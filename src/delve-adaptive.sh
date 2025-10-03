@@ -10,13 +10,21 @@ PROJECT_ROOT="$(dirname "$DELVE_SCRIPT_DIR")"
 
 # Use DELVE_SCRIPT_DIR for sourcing to avoid conflicts
 # (sourced files may redefine SCRIPT_DIR for their own use)
+# shellcheck disable=SC1091
 source "$DELVE_SCRIPT_DIR/knowledge-graph.sh"
+# shellcheck disable=SC1091
 source "$DELVE_SCRIPT_DIR/task-queue.sh"
+# shellcheck disable=SC1091
 source "$DELVE_SCRIPT_DIR/shared-state.sh"
+# shellcheck disable=SC1091
 source "$DELVE_SCRIPT_DIR/utils/gap-analyzer.sh"
+# shellcheck disable=SC1091
 source "$DELVE_SCRIPT_DIR/utils/contradiction-detector.sh"
+# shellcheck disable=SC1091
 source "$DELVE_SCRIPT_DIR/utils/lead-evaluator.sh"
+# shellcheck disable=SC1091
 source "$DELVE_SCRIPT_DIR/utils/confidence-scorer.sh"
+# shellcheck disable=SC1091
 source "$DELVE_SCRIPT_DIR/utils/config-loader.sh"
 
 # Load configuration using overlay pattern
@@ -132,6 +140,7 @@ initialize_session() {
     mkdir -p "$session_dir/knowledge"
 
     # Source version checker
+    # shellcheck disable=SC1091
     source "$DELVE_SCRIPT_DIR/utils/version-check.sh"
 
     # Get system version
@@ -211,7 +220,7 @@ The planner will:
 EOF
 
     # Wait for planning completion
-    read -p "Press Enter when planning is complete..."
+    read -r -p "Press Enter when planning is complete..."
 
     if [ ! -f "$planning_output" ]; then
         echo "Error: Planning output not found" >&2
@@ -277,7 +286,7 @@ For each task in the input, research and output findings in adaptive format.
 
 EOF
 
-        read -p "Press Enter when $agent is complete..."
+        read -r -p "Press Enter when $agent is complete..."
 
         # Mark tasks as completed
         echo "$agent_tasks" | jq -r '.[].id' | while read -r task_id; do
@@ -359,7 +368,7 @@ The coordinator will:
 
 EOF
 
-    read -p "Press Enter when coordinator is complete..."
+    read -r -p "Press Enter when coordinator is complete..."
 
     if [ ! -f "$coordinator_output" ]; then
         echo "Error: Coordinator output not found" >&2
@@ -471,7 +480,7 @@ Options:
 
 EOF
 
-    read -p "Your choice: " choice
+    read -r -p "Your choice: " choice
 
     case "$choice" in
         c|C|"")
@@ -521,7 +530,7 @@ Generate comprehensive final report from knowledge graph.
 
 EOF
 
-    read -p "Press Enter when synthesis is complete..."
+    read -r -p "Press Enter when synthesis is complete..."
 
     echo "Research complete! Output at: $session_dir/research-report.md"
 }
@@ -621,7 +630,7 @@ run_single_iteration() {
     fi
 
     # Show progress estimate
-    if [ $iteration -lt $MAX_ITERATIONS ]; then
+    if [ "$iteration" -lt "$MAX_ITERATIONS" ]; then
         echo "Next: Iteration $((iteration + 1))/$MAX_ITERATIONS"
     fi
 
@@ -645,6 +654,7 @@ resume_session() {
         echo "❌ Error: Session not found: $session_id" >&2
         echo "" >&2
         echo "Available sessions:" >&2
+        # shellcheck disable=SC2012
         ls -1t "$PROJECT_ROOT/research-sessions/" 2>/dev/null | head -10 >&2
         echo "" >&2
         echo "Usage: ./delve resume <session_id>" >&2
@@ -668,13 +678,14 @@ resume_session() {
     fi
     
     # Verify session compatibility
+    # shellcheck disable=SC1091
     source "$DELVE_SCRIPT_DIR/utils/version-check.sh"
     if ! validate_session_compatibility "$session_dir" 2>/dev/null; then
         echo "" >&2
         echo "⚠️  Warning: Session may be incompatible with current engine version" >&2
         echo "   You can try to continue, but results may be unexpected." >&2
         echo "" >&2
-        read -p "Continue anyway? [y/N] " -n 1 -r
+        read -r -p "Continue anyway? [y/N] " -n 1 -r
         echo ""
         if [[ ! $REPLY =~ ^[Yy]$ ]]; then
             return 1
@@ -689,7 +700,7 @@ resume_session() {
     mv "$tmp_file" "$session_dir/session.json"
     
     # Update .latest marker
-    echo "$(basename "$session_dir")" > "$PROJECT_ROOT/research-sessions/.latest"
+    basename "$session_dir" > "$PROJECT_ROOT/research-sessions/.latest"
     
     echo "$session_dir"
 }
@@ -767,6 +778,7 @@ main() {
 
     # Verify session compatibility (for existing sessions, if resume added later)
     # For new sessions, this validates the metadata was created correctly
+    # shellcheck disable=SC1091
     source "$DELVE_SCRIPT_DIR/utils/version-check.sh"
     if ! validate_session_compatibility "$session_dir" 2>/dev/null; then
         echo "⚠️  Warning: Session version mismatch (this shouldn't happen for new sessions)"
@@ -791,7 +803,7 @@ main() {
     echo ""
 
     # Update .latest marker
-    echo "$(basename "$session_dir")" > "$PROJECT_ROOT/research-sessions/.latest"
+    basename "$session_dir" > "$PROJECT_ROOT/research-sessions/.latest"
 
     echo "════════════════════════════════════════════════════════════"
     echo "Max Iterations: $MAX_ITERATIONS"
@@ -800,7 +812,7 @@ main() {
 
     # Main adaptive loop
     local iteration=0
-    while [ $iteration -lt $MAX_ITERATIONS ]; do
+    while [ "$iteration" -lt "$MAX_ITERATIONS" ]; do
         ((iteration++))
 
         # Run single iteration (returns 1 to stop, 0 to continue)
@@ -848,8 +860,7 @@ main_resume() {
     # Load existing session
     echo "→ Loading session..."
     local session_dir
-    session_dir=$(resume_session "$session_id")
-    if [ $? -ne 0 ]; then
+    if ! session_dir=$(resume_session "$session_id"); then
         exit 1
     fi
     echo "  ✓ Session loaded: $(basename "$session_dir")"
@@ -890,7 +901,7 @@ main_resume() {
     if [ "$pending_tasks" -eq 0 ]; then
         echo "⚠️  No pending tasks found in session."
         echo ""
-        read -p "Generate new tasks and continue? [Y/n] " -r
+        read -r -p "Generate new tasks and continue? [Y/n] " -r
         if [[ ! $REPLY =~ ^[Nn]$ ]]; then
             echo ""
             echo "→ Running coordinator to generate new tasks..."
@@ -921,7 +932,7 @@ main_resume() {
     
     # Continue iteration loop from last iteration
     local iteration=$current_iteration
-    while [ $iteration -lt $MAX_ITERATIONS ]; do
+    while [ "$iteration" -lt "$MAX_ITERATIONS" ]; do
         ((iteration++))
         
         # Run single iteration (returns 1 to stop, 0 to continue)

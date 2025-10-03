@@ -8,6 +8,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # Source error messages
 if [ -f "$SCRIPT_DIR/utils/error-messages.sh" ]; then
+    # shellcheck disable=SC1091
     source "$SCRIPT_DIR/utils/error-messages.sh"
 fi
 
@@ -42,7 +43,7 @@ lock_acquire() {
         # Check if timeout exceeded (using actual elapsed time)
         local elapsed
         elapsed=$(($(date +%s) - start_time))
-        if [ $elapsed -ge $timeout ]; then
+        if [ "$elapsed" -ge "$timeout" ]; then
             # Use user-friendly error message if available
             if type error_lock_failed &>/dev/null; then
                 error_lock_failed "$file" "$timeout"

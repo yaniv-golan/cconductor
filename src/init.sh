@@ -149,6 +149,7 @@ echo "2. Creating directories..."
 
 # Source path resolver to use configured paths
 if [ -f "$SCRIPT_DIR/utils/path-resolver.sh" ]; then
+    # shellcheck disable=SC1091
     source "$SCRIPT_DIR/utils/path-resolver.sh"
 
     # Initialize all configured paths
@@ -170,6 +171,7 @@ echo "3. Setting up user configuration directory..."
 
 # Get user config directory (OS-appropriate location)
 if [ -f "$SCRIPT_DIR/utils/platform-paths.sh" ]; then
+    # shellcheck disable=SC1091
     source "$SCRIPT_DIR/utils/platform-paths.sh"
     USER_CONFIG_DIR=$(get_config_dir)
 else
@@ -257,6 +259,7 @@ echo ""
 # Step 6: Validate configurations
 echo "6. Validating configurations..."
 if [ -f "$SCRIPT_DIR/utils/config-loader.sh" ]; then
+    # shellcheck disable=SC1091
     source "$SCRIPT_DIR/utils/config-loader.sh"
     if validate_configs > /dev/null 2>&1; then
         echo "   ✓ All configurations valid"

@@ -7,7 +7,9 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # Source shared-state for atomic operations
+# shellcheck disable=SC1091
 source "$SCRIPT_DIR/shared-state.sh"
+# shellcheck disable=SC1091
 source "$SCRIPT_DIR/utils/validation.sh"
 
 # Initialize a new knowledge graph
@@ -96,6 +98,8 @@ kg_increment_iteration() {
     local kg_file
     kg_file=$(kg_get_path "$session_dir")
 
+    # Single quotes intentional - this is a jq expression with literal $date
+    # shellcheck disable=SC2016
     atomic_json_update "$kg_file" \
         --arg date "$(date -u +"%Y-%m-%dT%H:%M:%SZ")" \
         '.iteration += 1 | .last_updated = $date'

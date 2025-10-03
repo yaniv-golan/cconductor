@@ -183,11 +183,7 @@ validate_session_compatibility() {
     local engine_version
     engine_version=$(get_engine_version)
     local session_version
-    session_version=$(get_session_version "$session_dir")
-
-    if [ $? -ne 0 ]; then
-        return 1
-    fi
+    session_version=$(get_session_version "$session_dir") || return 1
 
     if is_compatible "$engine_version" "$session_version"; then
         return 0
@@ -225,11 +221,7 @@ needs_migration() {
     local engine_version
     engine_version=$(get_engine_version)
     local session_version
-    session_version=$(get_session_version "$session_dir")
-
-    if [ $? -ne 0 ]; then
-        return 1
-    fi
+    session_version=$(get_session_version "$session_dir") || return 1
 
     # If versions are compatible but engine is newer, migration may be beneficial
     if is_compatible "$engine_version" "$session_version"; then
@@ -265,9 +257,7 @@ version_report() {
     fi
 
     local session_version
-    session_version=$(get_session_version "$session_dir" 2>/dev/null)
-
-    if [ $? -ne 0 ]; then
+    if ! session_version=$(get_session_version "$session_dir" 2>/dev/null); then
         echo "Session version: (unknown - metadata missing)"
         echo ""
         echo "Status: ⚠️  Cannot determine compatibility"

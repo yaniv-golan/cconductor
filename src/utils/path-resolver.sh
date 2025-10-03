@@ -6,7 +6,8 @@ set -euo pipefail
 
 # Get project root
 if [ -n "${PROJECT_ROOT:-}" ]; then
-    PROJECT_ROOT="$PROJECT_ROOT"
+    # PROJECT_ROOT already set, use it as-is
+    :
 elif [ -n "${CLAUDE_PROJECT_DIR:-}" ]; then
     PROJECT_ROOT="$CLAUDE_PROJECT_DIR"
 else
@@ -15,9 +16,11 @@ else
 fi
 
 # Source platform-aware paths
+# shellcheck disable=SC1091
 source "$PROJECT_ROOT/src/utils/platform-paths.sh"
 
 # Source config loader
+# shellcheck disable=SC1091
 source "$PROJECT_ROOT/src/utils/config-loader.sh"
 
 # Set platform-aware path variables

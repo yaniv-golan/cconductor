@@ -13,6 +13,7 @@ set -euo pipefail
 # Get project root and source path resolver
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+# shellcheck disable=SC1091
 source "$SCRIPT_DIR/path-resolver.sh"
 
 # Configuration
@@ -48,7 +49,7 @@ acquire_cache_lock() {
     local elapsed=0
     
     while ! mkdir "$LOCK_FILE" 2>/dev/null; do
-        if [ $elapsed -ge $timeout ]; then
+        if [ "$elapsed" -ge "$timeout" ]; then
             echo "Error: Could not acquire cache lock after ${timeout}s" >&2
             echo "       If no other process is running, remove: $LOCK_FILE" >&2
             return 1
@@ -708,7 +709,7 @@ cleanup_by_age() {
     echo "  Removing PDFs older than $max_days days..." >&2
     
     local removed=0
-    find "$PDF_CACHE_DIR" -name "*.pdf" -type f -mtime +$max_days 2>/dev/null | while read -r pdf_path; do
+    find "$PDF_CACHE_DIR" -name "*.pdf" -type f -mtime +"$max_days" 2>/dev/null | while read -r pdf_path; do
         local filename
         filename=$(basename "$pdf_path")
         local cache_key="${filename%.pdf}"

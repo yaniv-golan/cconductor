@@ -16,12 +16,18 @@ jobs:
         uses: actions/checkout@v4
       
       - name: Install ShellCheck
-        run: sudo apt-get update && sudo apt-get install -y shellcheck
+        run: |
+          # Install latest stable shellcheck from official source
+          wget -qO- "https://github.com/koalaman/shellcheck/releases/download/stable/shellcheck-stable.linux.x86_64.tar.xz" | tar -xJv
+          sudo cp "shellcheck-stable/shellcheck" /usr/bin/
+          shellcheck --version
       
       - name: Run ShellCheck
         run: |
           echo "Linting shell scripts..."
-          find . -name "*.sh" -type f | while read -r file; do
+          # Note: No severity filtering - checks style, info, warning, and error levels
+          # This ensures highest code quality standards
+          find . -name "*.sh" -type f -not -path "./.history/*" -not -path "./.git/*" | while read -r file; do
             echo "Checking: $file"
             shellcheck "$file" || exit 1
           done

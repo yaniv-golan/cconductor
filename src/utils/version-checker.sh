@@ -13,6 +13,7 @@ CACHE_TTL_SECONDS=86400  # 24 hours
 
 # Source dependencies
 if [ -f "$PROJECT_ROOT/src/utils/platform-paths.sh" ]; then
+    # shellcheck disable=SC1091
     source "$PROJECT_ROOT/src/utils/platform-paths.sh"
     CACHE_FILE="$(get_data_dir)/version-check.cache"
 else
