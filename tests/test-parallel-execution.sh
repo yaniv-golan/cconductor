@@ -23,7 +23,6 @@ DURATION=$((END_TIME - START_TIME))
 echo "✓ Research completed in $DURATION seconds"
 
 # Check if multiple agents were used (from logs)
-SESSION_DIR=$(ls -td "$PROJECT_ROOT/research-sessions"/* | head -1)
 AGENT_COUNT=$(grep -c "agent" "$PROJECT_ROOT/logs/research.log" | tail -1 || echo "0")
 
 echo "✓ Used agents: $AGENT_COUNT"

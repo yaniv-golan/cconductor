@@ -8,11 +8,11 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 # Source the PDF cache utilities
+# shellcheck disable=SC1091
 source "$PROJECT_ROOT/src/utils/pdf-cache.sh"
 
 # Test configuration
 TEST_PDF_URL="https://arxiv.org/pdf/1706.03762.pdf"
-INVALID_URL="https://example.com/nonexistent.pdf"
 HTTP_URL="http://arxiv.org/pdf/1706.03762.pdf"
 
 # Colors for output

@@ -17,7 +17,7 @@ echo "Question: $QUESTION"
 "$PROJECT_ROOT/src/research.sh" --mode scientific --template scientific-report "$QUESTION"
 
 # Validation
-SESSION_DIR=$(ls -td "$PROJECT_ROOT/research-sessions"/* | head -1)
+SESSION_DIR=$(find "$PROJECT_ROOT/research-sessions" -mindepth 1 -maxdepth 1 -type d -print0 | xargs -0 ls -td 2>/dev/null | head -1)
 
 if [ -f "$SESSION_DIR/research-report.md" ]; then
     echo "✓ Scientific research report generated"
