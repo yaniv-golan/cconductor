@@ -7,7 +7,9 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # Source shared-state for atomic operations
+# shellcheck disable=SC1091
 source "$SCRIPT_DIR/shared-state.sh"
+# shellcheck disable=SC1091
 source "$SCRIPT_DIR/utils/validation.sh"
 
 # Initialize task queue
@@ -53,7 +55,8 @@ tq_read() {
     # Validate inputs
     validate_directory "session_dir" "$session_dir" || return 1
 
-    local queue_file=$(tq_get_path "$session_dir")
+    local queue_file
+    queue_file=$(tq_get_path "$session_dir")
 
     if [ ! -f "$queue_file" ]; then
         echo "Error: Task queue not found: $queue_file" >&2
@@ -73,14 +76,16 @@ tq_add_task() {
     validate_json "task_json" "$task_json" || return 1
     validate_json_field "$task_json" "type" "string" || return 1
 
-    local queue_file=$(tq_get_path "$session_dir")
+    local queue_file
+    queue_file=$(tq_get_path "$session_dir")
 
     lock_acquire "$queue_file" || {
         echo "Error: Failed to acquire lock for adding task" >&2
         return 1
     }
 
-    local task_id="t$(jq '.stats.total_tasks' "$queue_file")"
+    local task_id
+    task_id="t$(jq '.stats.total_tasks' "$queue_file")"
 
     jq --argjson task "$task_json" \
        --arg id "$task_id" \
@@ -106,7 +111,8 @@ tq_add_tasks() {
     validate_directory "session_dir" "$session_dir" || return 1
     validate_json "tasks_json" "$tasks_json" || return 1
 
-    local queue_file=$(tq_get_path "$session_dir")
+    local queue_file
+    queue_file=$(tq_get_path "$session_dir")
 
     # Add each task
     echo "$tasks_json" | jq -c '.[]' | while read -r task; do
@@ -125,7 +131,8 @@ tq_get_next_task() {
     # Validate inputs
     validate_directory "session_dir" "$session_dir" || return 1
 
-    local queue_file=$(tq_get_path "$session_dir")
+    local queue_file
+    queue_file=$(tq_get_path "$session_dir")
 
     if [ -n "$agent_filter" ]; then
         jq --arg agent "$agent_filter" \
@@ -146,7 +153,8 @@ tq_get_pending() {
     # Validate inputs
     validate_directory "session_dir" "$session_dir" || return 1
 
-    local queue_file=$(tq_get_path "$session_dir")
+    local queue_file
+    queue_file=$(tq_get_path "$session_dir")
 
     jq '.tasks | map(select(.status == "pending")) | sort_by(-.priority)' "$queue_file"
 }
@@ -155,7 +163,8 @@ tq_get_pending() {
 tq_get_pending_by_agent() {
     local session_dir="$1"
     local agent_type="$2"
-    local queue_file=$(tq_get_path "$session_dir")
+    local queue_file
+    queue_file=$(tq_get_path "$session_dir")
 
     jq --arg agent "$agent_type" \
        '.tasks | map(select(.status == "pending" and .agent == $agent)) | sort_by(-.priority)' \
@@ -173,7 +182,8 @@ tq_update_status() {
     validate_required "task_id" "$task_id" || return 1
     validate_enum "new_status" "$new_status" "pending" "in_progress" "completed" "failed" || return 1
 
-    local queue_file=$(tq_get_path "$session_dir")
+    local queue_file
+    queue_file=$(tq_get_path "$session_dir")
 
     lock_acquire "$queue_file" || {
         echo "Error: Failed to acquire lock for updating task status" >&2
@@ -181,7 +191,8 @@ tq_update_status() {
     }
 
     # Get current status
-    local old_status=$(jq -r --arg id "$task_id" \
+    local old_status
+    old_status=$(jq -r --arg id "$task_id" \
                           '.tasks[] | select(.id == $id) | .status' \
                           "$queue_file")
 
@@ -194,6 +205,7 @@ tq_update_status() {
     # Build single jq expression for all updates (atomic)
     local timestamp_update=""
     case "$new_status" in
+        # SC2016: Single quotes intentional - these are jq expressions with literal $id and $date
         in_progress) timestamp_update='| (.tasks[] | select(.id == $id)) |= (. + {started_at: $date})' ;;
         completed|failed) timestamp_update='| (.tasks[] | select(.id == $id)) |= (. + {completed_at: $date})' ;;
     esac
@@ -248,7 +260,8 @@ tq_complete_task() {
     validate_required "task_id" "$task_id" || return 1
     validate_required "findings_file" "$findings_file" || return 1
 
-    local queue_file=$(tq_get_path "$session_dir")
+    local queue_file
+    queue_file=$(tq_get_path "$session_dir")
 
     # Update status first (which handles locking)
     tq_update_status "$session_dir" "$task_id" "completed"
@@ -279,7 +292,8 @@ tq_fail_task() {
     validate_required "task_id" "$task_id" || return 1
     validate_required "error_message" "$error_message" || return 1
 
-    local queue_file=$(tq_get_path "$session_dir")
+    local queue_file
+    queue_file=$(tq_get_path "$session_dir")
 
     # Update status first (which handles locking)
     tq_update_status "$session_dir" "$task_id" "failed"
@@ -310,7 +324,8 @@ tq_update_priority() {
     validate_required "task_id" "$task_id" || return 1
     validate_integer "new_priority" "$new_priority" 0 10 || return 1
 
-    local queue_file=$(tq_get_path "$session_dir")
+    local queue_file
+    queue_file=$(tq_get_path "$session_dir")
 
     lock_acquire "$queue_file" || {
         echo "Error: Failed to acquire lock for updating task priority" >&2
@@ -337,7 +352,8 @@ tq_get_task() {
     validate_directory "session_dir" "$session_dir" || return 1
     validate_required "task_id" "$task_id" || return 1
 
-    local queue_file=$(tq_get_path "$session_dir")
+    local queue_file
+    queue_file=$(tq_get_path "$session_dir")
 
     jq --arg id "$task_id" \
        '.tasks[] | select(.id == $id)' \
@@ -347,7 +363,8 @@ tq_get_task() {
 # Get completed tasks
 tq_get_completed() {
     local session_dir="$1"
-    local queue_file=$(tq_get_path "$session_dir")
+    local queue_file
+    queue_file=$(tq_get_path "$session_dir")
 
     jq '.tasks | map(select(.status == "completed"))' "$queue_file"
 }
@@ -355,7 +372,8 @@ tq_get_completed() {
 # Get in-progress tasks
 tq_get_in_progress() {
     local session_dir="$1"
-    local queue_file=$(tq_get_path "$session_dir")
+    local queue_file
+    queue_file=$(tq_get_path "$session_dir")
 
     jq '.tasks | map(select(.status == "in_progress"))' "$queue_file"
 }
@@ -363,7 +381,8 @@ tq_get_in_progress() {
 # Get failed tasks
 tq_get_failed() {
     local session_dir="$1"
-    local queue_file=$(tq_get_path "$session_dir")
+    local queue_file
+    queue_file=$(tq_get_path "$session_dir")
 
     jq '.tasks | map(select(.status == "failed"))' "$queue_file"
 }
@@ -371,7 +390,8 @@ tq_get_failed() {
 # Get queue statistics
 tq_get_stats() {
     local session_dir="$1"
-    local queue_file=$(tq_get_path "$session_dir")
+    local queue_file
+    queue_file=$(tq_get_path "$session_dir")
 
     jq '.stats' "$queue_file"
 }
@@ -379,7 +399,8 @@ tq_get_stats() {
 # Get queue summary (for display)
 tq_get_summary() {
     local session_dir="$1"
-    local queue_file=$(tq_get_path "$session_dir")
+    local queue_file
+    queue_file=$(tq_get_path "$session_dir")
 
     jq '{
         total: .stats.total_tasks,
@@ -395,7 +416,8 @@ tq_get_summary() {
 # Count tasks by type
 tq_count_by_type() {
     local session_dir="$1"
-    local queue_file=$(tq_get_path "$session_dir")
+    local queue_file
+    queue_file=$(tq_get_path "$session_dir")
 
     jq '.tasks | group_by(.type) | map({type: .[0].type, count: length}) | from_entries' "$queue_file"
 }
@@ -403,7 +425,8 @@ tq_count_by_type() {
 # Count tasks by agent
 tq_count_by_agent() {
     local session_dir="$1"
-    local queue_file=$(tq_get_path "$session_dir")
+    local queue_file
+    queue_file=$(tq_get_path "$session_dir")
 
     jq '.tasks | group_by(.agent) | map({agent: .[0].agent, count: length}) | from_entries' "$queue_file"
 }
@@ -415,16 +438,19 @@ tq_has_pending() {
     # Validate inputs
     validate_directory "session_dir" "$session_dir" || return 1
 
-    local queue_file=$(tq_get_path "$session_dir")
+    local queue_file
+    queue_file=$(tq_get_path "$session_dir")
 
-    local count=$(jq '.stats.pending' "$queue_file")
+    local count
+    count=$(jq '.stats.pending' "$queue_file")
     [ "$count" -gt 0 ]
 }
 
 # Get average task completion time
 tq_get_avg_completion_time() {
     local session_dir="$1"
-    local queue_file=$(tq_get_path "$session_dir")
+    local queue_file
+    queue_file=$(tq_get_path "$session_dir")
 
     jq '[.tasks[] | select(.status == "completed" and .started_at and .completed_at) |
          (((.completed_at | fromdateiso8601) - (.started_at | fromdateiso8601)) / 60)] |
