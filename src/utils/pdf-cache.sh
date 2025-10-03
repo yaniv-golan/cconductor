@@ -292,7 +292,7 @@ fetch_and_cache_pdf() {
 
     # Check if already cached
     if is_pdf_cached "$url"; then
-        echo "$(get_cached_pdf_path "$url")"
+        get_cached_pdf_path "$url"
         return 0
     fi
 

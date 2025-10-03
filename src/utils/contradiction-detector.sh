@@ -78,9 +78,12 @@ compare_claims() {
 
     if [ -n "$num1" ] && [ -n "$num2" ]; then
         # If both have numbers and statements are similar, check if numbers differ significantly
+        # Note: sed is needed here for complex regex pattern (numbers with optional decimals)
         local stmt1_no_num
+        # shellcheck disable=SC2001
         stmt1_no_num=$(echo "$stmt1" | sed 's/[0-9]\+\(\.[0-9]\+\)\?//g')
         local stmt2_no_num
+        # shellcheck disable=SC2001
         stmt2_no_num=$(echo "$stmt2" | sed 's/[0-9]\+\(\.[0-9]\+\)\?//g')
 
         if echo "$stmt1_no_num" | grep -qF "$stmt2_no_num" || echo "$stmt2_no_num" | grep -qF "$stmt1_no_num"; then
