@@ -10,6 +10,7 @@ PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 
 # Source platform-aware paths
 if [ -f "$SCRIPT_DIR/platform-paths.sh" ]; then
+    # shellcheck disable=SC1091
     source "$SCRIPT_DIR/platform-paths.sh"
 fi
 
@@ -150,7 +151,7 @@ init_user_config() {
 # List all available configs
 # Usage: list_configs
 list_configs() {
-    local config_dir="${1:-$PROJECT_ROOT/config}"
+    local config_dir="$PROJECT_ROOT/config"
     local user_config_dir
     user_config_dir=$(get_user_config_dir)
 
@@ -184,7 +185,7 @@ list_configs() {
 # Validate all configs (useful for CI/testing)
 # Usage: validate_configs
 validate_configs() {
-    local config_dir="${1:-$PROJECT_ROOT/config}"
+    local config_dir="$PROJECT_ROOT/config"
     local errors=0
 
     echo "Validating configurations..."
