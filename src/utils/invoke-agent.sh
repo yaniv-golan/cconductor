@@ -4,9 +4,6 @@
 
 set -euo pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_ROOT="$(dirname "$(dirname "$SCRIPT_DIR")")"
-
 # Check if Claude CLI is available
 check_claude_cli() {
     if ! command -v claude &> /dev/null; then
@@ -193,10 +190,12 @@ extract_json_output() {
     # Claude might wrap it in markdown code blocks or text
     if grep -q '```json' "$output_file"; then
         # Extract from markdown code block
+        # shellcheck disable=SC2016
         sed -n '/```json/,/```/p' "$output_file" | \
             sed '1d;$d' > "$extracted_file"
     elif grep -q '```' "$output_file"; then
         # Generic code block without json marker
+        # shellcheck disable=SC2016
         sed -n '/```/,/```/p' "$output_file" | \
             sed '1d;$d' > "$extracted_file"
     elif grep -q '^{' "$output_file"; then

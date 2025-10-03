@@ -10,9 +10,8 @@
 
 set -euo pipefail
 
-# Get project root and source utilities
+# Get script directory and source utilities
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 # shellcheck disable=SC1091
 source "$SCRIPT_DIR/path-resolver.sh"
 # shellcheck disable=SC1091

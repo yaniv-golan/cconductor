@@ -130,13 +130,14 @@ echo ""
 echo "Test 6: Verifying session creation..."
 # Find the most recent session directory
 if [ -f "$PROJECT_ROOT/src/utils/path-resolver.sh" ]; then
+    # shellcheck disable=SC1091
     source "$PROJECT_ROOT/src/utils/path-resolver.sh"
     SESSION_BASE=$(resolve_path "session_dir" 2>/dev/null || echo "$PROJECT_ROOT/research-sessions")
 else
     SESSION_BASE="$PROJECT_ROOT/research-sessions"
 fi
 
-LATEST_SESSION=$(ls -td "$SESSION_BASE"/session_* 2>/dev/null | head -1 || echo "")
+LATEST_SESSION=$(find "$SESSION_BASE" -maxdepth 1 -type d -name "session_*" -print0 2>/dev/null | xargs -0 ls -td 2>/dev/null | head -1 || echo "")
 
 if [ -n "$LATEST_SESSION" ] && [ -d "$LATEST_SESSION" ]; then
     echo "✅ Pass: Session created at $LATEST_SESSION"
