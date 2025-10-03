@@ -48,7 +48,7 @@ echo "Test 3: Checking agent definitions..."
 AGENT_COUNT=$(find "$PROJECT_ROOT/.claude/agents" -name "*.json" 2>/dev/null | wc -l | xargs)
 if [ "$AGENT_COUNT" -gt 0 ]; then
     echo "✅ Pass: Found $AGENT_COUNT agent definitions"
-    echo "  Agents: $(ls -1 $PROJECT_ROOT/.claude/agents/*.json 2>/dev/null | xargs -n1 basename | sed 's/.json$//' | tr '\n' ', ' | sed 's/,$//')"
+    echo "  Agents: $(find "$PROJECT_ROOT/.claude/agents" -name "*.json" -print0 2>/dev/null | xargs -0 -n1 basename | sed 's/.json$//' | tr '\n' ', ' | sed 's/,$//')"
 else
     echo "❌ Fail: No agent definitions found in .claude/agents/"
     exit 1

@@ -294,7 +294,7 @@ execute_pending_tasks() {
             local agent_name="$1"
             local input_file="$2"
             local output_file="$3"
-            local session_dir_param="$4"
+            # Note: session_dir available from parent scope
             
             # Invoke agent using Claude CLI with JSON extraction
             local agent_output_raw="${output_file}.raw"
