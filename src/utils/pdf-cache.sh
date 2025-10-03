@@ -90,7 +90,7 @@ init_pdf_cache() {
     # Create cache index if it doesn't exist
     local index_file="$PDF_CACHE_DIR/cache-index.json"
     if [ ! -f "$index_file" ]; then
-        echo '{"pdfs": [], "last_updated": "'$(date -u +"%Y-%m-%dT%H:%M:%SZ")'"}' > "$index_file" || {
+        echo '{"pdfs": [], "last_updated": "'"$(date -u +"%Y-%m-%dT%H:%M:%SZ")"'"}' > "$index_file" || {
             echo "Error: Could not create cache index file" >&2
             return 1
         }
@@ -442,7 +442,7 @@ deduplicate_cache_index() {
     acquire_cache_lock $LOCK_TIMEOUT || return 1
     
     # Remove duplicates, keeping most recent entry per URL
-    if ! jq '.pdfs = [.pdfs | group_by(.url) | .[] | sort_by(.cached_at) | last] | .last_updated = "'$(date -u +"%Y-%m-%dT%H:%M:%SZ")'"' \
+    if ! jq '.pdfs = [.pdfs | group_by(.url) | .[] | sort_by(.cached_at) | last] | .last_updated = "'"$(date -u +"%Y-%m-%dT%H:%M:%SZ")"'"' \
        "$index_file" > "${index_file}.tmp" 2>/dev/null; then
         release_cache_lock
         echo "Error: Failed to deduplicate index" >&2
@@ -475,7 +475,8 @@ verify_cache_integrity() {
     fi
     
     # Get array of cache keys
-    local cache_keys_array=($(jq -r '.pdfs[].cache_key' "$index_file" 2>/dev/null))
+    local cache_keys_array=()
+    mapfile -t cache_keys_array < <(jq -r '.pdfs[].cache_key' "$index_file" 2>/dev/null)
     
     # Check each indexed PDF exists
     for cache_key in "${cache_keys_array[@]}"; do
@@ -532,7 +533,8 @@ rebuild_cache_index() {
     acquire_cache_lock $LOCK_TIMEOUT || return 1
     
     # Create new index from existing metadata
-    local new_index='{"pdfs": [], "last_updated": "'$(date -u +"%Y-%m-%dT%H:%M:%SZ")'"}'
+    local new_index
+    new_index='{"pdfs": [], "last_updated": "'"$(date -u +"%Y-%m-%dT%H:%M:%SZ")"'"}'
     
     for metadata_file in "$PDF_METADATA_DIR"/*.json; do
         [ -f "$metadata_file" ] || continue
@@ -674,7 +676,7 @@ cleanup_lru() {
     
     # Find PDFs sorted by access time (oldest first)
     find "$PDF_CACHE_DIR" -name "*.pdf" -type f -exec stat -f '%a %N' {} \; 2>/dev/null | \
-        sort -n | while read -r access_time pdf_path; do
+        sort -n | while read -r _ pdf_path; do
         
         if [ "$freed_mb" -ge "$target_mb" ]; then
             break

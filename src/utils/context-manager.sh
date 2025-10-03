@@ -4,16 +4,12 @@
 
 # Configuration
 MAX_FACTS_PER_SOURCE=10
-MIN_CREDIBILITY="medium"
 
 # Prune raw research findings to essential information
 prune_context() {
     local raw_dir="$1"
 
-    # Combine all findings
-    local all_findings="$raw_dir"/*-findings*.json
-
-    # Extract only essential information:
+    # Extract only essential information from all findings:
     # - Top N facts per source
     # - Remove low-credibility sources
     # - Deduplicate similar facts
@@ -46,7 +42,7 @@ prune_context() {
 
         # Remove duplicates (same fact from different sources)
         unique_by(.fact)
-    ' $all_findings
+    ' "$raw_dir"/*-findings*.json
 }
 
 # Create progressive summaries for synthesis agent

@@ -4,15 +4,11 @@
 
 set -euo pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-
 # Detect contradictions in claims
 detect_contradictions() {
     local kg_json="$1"
 
     local contradictions='[]'
-    local claims
-    claims=$(echo "$kg_json" | jq -c '.claims[]')
 
     # Compare all pairs of claims for conflicts
     local claims_array

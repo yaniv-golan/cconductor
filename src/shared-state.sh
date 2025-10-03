@@ -71,7 +71,7 @@ lock_release() {
 with_lock() {
     local file="$1"
     shift
-    local command="$@"
+    local command="$*"
 
     if lock_acquire "$file"; then
         # Run command and capture result

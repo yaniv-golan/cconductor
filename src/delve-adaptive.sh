@@ -90,7 +90,6 @@ validate_field_type "task_generation.min_lead_priority" ".task_generation.min_le
 # Extract config values
 MAX_ITERATIONS=$(echo "$ADAPTIVE_CONFIG" | jq -r '.termination.max_iterations')
 CONFIDENCE_THRESHOLD=$(echo "$ADAPTIVE_CONFIG" | jq -r '.termination.confidence_threshold')
-MAX_TASKS=$(echo "$ADAPTIVE_CONFIG" | jq -r '.termination.max_tasks')
 INTERACTIVE_MODE=$(echo "$ADAPTIVE_CONFIG" | jq -r '.termination.interactive_mode')
 EXPLORATION_MODE=$(echo "$ADAPTIVE_CONFIG" | jq -r '.task_generation.exploration_mode')
 
@@ -712,6 +711,7 @@ list_sessions() {
     printf "%-25s %-50s %-20s\n" "SESSION ID" "QUESTION" "STATUS"
     printf "%-25s %-50s %-20s\n" "----------" "--------" "------"
     
+    # shellcheck disable=SC2045
     for session_path in $(ls -1dt "$sessions_dir"/session_* 2>/dev/null); do
         if [ -f "$session_path/session.json" ]; then
             local session_id

@@ -4,8 +4,6 @@
 
 set -euo pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-
 # Constants - Gap detection thresholds
 readonly MIN_ENTITY_DESCRIPTION_LENGTH=50  # Entities with <50 char descriptions need more detail
 readonly HIGH_RELATED_COUNT=3              # Entity with 3+ relationships is highly connected
@@ -14,8 +12,6 @@ readonly HIGH_MATCH_COUNT=2                # Gap appearing in 2+ contexts is sig
 readonly LOW_MATCH_COUNT=0                 # Gap with any matches gets some priority
 
 # Constants - Priority levels for gaps
-readonly GAP_PRIORITY_HIGH=8     # High priority gap
-readonly GAP_PRIORITY_MEDIUM=6   # Medium priority gap
 readonly GAP_PRIORITY_MAX=10     # Maximum priority (clamp at this)
 
 # Analyze knowledge graph for gaps
