@@ -1,0 +1,107 @@
+{
+  "security_profile": "strict",
+  "profiles": {
+    "strict": {
+      "description": "Production: Academic auto-allowed, commercial prompt once, known-bad blocked",
+      "auto_allow_academic": true,
+      "auto_allow_commercial": false,
+      "prompt_commercial_once_per_session": true,
+      "block_url_shorteners": true,
+      "block_free_domains": true,
+      "enable_content_scanning": true,
+      "max_fetch_size_mb": 10,
+      "fetch_timeout_seconds": 30
+    },
+    "permissive": {
+      "description": "Development: More auto-allowed, less prompting",
+      "auto_allow_academic": true,
+      "auto_allow_commercial": true,
+      "prompt_commercial_once_per_session": false,
+      "block_url_shorteners": true,
+      "block_free_domains": true,
+      "enable_content_scanning": true,
+      "max_fetch_size_mb": 50,
+      "fetch_timeout_seconds": 60
+    },
+    "max_automation": {
+      "description": "Isolated VMs only: Minimal prompting, heavy monitoring",
+      "auto_allow_academic": true,
+      "auto_allow_commercial": true,
+      "prompt_commercial_once_per_session": false,
+      "block_url_shorteners": true,
+      "block_free_domains": false,
+      "enable_content_scanning": true,
+      "max_fetch_size_mb": 100,
+      "fetch_timeout_seconds": 120
+    }
+  },
+  "domain_lists": {
+    "academic": [
+      "arxiv.org",
+      "semanticscholar.org",
+      "pubmed.ncbi.nlm.nih.gov",
+      "*.nih.gov",
+      "*.edu",
+      "*.gov",
+      "nature.com",
+      "science.org",
+      "springer.com",
+      "ieee.org",
+      "acm.org",
+      "wikipedia.org",
+      "github.com",
+      "biorxiv.org",
+      "medrxiv.org",
+      "ssrn.com",
+      "researchgate.net",
+      "sciencedirect.com",
+      "wiley.com",
+      "tandfonline.com",
+      "plos.org",
+      "frontiersin.org",
+      "mdpi.com",
+      "elsevier.com",
+      "cell.com",
+      "thelancet.com",
+      "nejm.org",
+      "bmj.com"
+    ],
+    "commercial": [
+      "crunchbase.com",
+      "pitchbook.com",
+      "techcrunch.com",
+      "reuters.com",
+      "bloomberg.com",
+      "forbes.com",
+      "wsj.com",
+      "ft.com",
+      "economist.com",
+      "businessinsider.com",
+      "cnbc.com",
+      "marketwatch.com",
+      "venturebeat.com",
+      "theverge.com",
+      "wired.com"
+    ],
+    "blocked": [
+      "bit.ly",
+      "tinyurl.com",
+      "t.co",
+      "goo.gl",
+      "ow.ly",
+      "buff.ly",
+      "adf.ly",
+      "*.tk",
+      "*.ml",
+      "*.ga",
+      "*.cf",
+      "*.gq"
+    ]
+  },
+  "audit": {
+    "log_all_fetches": true,
+    "log_blocked_attempts": true,
+    "alert_on_suspicious_content": true,
+    "log_directory": "~/.claude/delve"
+  }
+}

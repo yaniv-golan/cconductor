@@ -1,0 +1,56 @@
+{
+    "_comment": "PDF subsystem configuration - override in pdf-config.json",
+    "_schema_version": "1.0",
+    "cache": {
+        "max_size_mb": 5000,
+        "max_age_days": 90,
+        "cleanup_on_init": true,
+        "eviction_policy": "lru",
+        "compression": false,
+        "_comment_max_size": "Maximum cache size in MB (5GB default)",
+        "_comment_max_age": "Remove PDFs older than this many days",
+        "_comment_eviction": "Cache eviction policy: 'lru' or 'age'"
+    },
+    "download": {
+        "max_file_size_mb": 100,
+        "timeout_seconds": 60,
+        "max_parallel": 5,
+        "retry_attempts": 3,
+        "retry_delay_seconds": 2,
+        "user_agent": "Delve-ResearchEngine/1.0 (https://github.com/yaniv-golan/delve)",
+        "_comment_parallel": "Number of simultaneous PDF downloads",
+        "_comment_retry": "Retry failed downloads up to N times"
+    },
+    "security": {
+        "https_only": true,
+        "enforce_domain_whitelist": false,
+        "allowed_domains": [
+            "arxiv.org",
+            "biorxiv.org",
+            "medrxiv.org",
+            "psyarxiv.com",
+            "*.nih.gov",
+            "*.edu",
+            "*.ac.uk",
+            "*.gov",
+            "researchgate.net",
+            "semanticscholar.org"
+        ],
+        "verify_ssl": true,
+        "_comment_whitelist": "Set enforce_domain_whitelist to true for strict mode"
+    },
+    "processing": {
+        "verify_integrity": true,
+        "extract_metadata": true,
+        "ocr_enabled": false,
+        "_comment_integrity": "Verify SHA-256 hash after download",
+        "_comment_ocr": "OCR not yet implemented - reserved for future use"
+    },
+    "maintenance": {
+        "auto_repair_on_error": true,
+        "periodic_verification": false,
+        "verification_interval_days": 30,
+        "_comment_auto_repair": "Automatically repair cache issues when detected",
+        "_comment_periodic": "Enable scheduled integrity verification"
+    }
+}

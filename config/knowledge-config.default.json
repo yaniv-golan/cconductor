@@ -1,0 +1,21 @@
+{
+  "knowledge_paths": {
+    "core": "knowledge-base",
+    "user": "knowledge-base-custom",
+    "session": "{session_dir}/knowledge"
+  },
+  "agent_knowledge_map": {
+    "market-analyzer": ["vc-methodology"],
+    "competitor-analyzer": ["vc-methodology"],
+    "financial-extractor": ["vc-methodology"],
+    "web-researcher": ["scientific-methodology", "research-methodology"],
+    "academic-researcher": ["scientific-methodology", "research-methodology"],
+    "synthesis-agent": ["*"],
+    "fact-checker": ["*"]
+  },
+  "auto_discover": true,
+  "discovery_rules": {
+    "pattern": "*.md",
+    "exclude": ["README.md", "LICENSE.md", "TEMPLATE.md"]
+  }
+}

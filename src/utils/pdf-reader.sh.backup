@@ -1,0 +1,188 @@
+#!/bin/bash
+# PDF Reader Utility
+# Extracts text and metadata from PDFs using best available tools
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$SCRIPT_DIR/pdf-cache.sh"
+
+# Extract text from PDF
+extract_pdf_text() {
+    local pdf_path="$1"
+    local output_format="${2:-text}"  # text|markdown|json
+
+    if [ ! -f "$pdf_path" ]; then
+        echo "Error: PDF file not found: $pdf_path" >&2
+        return 1
+    fi
+
+    # For Claude Code integration: output path for Read tool
+    # Claude's Read tool can read PDFs directly with text and visual extraction
+    case "$output_format" in
+        text)
+            # Simple text extraction (fallback if needed)
+            # But prefer using Claude's Read tool which handles PDFs natively
+            echo "# PDF Content: $pdf_path"
+            echo ""
+            echo "Note: Use Claude's Read tool for best PDF reading with text and visual extraction"
+            echo "Read tool can process PDFs page by page, extracting both text and analyzing visual content."
+            echo ""
+            echo "File path: $pdf_path"
+            ;;
+        json)
+            cat <<EOF
+{
+  "file_path": "$pdf_path",
+  "file_size": $(stat -f%z "$pdf_path" 2>/dev/null || stat -c%s "$pdf_path" 2>/dev/null || echo 0),
+  "note": "Use Claude's Read tool for optimal PDF processing",
+  "read_tool_command": "Read file_path: $pdf_path"
+}
+EOF
+            ;;
+        *)
+            echo "Unknown format: $output_format" >&2
+            return 1
+            ;;
+    esac
+}
+
+# Extract PDF metadata (title, authors, date, etc.)
+extract_pdf_metadata() {
+    local pdf_path="$1"
+
+    if [ ! -f "$pdf_path" ]; then
+        echo "Error: PDF file not found: $pdf_path" >&2
+        return 1
+    fi
+
+    # Use pdfinfo if available, otherwise basic file info
+    if command -v pdfinfo &> /dev/null; then
+        pdfinfo "$pdf_path" 2>/dev/null | grep -E "^(Title|Author|Subject|Keywords|CreationDate|Pages):" || true
+    else
+        echo "Title: $(basename "$pdf_path" .pdf)"
+        echo "Pages: Unknown"
+        echo "Note: Install poppler-utils for detailed PDF metadata"
+    fi
+}
+
+# Prepare PDF for Claude Code Read tool
+prepare_pdf_for_read() {
+    local url="$1"
+    local title="${2:-Unknown}"
+    local source="${3:-Unknown}"
+
+    # Fetch and cache if not already cached
+    local cached_path
+    if is_pdf_cached "$url"; then
+        cached_path=$(get_cached_pdf_path "$url")
+        echo "Using cached PDF: $cached_path" >&2
+    else
+        echo "Fetching PDF from: $url" >&2
+        cached_path=$(fetch_and_cache_pdf "$url" "$title" "$source")
+    fi
+
+    # Get metadata
+    local metadata=$(get_pdf_metadata "$url")
+
+    # Output structured info for agent to use
+    cat <<EOF
+{
+  "pdf_url": "$url",
+  "cached_path": "$cached_path",
+  "title": "$title",
+  "source": "$source",
+  "metadata": $metadata,
+  "instructions": "Use the Read tool with file_path: $cached_path to extract text and visual content. Claude's Read tool handles PDFs natively with page-by-page processing."
+}
+EOF
+}
+
+# Extract academic paper structure
+extract_paper_structure() {
+    local pdf_path="$1"
+
+    cat <<EOF
+{
+  "pdf_path": "$pdf_path",
+  "extraction_strategy": "academic_paper",
+  "sections_to_extract": [
+    "Abstract",
+    "Introduction",
+    "Methodology/Methods",
+    "Results",
+    "Discussion",
+    "Conclusion",
+    "References"
+  ],
+  "note": "Use Claude's Read tool to read the PDF and identify these sections. The Read tool can process academic PDFs page by page and extract structured content."
+}
+EOF
+}
+
+# Batch prepare multiple PDFs
+batch_prepare_pdfs() {
+    local urls_file="$1"
+
+    if [ ! -f "$urls_file" ]; then
+        echo "Error: URLs file not found: $urls_file" >&2
+        return 1
+    fi
+
+    local output_dir="$(dirname "$urls_file")/pdf-cache-info"
+    mkdir -p "$output_dir"
+
+    local count=0
+    while IFS='|' read -r url title source; do
+        ((count++))
+        echo "Processing PDF $count: $url" >&2
+
+        local info_file="$output_dir/pdf-$count.json"
+        prepare_pdf_for_read "$url" "$title" "$source" > "$info_file"
+
+        echo "Saved info: $info_file" >&2
+    done < "$urls_file"
+
+    echo "Processed $count PDFs, info saved to: $output_dir"
+}
+
+# Export functions
+export -f extract_pdf_text
+export -f extract_pdf_metadata
+export -f prepare_pdf_for_read
+export -f extract_paper_structure
+export -f batch_prepare_pdfs
+
+# CLI interface
+if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
+    case "${1:-help}" in
+        text)
+            extract_pdf_text "$2" "text"
+            ;;
+        metadata)
+            extract_pdf_metadata "$2"
+            ;;
+        prepare)
+            prepare_pdf_for_read "$2" "${3:-Unknown}" "${4:-Unknown}"
+            ;;
+        structure)
+            extract_paper_structure "$2"
+            ;;
+        batch)
+            batch_prepare_pdfs "$2"
+            ;;
+        *)
+            echo "Usage: $0 {text|metadata|prepare|structure|batch} <args>"
+            echo ""
+            echo "Commands:"
+            echo "  text <pdf>                     - Extract text from PDF"
+            echo "  metadata <pdf>                 - Extract PDF metadata"
+            echo "  prepare <url> [title] [source] - Fetch, cache, and prepare PDF for reading"
+            echo "  structure <pdf>                - Extract academic paper structure"
+            echo "  batch <urls_file>              - Process multiple PDFs from file (format: url|title|source per line)"
+            echo ""
+            echo "Note: This utility prepares PDFs for Claude's Read tool,"
+            echo "which provides optimal PDF processing with text and visual extraction."
+            ;;
+    esac
+fi

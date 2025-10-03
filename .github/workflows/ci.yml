@@ -1,0 +1,104 @@
+name: CI
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  lint:
+    name: Lint Shell Scripts
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Install ShellCheck
+        run: sudo apt-get update && sudo apt-get install -y shellcheck
+      
+      - name: Run ShellCheck
+        run: |
+          echo "Linting shell scripts..."
+          find . -name "*.sh" -type f | while read -r file; do
+            echo "Checking: $file"
+            shellcheck "$file" || exit 1
+          done
+          echo "✓ All scripts passed ShellCheck"
+
+  test-scripts:
+    name: Test Scripts
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Install dependencies
+        run: |
+          if [[ "$OSTYPE" == "darwin"* ]]; then
+            brew install jq curl bash
+          else
+            sudo apt-get update
+            sudo apt-get install -y jq curl bash
+          fi
+      
+      - name: Test platform-paths.sh
+        run: |
+          chmod +x src/utils/platform-paths.sh
+          ./src/utils/platform-paths.sh --show
+          echo "✓ Platform paths detected"
+      
+      - name: Test version checker syntax
+        run: |
+          chmod +x src/utils/version-checker.sh
+          bash -n src/utils/version-checker.sh
+          echo "✓ Version checker syntax valid"
+      
+      - name: Test delve script syntax
+        run: |
+          chmod +x delve
+          bash -n delve
+          echo "✓ Delve script syntax valid"
+      
+      - name: Test install script syntax
+        run: |
+          chmod +x install.sh
+          bash -n install.sh
+          echo "✓ Install script syntax valid"
+
+  verify-permissions:
+    name: Verify File Permissions
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Check executable permissions
+        run: |
+          echo "Checking executable permissions..."
+          
+          files_to_check=(
+            "delve"
+            "install.sh"
+            "src/init.sh"
+            "src/utils/platform-paths.sh"
+            "src/utils/version-checker.sh"
+          )
+          
+          for file in "${files_to_check[@]}"; do
+            if [ -f "$file" ]; then
+              if [ -x "$file" ]; then
+                echo "✓ $file is executable"
+              else
+                echo "✗ $file is NOT executable"
+                exit 1
+              fi
+            fi
+          done
+

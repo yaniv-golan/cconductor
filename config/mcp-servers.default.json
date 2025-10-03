@@ -1,0 +1,106 @@
+{
+  "academic_sources": {
+    "arxiv": {
+      "enabled": true,
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-arxiv"],
+      "description": "Search arXiv preprints for scientific papers. Provides search, fetch abstracts, get PDF links.",
+      "usage_note": "Use for physics, CS, math, and other STEM papers. Returns PDF URLs for caching."
+    },
+    "semantic_scholar": {
+      "enabled": true,
+      "type": "api",
+      "base_url": "https://api.semanticscholar.org/graph/v1",
+      "description": "Semantic Scholar API for academic papers with citations, influence scores, and paper details",
+      "usage_note": "No API key required for basic access (rate limited). Use for cross-disciplinary search and citation analysis.",
+      "rate_limit": "100 requests/5 minutes (unauthenticated)"
+    },
+    "pubmed": {
+      "enabled": true,
+      "type": "api",
+      "base_url": "https://eutils.ncbi.nlm.nih.gov/entrez/eutils",
+      "description": "PubMed/NCBI E-utilities for biomedical literature",
+      "usage_note": "Free API. Use for medical, biology, health sciences. Returns PMIDs and abstracts. PDF links via PubMed Central.",
+      "rate_limit": "3 requests/second (no key), 10 requests/second (with API key)",
+      "api_key_env": "NCBI_API_KEY"
+    },
+    "crossref": {
+      "enabled": true,
+      "type": "api",
+      "base_url": "https://api.crossref.org",
+      "description": "Crossref metadata for DOI resolution and citation data",
+      "usage_note": "Use for resolving DOIs to full metadata, finding papers by DOI, checking citations",
+      "etiquette": "Include email in User-Agent header for polite pool access"
+    }
+  },
+  "market_sources": {
+    "crunchbase": {
+      "enabled": false,
+      "type": "api",
+      "api_key_env": "CRUNCHBASE_API_KEY",
+      "description": "Crunchbase company and funding data",
+      "usage_note": "Requires paid API key. Use for startup funding, acquisitions, people data."
+    },
+    "sec_edgar": {
+      "enabled": true,
+      "type": "api",
+      "base_url": "https://data.sec.gov",
+      "description": "SEC filings and public company data",
+      "usage_note": "Free access. Requires User-Agent header. Use for 10-K, 10-Q, 8-K filings.",
+      "rate_limit": "10 requests/second",
+      "user_agent_required": true
+    }
+  },
+  "integration_guide": {
+    "for_agents": {
+      "academic_researcher": [
+        "Use WebSearch to find papers and identify PDF URLs",
+        "For arXiv papers: Extract arXiv ID and construct PDF URL (https://arxiv.org/pdf/XXXX.XXXXX.pdf)",
+        "For PMIDs: Use PubMed API to check for free full-text via PMC",
+        "For DOIs: Use Crossref API to get metadata, then search for open access PDFs",
+        "Pass all PDF URLs to pdf-reader.sh prepare command for caching",
+        "Use Read tool on cached PDFs for full-text analysis"
+      ],
+      "pdf_analyzer": [
+        "Receives already-cached PDF paths from academic-researcher",
+        "Focuses on structure extraction and content analysis",
+        "Does not handle fetching or caching"
+      ],
+      "synthesis_agent": [
+        "Receives structured analysis from pdf-analyzer and academic-researcher",
+        "Synthesizes findings across multiple papers",
+        "Can request additional PDF analysis if needed"
+      ]
+    },
+    "api_usage_patterns": {
+      "semantic_scholar": {
+        "search": "GET /paper/search?query={query}&fields=title,authors,year,abstract,citationCount,influentialCitationCount,openAccessPdf",
+        "by_id": "GET /paper/{paper_id}?fields=title,authors,year,abstract,citations,references,openAccessPdf",
+        "example": "curl 'https://api.semanticscholar.org/graph/v1/paper/search?query=attention+is+all+you+need&fields=openAccessPdf'"
+      },
+      "pubmed": {
+        "search": "GET /esearch.fcgi?db=pubmed&term={query}&retmax=20&retmode=json",
+        "fetch": "GET /efetch.fcgi?db=pubmed&id={pmid}&retmode=xml",
+        "pmc_check": "GET /elink.fcgi?dbfrom=pubmed&id={pmid}&linkname=pubmed_pmc&retmode=json"
+      },
+      "crossref": {
+        "doi_lookup": "GET /works/{doi}",
+        "search": "GET /works?query={query}&rows=20"
+      }
+    }
+  },
+  "setup_instructions": {
+    "no_setup_required": [
+      "arxiv (via npx, auto-installs)",
+      "semantic_scholar (public API)",
+      "pubmed (public API)",
+      "crossref (public API)",
+      "sec_edgar (public API with User-Agent)"
+    ],
+    "optional_api_keys": {
+      "NCBI_API_KEY": "Register at https://ncbiinsights.ncbi.nlm.nih.gov/2017/11/02/new-api-keys-for-the-e-utilities/ for higher rate limits (10 req/s vs 3 req/s)",
+      "CRUNCHBASE_API_KEY": "Requires paid subscription at https://www.crunchbase.com/products/api"
+    }
+  },
+  "note": "Academic MCP servers are ENABLED by default. They use free public APIs and require no setup. Market sources (except SEC EDGAR) require API keys and are disabled by default."
+}

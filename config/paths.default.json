@@ -1,0 +1,14 @@
+{
+  "_comment": "Paths use platform-aware defaults. Override in ~/.config/delve/paths.json if needed.",
+  "cache_dir": "${PLATFORM_CACHE}",
+  "log_dir": "${PLATFORM_LOGS}",
+  "audit_log": "${PLATFORM_LOGS}/audit.log",
+  "citations_db": "${PLATFORM_DATA}/citations.json",
+  "pdf_cache": "${PLATFORM_CACHE}/pdfs",
+  "session_dir": "${PLATFORM_DATA}/research-sessions",
+  "knowledge_base_core": "${PROJECT_ROOT}/knowledge-base",
+  "knowledge_base_custom": "${PLATFORM_DATA}/knowledge-base-custom",
+  "config_dir": "${PLATFORM_CONFIG}",
+  "agents_dir": "${PROJECT_ROOT}/.claude/agents",
+  "hooks_dir": "${PROJECT_ROOT}/.claude/hooks"
+}

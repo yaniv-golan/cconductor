@@ -1,0 +1,152 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+permissions:
+  contents: write
+
+jobs:
+  validate:
+    name: Validate Release
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.get_version.outputs.version }}
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Get version from tag
+        id: get_version
+        run: |
+          VERSION=${GITHUB_REF#refs/tags/v}
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Version: $VERSION"
+      
+      - name: Verify VERSION file matches tag
+        run: |
+          FILE_VERSION=$(cat VERSION)
+          TAG_VERSION="${{ steps.get_version.outputs.version }}"
+          if [ "$FILE_VERSION" != "$TAG_VERSION" ]; then
+            echo "ERROR: VERSION file ($FILE_VERSION) doesn't match tag ($TAG_VERSION)"
+            exit 1
+          fi
+          echo "✓ Version file matches tag"
+      
+      - name: Verify CHANGELOG.md has entry
+        run: |
+          VERSION="${{ steps.get_version.outputs.version }}"
+          if ! grep -q "\[$VERSION\]" CHANGELOG.md; then
+            echo "WARNING: CHANGELOG.md missing entry for version $VERSION"
+          else
+            echo "✓ Changelog has entry for version $VERSION"
+          fi
+
+  build:
+    name: Build Release Artifacts
+    runs-on: ubuntu-latest
+    needs: validate
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y jq shellcheck
+      
+      - name: Run ShellCheck
+        run: |
+          echo "Running ShellCheck on shell scripts..."
+          find . -name "*.sh" -type f -exec shellcheck {} + || true
+      
+      - name: Set executable permissions
+        run: |
+          chmod +x delve
+          chmod +x install.sh
+          chmod +x src/*.sh 2>/dev/null || true
+          chmod +x src/utils/*.sh 2>/dev/null || true
+          chmod +x src/formatters/*.sh 2>/dev/null || true
+          chmod +x scripts/*.sh 2>/dev/null || true
+      
+      - name: Create tarball
+        run: |
+          VERSION="${{ needs.validate.outputs.version }}"
+          tar -czf "delve-v${VERSION}.tar.gz" \
+            --exclude='.git' \
+            --exclude='.github' \
+            --exclude='research-sessions' \
+            --exclude='logs' \
+            --exclude='*.log' \
+            --exclude='config/*.json' \
+            delve \
+            install.sh \
+            VERSION \
+            CHANGELOG.md \
+            README.md \
+            LICENSE \
+            USAGE.md \
+            src/ \
+            config/ \
+            knowledge-base/ \
+            docs/ \
+            scripts/
+          
+          echo "✓ Created delve-v${VERSION}.tar.gz"
+      
+      - name: Generate checksums
+        run: |
+          VERSION="${{ needs.validate.outputs.version }}"
+          
+          # Individual checksums
+          sha256sum install.sh > install.sh.sha256
+          sha256sum delve > delve.sha256
+          sha256sum "delve-v${VERSION}.tar.gz" > "delve-v${VERSION}.tar.gz.sha256"
+          
+          # Combined checksums file
+          cat > CHECKSUMS.txt << EOF
+          # Delve v${VERSION} - SHA256 Checksums
+          # Generated: $(date -u +"%Y-%m-%d %H:%M:%S UTC")
+          # Verify with: sha256sum -c CHECKSUMS.txt
+          
+          $(sha256sum install.sh)
+          $(sha256sum delve)
+          $(sha256sum delve-v${VERSION}.tar.gz)
+          EOF
+          
+          echo "✓ Generated all checksums"
+          cat CHECKSUMS.txt
+      
+      - name: Extract release notes
+        id: release_notes
+        run: |
+          VERSION="${{ needs.validate.outputs.version }}"
+          
+          # Extract release notes from CHANGELOG.md
+          awk "/## \[${VERSION}\]/,/## \[/" CHANGELOG.md | \
+            sed '/## \[/d' | \
+            sed '/^$/d' > release_notes.txt || echo "Release v${VERSION}" > release_notes.txt
+          
+          echo "✓ Extracted release notes"
+      
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          body_path: release_notes.txt
+          files: |
+            delve-v${{ needs.validate.outputs.version }}.tar.gz
+            delve-v${{ needs.validate.outputs.version }}.tar.gz.sha256
+            install.sh
+            install.sh.sha256
+            delve
+            delve.sha256
+            CHECKSUMS.txt
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+

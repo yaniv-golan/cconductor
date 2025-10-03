@@ -1,0 +1,65 @@
+Delve - Deep Research, Done Right
+
+USAGE:
+  delve <question>                 Start new research
+  delve latest                     Show latest research session
+  delve resume <session>           Continue previous research
+  delve sessions                   List all research sessions
+  delve status                     Check running research
+  delve configure                  Show configuration files
+  delve --update                   Update to latest version
+  delve --check-update             Check for updates now
+  delve --no-update-check          Disable update check for this run
+  delve --init                     Run/re-run initialization
+  delve --help                     Show this help
+  delve --version                  Show version
+
+EXAMPLES:
+  # Start research
+  delve "What are the latest advances in CRISPR?"
+  delve "SaaS market size 2024"
+  
+  # View latest results
+  delve latest
+  
+  # Resume previous session
+  delve resume session_1759356338
+  
+  # List all sessions
+  delve sessions
+  
+  # Check what's running
+  delve status
+  
+  # Run initialization non-interactively
+  delve --init --yes
+
+RESULTS:
+  Reports are saved to OS-appropriate data directories:
+    • macOS:   ~/Library/Application Support/Delve/research-sessions/
+    • Linux:   ~/.local/share/delve/research-sessions/
+    • Windows: %LOCALAPPDATA%\Delve\research-sessions\
+  
+  Use: ./src/utils/path-resolver.sh resolve session_dir (to find exact path)
+
+CONFIGURATION:
+  Config files are stored in OS-appropriate locations:
+    • macOS:   ~/.config/delve/
+    • Linux:   ~/.config/delve/
+    • Windows: %APPDATA%\Delve\
+
+  Create custom configs:
+    • ./src/utils/config-loader.sh init delve-config
+    • ./src/utils/config-loader.sh init security-config
+    • ./src/utils/config-loader.sh list    (see all configs)
+
+  Add custom knowledge:
+    • macOS:   ~/Library/Application Support/Delve/knowledge-base-custom/
+    • Linux:   ~/.local/share/delve/knowledge-base-custom/
+    • Windows: %LOCALAPPDATA%\Delve\knowledge-base-custom\
+
+DOCUMENTATION:
+  Quick start:  docs/QUICK_REFERENCE.md
+  User guide:   docs/USER_GUIDE.md
+  Troubleshoot: docs/TROUBLESHOOTING.md
+  README:       README.md

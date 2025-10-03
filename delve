@@ -1,0 +1,370 @@
+#!/bin/bash
+# Delve - Deep Research, Done Right
+
+set -euo pipefail
+
+VERSION="0.1.0"
+DELVE_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+check_initialization() {
+    # Check if user config directory exists (created by init.sh)
+    # Platform-aware check
+    if [ -f "$DELVE_ROOT/src/utils/platform-paths.sh" ]; then
+        source "$DELVE_ROOT/src/utils/platform-paths.sh"
+        local config_dir=$(get_config_dir)
+        
+        # Check if config directory exists
+        # We don't require configs to exist, just the directory
+        if [ -d "$config_dir" ]; then
+            return 0
+        fi
+    fi
+    
+    return 1
+}
+
+show_init_prompt() {
+    cat <<EOF
+┌─────────────────────────────────────────────────────┐
+│ Welcome to Delve! First-time setup required.        │
+└─────────────────────────────────────────────────────┘
+
+I will now:
+  1. Check for dependencies (jq, curl, bash)
+  2. Create user config directory (~/.config/delve/)
+  3. Create OS-appropriate data directories
+  4. Configure .gitignore to protect your data
+  5. Make scripts executable
+  6. Validate all configurations
+
+This takes ~5 seconds. Run initialization? [Y/n] 
+EOF
+}
+
+run_initialization() {
+    local interactive="${1:-true}"
+    
+    if [ "$interactive" = "true" ]; then
+        show_init_prompt
+        read -r response
+        
+        case "${response:-y}" in
+            [Yy]|[Yy][Ee][Ss]|"")
+                echo ""
+                "$DELVE_ROOT/src/init.sh"
+                ;;
+            *)
+                echo ""
+                echo "Initialization cancelled. Run './delve --init' when ready."
+                exit 0
+                ;;
+        esac
+    else
+        # Non-interactive mode
+        "$DELVE_ROOT/src/init.sh"
+    fi
+}
+
+# Version management
+show_version() {
+    local version=$(cat "$DELVE_ROOT/VERSION" 2>/dev/null || echo "$VERSION")
+    echo "Delve v$version"
+    
+    # Trigger async update check
+    if [ -f "$DELVE_ROOT/src/utils/version-checker.sh" ]; then
+        source "$DELVE_ROOT/src/utils/version-checker.sh"
+        check_for_updates_async
+    fi
+}
+
+# Self-update functionality
+perform_update() {
+    echo "🔄 Updating Delve..."
+    echo ""
+    
+    # Detect installation method
+    if [ -d "$DELVE_ROOT/.git" ]; then
+        # Git installation
+        echo "→ Detected git installation"
+        echo "→ Pulling latest changes..."
+        cd "$DELVE_ROOT"
+        git fetch origin
+        git pull origin main
+        
+        echo "→ Running initialization..."
+        "$DELVE_ROOT/src/init.sh"
+        
+        local new_version=$(cat "$DELVE_ROOT/VERSION" 2>/dev/null || echo "unknown")
+        echo ""
+        echo "✅ Updated to v$new_version"
+    else
+        # Installed via install.sh
+        echo "→ Detected installer-based installation"
+        echo "→ Downloading latest installer..."
+        
+        local temp_installer="/tmp/delve-install-$$.sh"
+        if curl -fsSL "https://github.com/yaniv-golan/delve/releases/latest/download/install.sh" \
+            -o "$temp_installer" 2>/dev/null; then
+            chmod +x "$temp_installer"
+            echo "→ Running installer..."
+            bash "$temp_installer" "$DELVE_ROOT"
+            rm "$temp_installer"
+            echo ""
+            echo "✅ Updated successfully"
+        else
+            echo "✗ Failed to download installer"
+            echo ""
+            echo "Manual update:"
+            echo "  curl -fsSL https://github.com/yaniv-golan/delve/releases/latest/download/install.sh | bash"
+            exit 1
+        fi
+    fi
+}
+
+show_help() {
+    cat <<EOF
+🔍 Delve v$VERSION - Deep Research, Done Right
+
+USAGE:
+  delve <question>                 Start new research
+  delve latest                     Show latest research session
+  delve resume <session>           Continue previous research
+  delve sessions                   List all research sessions
+  delve status                     Check running research
+  delve configure                  Show configuration files
+  delve --update                   Update to latest version
+  delve --check-update             Check for updates now
+  delve --no-update-check          Disable update check for this run
+  delve --init                     Run/re-run initialization
+  delve --help                     Show this help
+  delve --version                  Show version
+
+EXAMPLES:
+  delve "What are the latest advances in CRISPR?"
+  delve "SaaS market size 2024"
+  delve resume session_1759356338
+  delve latest
+  delve --init --yes               Run initialization non-interactively
+
+CONFIGURATION:
+  Config files are stored in OS-appropriate locations:
+    • macOS:   ~/.config/delve/
+    • Linux:   ~/.config/delve/
+    • Windows: %APPDATA%\\Delve\\
+
+  Create custom configs:
+    • ./src/utils/config-loader.sh init delve-config
+    • ./src/utils/config-loader.sh init security-config
+    • ./src/utils/config-loader.sh list    (see all configs)
+
+  Add custom knowledge:
+    • macOS:   ~/Library/Application Support/Delve/knowledge-base-custom/
+    • Linux:   ~/.local/share/delve/knowledge-base-custom/
+    • Windows: %LOCALAPPDATA%\\Delve\\knowledge-base-custom\\
+
+RESULTS:
+  Reports are saved to OS-appropriate data directories:
+    • macOS:   ~/Library/Application Support/Delve/research-sessions/
+    • Linux:   ~/.local/share/delve/research-sessions/
+    • Windows: %LOCALAPPDATA%\\Delve\\research-sessions\\
+  
+  Use: ./src/utils/path-resolver.sh resolve session_dir (to find exact path)
+
+DOCUMENTATION:
+  Quick start:  docs/QUICK_REFERENCE.md
+  User guide:   docs/USER_GUIDE.md
+  Troubleshoot: docs/TROUBLESHOOTING.md
+  README:       README.md
+
+EOF
+}
+
+main() {
+    case "${1:-}" in
+        ""|--help|-h)
+            show_help
+            ;;
+        --version|-v)
+            show_version
+            ;;
+        --update)
+            perform_update
+            ;;
+        --check-update)
+            if [ -f "$DELVE_ROOT/src/utils/version-checker.sh" ]; then
+                source "$DELVE_ROOT/src/utils/version-checker.sh"
+                check_for_updates_sync
+            else
+                echo "Version checker not available"
+                exit 1
+            fi
+            ;;
+        --no-update-check)
+            export DELVE_NO_UPDATE_CHECK=1
+            shift
+            if [ $# -gt 0 ]; then
+                main "$@"
+            else
+                show_help
+            fi
+            ;;
+        --init)
+            # Handle initialization flag
+            shift
+            if [ "${1:-}" = "--yes" ] || [ "${1:-}" = "-y" ]; then
+                run_initialization false
+            else
+                run_initialization true
+            fi
+            ;;
+        resume)
+            # Check initialization before resuming
+            if ! check_initialization; then
+                run_initialization true
+            fi
+            shift
+            "$DELVE_ROOT/src/delve-adaptive.sh" --resume "$@"
+            
+            # Show update notification after research
+            if [ "${DELVE_NO_UPDATE_CHECK:-0}" != "1" ] && [ -f "$DELVE_ROOT/src/utils/version-checker.sh" ]; then
+                source "$DELVE_ROOT/src/utils/version-checker.sh"
+                show_cached_notification || check_for_updates_async
+            fi
+            ;;
+        sessions|list)
+            # Use the formatted list from delve-adaptive.sh
+            "$DELVE_ROOT/src/delve-adaptive.sh" --list
+            ;;
+        status)
+            echo "Checking for running research sessions..."
+            pgrep -fl "delve-adaptive" || echo "No active sessions"
+            ;;
+        latest)
+            # Get session directory from path resolver (with fallback)
+            local session_dir="$DELVE_ROOT/research-sessions"
+            if [ -f "$DELVE_ROOT/src/utils/path-resolver.sh" ]; then
+                source "$DELVE_ROOT/src/utils/path-resolver.sh" 2>/dev/null
+                local resolved=$(resolve_path "session_dir" 2>/dev/null)
+                # Only use resolved path if it's valid and not an error
+                if [ -n "$resolved" ] && [ "${resolved:0:5}" != "ERROR" ]; then
+                    session_dir="$resolved"
+                fi
+            fi
+            
+            if [ -f "$session_dir/.latest" ]; then
+                LATEST_SESSION=$(cat "$session_dir/.latest")
+                LATEST_PATH="$session_dir/$LATEST_SESSION"
+                
+                if [ -d "$LATEST_PATH" ]; then
+                    echo "Latest session: $LATEST_SESSION"
+                    echo "Location: $LATEST_PATH"
+                    echo ""
+                    
+                    # Show session metadata if available
+                    if [ -f "$LATEST_PATH/session.json" ]; then
+                        local question=$(jq -r '.research_question // "N/A"' "$LATEST_PATH/session.json" 2>/dev/null)
+                        local status=$(jq -r '.status // "unknown"' "$LATEST_PATH/session.json" 2>/dev/null)
+                        local created=$(jq -r '.created_at // "N/A"' "$LATEST_PATH/session.json" 2>/dev/null)
+                        
+                        echo "Question: $question"
+                        echo "Status: $status"
+                        echo "Created: $created"
+                        echo ""
+                    fi
+                    
+                    # Show knowledge graph summary if available
+                    if [ -f "$LATEST_PATH/knowledge-graph.json" ]; then
+                        local entities=$(jq -r '.stats.total_entities // 0' "$LATEST_PATH/knowledge-graph.json" 2>/dev/null)
+                        local claims=$(jq -r '.stats.total_claims // 0' "$LATEST_PATH/knowledge-graph.json" 2>/dev/null)
+                        local confidence=$(jq -r '.confidence_scores.overall // 0' "$LATEST_PATH/knowledge-graph.json" 2>/dev/null)
+                        local gaps=$(jq -r '.stats.unresolved_gaps // 0' "$LATEST_PATH/knowledge-graph.json" 2>/dev/null)
+                        
+                        echo "Progress:"
+                        echo "  • Entities: $entities"
+                        echo "  • Claims: $claims"
+                        echo "  • Confidence: $confidence"
+                        echo "  • Unresolved gaps: $gaps"
+                        echo ""
+                    fi
+                    
+                    # Show report if exists
+                    if [ -f "$LATEST_PATH/research-report.md" ]; then
+                        echo "✓ Report available: $LATEST_PATH/research-report.md"
+                        echo ""
+                        echo "View with:"
+                        echo "  cat $LATEST_PATH/research-report.md"
+                        echo "  open $LATEST_PATH/research-report.md"
+                        echo ""
+                        echo "Resume with:"
+                        echo "  ./delve resume $LATEST_SESSION"
+                    else
+                        echo "⏳ Research in progress or not yet complete"
+                        echo ""
+                        echo "Resume with:"
+                        echo "  ./delve resume $LATEST_SESSION"
+                    fi
+                else
+                    echo "Error: Latest session directory not found: $LATEST_SESSION"
+                    exit 1
+                fi
+            else
+                echo "No research sessions yet. Start one with:"
+                echo "  ./delve \"your research question\""
+            fi
+            ;;
+        configure|config)
+            echo "🔧 Delve Configuration"
+            echo ""
+            
+            # Get user config directory
+            if [ -f "$DELVE_ROOT/src/utils/config-loader.sh" ]; then
+                source "$DELVE_ROOT/src/utils/config-loader.sh"
+                
+                echo "═══════════════════════════════════════════════════════"
+                echo ""
+                
+                # Show user config location
+                local user_config_dir=$(get_user_config_dir)
+                echo "User Config Directory: $user_config_dir"
+                echo ""
+                
+                # List configs
+                "$DELVE_ROOT/src/utils/config-loader.sh" list
+                echo ""
+                
+                echo "═══════════════════════════════════════════════════════"
+                echo ""
+                echo "Create custom config:"
+                echo "  ./src/utils/config-loader.sh init <config-name>"
+                echo ""
+                echo "Edit config:"
+                echo "  vim $user_config_dir/<config-name>.json"
+                echo ""
+                echo "View differences:"
+                echo "  ./src/utils/config-loader.sh diff <config-name>"
+                echo ""
+                echo "Get help:"
+                echo "  ./src/utils/config-loader.sh help"
+            else
+                echo "Error: Config loader not found"
+                exit 1
+            fi
+            ;;
+        *)
+            # Check initialization before running research
+            if ! check_initialization; then
+                run_initialization true
+            fi
+            # Research question - use adaptive system
+            "$DELVE_ROOT/src/delve-adaptive.sh" "$@"
+            
+            # Show update notification after research
+            if [ "${DELVE_NO_UPDATE_CHECK:-0}" != "1" ] && [ -f "$DELVE_ROOT/src/utils/version-checker.sh" ]; then
+                source "$DELVE_ROOT/src/utils/version-checker.sh"
+                show_cached_notification || check_for_updates_async
+            fi
+            ;;
+    esac
+}
+
+main "$@"

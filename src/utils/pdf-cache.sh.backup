@@ -1,0 +1,257 @@
+#!/bin/bash
+# PDF Cache Manager
+# Caches fetched PDFs locally with metadata to avoid redundant downloads
+
+set -euo pipefail
+
+# Get project root and source path resolver
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+source "$SCRIPT_DIR/path-resolver.sh"
+
+# Configuration
+PDF_CACHE_DIR=$(resolve_path "pdf_cache")
+PDF_METADATA_DIR="${PDF_CACHE_DIR}/metadata"
+
+# Initialize cache directories
+init_pdf_cache() {
+    mkdir -p "$PDF_CACHE_DIR"
+    mkdir -p "$PDF_METADATA_DIR"
+
+    # Create cache index if it doesn't exist
+    local index_file="$PDF_CACHE_DIR/cache-index.json"
+    if [ ! -f "$index_file" ]; then
+        echo '{"pdfs": [], "last_updated": "'$(date -u +"%Y-%m-%dT%H:%M:%SZ")'"}' > "$index_file"
+    fi
+}
+
+# Generate cache key from URL (hash)
+get_cache_key() {
+    local url="$1"
+    echo -n "$url" | shasum -a 256 | cut -d' ' -f1
+}
+
+# Check if PDF is already cached
+is_pdf_cached() {
+    local url="$1"
+    local cache_key=$(get_cache_key "$url")
+    local pdf_file="$PDF_CACHE_DIR/${cache_key}.pdf"
+
+    [ -f "$pdf_file" ]
+}
+
+# Get cached PDF path
+get_cached_pdf_path() {
+    local url="$1"
+    local cache_key=$(get_cache_key "$url")
+    echo "$PDF_CACHE_DIR/${cache_key}.pdf"
+}
+
+# Get PDF metadata path
+get_pdf_metadata_path() {
+    local url="$1"
+    local cache_key=$(get_cache_key "$url")
+    echo "$PDF_METADATA_DIR/${cache_key}.json"
+}
+
+# Save PDF to cache with metadata
+cache_pdf() {
+    local url="$1"
+    local pdf_path="$2"
+    local title="${3:-Unknown}"
+    local source="${4:-Unknown}"
+
+    init_pdf_cache
+
+    local cache_key=$(get_cache_key "$url")
+    local cached_pdf="$PDF_CACHE_DIR/${cache_key}.pdf"
+    local metadata_file="$PDF_METADATA_DIR/${cache_key}.json"
+
+    # Copy PDF to cache
+    cp "$pdf_path" "$cached_pdf"
+
+    # Get file metadata
+    local file_size=$(stat -f%z "$cached_pdf" 2>/dev/null || stat -c%s "$cached_pdf" 2>/dev/null || echo 0)
+    local sha256=$(shasum -a 256 "$cached_pdf" | cut -d' ' -f1)
+
+    # Create metadata using jq (prevents injection attacks)
+    jq -n \
+        --arg url "$url" \
+        --arg title "$title" \
+        --arg source "$source" \
+        --arg cache_key "$cache_key" \
+        --arg cached_at "$(date -u +"%Y-%m-%dT%H:%M:%SZ")" \
+        --argjson file_size "$file_size" \
+        --arg file_path "$cached_pdf" \
+        --arg sha256 "$sha256" \
+        '{
+            url: $url,
+            title: $title,
+            source: $source,
+            cache_key: $cache_key,
+            cached_at: $cached_at,
+            file_size: $file_size,
+            file_path: $file_path,
+            sha256: $sha256
+        }' > "$metadata_file"
+
+    # Update cache index
+    update_cache_index "$url" "$cache_key" "$title"
+
+    echo "$cached_pdf"
+}
+
+# Update cache index with new entry
+update_cache_index() {
+    local url="$1"
+    local cache_key="$2"
+    local title="$3"
+
+    local index_file="$PDF_CACHE_DIR/cache-index.json"
+
+    # Add entry to index
+    jq --arg url "$url" \
+       --arg key "$cache_key" \
+       --arg title "$title" \
+       --arg date "$(date -u +"%Y-%m-%dT%H:%M:%SZ")" \
+       '.pdfs += [{url: $url, cache_key: $key, title: $title, cached_at: $date}] | .last_updated = $date' \
+       "$index_file" > "${index_file}.tmp"
+
+    mv "${index_file}.tmp" "$index_file"
+}
+
+# Fetch PDF from URL and cache it
+fetch_and_cache_pdf() {
+    local url="$1"
+    local title="${2:-Unknown}"
+    local source="${3:-Unknown}"
+
+    init_pdf_cache
+
+    # Check if already cached
+    if is_pdf_cached "$url"; then
+        echo "$(get_cached_pdf_path "$url")"
+        return 0
+    fi
+
+    # Download PDF
+    local temp_pdf=$(mktemp /tmp/pdf-XXXXXX.pdf)
+
+    if curl -L -s -f -o "$temp_pdf" "$url"; then
+        # Verify it's a PDF
+        if file "$temp_pdf" | grep -q "PDF"; then
+            # Cache it
+            local cached_path=$(cache_pdf "$url" "$temp_pdf" "$title" "$source")
+            rm -f "$temp_pdf"
+            echo "$cached_path"
+            return 0
+        else
+            rm -f "$temp_pdf"
+            echo "Error: Downloaded file is not a PDF" >&2
+            return 1
+        fi
+    else
+        rm -f "$temp_pdf"
+        echo "Error: Failed to download PDF from $url" >&2
+        return 1
+    fi
+}
+
+# Get PDF metadata
+get_pdf_metadata() {
+    local url="$1"
+    local metadata_file=$(get_pdf_metadata_path "$url")
+
+    if [ -f "$metadata_file" ]; then
+        cat "$metadata_file"
+    else
+        echo '{"error": "PDF not found in cache"}'
+    fi
+}
+
+# List all cached PDFs
+list_cached_pdfs() {
+    init_pdf_cache
+    cat "$PDF_CACHE_DIR/cache-index.json"
+}
+
+# Clear cache
+clear_pdf_cache() {
+    local confirm="${1:-no}"
+
+    if [ "$confirm" = "yes" ]; then
+        rm -rf "$PDF_CACHE_DIR"
+        echo "PDF cache cleared"
+    else
+        echo "Use: clear_pdf_cache yes"
+    fi
+}
+
+# Get cache statistics
+get_cache_stats() {
+    init_pdf_cache
+
+    local pdf_count=$(find "$PDF_CACHE_DIR" -name "*.pdf" | wc -l)
+    local total_size=$(du -sh "$PDF_CACHE_DIR" 2>/dev/null | cut -f1)
+
+    cat <<EOF
+{
+  "cached_pdfs": $pdf_count,
+  "total_size": "$total_size",
+  "cache_location": "$PDF_CACHE_DIR"
+}
+EOF
+}
+
+# Export functions
+export -f init_pdf_cache
+export -f get_cache_key
+export -f is_pdf_cached
+export -f get_cached_pdf_path
+export -f get_pdf_metadata_path
+export -f cache_pdf
+export -f update_cache_index
+export -f fetch_and_cache_pdf
+export -f get_pdf_metadata
+export -f list_cached_pdfs
+export -f clear_pdf_cache
+export -f get_cache_stats
+
+# CLI interface
+if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
+    case "${1:-help}" in
+        fetch)
+            fetch_and_cache_pdf "$2" "${3:-Unknown}" "${4:-Unknown}"
+            ;;
+        check)
+            if is_pdf_cached "$2"; then
+                echo "Cached: $(get_cached_pdf_path "$2")"
+            else
+                echo "Not cached"
+            fi
+            ;;
+        metadata)
+            get_pdf_metadata "$2"
+            ;;
+        list)
+            list_cached_pdfs
+            ;;
+        stats)
+            get_cache_stats
+            ;;
+        clear)
+            clear_pdf_cache "${2:-no}"
+            ;;
+        *)
+            echo "Usage: $0 {fetch|check|metadata|list|stats|clear} [args]"
+            echo ""
+            echo "Commands:"
+            echo "  fetch <url> [title] [source]  - Fetch and cache PDF"
+            echo "  check <url>                    - Check if PDF is cached"
+            echo "  metadata <url>                 - Get cached PDF metadata"
+            echo "  list                           - List all cached PDFs"
+            echo "  stats                          - Show cache statistics"
+            echo "  clear yes                      - Clear entire cache"
+            ;;
+    esac
+fi

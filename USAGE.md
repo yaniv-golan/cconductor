@@ -1,0 +1,609 @@
+# Usage Guide - Delve
+
+**How to use Delve for AI-powered research**
+
+Version: 0.1.0
+
+---
+
+## Quick Start
+
+### Installation
+
+**Easiest way:**
+
+```bash
+curl -fsSL https://github.com/yaniv-golan/delve/releases/latest/download/install.sh | bash
+```
+
+Then use from anywhere:
+
+```bash
+delve "Your research question here"
+```
+
+**Manual install:**
+
+```bash
+git clone https://github.com/yaniv-golan/delve.git
+cd delve
+./delve "Your research question here"
+```
+
+**Note:** If you get "Permission denied", run: `chmod +x delve`
+
+### What Happens When You Run Delve
+
+**First time:**
+
+1. Setup runs automatically (~5 seconds)
+2. Dependencies auto-installed (if needed)
+3. Session created automatically
+4. Research begins immediately
+5. Progress shown in terminal
+6. Report generated when complete
+
+**Subsequent runs:**
+
+1. Session created automatically
+2. Research begins immediately
+3. Progress shown in terminal
+4. Report generated when complete
+
+**Example**:
+
+```bash
+./delve "What is Docker containerization?"
+```
+
+### Viewing Results
+
+```bash
+# Show latest research
+./delve latest
+
+# List all sessions
+./delve sessions
+
+# View specific report
+cat research-sessions/session_1759420487/research-report.md
+```
+
+---
+
+## How Delve Works
+
+### The Research Pipeline
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│  1. Understanding & Decomposition                            │
+│     • Analyzes research question                             │
+│     • Detects research type (academic, market, etc.)         │
+│     • Creates focused sub-tasks                              │
+└─────────────────────────────────────────────────────────────┘
+                            ↓
+┌─────────────────────────────────────────────────────────────┐
+│  2. Parallel Research (multi-agent)                          │
+│     • Web Researcher → Web search & analysis                 │
+│     • Academic Researcher → Papers & journals                │
+│     • PDF Analyzer → Document analysis                       │
+│     • Market Analyzer → Business intelligence                │
+│     • Code Analyzer → Technical research                     │
+│     • Specialist agents work simultaneously                  │
+└─────────────────────────────────────────────────────────────┘
+                            ↓
+┌─────────────────────────────────────────────────────────────┐
+│  3. Synthesis & Integration                                  │
+│     • Combines findings from all agents                      │
+│     • Resolves contradictions                                │
+│     • Identifies gaps                                        │
+│     • Builds knowledge graph                                 │
+│     • Tracks citations and sources                           │
+└─────────────────────────────────────────────────────────────┘
+                            ↓
+┌─────────────────────────────────────────────────────────────┐
+│  4. Validation & Quality Assessment                          │
+│     • Fact-checking against sources                          │
+│     • Citation coverage analysis                             │
+│     • Confidence scoring                                     │
+│     • Gap identification                                     │
+│     • Quality gate enforcement                               │
+└─────────────────────────────────────────────────────────────┘
+                            ↓
+┌─────────────────────────────────────────────────────────────┐
+│  5. Report Generation                                        │
+│     • Formatted report with citations                        │
+│     • Complete bibliography                                  │
+│     • Quality score and breakdown                            │
+│     • Markdown output (HTML/JSON in v0.2)                    │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### Research Modes
+
+Delve supports different research approaches (configured in `config/delve-modes.json`):
+
+#### Available Modes
+
+**default** - General research mode
+
+- Balanced approach
+- Mixed source types
+- Good for exploration
+- 10-20 minutes typical
+
+**scientific** - Academic/scientific research
+
+- Peer-reviewed sources
+- Full citations
+- Methodology focus
+- 20-35 minutes typical
+
+**market** - Business/market research
+
+- Business sources
+- Market data focus
+- Industry reports
+- 10-20 minutes typical
+
+**technical** - Technical deep-dives
+
+- Official documentation
+- Code analysis
+- Architecture focus
+- 15-25 minutes typical
+
+**literature_review** - Comprehensive academic reviews
+
+- Systematic analysis
+- 20-30 papers
+- Citation networks
+- 30-45 minutes typical
+
+**Note**: v0.1 uses automatic mode selection based on your question. Explicit mode selection via CLI options will be available in v0.2.
+
+---
+
+## Output and Results
+
+### Where Results Go
+
+All research is saved in `research-sessions/`:
+
+```
+research-sessions/
+  session_1759420487/          # Timestamp-based ID
+    research-report.md         # Main report ← Read this!
+    metadata.json              # Session metadata
+    raw/                       # Raw research data
+    intermediate/              # Processing artifacts
+    final/                     # Final processed data
+```
+
+### Finding Your Latest Research
+
+**Quick method**:
+
+```bash
+./delve latest
+```
+
+**Output shows**:
+
+- Session ID
+- Location
+- Report status
+- Quick view commands
+
+**Manual method**:
+
+```bash
+# List all sessions
+ls -lt research-sessions/
+
+# Read latest report
+cat research-sessions/$(cat research-sessions/.latest)/research-report.md
+```
+
+### Understanding Your Report
+
+Every report includes:
+
+#### 1. Header with Metadata
+
+```markdown
+Generated by: Delve v0.1.0
+Date: October 2, 2025
+Session: session_1759420487
+
+🔍 Research Question: What is Docker containerization?
+📊 Quality Score: 82/100 - VERY GOOD
+📚 Sources: 35 (15 academic, 14 web, 6 PDF)
+⏱️  Duration: 15 minutes
+```
+
+#### 2. Quality Assessment
+
+```markdown
+Research Quality Assessment
+
+Overall Score: 82/100 - VERY GOOD ✅
+
+Breakdown:
+  Confidence:        0.85/1.00  (HIGH)
+  Citation Coverage: 32/35      (91%)
+  Contradictions:    0           (NONE)
+  Coverage:          82%         (GOOD)
+
+Recommendation: Ready for use
+```
+
+**Quality scores**:
+
+- **90-100**: EXCELLENT - Publication ready
+- **80-89**: VERY GOOD - High confidence
+- **70-79**: GOOD - Solid research
+- **60-69**: FAIR - Usable with caveats
+- **<60**: NEEDS WORK - Run more iterations
+
+#### 3. Executive Summary
+
+High-level overview of findings.
+
+#### 4. Main Findings
+
+Detailed research results with citations.
+
+**Citations format**:
+
+```markdown
+Docker uses containerization to isolate applications [1].
+Released in 2013 [2], it became widely adopted [3].
+```
+
+#### 5. Bibliography
+
+Complete list of sources:
+
+```markdown
+## References
+
+[1] Docker Inc. (2024). "What is Docker?" 
+    https://docs.docker.com/
+
+[2] Merkel, D. (2014). "Docker: lightweight Linux 
+    containers..." Linux Journal.
+```
+
+---
+
+## Configuration
+
+### Security Settings
+
+Control which domains Delve can access.
+
+**Configuration file**: `config/security-config.json`
+
+**Three profiles**:
+
+```json
+{
+  "security_profile": "strict"       // Maximum safety (default)
+}
+```
+
+**Available profiles**:
+
+- **strict** - Academic/sensitive, prompts for unknown domains (default)
+- **permissive** - Business research, fewer prompts
+- **max_automation** - Testing only, minimal prompts (use in VMs)
+
+**To change**:
+
+```bash
+# Edit config file
+nano config/security-config.json
+
+# Change profile value, save, and close
+```
+
+See [Security Guide](docs/SECURITY_GUIDE.md) for detailed information.
+
+### Research Preferences
+
+**Configuration file**: `config/delve-config.json`
+
+Controls:
+
+- Source preferences
+- Agent behavior
+- Quality thresholds
+- Logging and audit settings
+
+See [Configuration Reference](docs/CONFIGURATION_REFERENCE.md) for all options.
+
+### Custom Knowledge
+
+Add your own domain expertise to Delve.
+
+**Create file**: `knowledge-base-custom/my-domain.md`
+
+**Format** (simple markdown):
+
+```markdown
+## Overview
+What this knowledge covers.
+
+## Key Concepts
+- Term 1: Definition
+- Term 2: Definition
+
+## Important Facts
+- Fact about your domain
+```
+
+**Automatic discovery**: Delve finds and uses all `.md` files in `knowledge-base-custom/`
+
+See [Custom Knowledge Guide](docs/CUSTOM_KNOWLEDGE.md) for detailed guide.
+
+---
+
+## Command Reference
+
+### Basic Commands
+
+```bash
+# Start research
+./delve "question"
+
+# View latest
+./delve latest
+
+# List sessions
+./delve sessions
+
+# Resume research
+./delve resume SESSION_ID
+
+# Check status
+./delve status
+
+# View configuration
+./delve configure
+
+# Run/re-run initialization
+./delve --init
+./delve --init --yes   # Non-interactive for scripts
+
+# Help
+./delve --help
+
+# Version
+./delve --version
+```
+
+### Examples
+
+```bash
+# Research any topic
+./delve "What is quantum computing?"
+
+# Academic research
+./delve "Latest mRNA vaccine research"
+
+# Business research
+./delve "AI coding assistant market landscape"
+
+# Technical research
+./delve "Kubernetes architecture and components"
+```
+
+---
+
+## Advanced Usage
+
+### Resuming Research
+
+Continue a previous session to improve quality:
+
+```bash
+./delve resume session_1759420487
+```
+
+**When to resume**:
+
+- Quality score lower than needed
+- Want more depth or coverage
+- Found gaps in the research
+- Need more citations
+
+**Expected improvement**: +10-20 quality points per iteration
+
+### Multi-Session Research
+
+Build comprehensive understanding through multiple focused sessions:
+
+```bash
+# Overview first
+./delve "Quantum computing overview"
+
+# Then specific aspects
+./delve "Quantum error correction methods"
+./delve "Quantum computing applications"
+```
+
+### PDF Research
+
+Research with PDF documents:
+
+1. Create pdfs directory:
+
+   ```bash
+   mkdir pdfs/
+   ```
+
+2. Add your PDFs:
+
+   ```bash
+   cp paper1.pdf paper2.pdf pdfs/
+   ```
+
+3. Research referencing PDFs:
+
+   ```bash
+   ./delve "Summarize key findings from papers in pdfs/"
+   ```
+
+---
+
+## Session Management
+
+### Listing Sessions
+
+```bash
+./delve sessions
+```
+
+Shows all research sessions, newest first.
+
+### Finding Specific Research
+
+**By recency**:
+
+```bash
+./delve latest              # Most recent
+./delve sessions | head -5  # 5 most recent
+```
+
+**By content**:
+
+```bash
+grep -r "keyword" research-sessions/*/research-report.md
+```
+
+### Organizing Sessions
+
+**Archive old research**:
+
+```bash
+mkdir -p archive/2024-q3/
+mv research-sessions/session_old* archive/2024-q3/
+```
+
+---
+
+## Quality and Citations
+
+### Understanding Quality Scores
+
+Every session receives a quality assessment with:
+
+- **Overall Score** (0-100) - Reliability rating
+- **Confidence** (0.0-1.0) - Certainty about findings
+- **Citation Coverage** (X/Y) - Claims with citations
+- **Contradictions** - Unresolved conflicts in sources
+- **Coverage** (%) - Percentage of topic explored
+
+See [Quality Guide](docs/QUALITY_GUIDE.md) for detailed explanation.
+
+### Citations and Bibliography
+
+Every report includes:
+
+**In-text citations**:
+
+```markdown
+Docker uses containerization [1]. Released in 2013 [2].
+```
+
+**Complete bibliography** at end of report.
+
+See [Citations Guide](docs/CITATIONS_GUIDE.md) for details.
+
+---
+
+## Troubleshooting
+
+### Common Issues
+
+| Problem | Solution |
+|---------|----------|
+| "Command not found" | `cd` to delve directory |
+| "Permission denied" | `chmod +x delve` |
+| "Config error" | `cp config/*.default.json config/` |
+| "Session not found" | Use `./delve sessions` to list |
+| "Quality too low" | `./delve resume SESSION_ID` |
+
+### Getting Help
+
+1. **Check error message** - Delve provides helpful errors
+2. **Review logs** - Check `logs/` directory
+3. **Consult docs** - See [Troubleshooting Guide](docs/TROUBLESHOOTING.md)
+4. **File issue** - GitHub Issues if problem persists
+
+---
+
+## What's Coming
+
+### v0.2 Planned Features
+
+The following features are **planned but not yet available in v0.1**:
+
+🚧 **CLI Options** - Advanced command-line options (not yet implemented):
+
+```bash
+# These will work in v0.2, but DO NOT work in v0.1:
+./delve "question" --mode scientific    # Explicit mode selection
+./delve "question" --speed fast         # Control research depth
+./delve "question" --output html        # HTML/JSON output formats
+./delve "question" --name my-research   # Custom session names
+```
+
+**Current v0.1 alternatives**:
+
+- Mode: Automatic detection based on question keywords
+- Speed: Configure via `config/delve-config.json`
+- Session naming: Timestamp-based (session_TIMESTAMP)
+
+🚧 **Enhanced Output** - Multiple formats:
+
+- HTML reports with styling
+- JSON export for processing
+- Multiple citation styles (APA, MLA, Chicago)
+- BibTeX export
+
+🚧 **Better UX** - Improved experience:
+
+- Real-time progress indicators
+- Enhanced session management
+- Interactive configuration wizard
+
+See project roadmap for more planned features.
+
+---
+
+## Documentation
+
+### For Users
+
+- **[User Guide](docs/USER_GUIDE.md)** - Comprehensive guide
+- **[Quick Reference](docs/QUICK_REFERENCE.md)** - Command cheat sheet
+- **[Troubleshooting](docs/TROUBLESHOOTING.md)** - Fix problems
+
+### Feature Guides
+
+- **[Citations Guide](docs/CITATIONS_GUIDE.md)** - Using citations
+- **[Security Guide](docs/SECURITY_GUIDE.md)** - Security configuration
+- **[Quality Guide](docs/QUALITY_GUIDE.md)** - Understanding quality
+- **[Custom Knowledge](docs/CUSTOM_KNOWLEDGE.md)** - Adding expertise
+- **[PDF Research](docs/PDF_RESEARCH_GUIDE.md)** - Working with papers
+
+### Reference
+
+- **[Configuration Reference](docs/CONFIGURATION_REFERENCE.md)** - All configs
+
+---
+
+**Start researching**: `./delve "your question"` 🔍

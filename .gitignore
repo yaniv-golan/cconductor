@@ -1,0 +1,31 @@
+# User customizations (stored in user home directory, not in project)
+knowledge-base-custom/
+.claude/agents-custom/
+.claude/hooks-custom/
+.claude/settings.local.json
+.claude/CLAUDE.local.md
+
+# Internal documentation
+internal_docs/
+
+# Session data (can be large)
+research-sessions/
+
+# Logs
+logs/
+*.log
+
+# Cache
+.cache/
+
+# Temp files
+*.tmp
+*.lock
+
+# History
+.history/
+
+# OS files
+.DS_Store
+
+# Note: User configs are stored in ~/.config/delve/ (not in project)

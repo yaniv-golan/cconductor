@@ -1,0 +1,1047 @@
+# Delve Configuration Reference
+
+**Complete reference for all configuration options**
+
+**Version**: 0.1.0  
+**Last Updated**: October 2025  
+**For**: Advanced users and administrators
+
+---
+
+## Table of Contents
+
+1. [Configuration Files Overview](#configuration-files-overview)
+2. [Main Configuration (delve-config.json)](#main-configuration-delve-configjson)
+3. [Research Modes (delve-modes.json)](#research-modes-delve-modesjson)
+4. [Security Configuration (security-config.json)](#security-configuration-security-configjson)
+5. [Adaptive Research (adaptive-config.json)](#adaptive-research-adaptive-configjson)
+6. [Knowledge Base (knowledge-config.json)](#knowledge-base-knowledge-configjson)
+7. [Paths Configuration (paths.json)](#paths-configuration-pathsjson)
+8. [MCP Servers (mcp-servers.json)](#mcp-servers-mcp-serversjson)
+9. [Configuration Patterns](#configuration-patterns)
+10. [Advanced Topics](#advanced-topics)
+
+---
+
+## Configuration Files Overview
+
+### Location
+
+Configuration files are stored in OS-appropriate locations:
+
+**User Configs (your customizations)**:
+
+- **macOS**: `~/.config/delve/`
+- **Linux**: `~/.config/delve/` (or `$XDG_CONFIG_HOME/delve/`)
+- **Windows**: `%APPDATA%\Delve\`
+
+**Default Configs (git-tracked, don't edit)**:
+
+- `PROJECT_ROOT/config/*.default.json`
+
+```
+# User configs (in your home directory)
+~/.config/delve/
+  delve-config.json              Main configuration
+  delve-modes.json               Research mode definitions
+  security-config.json           Security settings
+  adaptive-config.json           Adaptive research settings
+  knowledge-config.json          Knowledge base paths
+  paths.json                     Directory paths
+  mcp-servers.json              MCP server integrations
+  
+# Default configs (in project directory)  
+PROJECT_ROOT/config/
+  *.default.json                 Default versions (don't edit these!)
+```
+
+### The `.default` Pattern
+
+**How configs work**:
+
+1. **Default configs**: In `PROJECT_ROOT/config/*.default.json` (git-tracked, never edit)
+2. **User configs**: In `~/.config/delve/*.json` (your customizations)
+3. **Loading**: Delve loads defaults, then overlays your customizations
+
+**Benefits**:
+
+- ✅ Your customizations stored in OS-standard location
+- ✅ Survive project deletion/reinstallation
+- ✅ Git updates never overwrite your settings
+- ✅ Multi-user support (each user has own configs)
+- ✅ You can always reset: delete your config to use defaults
+
+**Upgrade safety**: Your customizations in `~/.config/delve/` persist across Delve upgrades and reinstalls!
+
+---
+
+## Main Configuration (delve-config.json)
+
+### Overview
+
+**File**: `config/delve-config.json`  
+**Purpose**: Primary configuration for research behavior  
+**Affects**: All research sessions
+
+### Full Structure
+
+```json
+{
+  "version": "0.1.0",
+  "research": { ... },
+  "research_modes": { ... },
+  "agents": { ... },
+  "context_management": { ... },
+  "output": { ... },
+  "logging": { ... },
+  "quality_gates": { ... },
+  "advanced": { ... }
+}
+```
+
+---
+
+### Section: research
+
+**Controls basic research parameters**
+
+```json
+"research": {
+  "max_web_searches": 5,
+  "sources_per_search": 7,
+  "min_source_credibility": "medium",
+  "require_cross_validation": true,
+  "min_sources_per_claim": 3,
+  "include_code_analysis": true,
+  "search_timeout_seconds": 30
+}
+```
+
+**Options**:
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `max_web_searches` | integer | `5` | Max web searches per research task |
+| `sources_per_search` | integer | `7` | How many sources to analyze per search |
+| `min_source_credibility` | string | `"medium"` | Minimum source quality: `"low"`, `"medium"`, `"high"` |
+| `require_cross_validation` | boolean | `true` | Require multiple sources for claims |
+| `min_sources_per_claim` | integer | `3` | Minimum sources to support each claim |
+| `include_code_analysis` | boolean | `true` | Enable code repository analysis |
+| `search_timeout_seconds` | integer | `30` | Timeout for web searches |
+
+**When to adjust**:
+
+- **Increase `max_web_searches`** for more comprehensive research (slower)
+- **Decrease `sources_per_search`** for faster research (less thorough)
+- **Set `min_source_credibility` to "high"** for academic work
+- **Increase `min_sources_per_claim`** for higher reliability
+
+---
+
+### Section: research_modes
+
+**Configure built-in research modes**
+
+```json
+"research_modes": {
+  "scientific": {
+    "enabled": true,
+    "min_peer_reviewed_sources": 5,
+    "require_methodology_assessment": true,
+    "require_statistical_analysis": true,
+    "check_retractions": true,
+    "track_citation_network": true,
+    "preferred_databases": ["arxiv", "google_scholar", "pubmed"]
+  },
+  "vc_market": { ... },
+  "technical": { ... },
+  "general": { ... }
+}
+```
+
+**Scientific Mode Options**:
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `enabled` | boolean | `true` | Enable this mode |
+| `min_peer_reviewed_sources` | integer | `5` | Minimum peer-reviewed papers needed |
+| `require_methodology_assessment` | boolean | `true` | Assess study methodology |
+| `require_statistical_analysis` | boolean | `true` | Include statistical analysis |
+| `check_retractions` | boolean | `true` | Check if papers were retracted |
+| `track_citation_network` | boolean | `true` | Analyze citation relationships |
+| `preferred_databases` | array | See config | Prioritize these academic databases |
+
+**VC/Market Mode Options**:
+
+```json
+"vc_market": {
+  "enabled": true,
+  "require_tam_sam_som": true,
+  "min_competitors_analyzed": 5,
+  "require_financial_metrics": true,
+  "require_multiple_market_sources": true,
+  "track_funding_rounds": true,
+  "distinguish_disclosed_vs_estimated": true
+}
+```
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `require_tam_sam_som` | boolean | `true` | Calculate TAM/SAM/SOM |
+| `min_competitors_analyzed` | integer | `5` | Minimum competitors to analyze |
+| `require_financial_metrics` | boolean | `true` | Extract financial data |
+| `require_multiple_market_sources` | boolean | `true` | Cross-validate market data |
+| `track_funding_rounds` | boolean | `true` | Track company funding |
+| `distinguish_disclosed_vs_estimated` | boolean | `true` | Separate disclosed from estimated data |
+
+**Technical Mode Options**:
+
+```json
+"technical": {
+  "enabled": true,
+  "require_code_examples": true,
+  "require_file_line_references": true,
+  "include_architecture_analysis": true
+}
+```
+
+**General Mode Options**:
+
+```json
+"general": {
+  "enabled": true,
+  "default_mode": true
+}
+```
+
+---
+
+### Section: agents
+
+**Control AI agent behavior**
+
+```json
+"agents": {
+  "parallel_execution": true,
+  "max_parallel_agents": 4,
+  "model": "claude-sonnet-4-5",
+  "context_window_limit": 180000,
+  "agent_timeout_minutes": 10,
+  "available_agents": [
+    "research-planner",
+    "web-researcher",
+    "code-analyzer",
+    "academic-researcher",
+    "market-analyzer",
+    "competitor-analyzer",
+    "financial-extractor",
+    "synthesis-agent",
+    "fact-checker"
+  ]
+}
+```
+
+**Options**:
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `parallel_execution` | boolean | `true` | Run agents in parallel |
+| `max_parallel_agents` | integer | `4` | Max simultaneous agents |
+| `model` | string | `"claude-sonnet-4-5"` | Claude model to use |
+| `context_window_limit` | integer | `180000` | Max tokens per agent |
+| `agent_timeout_minutes` | integer | `10` | Timeout for each agent |
+| `available_agents` | array | See config | Which agents are enabled |
+
+**When to adjust**:
+
+- **Decrease `max_parallel_agents`** to reduce Claude Code usage (fewer simultaneous prompts)
+- **Increase `agent_timeout_minutes`** for complex research
+- **Disable agents** by removing from `available_agents`
+
+**Note on Claude Code usage**: Each agent invocation uses Claude Code prompts. More parallel agents = faster research but higher prompt usage. Adjust `max_parallel_agents` to balance speed vs. cost based on your Claude subscription/API plan.
+
+---
+
+### Section: context_management
+
+**Manage token usage and context**
+
+```json
+"context_management": {
+  "enable_pruning": true,
+  "enable_summarization": true,
+  "max_facts_per_source": 10,
+  "token_budget_per_agent": {
+    "research-planner": 10000,
+    "web-researcher": 40000,
+    "code-analyzer": 30000,
+    "academic-researcher": 40000,
+    "market-analyzer": 40000,
+    "competitor-analyzer": 40000,
+    "financial-extractor": 30000,
+    "synthesis-agent": 60000,
+    "fact-checker": 40000
+  }
+}
+```
+
+**Options**:
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `enable_pruning` | boolean | `true` | Remove low-relevance content |
+| `enable_summarization` | boolean | `true` | Summarize long content |
+| `max_facts_per_source` | integer | `10` | Max facts extracted per source |
+| `token_budget_per_agent` | object | See config | Token limits per agent type |
+
+**Token budgets**: Control how much context each agent type can use. Increase for deeper analysis, decrease to save costs.
+
+---
+
+### Section: output
+
+**Control output format and content**
+
+```json
+"output": {
+  "default_format": "markdown",
+  "include_confidence_scores": true,
+  "show_conflicting_info": true,
+  "show_knowledge_gaps": true,
+  "citation_style": "inline",
+  "include_methodology_section": true
+}
+```
+
+**Options**:
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `default_format` | string | `"markdown"` | Output format (currently only markdown) |
+| `include_confidence_scores` | boolean | `true` | Show confidence in findings |
+| `show_conflicting_info` | boolean | `true` | Highlight contradictions |
+| `show_knowledge_gaps` | boolean | `true` | Note areas needing more research |
+| `citation_style` | string | `"inline"` | Citation format |
+| `include_methodology_section` | boolean | `true` | Add methodology description |
+
+---
+
+### Section: logging
+
+**Control logging behavior**
+
+```json
+"logging": {
+  "enabled": true,
+  "log_level": "info",
+  "log_queries": true,
+  "log_sources": true,
+  "audit_trail": true,
+  "log_file": "../logs/research.log"
+}
+```
+
+**Options**:
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `enabled` | boolean | `true` | Enable logging |
+| `log_level` | string | `"info"` | Log level: `"debug"`, `"info"`, `"warn"`, `"error"` |
+| `log_queries` | boolean | `true` | Log research questions |
+| `log_sources` | boolean | `true` | Log accessed sources |
+| `audit_trail` | boolean | `true` | Complete audit trail |
+| `log_file` | string | `"../logs/research.log"` | Log file path |
+
+---
+
+### Section: quality_gates
+
+**Set quality thresholds**
+
+```json
+"quality_gates": {
+  "min_sources": 3,
+  "min_verified_claims_percentage": 70,
+  "fail_on_low_quality": false,
+  "warn_on_conflicts": true
+}
+```
+
+**Options**:
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `min_sources` | integer | `3` | Minimum sources required |
+| `min_verified_claims_percentage` | integer | `70` | Minimum % of claims with citations |
+| `fail_on_low_quality` | boolean | `false` | Stop if quality threshold not met |
+| `warn_on_conflicts` | boolean | `true` | Warn about source conflicts |
+
+---
+
+### Section: advanced
+
+**Advanced features**
+
+```json
+"advanced": {
+  "enable_mcp": false,
+  "mcp_servers": [],
+  "custom_agents": [],
+  "enable_hooks": true,
+  "cache_search_results": true,
+  "cache_ttl_hours": 24
+}
+```
+
+**Options**:
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `enable_mcp` | boolean | `false` | Enable MCP integrations |
+| `mcp_servers` | array | `[]` | MCP servers to use |
+| `custom_agents` | array | `[]` | Custom agent scripts |
+| `enable_hooks` | boolean | `true` | Enable hooks system |
+| `cache_search_results` | boolean | `true` | Cache web search results |
+| `cache_ttl_hours` | integer | `24` | Cache lifetime in hours |
+
+---
+
+## Research Modes (delve-modes.json)
+
+### Overview
+
+**File**: `config/delve-modes.json`  
+**Purpose**: Define detailed research mode configurations  
+**Affects**: Research behavior per mode
+
+### Available Modes
+
+Delve has 5 built-in research modes:
+
+1. **default** - General purpose research
+2. **scientific** - Academic literature with PDF analysis
+3. **market** - Market sizing and competitive analysis
+4. **technical** - Technical architecture deep dives
+5. **literature_review** - Systematic literature reviews
+
+### Mode Structure
+
+```json
+"scientific": {
+  "name": "Scientific Literature Review",
+  "description": "Academic research with full PDF analysis...",
+  "agents": ["research-planner", "academic-researcher", "pdf-analyzer", ...],
+  "output_format": "scientific-report",
+  "clarification_required": true,
+  "pdf_centric": true,
+  "special_instructions": { ... },
+  "quality_requirements": { ... }
+}
+```
+
+### Mode Selection
+
+**Automatic detection** based on keywords:
+
+```json
+"mode_selection": {
+  "auto_detect_keywords": {
+    "scientific": ["paper", "study", "research", "peer-reviewed", ...],
+    "market": ["market size", "TAM", "SAM", "competitors", ...],
+    "technical": ["implementation", "architecture", "how does", ...],
+    "literature_review": ["literature review", "systematic review", ...]
+  },
+  "default_mode": "default"
+}
+```
+
+**How it works**:
+
+- Delve scans your question for keywords
+- Matches to the most appropriate mode
+- Falls back to `default_mode` if no match
+
+**Example**:
+
+```bash
+./delve "peer-reviewed research on CRISPR"
+# Auto-selects "scientific" mode
+
+./delve "market size for AI-powered CRM"
+# Auto-selects "market" mode
+
+./delve "how does Docker containerization work"
+# Auto-selects "technical" mode
+```
+
+### Literature Review Mode (Most Comprehensive)
+
+**Special features**:
+
+```json
+"literature_review": {
+  "name": "Comprehensive Literature Review",
+  "description": "Academic literature review with citation network analysis...",
+  "agents": [
+    "research-planner",
+    "academic-researcher",
+    "pdf-analyzer",
+    "synthesis-agent",
+    "fact-checker"
+  ],
+  "output_format": "literature-review",
+  "pdf_centric": true,
+  "special_instructions": {
+    "academic_researcher": {
+      "systematic_search": true,
+      "always_fetch_pdfs": true,
+      "min_papers": 20,
+      "track_citation_network": true,
+      "identify_seminal_papers": true,
+      "identify_recent_advances": true,
+      "extract_full_methodology": true,
+      "categorize_by_approach": true
+    },
+    "synthesis_agent": {
+      "format": "systematic_literature_review",
+      "sections": [
+        "Abstract",
+        "Introduction and Background",
+        "Search Methodology",
+        "Inclusion/Exclusion Criteria",
+        "Literature Overview",
+        "Thematic Analysis",
+        "Methodological Comparison",
+        "Key Findings Synthesis",
+        "Temporal Trends",
+        "Citation Network Analysis",
+        "Research Gaps",
+        "Limitations of Current Literature",
+        "Future Research Directions",
+        "Conclusion",
+        "References"
+      ],
+      "create_summary_tables": true,
+      "create_timeline": true,
+      "assess_consensus": true,
+      "identify_controversies": true,
+      "quantitative_synthesis": true
+    }
+  },
+  "quality_requirements": {
+    "min_peer_reviewed_sources": 15,
+    "min_total_papers": 20,
+    "max_preprint_reliance": 0.25,
+    "require_seminal_papers": true,
+    "require_recent_papers": true,
+    "recent_cutoff_years": 2,
+    "min_citation_tracking_depth": 2,
+    "require_methodological_diversity": true
+  }
+}
+```
+
+**Output sections**: 15 structured sections including abstract, methodology, analysis, gaps, and references.
+
+**Quality requirements**: Highest standards - minimum 20 papers, citation network analysis, temporal trends.
+
+**Best for**: Academic papers, dissertation research, grant proposals.
+
+---
+
+## Security Configuration (security-config.json)
+
+### Overview
+
+**File**: `config/security-config.json`  
+**Purpose**: Control which domains and content Delve can access  
+**See also**: [Security Guide](SECURITY_GUIDE.md) for complete documentation
+
+### Security Profiles
+
+Three built-in profiles:
+
+1. **strict** (default) - Maximum safety, prompts for unknown domains
+2. **permissive** - Trusted commercial sites auto-allowed
+3. **max_automation** - Minimal prompts (for sandboxed environments only)
+
+### Profile Selection
+
+```json
+{
+  "security_profile": "strict"
+}
+```
+
+**Change to**:
+
+- `"strict"` - Production, academic, sensitive work
+- `"permissive"` - Business research, trusted environment
+- `"max_automation"` - VMs/containers/testing only
+
+### Profile Definitions
+
+```json
+"profiles": {
+  "strict": {
+    "description": "Production: Academic auto-allowed, commercial prompt once, known-bad blocked",
+    "auto_allow_academic": true,
+    "auto_allow_commercial": false,
+    "prompt_commercial_once_per_session": true,
+    "block_url_shorteners": true,
+    "block_free_domains": true,
+    "enable_content_scanning": true,
+    "max_fetch_size_mb": 10,
+    "fetch_timeout_seconds": 30
+  }
+}
+```
+
+**Profile options**:
+
+| Option | Type | Strict | Permissive | Max Auto |
+|--------|------|--------|------------|----------|
+| `auto_allow_academic` | boolean | ✅ | ✅ | ✅ |
+| `auto_allow_commercial` | boolean | ❌ | ✅ | ✅ |
+| `prompt_commercial_once_per_session` | boolean | ✅ | ❌ | ❌ |
+| `block_url_shorteners` | boolean | ✅ | ✅ | ✅ |
+| `block_free_domains` | boolean | ✅ | ✅ | ❌ |
+| `enable_content_scanning` | boolean | ✅ | ✅ | ✅ |
+| `max_fetch_size_mb` | integer | 10 | 50 | 100 |
+| `fetch_timeout_seconds` | integer | 30 | 60 | 120 |
+
+### Domain Lists
+
+**Academic (always allowed)**:
+
+```json
+"academic": [
+  "arxiv.org",
+  "semanticscholar.org",
+  "pubmed.ncbi.nlm.nih.gov",
+  "*.edu",
+  "*.gov",
+  "nature.com",
+  "science.org",
+  ...
+]
+```
+
+**Commercial (profile-dependent)**:
+
+```json
+"commercial": [
+  "crunchbase.com",
+  "bloomberg.com",
+  "techcrunch.com",
+  "reuters.com",
+  "forbes.com",
+  ...
+]
+```
+
+**Blocked (always blocked)**:
+
+```json
+"blocked": [
+  "bit.ly",
+  "tinyurl.com",
+  "t.co",
+  "*.tk",
+  "*.ml",
+  "*.ga",
+  ...
+]
+```
+
+**Customizing lists**: Add your trusted/blocked domains directly to these arrays.
+
+---
+
+## Adaptive Research (adaptive-config.json)
+
+### Overview
+
+**File**: `config/adaptive-config.json`  
+**Purpose**: Configure the adaptive research loop (advanced mode)  
+**Note**: This is used by `./delve-adaptive` only, not standard research
+
+### Key Settings
+
+```json
+{
+  "max_iterations": 10,
+  "termination_threshold": 0.9,
+  "gap_exploration_probability": 0.7,
+  "contradiction_resolution_priority": "high",
+  "lead_evaluation_threshold": 0.6,
+  "min_coverage_percentage": 80,
+  "min_confidence_per_entity": 0.7,
+  "parallel_task_limit": 3,
+  "enable_knowledge_graph": true
+}
+```
+
+**Options**:
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `max_iterations` | integer | `10` | Max research cycles |
+| `termination_threshold` | float | `0.9` | Stop when confidence reaches this |
+| `gap_exploration_probability` | float | `0.7` | Chance of exploring gaps |
+| `contradiction_resolution_priority` | string | `"high"` | Priority for resolving conflicts |
+| `lead_evaluation_threshold` | float | `0.6` | Min score to follow a lead |
+| `min_coverage_percentage` | integer | `80` | Target topic coverage % |
+| `min_confidence_per_entity` | float | `0.7` | Min confidence per entity |
+| `parallel_task_limit` | integer | `3` | Max parallel tasks |
+| `enable_knowledge_graph` | boolean | `true` | Use knowledge graph |
+
+**When to adjust**:
+
+- **Increase `max_iterations`** for more thorough research
+- **Increase `termination_threshold`** for higher quality (slower)
+- **Decrease `min_coverage_percentage`** for faster research
+
+---
+
+## Knowledge Base (knowledge-config.json)
+
+### Overview
+
+**File**: `config/knowledge-config.json`  
+**Purpose**: Configure knowledge base directories  
+**Affects**: Where Delve looks for domain knowledge
+
+### Structure
+
+```json
+{
+  "knowledge_directories": [
+    "../knowledge-base",
+    "../knowledge-base-custom"
+  ],
+  "enable_custom_knowledge": true,
+  "knowledge_cache_ttl_hours": 24
+}
+```
+
+**Options**:
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `knowledge_directories` | array | See config | Directories to search for knowledge |
+| `enable_custom_knowledge` | boolean | `true` | Use custom knowledge files |
+| `knowledge_cache_ttl_hours` | integer | `24` | Cache lifetime for knowledge |
+
+**Adding knowledge directories**:
+
+```json
+"knowledge_directories": [
+  "../knowledge-base",           // Built-in
+  "../knowledge-base-custom",    // Your knowledge
+  "/path/to/company-knowledge",  // Company-wide
+  "../project-knowledge"         // Project-specific
+]
+```
+
+**See**: [Custom Knowledge Guide](CUSTOM_KNOWLEDGE.md) for creating knowledge files.
+
+---
+
+## Paths Configuration (paths.json)
+
+### Overview
+
+**File**: `config/paths.json`  
+**Purpose**: Configure all directory paths  
+**Affects**: Where Delve stores data and looks for inputs
+
+### Structure
+
+```json
+{
+  "sessions": "../research-sessions",
+  "logs": "../logs",
+  "pdfs": "../pdfs",
+  "knowledge_base": "../knowledge-base",
+  "knowledge_base_custom": "../knowledge-base-custom",
+  "hooks": "../.claude/hooks"
+}
+```
+
+**All paths are relative to the `config/` directory.**
+
+**Options**:
+
+| Path | Default | Purpose |
+|------|---------|---------|
+| `sessions` | `../research-sessions` | Research session output |
+| `logs` | `../logs` | Log files |
+| `pdfs` | `../pdfs` | PDFs for analysis |
+| `knowledge_base` | `../knowledge-base` | Built-in knowledge |
+| `knowledge_base_custom` | `../knowledge-base-custom` | Your knowledge |
+| `hooks` | `../.claude/hooks` | Hook scripts |
+
+**When to customize**:
+
+- Moving data to different drive
+- Network storage
+- Shared team directories
+- Docker volume mappings
+
+**Example custom paths**:
+
+```json
+{
+  "sessions": "/mnt/research-data/sessions",
+  "logs": "/var/log/delve",
+  "pdfs": "/shared/papers",
+  "knowledge_base": "../knowledge-base",
+  "knowledge_base_custom": "/company/delve-knowledge",
+  "hooks": "../.claude/hooks"
+}
+```
+
+---
+
+## MCP Servers (mcp-servers.json)
+
+### Overview
+
+**File**: `config/mcp-servers.json`  
+**Purpose**: Configure Model Context Protocol (MCP) server integrations  
+**Affects**: External tool integrations (Zapier, Evernote, etc.)
+
+### Structure
+
+```json
+{
+  "mcpServers": {
+    "zapier": {
+      "command": "node",
+      "args": [...],
+      "env": {
+        "ZAPIER_API_KEY": "your-key-here"
+      }
+    }
+  }
+}
+```
+
+**Typical integrations**:
+
+- Zapier (automation)
+- Evernote (note-taking)
+- Slack (notifications)
+- Affinity (CRM)
+
+**Setup**: See individual MCP server documentation for configuration.
+
+---
+
+## Configuration Patterns
+
+### The Git-Safe Customization Pattern
+
+**Always use this pattern**:
+
+1. **Never edit `.default.json` files** in `PROJECT_ROOT/config/` - these are tracked in git
+2. **Create user configs** in `~/.config/delve/` using `./src/utils/config-loader.sh init <config-name>`
+3. **Edit user configs** in `~/.config/delve/` - these are in your home directory, never touched by git
+4. **Reset anytime**: Delete `~/.config/delve/config-name.json` to revert to defaults
+
+**Result**:
+
+- Zero merge conflicts on git pull
+- Configs survive project deletion/reinstallation
+- Each user can have their own settings
+- Smooth upgrades every time
+
+---
+
+### Environment Variable Overrides
+
+**Some configs support environment variables**:
+
+```bash
+# Override security profile
+export DELVE_SECURITY_PROFILE=permissive
+./delve "research question"
+
+# Override mode
+export RESEARCH_MODE=scientific
+./delve "research question"
+
+# Override log level
+export LOG_LEVEL=debug
+./delve "research question"
+```
+
+**Supported variables**:
+
+- `DELVE_SECURITY_PROFILE` - Security profile
+- `RESEARCH_MODE` - Research mode
+- `LOG_LEVEL` - Logging level
+- `MAX_PARALLEL_AGENTS` - Agent parallelism
+
+---
+
+### Per-Session Overrides
+
+**Create session-specific config** (coming in v0.2):
+
+```bash
+# Will be: ./delve "question" --config custom-config.json
+```
+
+**Current workaround**: Modify main config before running, restore after.
+
+---
+
+## Advanced Topics
+
+### Configuration Validation
+
+**Check config syntax**:
+
+```bash
+jq empty config/delve-config.json
+# No output = valid JSON
+# Error message = fix syntax
+```
+
+**Validate all configs**:
+
+```bash
+for f in config/*.json; do 
+  echo "Checking $f..."
+  jq empty "$f" || echo "ERROR in $f"
+done
+```
+
+---
+
+### Configuration Backup
+
+**Backup your customizations**:
+
+```bash
+# Backup all your configs
+mkdir -p backups/$(date +%Y%m%d)
+cp config/*.json backups/$(date +%Y%m%d)/
+
+# Or just your customizations
+cp config/delve-config.json config/delve-config.backup
+cp config/security-config.json config/security-config.backup
+```
+
+**Recommended**: Keep backups before major upgrades.
+
+---
+
+### Version Tracking
+
+**Config files include version**:
+
+```json
+{
+  "version": "0.1.0",
+  ...
+}
+```
+
+**Check version**:
+
+```bash
+jq .version config/delve-config.json
+```
+
+**Version compatibility**: Delve checks config versions and migrates if needed.
+
+---
+
+### Configuration Debugging
+
+**See active configuration**:
+
+```bash
+./delve configure
+# Shows current settings (planned for v0.2)
+```
+
+**Current workaround - check config manually**:
+
+```bash
+jq . config/delve-config.json
+```
+
+**See what security profile is active**:
+
+```bash
+jq .security_profile config/security-config.json
+```
+
+**See what research mode will be used**:
+
+```bash
+jq '.mode_selection.default_mode' config/delve-modes.json
+```
+
+---
+
+### Configuration Templates
+
+**For teams**: Create template configs for common scenarios:
+
+**Academic template**:
+
+```json
+{
+  "research": {
+    "min_source_credibility": "high",
+    "min_sources_per_claim": 5
+  },
+  "research_modes": {
+    "scientific": {
+      "min_peer_reviewed_sources": 10
+    }
+  }
+}
+```
+
+**Business template**:
+
+```json
+{
+  "research_modes": {
+    "vc_market": {
+      "min_competitors_analyzed": 10
+    }
+  }
+}
+```
+
+**Fast prototype template**:
+
+```json
+{
+  "research": {
+    "max_web_searches": 3,
+    "sources_per_search": 5,
+    "min_sources_per_claim": 2
+  }
+}
+```
+
+---
+
+## See Also
+
+- **[User Guide](USER_GUIDE.md)** - How to use Delve
+- **[Security Guide](SECURITY_GUIDE.md)** - Security configuration details
+- **[Custom Knowledge](CUSTOM_KNOWLEDGE.md)** - Adding domain knowledge
+- **[Quality Guide](QUALITY_GUIDE.md)** - Quality scoring configuration
+
+---
+
+**Delve Configuration** - Fine-tune your research ⚙️
