@@ -10,6 +10,9 @@
 # Start research
 ./delve "your question"
 
+# Research with local files (PDFs, markdown, text)
+./delve "your question" --input-dir /path/to/files/
+
 # View latest results
 ./delve latest
 
@@ -141,6 +144,21 @@ rm ~/.config/delve/security-config.json
 
 # Technical question
 ./delve "How does Kubernetes handle container orchestration?"
+```
+
+### Research with Local Files
+
+```bash
+# Analyze pitch deck
+./delve "Evaluate this startup" --input-dir ./pitch-materials/
+
+# Research with context documents
+./delve "Summarize findings" --input-dir ~/Documents/research/
+
+# Market analysis with local reports
+./delve "Market size analysis" --input-dir ./market-reports/
+
+# Supported: PDFs (.pdf), Markdown (.md), Text (.txt)
 ```
 
 ### Academic Research

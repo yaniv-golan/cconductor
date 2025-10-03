@@ -348,6 +348,35 @@ The simplest way to use Delve:
 ./delve "What causes climate change?"
 ```
 
+### Example: Research with Local Files
+
+If you have PDFs, documents, or notes to analyze alongside web research:
+
+```bash
+./delve "Analyze this pitch deck" --input-dir ./pitch-materials/
+```
+
+**What files are supported**:
+
+- **PDFs** (`.pdf`) - Automatically cached and analyzed  
+- **Markdown** (`.md`) - Loaded into session context
+- **Text files** (`.txt`) - Loaded into session context
+
+**What happens**:
+
+- Delve discovers files in the directory
+- PDFs are cached (content-based deduplication)
+- Text files are copied to session knowledge
+- Research coordinator analyzes your materials FIRST
+- Then expands research with web/academic sources
+
+**Common use cases**:
+
+- VC due diligence with pitch decks
+- Research with existing reports/notes
+- Analysis of company materials
+- Academic research with your PDFs
+
 **What happens**:
 
 1. **Session Created**:

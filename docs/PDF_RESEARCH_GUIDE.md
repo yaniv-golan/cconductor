@@ -4,7 +4,105 @@
 
 Delve has comprehensive PDF support for academic research, enabling full-text analysis of scientific papers with automatic caching and source tracking.
 
-## Features
+**Two Ways to Use PDFs**:
+
+1. **Downloaded PDFs** - Delve automatically downloads and caches PDFs from web/academic sources during research
+2. **Local PDFs** - Provide your own PDF files using `--input-dir` flag (v0.1.0+)
+
+## Local PDF Files (User-Provided)
+
+### Quick Start
+
+```bash
+# Analyze your own PDFs alongside web research
+./delve "Research question" --input-dir /path/to/your/files/
+```
+
+### How It Works
+
+When you provide local files with `--input-dir`:
+
+1. **File Discovery**: Delve scans the directory for supported files
+   - PDFs (`.pdf`) - Analyzed with Read tool
+   - Markdown (`.md`) - Loaded into session context
+   - Text (`.txt`) - Loaded into session context
+
+2. **Content-Based Caching**: PDFs are cached by content hash (SHA-256)
+   - Same content = same cache entry (automatic deduplication)
+   - Different files with identical content reuse cache
+   - Version tracking (content change = new cache entry)
+
+3. **Session Manifest**: Track all input files in `input-files.json`
+
+   ```json
+   {
+     "input_dir": "/path/to/files",
+     "pdfs": [
+       {
+         "original_name": "pitch-deck.pdf",
+         "sha256": "abc123...",
+         "cached_path": "~/Library/Caches/Delve/pdfs/abc123.pdf",
+         "source_type": "user_provided"
+       }
+     ],
+     "markdown": [ ... ],
+     "text": [ ... ]
+   }
+   ```
+
+4. **Priority Analysis**: Research coordinator analyzes your files FIRST, then expands to web sources
+
+### Use Cases
+
+**VC Due Diligence**:
+
+```bash
+./delve "Evaluate this startup" --input-dir ./deals/acme/
+# Include: pitch deck, financials, market research
+```
+
+**Academic Research with Your PDFs**:
+
+```bash
+./delve "Compare methodologies in these papers" --input-dir ./literature/
+# Your collection of papers analyzed together
+```
+
+**Market Research with Reports**:
+
+```bash
+./delve "Market size analysis" --input-dir ./market-reports/
+# Analyze proprietary reports + public research
+```
+
+### Local vs Downloaded PDFs
+
+| Feature | Local PDFs (`--input-dir`) | Downloaded PDFs (automatic) |
+|---------|---------------------------|----------------------------|
+| **Cache Key** | Content hash (SHA-256) | URL hash |
+| **Deduplication** | By content | By URL |
+| **Source** | `source: "local"` | `source: "download"` |
+| **Manifest** | `input-files.json` | Standard session tracking |
+| **Priority** | Analyzed FIRST | Standard priority |
+| **Version Tracking** | Hash change = new version | Same URL = same file |
+
+### File Organization
+
+**Single directory, flat structure** (no recursion):
+
+```
+your-files/
+├── document1.pdf          ✅ Processed
+├── notes.md               ✅ Processed
+├── context.txt            ✅ Processed
+├── image.jpg              ⚠️  Skipped (unsupported)
+└── subfolder/
+    └── nested.pdf         ❌ Not discovered (no recursion)
+```
+
+**Tip**: Place all files in one directory for discovery.
+
+## Downloaded PDFs (Automatic)
 
 ### 1. PDF Caching System
 

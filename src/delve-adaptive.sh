@@ -429,6 +429,98 @@ execute_pending_tasks() {
     done <<< "$agents"
 }
 
+# Build input files context for coordinator
+build_input_files_context() {
+    local session_dir="$1"
+    local manifest="$session_dir/input-files.json"
+    
+    # Check if manifest exists
+    if [ ! -f "$manifest" ]; then
+        echo ""
+        return 0
+    fi
+    
+    local context="📁 USER-PROVIDED INPUT FILES (PRIORITY ANALYSIS):
+
+The user has provided the following materials for analysis. 
+IMPORTANT: Analyze these materials FIRST before expanding research to web/academic sources.
+
+"
+    
+    # List PDFs
+    local pdf_count
+    pdf_count=$(jq '.pdfs | length' "$manifest" 2>/dev/null || echo "0")
+    if [ "$pdf_count" -gt 0 ]; then
+        context+="PDF Documents ($pdf_count):
+"
+        while IFS= read -r pdf; do
+            local name
+            name=$(echo "$pdf" | jq -r '.original_name')
+            local path
+            path=$(echo "$pdf" | jq -r '.cached_path')
+            local size
+            size=$(echo "$pdf" | jq -r '.file_size')
+            context+="  • $name ($size bytes)
+    Path: $path
+    [Use Read tool to analyze this PDF]
+"
+        done < <(jq -c '.pdfs[]' "$manifest" 2>/dev/null || echo '[]')
+        context+="
+"
+    fi
+    
+    # List markdown/text files
+    local md_count
+    md_count=$(jq '.markdown | length' "$manifest" 2>/dev/null || echo "0")
+    local txt_count
+    txt_count=$(jq '.text | length' "$manifest" 2>/dev/null || echo "0")
+    local total_text=$((md_count + txt_count))
+    
+    if [ "$total_text" -gt 0 ]; then
+        context+="Context Files ($total_text - already loaded in session knowledge):
+"
+        
+        if [ "$md_count" -gt 0 ]; then
+            while IFS= read -r md; do
+                local name
+                name=$(echo "$md" | jq -r '.original_name')
+                local spath
+                spath=$(echo "$md" | jq -r '.session_path')
+                context+="  • $name (markdown) → $spath
+"
+            done < <(jq -c '.markdown[]' "$manifest" 2>/dev/null || echo '[]')
+        fi
+        
+        if [ "$txt_count" -gt 0 ]; then
+            while IFS= read -r txt; do
+                local name
+                name=$(echo "$txt" | jq -r '.original_name')
+                local spath
+                spath=$(echo "$txt" | jq -r '.session_path')
+                context+="  • $name (text) → $spath
+"
+            done < <(jq -c '.text[]' "$manifest" 2>/dev/null || echo '[]')
+        fi
+        context+="
+"
+    fi
+    
+    context+="RESEARCH STRATEGY:
+1. Analyze all user-provided materials FIRST
+2. Extract key concepts, claims, and data points
+3. Identify questions that need validation or expansion
+4. THEN use web/academic sources to:
+   - Validate claims in user materials
+   - Fill knowledge gaps
+   - Provide additional context
+   - Find supporting/contradicting evidence
+
+The user's materials should drive the research direction.
+"
+    
+    echo "$context"
+}
+
 # Run coordinator analysis
 run_coordinator() {
     local session_dir="$1"
@@ -460,6 +552,10 @@ run_coordinator() {
         fi
     done <<< "$(echo "$completed_tasks" | jq -c '.[]')"
 
+    # Build input files context if present
+    local input_context
+    input_context=$(build_input_files_context "$session_dir")
+
     local coordinator_input="$session_dir/intermediate/coordinator-input-${iteration}.json"
     jq -n \
         --argjson kg "$kg" \
@@ -467,12 +563,14 @@ run_coordinator() {
         --argjson findings "$new_findings" \
         --arg iteration "$iteration" \
         --argjson config "$ADAPTIVE_CONFIG" \
+        --arg input_context "$input_context" \
         '{
             knowledge_graph: $kg,
             task_queue: $queue,
             new_findings: $findings,
             iteration: ($iteration | tonumber),
-            config: $config
+            config: $config,
+            input_files_context: $input_context
         }' \
         > "$coordinator_input"
 
@@ -905,6 +1003,27 @@ main() {
     session_dir=$(initialize_session "$research_question")
     echo "  ✓ Session created: $(basename "$session_dir")"
     echo ""
+
+    # Process input files if --input-dir was provided
+    if [ -n "${DELVE_INPUT_DIR:-}" ]; then
+        echo "→ Processing input files..."
+        # shellcheck disable=SC1091
+        source "$DELVE_SCRIPT_DIR/utils/input-files-manager.sh"
+        
+        if process_input_directory "$DELVE_INPUT_DIR" "$session_dir"; then
+            echo "  ✓ Input files processed"
+            
+            # Store input_dir reference in session metadata
+            local temp_session="$session_dir/session.json.tmp"
+            jq --arg input_dir "$DELVE_INPUT_DIR" \
+               '.input_dir = $input_dir' \
+               "$session_dir/session.json" > "$temp_session" && \
+               mv "$temp_session" "$session_dir/session.json"
+        else
+            echo "  ⚠  Warning: Failed to process some input files"
+        fi
+        echo ""
+    fi
 
     # Verify session compatibility (for existing sessions, if resume added later)
     # For new sessions, this validates the metadata was created correctly

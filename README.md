@@ -48,6 +48,24 @@ Comprehensive research with full citations and bibliography.
 ./delve "Latest advances in CRISPR gene editing 2023-2024"
 ```
 
+### Research with Local Files
+
+Analyze your own PDFs, documents, and notes alongside web research.
+
+```bash
+# Analyze pitch decks
+./delve "Evaluate this pitch deck" --input-dir ./pitch-materials/
+
+# Research with context documents
+./delve "Summarize findings" --input-dir ~/Documents/research-reports/
+```
+
+**Supported formats:**
+
+- PDFs (`.pdf`) - Automatically cached and analyzed
+- Markdown (`.md`) - Loaded into session context
+- Text files (`.txt`) - Loaded into session context
+
 ### Market Analysis
 
 Business intelligence with market data and competitive insights.
@@ -90,6 +108,7 @@ Balanced research on any topic.
 ### v0.1.0 Features
 
 - ✨ **Citations & Bibliography** - Automatic source tracking and reference generation
+- 📁 **Local File Analysis** - Analyze your own PDFs, markdown, and text files with `--input-dir`
 - 🔒 **Configurable Security** - Three profiles (strict/permissive/max_automation)
 - 📊 **Quality Validation** - Research quality gates prevent incomplete results
 - 🌍 **Cross-Platform Support** - Works on Windows, macOS, and Linux

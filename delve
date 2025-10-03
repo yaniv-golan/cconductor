@@ -1,10 +1,16 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # Delve - Deep Research, Done Right
+#
+# Requires: Bash 4.0+
 
 set -euo pipefail
 
 VERSION="0.1.0"
 DELVE_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# Source CLI parser
+# shellcheck disable=SC1091
+source "$DELVE_ROOT/src/utils/cli-parser.sh"
 
 check_initialization() {
     # Check if user config directory exists (created by init.sh)
@@ -127,6 +133,7 @@ show_help() {
 
 USAGE:
   delve <question>                 Start new research
+  delve <question> --input-dir DIR Analyze local files with your research
   delve latest                     Show latest research session
   delve resume <session>           Continue previous research
   delve sessions                   List all research sessions
@@ -139,9 +146,21 @@ USAGE:
   delve --help                     Show this help
   delve --version                  Show version
 
+OPTIONS:
+  --input-dir DIR                  Directory with local files to analyze
+                                   Supported: PDFs (.pdf), Markdown (.md), Text (.txt)
+                                   PDFs are cached; text files are loaded into session
+
 EXAMPLES:
+  # Basic research
   delve "What are the latest advances in CRISPR?"
   delve "SaaS market size 2024"
+  
+  # Research with local materials
+  delve "Analyze this pitch deck" --input-dir ./pitch-materials/
+  delve "Summarize these reports" --input-dir ~/Documents/research/
+  
+  # Session management
   delve resume session_1759356338
   delve latest
   delve --init --yes               Run initialization non-interactively
@@ -179,54 +198,121 @@ DOCUMENTATION:
 EOF
 }
 
+handle_research() {
+    local question="$1"
+    
+    # Check initialization before running research
+    if ! check_initialization; then
+        run_initialization true
+    fi
+    
+    # Check for --input-dir flag
+    local input_dir=""
+    if has_flag "input-dir"; then
+        input_dir=$(get_flag "input-dir")
+        
+        # Validate input directory exists
+        if [ ! -d "$input_dir" ]; then
+            echo "Error: Input directory not found: $input_dir" >&2
+            exit 1
+        fi
+        
+        # Resolve to absolute path
+        input_dir=$(cd "$input_dir" && pwd)
+        
+        echo "📁 Loading input files from: $input_dir"
+        echo ""
+        
+        # Pass to delve-adaptive.sh via environment variable
+        export DELVE_INPUT_DIR="$input_dir"
+    fi
+    
+    # Call delve-adaptive.sh
+    "$DELVE_ROOT/src/delve-adaptive.sh" "$question"
+    
+    # Show update notification after research
+    if [ "${DELVE_NO_UPDATE_CHECK:-0}" != "1" ] && [ -f "$DELVE_ROOT/src/utils/version-checker.sh" ]; then
+        # shellcheck disable=SC1091
+        source "$DELVE_ROOT/src/utils/version-checker.sh"
+        show_cached_notification || check_for_updates_async
+    fi
+}
+
 main() {
-    case "${1:-}" in
-        ""|--help|-h)
-            show_help
-            ;;
-        --version|-v)
-            show_version
-            ;;
-        --update)
-            perform_update
-            ;;
-        --check-update)
-            if [ -f "$DELVE_ROOT/src/utils/version-checker.sh" ]; then
-                source "$DELVE_ROOT/src/utils/version-checker.sh"
-                check_for_updates_sync
-            else
-                echo "Version checker not available"
-                exit 1
-            fi
-            ;;
-        --no-update-check)
-            export DELVE_NO_UPDATE_CHECK=1
-            shift
-            if [ $# -gt 0 ]; then
-                main "$@"
-            else
-                show_help
-            fi
-            ;;
-        --init)
-            # Handle initialization flag
-            shift
-            if [ "${1:-}" = "--yes" ] || [ "${1:-}" = "-y" ]; then
-                run_initialization false
-            else
-                run_initialization true
-            fi
-            ;;
+    # Parse all CLI arguments
+    parse_cli_args "$@"
+    
+    # Handle special flags first
+    if has_flag "help" || has_flag "h"; then
+        show_help
+        return 0
+    fi
+    
+    if has_flag "version" || has_flag "v"; then
+        show_version
+        return 0
+    fi
+    
+    if has_flag "update"; then
+        perform_update
+        return 0
+    fi
+    
+    if has_flag "check-update"; then
+        if [ -f "$DELVE_ROOT/src/utils/version-checker.sh" ]; then
+            # shellcheck disable=SC1091
+            source "$DELVE_ROOT/src/utils/version-checker.sh"
+            check_for_updates_sync
+        else
+            echo "Version checker not available"
+            exit 1
+        fi
+        return 0
+    fi
+    
+    if has_flag "no-update-check"; then
+        export DELVE_NO_UPDATE_CHECK=1
+    fi
+    
+    if has_flag "init"; then
+        if has_flag "yes" || has_flag "y"; then
+            run_initialization false
+        else
+            run_initialization true
+        fi
+        return 0
+    fi
+    
+    # Get first positional argument (command or research question)
+    local command
+    command=$(get_arg 0)
+    
+    # Handle empty command
+    if [ -z "$command" ]; then
+        show_help
+        return 0
+    fi
+    
+    # Handle commands
+    case "$command" in
         resume)
             # Check initialization before resuming
             if ! check_initialization; then
                 run_initialization true
             fi
-            shift
-            "$DELVE_ROOT/src/delve-adaptive.sh" --resume "$@"
+            
+            local session_id
+            session_id=$(get_arg 1)
+            if [ -z "$session_id" ]; then
+                echo "Error: resume requires a session ID" >&2
+                exit 1
+            fi
+            
+            "$DELVE_ROOT/src/delve-adaptive.sh" --resume "$session_id"
             
             # Show update notification after research
             if [ "${DELVE_NO_UPDATE_CHECK:-0}" != "1" ] && [ -f "$DELVE_ROOT/src/utils/version-checker.sh" ]; then
+                # shellcheck disable=SC1091
                 source "$DELVE_ROOT/src/utils/version-checker.sh"
                 show_cached_notification || check_for_updates_async
             fi
@@ -351,18 +437,8 @@ main() {
             fi
             ;;
         *)
-            # Check initialization before running research
-            if ! check_initialization; then
-                run_initialization true
-            fi
-            # Research question - use adaptive system
-            "$DELVE_ROOT/src/delve-adaptive.sh" "$@"
-            
-            # Show update notification after research
-            if [ "${DELVE_NO_UPDATE_CHECK:-0}" != "1" ] && [ -f "$DELVE_ROOT/src/utils/version-checker.sh" ]; then
-                source "$DELVE_ROOT/src/utils/version-checker.sh"
-                show_cached_notification || check_for_updates_async
-            fi
+            # Research question - use adaptive system with optional --input-dir
+            handle_research "$command"
             ;;
     esac
 }

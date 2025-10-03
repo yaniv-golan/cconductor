@@ -143,6 +143,165 @@ get_pdf_metadata_path() {
 }
 
 # =============================================================================
+# CONTENT-ADDRESSED CACHING (for local files)
+# =============================================================================
+
+# Compute SHA-256 hash of file contents
+# Returns: content hash string
+compute_file_hash() {
+    local file_path="$1"
+    
+    if [ ! -f "$file_path" ]; then
+        echo "Error: File not found: $file_path" >&2
+        return 1
+    fi
+    
+    # Use platform-appropriate hash command
+    if command -v sha256sum &> /dev/null; then
+        sha256sum "$file_path" | cut -d' ' -f1
+    else
+        shasum -a 256 "$file_path" | cut -d' ' -f1
+    fi
+}
+
+# Check if content hash exists in cache
+# Returns: 0 if exists, 1 if not
+cache_has_content_hash() {
+    local content_hash="$1"
+    local cache_index="$PDF_CACHE_DIR/cache-index.json"
+    
+    [[ -f "$cache_index" ]] || return 1
+    
+    # Check if any PDF has this content hash
+    jq -e --arg hash "$content_hash" \
+        '.pdfs[] | select(.content_hash == $hash)' \
+        "$cache_index" &> /dev/null
+}
+
+# Get cache path by content hash
+# Returns: path to cached PDF file
+get_cache_path_by_content_hash() {
+    local content_hash="$1"
+    local cache_index="$PDF_CACHE_DIR/cache-index.json"
+    
+    jq -r --arg hash "$content_hash" \
+        '.pdfs[] | select(.content_hash == $hash) | .file_path' \
+        "$cache_index" | head -1
+}
+
+# Add local PDF file to cache by content hash
+# Usage: cache_local_pdf file_path [original_name]
+# Returns: path to cached PDF
+cache_local_pdf() {
+    local file_path="$1"
+    local original_name="${2:-$(basename "$file_path")}"
+    
+    init_pdf_cache || return 1
+    
+    # Validate file exists and is readable
+    if [ ! -f "$file_path" ]; then
+        echo "Error: PDF file not found: $file_path" >&2
+        return 1
+    fi
+    
+    if [ ! -r "$file_path" ]; then
+        echo "Error: PDF file not readable: $file_path" >&2
+        return 1
+    fi
+    
+    # Compute content hash
+    local content_hash
+    content_hash=$(compute_file_hash "$file_path") || return 1
+    
+    # Check if already cached
+    if cache_has_content_hash "$content_hash"; then
+        # Already in cache - return existing path
+        get_cache_path_by_content_hash "$content_hash"
+        return 0
+    fi
+    
+    # Not in cache - add it
+    local cached_pdf="$PDF_CACHE_DIR/${content_hash}.pdf"
+    local metadata_file="$PDF_METADATA_DIR/${content_hash}.json"
+    
+    # Copy to cache
+    if ! cp "$file_path" "$cached_pdf" 2>/dev/null; then
+        echo "Error: Failed to copy PDF to cache (check disk space)" >&2
+        return 1
+    fi
+    
+    # Get file metadata
+    local file_size
+    file_size=$(stat -f%z "$cached_pdf" 2>/dev/null || stat -c%s "$cached_pdf" 2>/dev/null || echo 0)
+    
+    # Create metadata
+    if ! jq -n \
+        --arg url "file://$file_path" \
+        --arg title "$original_name" \
+        --arg source "local" \
+        --arg cache_key "$content_hash" \
+        --arg content_hash "$content_hash" \
+        --arg cached_at "$(date -u +"%Y-%m-%dT%H:%M:%SZ")" \
+        --argjson file_size "$file_size" \
+        --arg file_path "$cached_pdf" \
+        '{
+            url: $url,
+            title: $title,
+            source: $source,
+            cache_key: $cache_key,
+            content_hash: $content_hash,
+            cached_at: $cached_at,
+            file_size: $file_size,
+            file_path: $file_path
+        }' > "$metadata_file" 2>/dev/null; then
+        echo "Error: Failed to create metadata file (jq error)" >&2
+        rm -f "$cached_pdf"  # Cleanup
+        return 1
+    fi
+    
+    # Update cache index (with locking)
+    if ! acquire_cache_lock; then
+        echo "Error: Could not acquire cache lock" >&2
+        return 1
+    fi
+    
+    local temp_index="${PDF_CACHE_DIR}/cache-index.json.$$"
+    if ! jq --arg url "file://$file_path" \
+       --arg title "$original_name" \
+       --arg cache_key "$content_hash" \
+       --arg content_hash "$content_hash" \
+       --arg file_path "$cached_pdf" \
+       --argjson file_size "$file_size" \
+       --arg cached_at "$(date -u +"%Y-%m-%dT%H:%M:%SZ")" \
+       '.pdfs += [{
+           url: $url,
+           title: $title,
+           cache_key: $cache_key,
+           content_hash: $content_hash,
+           file_path: $file_path,
+           file_size: $file_size,
+           cached_at: $cached_at,
+           source: "local"
+       }] | .last_updated = $cached_at' \
+       "$PDF_CACHE_DIR/cache-index.json" > "$temp_index" 2>/dev/null; then
+        release_cache_lock
+        echo "Error: Failed to update cache index" >&2
+        return 1
+    fi
+    
+    mv "$temp_index" "$PDF_CACHE_DIR/cache-index.json" || {
+        release_cache_lock
+        echo "Error: Failed to update cache index file" >&2
+        return 1
+    }
+    
+    release_cache_lock
+    
+    echo "$cached_pdf"
+    return 0
+}
+
+# =============================================================================
 # CACHE MANAGEMENT
 # =============================================================================
 
@@ -730,6 +889,12 @@ cleanup_by_age() {
 auto_cleanup_if_needed() {
     local current_size
     current_size=$(get_cache_size_mb)
+    
+    # Check if current_size is a valid number
+    if [ -z "$current_size" ] || ! [[ "$current_size" =~ ^[0-9]+$ ]]; then
+        # Cache size unavailable or invalid, skip cleanup
+        return 0
+    fi
     
     if [ "$current_size" -gt "$MAX_CACHE_SIZE_MB" ]; then
         echo "Cache size (${current_size}MB) exceeds limit (${MAX_CACHE_SIZE_MB}MB)" >&2
