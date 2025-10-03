@@ -509,11 +509,13 @@ Linux:
 ### Files You Should NOT Edit
 
 ```
-PROJECT_ROOT/config/*.default.json  ← Defaults (git-tracked, updated on pull)
-PROJECT_ROOT/src/**/*.sh            ← Core engine (edit with caution)
-PROJECT_ROOT/.claude/agents/*.json  ← Agent definitions (core functionality)
-PROJECT_ROOT/VERSION                ← Version tracking (auto-generated)
+PROJECT_ROOT/config/*.default.json        ← Defaults (git-tracked, updated on pull)
+PROJECT_ROOT/src/**/*.sh                  ← Core engine (edit with caution)
+PROJECT_ROOT/src/claude-runtime/**/*      ← Agent templates (core functionality)
+PROJECT_ROOT/VERSION                      ← Version tracking (auto-generated)
 ```
+
+**Note**: Session-specific `.claude/` directories in research sessions are copies and can be modified for that session only.
 
 ---
 

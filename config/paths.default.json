@@ -9,6 +9,6 @@
   "knowledge_base_core": "${PROJECT_ROOT}/knowledge-base",
   "knowledge_base_custom": "${PLATFORM_DATA}/knowledge-base-custom",
   "config_dir": "${PLATFORM_CONFIG}",
-  "agents_dir": "${PROJECT_ROOT}/.claude/agents",
-  "hooks_dir": "${PROJECT_ROOT}/.claude/hooks"
+  "agents_dir": "${PROJECT_ROOT}/src/claude-runtime/agents",
+  "hooks_dir": "${PROJECT_ROOT}/src/claude-runtime/hooks"
 }

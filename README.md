@@ -520,7 +520,7 @@ delve/
 │   └── README.md             # Config documentation
 ├── docs/                     # Documentation
 ├── knowledge-base/           # Built-in knowledge (git-tracked)
-└── .claude/hooks/            # Research monitoring
+└── src/claude-runtime/       # Claude Code agent templates (copied per-session)
 ```
 
 ### User Directory (Your Data - OS-Appropriate Locations)

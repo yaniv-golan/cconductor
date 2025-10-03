@@ -1,0 +1,13 @@
+{
+    "mcpServers": {
+        "arxiv": {
+            "command": "npx",
+            "args": [
+                "-y",
+                "@modelcontextprotocol/server-arxiv"
+            ],
+            "type": "stdio"
+        }
+    },
+    "_comment": "Default MCP servers for research sessions. Users can add global MCP servers in ~/.claude/mcp.json (user scope). Session-specific servers here take precedence."
+}

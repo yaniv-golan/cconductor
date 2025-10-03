@@ -23,6 +23,7 @@ invoke_agent() {
     local input_file="$2"
     local output_file="$3"
     local timeout="${4:-600}"  # 10 minutes default
+    local session_dir="${5:-}"  # REQUIRED: session directory for context isolation
     
     # Validate inputs
     if [ -z "$agent_name" ]; then
@@ -32,6 +33,16 @@ invoke_agent() {
     
     if [ ! -f "$input_file" ]; then
         echo "Error: Input file not found: $input_file" >&2
+        return 1
+    fi
+    
+    if [ -z "$session_dir" ]; then
+        echo "Error: Session directory required" >&2
+        return 1
+    fi
+    
+    if [ ! -d "$session_dir/.claude" ]; then
+        echo "Error: Session directory missing .claude/ context: $session_dir" >&2
         return 1
     fi
     
@@ -53,13 +64,15 @@ EOF
     # Create output directory if needed
     mkdir -p "$(dirname "$output_file")"
     
-    # Invoke Claude with the agent context
-    # Claude will auto-discover agents from .claude/agents/
-    cd "$PROJECT_ROOT" || return 1
+    # Change to session directory
+    local original_dir
+    original_dir=$(pwd)
+    cd "$session_dir" || return 1
     
-    echo "⚡ Invoking $agent_name agent..." >&2
+    echo "⚡ Invoking $agent_name agent from session context..." >&2
     
     # Run Claude in non-interactive mode
+    # Claude will auto-discover agents from .claude/ in current directory
     # Note: MCP config disabled until proper format is implemented
     if echo "$prompt" | timeout "$timeout" claude \
         --print \
@@ -67,10 +80,17 @@ EOF
         --model sonnet \
         > "$output_file" 2>&1; then
         
+        # Return to original directory
+        cd "$original_dir" || true
+        
         echo "✓ Agent $agent_name completed successfully" >&2
         return 0
     else
         local exit_code=$?
+        
+        # Return to original directory
+        cd "$original_dir" || true
+        
         if [ $exit_code -eq 124 ]; then
             echo "✗ Agent $agent_name timed out after ${timeout}s" >&2
         else
@@ -86,14 +106,15 @@ invoke_agent_json() {
     local input_json="$2"
     local output_file="$3"
     local timeout="${4:-600}"
+    local session_dir="${5:-}"  # REQUIRED: session directory
     
     # Create temp input file
     local temp_input
     temp_input=$(mktemp)
     echo "$input_json" > "$temp_input"
     
-    # Invoke agent
-    invoke_agent "$agent_name" "$temp_input" "$output_file" "$timeout"
+    # Invoke agent with session context
+    invoke_agent "$agent_name" "$temp_input" "$output_file" "$timeout" "$session_dir"
     local result=$?
     
     # Cleanup
@@ -108,13 +129,28 @@ invoke_agent_simple() {
     local prompt_text="$2"
     local output_file="$3"
     local timeout="${4:-600}"
+    local session_dir="${5:-}"  # REQUIRED: session directory
+    
+    # Validate session_dir
+    if [ -z "$session_dir" ]; then
+        echo "Error: Session directory required" >&2
+        return 1
+    fi
+    
+    if [ ! -d "$session_dir/.claude" ]; then
+        echo "Error: Session directory missing .claude/ context: $session_dir" >&2
+        return 1
+    fi
     
     # Check Claude CLI
     check_claude_cli || return 1
     
-    cd "$PROJECT_ROOT" || return 1
+    # Change to session directory
+    local original_dir
+    original_dir=$(pwd)
+    cd "$session_dir" || return 1
     
-    echo "⚡ Invoking $agent_name agent..." >&2
+    echo "⚡ Invoking $agent_name agent from session context..." >&2
     
     # Create output directory if needed
     mkdir -p "$(dirname "$output_file")"
@@ -127,10 +163,13 @@ invoke_agent_simple() {
         --model sonnet \
         > "$output_file" 2>&1; then
         
+        cd "$original_dir" || true
         echo "✓ Agent $agent_name completed successfully" >&2
         return 0
     else
         local exit_code=$?
+        cd "$original_dir" || true
+        
         if [ $exit_code -eq 124 ]; then
             echo "✗ Agent $agent_name timed out after ${timeout}s" >&2
         else
@@ -189,12 +228,13 @@ invoke_agent_with_extraction() {
     local input_file="$2"
     local output_file="$3"
     local timeout="${4:-600}"
+    local session_dir="${5:-}"  # REQUIRED: session directory
     
     # Temp file for raw output
     local raw_output="${output_file}.raw"
     
-    # Invoke agent
-    if invoke_agent "$agent_name" "$input_file" "$raw_output" "$timeout"; then
+    # Invoke agent with session context
+    if invoke_agent "$agent_name" "$input_file" "$raw_output" "$timeout" "$session_dir"; then
         # Extract JSON
         if extract_json_output "$raw_output" "$output_file"; then
             rm -f "$raw_output"
@@ -220,13 +260,13 @@ export -f extract_json_output
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
     case "${1:-help}" in
         invoke)
-            invoke_agent "$2" "$3" "$4" "${5:-600}"
+            invoke_agent "$2" "$3" "$4" "${5:-600}" "$6"
             ;;
         invoke-json)
-            invoke_agent_json "$2" "$3" "$4" "${5:-600}"
+            invoke_agent_json "$2" "$3" "$4" "${5:-600}" "$6"
             ;;
         invoke-simple)
-            invoke_agent_simple "$2" "$3" "$4" "${5:-600}"
+            invoke_agent_simple "$2" "$3" "$4" "${5:-600}" "$6"
             ;;
         extract-json)
             extract_json_output "$2" "$3"
@@ -239,13 +279,13 @@ if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
 Usage: $0 <command> [args...]
 
 Commands:
-  invoke <agent> <input_file> <output_file> [timeout]
+  invoke <agent> <input_file> <output_file> [timeout] <session_dir>
       Invoke agent with input from file
       
-  invoke-json <agent> <json_string> <output_file> [timeout]
+  invoke-json <agent> <json_string> <output_file> [timeout] <session_dir>
       Invoke agent with JSON string input
       
-  invoke-simple <agent> <prompt> <output_file> [timeout]
+  invoke-simple <agent> <prompt> <output_file> [timeout] <session_dir>
       Invoke agent with simple text prompt
       
   extract-json <output_file> <extracted_file>
@@ -255,11 +295,13 @@ Commands:
       Check if Claude CLI is available
 
 Examples:
-  $0 invoke research-planner input.json output.json
-  $0 invoke-json web-researcher '{"query":"Docker"}' output.json
+  $0 invoke research-planner input.json output.json 600 /path/to/session
+  $0 invoke-simple research-planner "What is Docker?" output.txt 600 /path/to/session
   $0 check
 
-Timeout: Default is 600 seconds (10 minutes)
+Notes:
+  - session_dir is REQUIRED and must contain a .claude/ directory
+  - Timeout default is 600 seconds (10 minutes)
 EOF
             ;;
     esac

@@ -131,16 +131,39 @@ Example configuration:
 
 ### Manual Import in Claude Code
 
-Add custom knowledge to `.claude/CLAUDE.local.md` (gitignored):
+You have three options for making knowledge available to Claude Code agents:
+
+**Option 1: Template (affects all new sessions)**
+
+Edit `src/claude-runtime/CLAUDE.md` to add imports that will be included in all future research sessions:
 
 ```markdown
-# Local Project Memory
-
 ## Custom Knowledge Imports
 
-@../knowledge-base-custom/healthcare-policy.md
-@../knowledge-base-custom/crypto-markets.md
-@../knowledge-base-custom/legal-compliance.md
+@../../knowledge-base-custom/healthcare-policy.md
+@../../knowledge-base-custom/crypto-markets.md
+@../../knowledge-base-custom/legal-compliance.md
+```
+
+**Option 2: User-wide (affects all sessions globally)**
+
+Add to `~/.claude/CLAUDE.md` (user-wide Claude Code configuration):
+
+```markdown
+## Custom Knowledge Imports
+
+@/absolute/path/to/delve/knowledge-base-custom/healthcare-policy.md
+@/absolute/path/to/delve/knowledge-base-custom/crypto-markets.md
+```
+
+**Option 3: Session-specific (one session only)**
+
+After creating a session, edit `$session_dir/.claude/CLAUDE.md`:
+
+```markdown
+## Session-Specific Knowledge
+
+@../../knowledge-base-custom/specialized-knowledge.md
 ```
 
 This makes knowledge available to Claude Code directly without going through knowledge-loader.sh.
@@ -291,6 +314,7 @@ From `config/knowledge-config.default.json`:
 ```
 
 **What gets discovered**:
+
 - All `.md` files in `knowledge-base-custom/`
 - Excludes: README, LICENSE, TEMPLATE
 
@@ -370,6 +394,7 @@ echo "# SESSION VERSION" > "$SESSION_DIR/knowledge/test.md"
 **Problem**: Custom knowledge not appearing in agent output
 
 **Diagnosis**:
+
 ```bash
 # Check if file is discovered
 ./src/utils/knowledge-loader.sh all
@@ -382,10 +407,11 @@ jq '.' config/knowledge-config.json
 ```
 
 **Solutions**:
+
 1. Ensure filename ends with `.md`
 2. Check file isn't in exclude list
 3. Verify file exists in `knowledge-base-custom/`
-4. Try manual import in `.claude/CLAUDE.local.md`
+4. Try manual import in `src/claude-runtime/CLAUDE.md` (template) or `~/.claude/CLAUDE.md` (user-wide)
 
 ### Git Conflicts
 
@@ -394,6 +420,7 @@ jq '.' config/knowledge-config.json
 **Cause**: Custom knowledge files were accidentally committed to git
 
 **Solution**:
+
 ```bash
 # Remove from git (keeps local file)
 git rm --cached knowledge-base-custom/*.md
@@ -412,6 +439,7 @@ git pull origin main
 **Problem**: Syntax errors or formatting issues
 
 **Solution**:
+
 - Use TEMPLATE.md as a guide
 - Keep markdown simple (no complex HTML)
 - Test with smaller files first
@@ -422,6 +450,7 @@ git pull origin main
 ### 1. Keep Knowledge Focused
 
 **Good**:
+
 ```markdown
 # SaaS Metrics Methodology
 
@@ -429,6 +458,7 @@ Focus on SaaS-specific metrics and analysis.
 ```
 
 **Bad**:
+
 ```markdown
 # Everything About Software
 
@@ -503,6 +533,7 @@ Specialized approach for analyzing healthcare policy, regulations, and market dy
 ```
 
 Usage:
+
 ```bash
 # Automatically loaded for relevant queries
 ./delve "Analyze FDA approval process for digital health devices"
@@ -532,6 +563,7 @@ Framework for analyzing cryptocurrency projects, tokenomics, and market dynamics
 ```
 
 Usage:
+
 ```bash
 ./delve "Analyze DeFi lending protocols market"
 ```
@@ -612,6 +644,7 @@ A: Yes! Use session overrides in `research-sessions/session_X/knowledge/`.
 **Happy researching with custom knowledge!** 🔬
 
 For more information:
+
 - Configuration Guide: `./src/utils/config-loader.sh help`
 - Upgrade Guide: `UPGRADE.md`
 - Troubleshooting: `docs/TROUBLESHOOTING.md`

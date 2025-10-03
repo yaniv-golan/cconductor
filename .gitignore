@@ -1,15 +1,15 @@
 # User customizations (stored in user home directory, not in project)
 knowledge-base-custom/
-.claude/agents-custom/
-.claude/hooks-custom/
-.claude/settings.local.json
-.claude/CLAUDE.local.md
 
 # Internal documentation
 internal_docs/
 
 # Session data (can be large)
+# Note: Sessions include their own .claude/ directories and .mcp.json
 research-sessions/
+# Specifically ignore session-specific configs
+research-sessions/*/.claude/settings.local.json
+research-sessions/*/.mcp.json
 
 # Logs
 logs/

@@ -43,26 +43,37 @@ else
 fi
 echo ""
 
-# Test 3: Verify agent definitions exist
-echo "Test 3: Checking agent definitions..."
-AGENT_COUNT=$(find "$PROJECT_ROOT/.claude/agents" -name "*.json" 2>/dev/null | wc -l | xargs)
+# Test 3: Verify agent definitions exist in source template
+echo "Test 3: Checking agent definitions in source template..."
+AGENT_COUNT=$(find "$PROJECT_ROOT/src/claude-runtime/agents" -name "*.json" 2>/dev/null | wc -l | xargs)
 if [ "$AGENT_COUNT" -gt 0 ]; then
-    echo "✅ Pass: Found $AGENT_COUNT agent definitions"
-    echo "  Agents: $(find "$PROJECT_ROOT/.claude/agents" -name "*.json" -print0 2>/dev/null | xargs -0 -n1 basename | sed 's/.json$//' | tr '\n' ', ' | sed 's/,$//')"
+    echo "✅ Pass: Found $AGENT_COUNT agent definitions in template"
+    echo "  Agents: $(find "$PROJECT_ROOT/src/claude-runtime/agents" -name "*.json" -print0 2>/dev/null | xargs -0 -n1 basename | sed 's/.json$//' | tr '\n' ', ' | sed 's/,$//')"
 else
-    echo "❌ Fail: No agent definitions found in .claude/agents/"
+    echo "❌ Fail: No agent definitions found in src/claude-runtime/agents/"
     exit 1
 fi
 echo ""
 
 # Test 4: Test simple agent invocation (quick validation)
 echo "Test 4: Testing agent invocation system..."
+# Create temporary session with .claude context for testing
+TEST_SESSION="/tmp/delve-test-session-$$"
+mkdir -p "$TEST_SESSION"
+cp -r "$PROJECT_ROOT/src/claude-runtime" "$TEST_SESSION/.claude"
+mv "$TEST_SESSION/.claude/settings.json" "$TEST_SESSION/.claude/settings.local.json" 2>/dev/null || true
+if [ -f "$PROJECT_ROOT/src/claude-runtime/mcp.json" ]; then
+    cp "$PROJECT_ROOT/src/claude-runtime/mcp.json" "$TEST_SESSION/.mcp.json"
+fi
+chmod +x "$TEST_SESSION/.claude/hooks/"*.sh 2>/dev/null || true
+
 TEST_OUTPUT="/tmp/delve-agent-test-$$.txt"
 if timeout 60 bash "$PROJECT_ROOT/src/utils/invoke-agent.sh" invoke-simple \
     research-planner \
     "Quick test: What is Git?" \
     "$TEST_OUTPUT" \
-    60 2>&1 | grep -q "completed successfully"; then
+    60 \
+    "$TEST_SESSION" 2>&1 | grep -q "completed successfully"; then
     echo "✅ Pass: Agent invocation works"
     rm -f "$TEST_OUTPUT"
 else
@@ -71,6 +82,7 @@ else
     rm -f "$TEST_OUTPUT"
     exit 1
 fi
+rm -rf "$TEST_SESSION"
 echo ""
 
 # Test 5: Run actual research (abbreviated version)

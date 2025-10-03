@@ -201,12 +201,11 @@ if [ ! -f "$GITIGNORE" ]; then
     cat > "$GITIGNORE" << 'EOF'
 # User customizations
 knowledge-base-custom/
-.claude/agents-custom/
-.claude/hooks-custom/
-.claude/settings.local.json
 
-# Session data
+# Session data (includes per-session .claude/ and .mcp.json)
 research-sessions/
+research-sessions/*/.claude/settings.local.json
+research-sessions/*/.mcp.json
 
 # Logs
 logs/
@@ -252,8 +251,9 @@ chmod +x "$SCRIPT_DIR/adaptive-research.sh" 2>/dev/null || true
 chmod +x "$SCRIPT_DIR/research.sh" 2>/dev/null || true
 chmod +x "$SCRIPT_DIR/research-wrapper.sh" 2>/dev/null || true
 chmod +x "$SCRIPT_DIR/utils/"*.sh 2>/dev/null || true
-chmod +x "$SCRIPT_DIR/../.claude/hooks/"*.sh 2>/dev/null || true
+chmod +x "$SCRIPT_DIR/claude-runtime/hooks/"*.sh 2>/dev/null || true
 echo "   ✓ Scripts are executable"
+echo "   (Note: Session hooks are set executable during session creation)"
 echo ""
 
 # Step 6: Validate configurations

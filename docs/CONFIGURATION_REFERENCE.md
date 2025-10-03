@@ -765,7 +765,8 @@ Three built-in profiles:
   "pdfs": "../pdfs",
   "knowledge_base": "../knowledge-base",
   "knowledge_base_custom": "../knowledge-base-custom",
-  "hooks": "../.claude/hooks"
+  "agents_dir": "../src/claude-runtime/agents",
+  "hooks_dir": "../src/claude-runtime/hooks"
 }
 ```
 
@@ -780,7 +781,8 @@ Three built-in profiles:
 | `pdfs` | `../pdfs` | PDFs for analysis |
 | `knowledge_base` | `../knowledge-base` | Built-in knowledge |
 | `knowledge_base_custom` | `../knowledge-base-custom` | Your knowledge |
-| `hooks` | `../.claude/hooks` | Hook scripts |
+| `agents_dir` | `../src/claude-runtime/agents` | Agent definition templates |
+| `hooks_dir` | `../src/claude-runtime/hooks` | Hook script templates |
 
 **When to customize**:
 
@@ -798,7 +800,8 @@ Three built-in profiles:
   "pdfs": "/shared/papers",
   "knowledge_base": "../knowledge-base",
   "knowledge_base_custom": "/company/delve-knowledge",
-  "hooks": "../.claude/hooks"
+  "agents_dir": "../src/claude-runtime/agents",
+  "hooks_dir": "../src/claude-runtime/hooks"
 }
 ```
 

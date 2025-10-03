@@ -144,6 +144,28 @@ initialize_session() {
     mkdir -p "$session_dir/raw"
     mkdir -p "$session_dir/intermediate"
     mkdir -p "$session_dir/knowledge"
+    
+    # Copy Claude runtime context to session
+    if [ -d "$PROJECT_ROOT/src/claude-runtime" ]; then
+        cp -r "$PROJECT_ROOT/src/claude-runtime" "$session_dir/.claude"
+        
+        # Rename settings.json to settings.local.json for Claude Code
+        if [ -f "$session_dir/.claude/settings.json" ]; then
+            mv "$session_dir/.claude/settings.json" "$session_dir/.claude/settings.local.json"
+        fi
+        
+        # Copy MCP configuration to session root (local scope)
+        # Claude Code looks for .mcp.json in the working directory
+        if [ -f "$PROJECT_ROOT/src/claude-runtime/mcp.json" ]; then
+            cp "$PROJECT_ROOT/src/claude-runtime/mcp.json" "$session_dir/.mcp.json"
+        fi
+        
+        # Make hooks executable
+        chmod +x "$session_dir/.claude/hooks/"*.sh 2>/dev/null || true
+    else
+        echo "Error: Claude runtime template not found at $PROJECT_ROOT/src/claude-runtime" >&2
+        exit 1
+    fi
 
     # Source version checker
     # shellcheck disable=SC1091
@@ -208,7 +230,8 @@ initial_planning() {
         "research-planner" \
         "Create initial research tasks for: '$research_question'. Return ONLY valid JSON with 'initial_tasks' array. Each task must have: type (research), agent (web-researcher/code-analyzer/academic-researcher/market-analyzer), priority (1-10), query (specific search query). NO explanatory text, just the JSON object starting with {." \
         "$planning_output_raw" \
-        600; then
+        600 \
+        "$session_dir"; then
         echo "Error: Research planner failed" >&2
         return 1
     fi
@@ -294,7 +317,7 @@ execute_pending_tasks() {
             local agent_name="$1"
             local input_file="$2"
             local output_file="$3"
-            # Note: session_dir available from parent scope
+            local sess_dir="$4"  # Add session_dir parameter
             
             # Invoke agent using Claude CLI with JSON extraction
             local agent_output_raw="${output_file}.raw"
@@ -302,7 +325,8 @@ execute_pending_tasks() {
                 "$agent_name" \
                 "$input_file" \
                 "$agent_output_raw" \
-                900; then
+                900 \
+                "$sess_dir"; then  # Pass session directory
                 
                 # Extract JSON from output
                 if bash "$DELVE_SCRIPT_DIR/utils/invoke-agent.sh" extract-json \
@@ -462,7 +486,8 @@ run_coordinator() {
         "research-coordinator" \
         "$coordinator_input" \
         "$coordinator_output_raw" \
-        900; then
+        900 \
+        "$session_dir"; then
         echo "Error: Research coordinator failed" >&2
         return 1
     fi
