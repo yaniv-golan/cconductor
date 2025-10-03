@@ -204,8 +204,9 @@ tq_update_status() {
 
     # Build single jq expression for all updates (atomic)
     local timestamp_update=""
+    # shellcheck disable=SC2016
     case "$new_status" in
-        # SC2016: Single quotes intentional - these are jq expressions with literal $id and $date
+        # Single quotes intentional - these are jq expressions with literal $id and $date
         in_progress) timestamp_update='| (.tasks[] | select(.id == $id)) |= (. + {started_at: $date})' ;;
         completed|failed) timestamp_update='| (.tasks[] | select(.id == $id)) |= (. + {completed_at: $date})' ;;
     esac
