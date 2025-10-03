@@ -75,7 +75,8 @@ kg_get_path() {
 # Read entire knowledge graph
 kg_read() {
     local session_dir="$1"
-    local kg_file=$(kg_get_path "$session_dir")
+    local kg_file
+    kg_file=$(kg_get_path "$session_dir")
 
     if [ ! -f "$kg_file" ]; then
         echo "Error: Knowledge graph not found: $kg_file" >&2
@@ -92,7 +93,8 @@ kg_increment_iteration() {
     # Validate inputs
     validate_session_dir "$session_dir" || return 1
 
-    local kg_file=$(kg_get_path "$session_dir")
+    local kg_file
+    kg_file=$(kg_get_path "$session_dir")
 
     atomic_json_update "$kg_file" \
         --arg date "$(date -u +"%Y-%m-%dT%H:%M:%SZ")" \
@@ -109,7 +111,8 @@ kg_add_entity() {
     validate_json "entity_json" "$entity_json" || return 1
     validate_json_field "$entity_json" "name" "string" || return 1
 
-    local kg_file=$(kg_get_path "$session_dir")
+    local kg_file
+    kg_file=$(kg_get_path "$session_dir")
 
     # Acquire lock for atomic operation
     lock_acquire "$kg_file" || {
@@ -118,8 +121,10 @@ kg_add_entity() {
     }
 
     # Check if entity already exists (by name)
-    local entity_name=$(echo "$entity_json" | jq -r '.name')
-    local exists=$(jq --arg name "$entity_name" \
+    local entity_name
+    entity_name=$(echo "$entity_json" | jq -r '.name')
+    local exists
+    exists=$(jq --arg name "$entity_name" \
                      '.entities[] | select(.name == $name) | .id' \
                      "$kg_file" | head -1)
 
@@ -133,7 +138,8 @@ kg_add_entity() {
            "$kg_file" > "${kg_file}.tmp"
     else
         # Add new entity
-        local entity_id="e$(jq '.stats.total_entities' "$kg_file")"
+        local entity_id
+        entity_id="e$(jq '.stats.total_entities' "$kg_file")"
         jq --argjson entity "$entity_json" \
            --arg id "$entity_id" \
            --arg date "$(date -u +"%Y-%m-%dT%H:%M:%SZ")" \
@@ -157,7 +163,8 @@ kg_add_claim() {
     validate_json "claim_json" "$claim_json" || return 1
     validate_json_field "$claim_json" "statement" "string" || return 1
 
-    local kg_file=$(kg_get_path "$session_dir")
+    local kg_file
+    kg_file=$(kg_get_path "$session_dir")
 
     # Acquire lock for atomic operation
     lock_acquire "$kg_file" || {
@@ -165,7 +172,8 @@ kg_add_claim() {
         return 1
     }
 
-    local claim_id="c$(jq '.stats.total_claims' "$kg_file")"
+    local claim_id
+    claim_id="c$(jq '.stats.total_claims' "$kg_file")"
 
     jq --argjson claim "$claim_json" \
        --arg id "$claim_id" \
@@ -190,14 +198,16 @@ kg_add_relationship() {
     validate_json_field "$relationship_json" "from" "string" || return 1
     validate_json_field "$relationship_json" "to" "string" || return 1
 
-    local kg_file=$(kg_get_path "$session_dir")
+    local kg_file
+    kg_file=$(kg_get_path "$session_dir")
 
     lock_acquire "$kg_file" || {
         echo "Error: Failed to acquire lock for adding relationship" >&2
         return 1
     }
 
-    local rel_id="r$(jq '.stats.total_relationships' "$kg_file")"
+    local rel_id
+    rel_id="r$(jq '.stats.total_relationships' "$kg_file")"
 
     jq --argjson rel "$relationship_json" \
        --arg id "$rel_id" \
@@ -221,15 +231,18 @@ kg_add_gap() {
     validate_json "gap_json" "$gap_json" || return 1
     validate_json_field "$gap_json" "description" "string" || return 1
 
-    local kg_file=$(kg_get_path "$session_dir")
+    local kg_file
+    kg_file=$(kg_get_path "$session_dir")
 
     lock_acquire "$kg_file" || {
         echo "Error: Failed to acquire lock for adding gap" >&2
         return 1
     }
 
-    local gap_id="g$(jq '.stats.total_gaps' "$kg_file")"
-    local iteration=$(jq '.iteration' "$kg_file")
+    local gap_id
+    gap_id="g$(jq '.stats.total_gaps' "$kg_file")"
+    local iteration
+    iteration=$(jq '.iteration' "$kg_file")
 
     jq --argjson gap "$gap_json" \
        --arg id "$gap_id" \
@@ -256,14 +269,16 @@ kg_update_gap_status() {
     validate_required "gap_id" "$gap_id" || return 1
     validate_enum "status" "$status" "pending" "investigating" "resolved" || return 1
 
-    local kg_file=$(kg_get_path "$session_dir")
+    local kg_file
+    kg_file=$(kg_get_path "$session_dir")
 
     lock_acquire "$kg_file" || {
         echo "Error: Failed to acquire lock for updating gap status" >&2
         return 1
     }
 
-    local was_unresolved=$(jq --arg id "$gap_id" \
+    local was_unresolved
+    was_unresolved=$(jq --arg id "$gap_id" \
                               '.gaps[] | select(.id == $id and .status != "resolved") | .id' \
                               "$kg_file" | wc -l | xargs)
 
@@ -299,15 +314,18 @@ kg_add_contradiction() {
     validate_json "contradiction_json" "$contradiction_json" || return 1
     validate_json_field "$contradiction_json" "description" "string" || return 1
 
-    local kg_file=$(kg_get_path "$session_dir")
+    local kg_file
+    kg_file=$(kg_get_path "$session_dir")
 
     lock_acquire "$kg_file" || {
         echo "Error: Failed to acquire lock for adding contradiction" >&2
         return 1
     }
 
-    local con_id="con$(jq '.stats.total_contradictions' "$kg_file")"
-    local iteration=$(jq '.iteration' "$kg_file")
+    local con_id
+    con_id="con$(jq '.stats.total_contradictions' "$kg_file")"
+    local iteration
+    iteration=$(jq '.iteration' "$kg_file")
 
     jq --argjson con "$contradiction_json" \
        --arg id "$con_id" \
@@ -334,7 +352,8 @@ kg_resolve_contradiction() {
     validate_required "con_id" "$con_id" || return 1
     validate_required "resolution" "$resolution" || return 1
 
-    local kg_file=$(kg_get_path "$session_dir")
+    local kg_file
+    kg_file=$(kg_get_path "$session_dir")
 
     lock_acquire "$kg_file" || {
         echo "Error: Failed to acquire lock for resolving contradiction" >&2
@@ -363,15 +382,18 @@ kg_add_lead() {
     validate_json "lead_json" "$lead_json" || return 1
     validate_json_field "$lead_json" "description" "string" || return 1
 
-    local kg_file=$(kg_get_path "$session_dir")
+    local kg_file
+    kg_file=$(kg_get_path "$session_dir")
 
     lock_acquire "$kg_file" || {
         echo "Error: Failed to acquire lock for adding lead" >&2
         return 1
     }
 
-    local lead_id="l$(jq '.stats.total_leads' "$kg_file")"
-    local iteration=$(jq '.iteration' "$kg_file")
+    local lead_id
+    lead_id="l$(jq '.stats.total_leads' "$kg_file")"
+    local iteration
+    iteration=$(jq '.iteration' "$kg_file")
 
     jq --argjson lead "$lead_json" \
        --arg id "$lead_id" \
@@ -395,7 +417,8 @@ kg_mark_lead_explored() {
     validate_session_dir "$session_dir" || return 1
     validate_required "lead_id" "$lead_id" || return 1
 
-    local kg_file=$(kg_get_path "$session_dir")
+    local kg_file
+    kg_file=$(kg_get_path "$session_dir")
 
     lock_acquire "$kg_file" || {
         echo "Error: Failed to acquire lock for marking lead explored" >&2
@@ -422,7 +445,8 @@ kg_update_confidence() {
     validate_session_dir "$session_dir" || return 1
     validate_json "confidence_json" "$confidence_json" || return 1
 
-    local kg_file=$(kg_get_path "$session_dir")
+    local kg_file
+    kg_file=$(kg_get_path "$session_dir")
 
     lock_acquire "$kg_file" || {
         echo "Error: Failed to acquire lock for updating confidence" >&2
@@ -447,7 +471,8 @@ kg_update_coverage() {
     validate_session_dir "$session_dir" || return 1
     validate_json "coverage_json" "$coverage_json" || return 1
 
-    local kg_file=$(kg_get_path "$session_dir")
+    local kg_file
+    kg_file=$(kg_get_path "$session_dir")
 
     lock_acquire "$kg_file" || {
         echo "Error: Failed to acquire lock for updating coverage" >&2
@@ -467,7 +492,8 @@ kg_update_coverage() {
 kg_get_high_priority_gaps() {
     local session_dir="$1"
     local min_priority="${2:-7}"
-    local kg_file=$(kg_get_path "$session_dir")
+    local kg_file
+    kg_file=$(kg_get_path "$session_dir")
 
     jq --arg min "$min_priority" \
        '.gaps | map(select(.status != "resolved" and (.priority | tonumber) >= ($min | tonumber)))' \
@@ -477,7 +503,8 @@ kg_get_high_priority_gaps() {
 # Get unresolved contradictions
 kg_get_unresolved_contradictions() {
     local session_dir="$1"
-    local kg_file=$(kg_get_path "$session_dir")
+    local kg_file
+    kg_file=$(kg_get_path "$session_dir")
 
     jq '.contradictions | map(select(.status == "unresolved"))' "$kg_file"
 }
@@ -486,7 +513,8 @@ kg_get_unresolved_contradictions() {
 kg_get_unexplored_leads() {
     local session_dir="$1"
     local min_priority="${2:-6}"
-    local kg_file=$(kg_get_path "$session_dir")
+    local kg_file
+    kg_file=$(kg_get_path "$session_dir")
 
     jq --arg min "$min_priority" \
        '.promising_leads | map(select(.status == "pending" and (.priority | tonumber) >= ($min | tonumber)))' \
@@ -496,7 +524,8 @@ kg_get_unexplored_leads() {
 # Get summary statistics
 kg_get_summary() {
     local session_dir="$1"
-    local kg_file=$(kg_get_path "$session_dir")
+    local kg_file
+    kg_file=$(kg_get_path "$session_dir")
 
     jq '{
         iteration: .iteration,
@@ -524,14 +553,16 @@ kg_bulk_update() {
     validate_session_dir "$session_dir" || return 1
     validate_file "coordinator_output_file" "$coordinator_output_file" || return 1
 
-    local kg_file=$(kg_get_path "$session_dir")
+    local kg_file
+    kg_file=$(kg_get_path "$session_dir")
 
     lock_acquire "$kg_file" 60 || {
         echo "Error: Failed to acquire lock for bulk update" >&2
         return 1
     }
 
-    local output=$(cat "$coordinator_output_file")
+    local output
+    output=$(cat "$coordinator_output_file")
 
     # Validate JSON content
     if ! echo "$output" | jq '.' >/dev/null 2>&1; then
@@ -539,8 +570,10 @@ kg_bulk_update() {
         echo "Error: coordinator_output_file contains invalid JSON" >&2
         return 1
     fi
-    local date="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
-    local iteration=$(jq -r '.iteration // 0' "$kg_file")
+    local date
+    date="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
+    local iteration
+    iteration=$(jq -r '.iteration // 0' "$kg_file")
 
     # Single atomic jq operation that processes ALL updates at once
     jq --argjson new_data "$output" \

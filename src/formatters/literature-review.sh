@@ -4,11 +4,15 @@
 
 set -euo pipefail
 
+# SCRIPT_DIR is currently unused but reserved for future use
+# shellcheck disable=SC2034
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 format_literature_review() {
     local input_file="$1"
     local output_file="$2"
+    # Title parameter reserved for future template substitution
+    # shellcheck disable=SC2034
     local title="${3:-Literature Review}"
 
     if [ ! -f "$input_file" ]; then
@@ -16,8 +20,10 @@ format_literature_review() {
         return 1
     fi
 
-    # Read the synthesis output (JSON)
-    local synthesis=$(cat "$input_file")
+    # Read the synthesis output (JSON) - reserved for future template substitution
+    local synthesis
+    # shellcheck disable=SC2034
+    synthesis=$(cat "$input_file")
 
     # Generate literature review in markdown
     cat > "$output_file" <<'TEMPLATE_START'

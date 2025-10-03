@@ -23,9 +23,12 @@ find_knowledge_file() {
     local knowledge_name="$1"
     local session_dir="${2:-}"
 
-    local config=$(get_knowledge_config)
-    local core_path="$PROJECT_ROOT/$(echo "$config" | jq -r '.knowledge_paths.core')"
-    local user_path="$PROJECT_ROOT/$(echo "$config" | jq -r '.knowledge_paths.user')"
+    local config
+    config=$(get_knowledge_config)
+    local core_path
+    core_path="$PROJECT_ROOT/$(echo "$config" | jq -r '.knowledge_paths.core')"
+    local user_path
+    user_path="$PROJECT_ROOT/$(echo "$config" | jq -r '.knowledge_paths.user')"
 
     # Add .md extension if not present
     if [[ ! "$knowledge_name" =~ \.md$ ]]; then
@@ -65,11 +68,14 @@ get_agent_knowledge() {
     local agent_name="$1"
     local session_dir="${2:-}"
 
-    local config=$(get_knowledge_config)
-    local auto_discover=$(echo "$config" | jq -r '.auto_discover // true')
+    local config
+    config=$(get_knowledge_config)
+    local auto_discover
+    auto_discover=$(echo "$config" | jq -r '.auto_discover // true')
 
     # Get mapped knowledge domains
-    local mapped_knowledge=$(echo "$config" | jq -r ".agent_knowledge_map[\"$agent_name\"][]" 2>/dev/null || echo "")
+    local mapped_knowledge
+    mapped_knowledge=$(echo "$config" | jq -r ".agent_knowledge_map[\"$agent_name\"][]" 2>/dev/null || echo "")
 
     # Collect knowledge file paths
     local knowledge_files=()
@@ -88,7 +94,8 @@ get_agent_knowledge() {
                 done < <(discover_all_knowledge "$session_dir")
             else
                 # Specific knowledge file
-                local found_file=$(find_knowledge_file "$knowledge_name" "$session_dir" 2>/dev/null || echo "")
+                local found_file
+                found_file=$(find_knowledge_file "$knowledge_name" "$session_dir" 2>/dev/null || echo "")
                 if [ -n "$found_file" ]; then
                     knowledge_files+=("$found_file")
                 fi
@@ -117,11 +124,16 @@ get_agent_knowledge() {
 discover_all_knowledge() {
     local session_dir="${1:-}"
 
-    local config=$(get_knowledge_config)
-    local core_path="$PROJECT_ROOT/$(echo "$config" | jq -r '.knowledge_paths.core')"
-    local user_path="$PROJECT_ROOT/$(echo "$config" | jq -r '.knowledge_paths.user')"
-    local pattern=$(echo "$config" | jq -r '.discovery_rules.pattern')
-    local excludes=$(echo "$config" | jq -r '.discovery_rules.exclude[]' 2>/dev/null || echo "")
+    local config
+    config=$(get_knowledge_config)
+    local core_path
+    core_path="$PROJECT_ROOT/$(echo "$config" | jq -r '.knowledge_paths.core')"
+    local user_path
+    user_path="$PROJECT_ROOT/$(echo "$config" | jq -r '.knowledge_paths.user')"
+    local pattern
+    pattern=$(echo "$config" | jq -r '.discovery_rules.pattern')
+    local excludes
+    excludes=$(echo "$config" | jq -r '.discovery_rules.exclude[]' 2>/dev/null || echo "")
 
     # Collect unique knowledge names (priority order)
     declare -A seen_knowledge
@@ -132,7 +144,8 @@ discover_all_knowledge() {
         local session_path="$session_dir/knowledge"
         if [ -d "$session_path" ]; then
             while IFS= read -r file; do
-                local basename=$(basename "$file")
+                local basename
+                basename=$(basename "$file")
                 if ! is_excluded "$basename" "$excludes"; then
                     seen_knowledge["$basename"]=1
                     discovered_files+=("$file")
@@ -144,7 +157,8 @@ discover_all_knowledge() {
     # Priority 2: User custom knowledge
     if [ -d "$user_path" ]; then
         while IFS= read -r file; do
-            local basename=$(basename "$file")
+            local basename
+            basename=$(basename "$file")
             if ! is_excluded "$basename" "$excludes" && [ -z "${seen_knowledge[$basename]:-}" ]; then
                 seen_knowledge["$basename"]=1
                 discovered_files+=("$file")
@@ -155,7 +169,8 @@ discover_all_knowledge() {
     # Priority 3: Core knowledge
     if [ -d "$core_path" ]; then
         while IFS= read -r file; do
-            local basename=$(basename "$file")
+            local basename
+            basename=$(basename "$file")
             if ! is_excluded "$basename" "$excludes" && [ -z "${seen_knowledge[$basename]:-}" ]; then
                 seen_knowledge["$basename"]=1
                 discovered_files+=("$file")
@@ -195,8 +210,10 @@ inject_knowledge_context() {
     local base_prompt="$2"
     local session_dir="${3:-}"
 
-    local knowledge_files=$(get_agent_knowledge "$agent_name" "$session_dir")
-    local knowledge_count=$(echo "$knowledge_files" | jq 'length')
+    local knowledge_files
+    knowledge_files=$(get_agent_knowledge "$agent_name" "$session_dir")
+    local knowledge_count
+    knowledge_count=$(echo "$knowledge_files" | jq 'length')
 
     if [ "$knowledge_count" -eq 0 ]; then
         # No knowledge available - return base prompt
@@ -209,11 +226,14 @@ inject_knowledge_context() {
 
     local idx=0
     while [ $idx -lt "$knowledge_count" ]; do
-        local knowledge_file=$(echo "$knowledge_files" | jq -r ".[$idx]")
-        local knowledge_name=$(basename "$knowledge_file" .md)
+        local knowledge_file
+        knowledge_file=$(echo "$knowledge_files" | jq -r ".[$idx]")
+        local knowledge_name
+        knowledge_name=$(basename "$knowledge_file" .md)
 
         if [ -f "$knowledge_file" ]; then
-            local knowledge_content=$(cat "$knowledge_file")
+            local knowledge_content
+            knowledge_content=$(cat "$knowledge_file")
             knowledge_context+="## ${knowledge_name}\n\n<knowledge_base name=\"${knowledge_name}\">\n${knowledge_content}\n</knowledge_base>\n\n"
         fi
 
@@ -230,9 +250,12 @@ inject_knowledge_context() {
 list_all_knowledge() {
     local session_dir="${1:-}"
 
-    local config=$(get_knowledge_config)
-    local core_path="$PROJECT_ROOT/$(echo "$config" | jq -r '.knowledge_paths.core')"
-    local user_path="$PROJECT_ROOT/$(echo "$config" | jq -r '.knowledge_paths.user')"
+    local config
+    config=$(get_knowledge_config)
+    local core_path
+    core_path="$PROJECT_ROOT/$(echo "$config" | jq -r '.knowledge_paths.core')"
+    local user_path
+    user_path="$PROJECT_ROOT/$(echo "$config" | jq -r '.knowledge_paths.user')"
 
     echo "Available Knowledge Files"
     echo "════════════════════════════════════════════════════════"

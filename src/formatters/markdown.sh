@@ -16,7 +16,7 @@ cat <<EOF
 # Research Report
 
 **Generated**: $(date "+%Y-%m-%d %H:%M:%S")
-**Session**: $(basename $(dirname "$RESEARCH_FILE"))
+**Session**: $(basename "$(dirname "$RESEARCH_FILE")")
 
 ---
 
