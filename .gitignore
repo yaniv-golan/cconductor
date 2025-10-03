@@ -29,6 +29,10 @@ logs/
 .DS_Store
 
 # Note: User configs are stored in ~/.config/delve/ (not in project)
+# Config files: only .default.json should be tracked
+config/*.json
+!config/*.default.json
+
 memory-bank/activeContext.md
 memory-bank/productContext.md
 memory-bank/progress.md

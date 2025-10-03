@@ -286,12 +286,12 @@ Variable Expansion:
   \${PLATFORM_CONFIG} - OS-appropriate config directory
 
 Path Configuration:
-  Default paths: config/paths.default.json
-  Custom paths:  config/paths.json (overlay)
+  Default paths: config/paths.default.json (git-tracked, don't edit)
+  Custom paths:  ~/.config/delve/paths.json (user customizations)
 
   Create custom config:
     ./src/utils/config-loader.sh init paths
-    vim config/paths.json
+    vim ~/.config/delve/paths.json
 
 EOF
             ;;

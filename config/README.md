@@ -13,10 +13,10 @@ config/
 ├── knowledge-config.default.json
 ├── mcp-servers.default.json
 ├── paths.default.json
+├── pdf-config.default.json
 ├── research-config.default.json
 ├── research-modes.default.json
-├── security-config.default.json
-└── ...
+└── security-config.default.json
 ```
 
 ## User Configuration

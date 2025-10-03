@@ -34,7 +34,7 @@ if ! ADAPTIVE_CONFIG=$(load_config "adaptive-config"); then
     echo "" >&2
     echo "To create a custom configuration:" >&2
     echo "  $DELVE_SCRIPT_DIR/utils/config-loader.sh init adaptive-config" >&2
-    echo "  vim $PROJECT_ROOT/config/adaptive-config.json" >&2
+    echo "  vim ~/.config/delve/adaptive-config.json" >&2
     echo "" >&2
     exit 1
 fi

@@ -374,12 +374,12 @@ Priority Order:
   3. Core Default        → knowledge-base/
 
 Configuration:
-  Default config: config/knowledge-config.default.json
-  Custom config:  config/knowledge-config.json (overlay)
+  Default config: config/knowledge-config.default.json (git-tracked, don't edit)
+  Custom config:  ~/.config/delve/knowledge-config.json (user customizations)
 
   Create custom config:
     ./src/utils/config-loader.sh init knowledge-config
-    vim config/knowledge-config.json
+    vim ~/.config/delve/knowledge-config.json
 
 Examples:
   # Find where vc-methodology is loaded from

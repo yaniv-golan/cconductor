@@ -21,6 +21,12 @@ else
     CACHE_FILE="$HOME/.local/share/delve/version-check.cache"
 fi
 
+# Source config loader for overlay pattern
+if [ -f "$SCRIPT_DIR/config-loader.sh" ]; then
+    # shellcheck disable=SC1091
+    source "$SCRIPT_DIR/config-loader.sh"
+fi
+
 # Get current installed version
 get_current_version() {
     if [ -f "$PROJECT_ROOT/VERSION" ]; then
@@ -77,12 +83,13 @@ compare_versions() {
 
 # Check if we should check for updates
 should_check_for_updates() {
-    # Check if disabled in config
-    local config="$PROJECT_ROOT/config/delve-config.json"
-    if [ -f "$config" ]; then
-        local enabled
-        enabled=$(jq -r '.update_settings.check_for_updates // true' "$config" 2>/dev/null)
-        [ "$enabled" != "true" ] && return 1
+    # Check if disabled in config (using overlay pattern)
+    if command -v load_config &>/dev/null; then
+        if DELVE_CONFIG=$(load_config "delve-config" 2>/dev/null); then
+            local enabled
+            enabled=$(echo "$DELVE_CONFIG" | jq -r '.update_settings.check_for_updates // true')
+            [ "$enabled" != "true" ] && return 1
+        fi
     fi
     
     # Check cache age
@@ -144,7 +151,7 @@ show_update_notification() {
     echo "│ Release notes:                                     │"
     echo "│   https://github.com/${REPO}/releases/latest      │"
     echo "│                                                    │"
-    echo "│ To disable: Edit config/delve-config.json         │"
+    echo "│ To disable: Edit ~/.config/delve/delve-config.json│"
     echo "╰────────────────────────────────────────────────────╯"
     echo ""
 }
@@ -208,11 +215,13 @@ show_cached_notification() {
         current=$(jq -r '.current_version // "unknown"' "$CACHE_FILE")
         local latest
         latest=$(jq -r '.latest_version // "unknown"' "$CACHE_FILE")
-        local config="$PROJECT_ROOT/config/delve-config.json"
         local style="full"
         
-        if [ -f "$config" ]; then
-            style=$(jq -r '.update_settings.update_notification_style // "full"' "$config" 2>/dev/null)
+        # Get notification style from config (using overlay pattern)
+        if command -v load_config &>/dev/null; then
+            if DELVE_CONFIG=$(load_config "delve-config" 2>/dev/null); then
+                style=$(echo "$DELVE_CONFIG" | jq -r '.update_settings.update_notification_style // "full"')
+            fi
         fi
         
         show_update_notification "$current" "$latest" "$style"

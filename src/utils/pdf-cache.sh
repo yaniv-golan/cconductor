@@ -10,11 +10,13 @@
 
 set -euo pipefail
 
-# Get project root and source path resolver
+# Get project root and source utilities
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 # shellcheck disable=SC1091
 source "$SCRIPT_DIR/path-resolver.sh"
+# shellcheck disable=SC1091
+source "$SCRIPT_DIR/config-loader.sh"
 
 # Configuration
 PDF_CACHE_DIR=$(resolve_path "pdf_cache")
@@ -24,14 +26,14 @@ LOCK_TIMEOUT=10  # seconds
 MAX_PDF_SIZE_MB=100
 DOWNLOAD_TIMEOUT=60
 
-# Load PDF configuration if available
-PDF_CONFIG_FILE="$PROJECT_ROOT/config/pdf-config.json"
-if [ -f "$PDF_CONFIG_FILE" ]; then
-    MAX_CACHE_SIZE_MB=$(jq -r '.cache.max_size_mb // 5000' "$PDF_CONFIG_FILE" 2>/dev/null || echo "5000")
-    MAX_AGE_DAYS=$(jq -r '.cache.max_age_days // 90' "$PDF_CONFIG_FILE" 2>/dev/null || echo "90")
-    CLEANUP_ON_INIT=$(jq -r '.cache.cleanup_on_init // false' "$PDF_CONFIG_FILE" 2>/dev/null || echo "false")
-    EVICTION_POLICY=$(jq -r '.cache.eviction_policy // "lru"' "$PDF_CONFIG_FILE" 2>/dev/null || echo "lru")
+# Load PDF configuration using overlay pattern (user config overrides defaults)
+if PDF_CONFIG=$(load_config "pdf-config" 2>/dev/null); then
+    MAX_CACHE_SIZE_MB=$(echo "$PDF_CONFIG" | jq -r '.cache.max_size_mb // 5000')
+    MAX_AGE_DAYS=$(echo "$PDF_CONFIG" | jq -r '.cache.max_age_days // 90')
+    CLEANUP_ON_INIT=$(echo "$PDF_CONFIG" | jq -r '.cache.cleanup_on_init // false')
+    EVICTION_POLICY=$(echo "$PDF_CONFIG" | jq -r '.cache.eviction_policy // "lru"')
 else
+    # Fallback to defaults if config loading fails
     MAX_CACHE_SIZE_MB=5000
     MAX_AGE_DAYS=90
     CLEANUP_ON_INIT=false
