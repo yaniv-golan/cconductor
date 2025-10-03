@@ -78,7 +78,8 @@ get_flag() {
 # Usage: if has_flag "flag-name"; then ... fi
 has_flag() {
     local flag="$1"
-    [[ -v CLI_FLAGS[$flag] ]]
+    # Use bash 4.0+ compatible test (not 4.2+ -v)
+    [[ "${CLI_FLAGS[$flag]+isset}" == "isset" ]]
 }
 
 # Get positional argument by index (0-based)

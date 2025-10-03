@@ -586,6 +586,9 @@ kg_bulk_update() {
        '
        # Get existing entity names for duplicate detection
        (.entities | map(.name)) as $existing_names |
+       
+       # Get max existing entity ID to prevent collisions
+       ([.entities[] | .id | ltrimstr("e") | tonumber] | max // -1) as $max_entity_id |
 
        # Add new entities (avoid duplicates by name)
        .entities += (
@@ -593,62 +596,77 @@ kg_bulk_update() {
            map(select(.name as $n | $existing_names | contains([$n]) | not)) |
            to_entries |
            map(.value + {
-               id: ("e" + (($existing_names | length) + .key | tostring)),
+               id: ("e" + (($max_entity_id + 1 + .key) | tostring)),
                added_at: $date
            })
        ) |
 
+       # Get max existing claim ID to prevent collisions
+       ([.claims[] | .id | ltrimstr("c") | tonumber] | max // -1) as $max_claim_id |
+       
        # Add new claims with generated IDs
        .claims += (
            ($new_data.claims // []) |
            to_entries |
            map(.value + {
-               id: ("c" + ((.key + (.claims | length)) | tostring)),
+               id: ("c" + (($max_claim_id + 1 + .key) | tostring)),
                added_at: $date,
                verified: false
            })
        ) |
 
+       # Get max existing relationship ID to prevent collisions
+       ([.relationships[] | .id | ltrimstr("r") | tonumber] | max // -1) as $max_rel_id |
+       
        # Add new relationships with generated IDs
        .relationships += (
            ($new_data.relationships_discovered // []) |
            to_entries |
            map(.value + {
-               id: ("r" + ((.key + (.relationships | length)) | tostring)),
+               id: ("r" + (($max_rel_id + 1 + .key) | tostring)),
                added_at: $date
            })
        ) |
 
+       # Get max existing gap ID to prevent collisions
+       ([.gaps[] | .id | ltrimstr("g") | tonumber] | max // -1) as $max_gap_id |
+       
        # Add new gaps
        .gaps += (
            ($new_data.gaps_detected // []) |
            to_entries |
            map(.value + {
-               id: ("g" + ((.key + (.gaps | length)) | tostring)),
+               id: ("g" + (($max_gap_id + 1 + .key) | tostring)),
                detected_at_iteration: $iter,
                status: "pending",
                added_at: $date
            })
        ) |
 
+       # Get max existing contradiction ID to prevent collisions
+       ([.contradictions[] | .id | ltrimstr("con") | tonumber] | max // -1) as $max_con_id |
+       
        # Add new contradictions
        .contradictions += (
            ($new_data.contradictions_detected // []) |
            to_entries |
            map(.value + {
-               id: ("con" + ((.key + (.contradictions | length)) | tostring)),
+               id: ("con" + (($max_con_id + 1 + .key) | tostring)),
                detected_at_iteration: $iter,
                status: "unresolved",
                added_at: $date
            })
        ) |
 
+       # Get max existing lead ID to prevent collisions
+       ([.promising_leads[] | .id | ltrimstr("l") | tonumber] | max // -1) as $max_lead_id |
+       
        # Add new leads
        .promising_leads += (
            ($new_data.leads_identified // []) |
            to_entries |
            map(.value + {
-               id: ("l" + ((.key + (.promising_leads | length)) | tostring)),
+               id: ("l" + (($max_lead_id + 1 + .key) | tostring)),
                detected_at_iteration: $iter,
                status: "pending",
                added_at: $date
@@ -657,12 +675,15 @@ kg_bulk_update() {
 
        # Add new citations (deduplicate by DOI or URL)
        (.citations | map(.doi // .url)) as $existing_identifiers |
+       # Get max existing citation ID (extract number from cite_N format)
+       ([.citations[] | .id | ltrimstr("cite_") | tonumber] | max // -1) as $max_cite_id |
+       
        .citations += (
            ($new_data.citations // []) |
            map(select((.doi // .url) as $id | $existing_identifiers | contains([$id]) | not)) |
            to_entries |
            map(.value + {
-               id: ("cite_" + ((.key + (.citations | length)) | tostring)),
+               id: ("cite_" + (($max_cite_id + 1 + .key) | tostring)),
                added_at: $date,
                cited_by_claims: []
            })

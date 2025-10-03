@@ -198,12 +198,12 @@ extract_json_output() {
         # shellcheck disable=SC2016
         sed -n '/```/,/```/p' "$output_file" | \
             sed '1d;$d' > "$extracted_file"
-    elif grep -q '^{' "$output_file"; then
-        # Already JSON, just copy
+    elif grep -q '^\s*{' "$output_file"; then
+        # Already JSON (possibly indented), just copy
         cp "$output_file" "$extracted_file"
     else
-        # Try to find JSON in the output (look for { ... } blocks)
-        awk '/^{/,/^}/' "$output_file" > "$extracted_file"
+        # Try to find JSON in the output (look for { ... } blocks, handle indentation)
+        awk '/^\s*{/,/^\s*}/' "$output_file" > "$extracted_file"
         if [ ! -s "$extracted_file" ]; then
             echo "Warning: Could not extract JSON from output" >&2
             cp "$output_file" "$extracted_file"

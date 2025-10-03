@@ -47,16 +47,18 @@ fi
 # Returns: 0 on success, 1 on timeout
 acquire_cache_lock() {
     local timeout="${1:-$LOCK_TIMEOUT}"
-    local elapsed=0
+    local start_time
+    start_time=$(date +%s)
     
     while ! mkdir "$LOCK_FILE" 2>/dev/null; do
+        local elapsed
+        elapsed=$(($(date +%s) - start_time))
         if [ "$elapsed" -ge "$timeout" ]; then
             echo "Error: Could not acquire cache lock after ${timeout}s" >&2
             echo "       If no other process is running, remove: $LOCK_FILE" >&2
             return 1
         fi
         sleep 0.1
-        elapsed=$((elapsed + 1))
     done
     
     # Store PID for debugging

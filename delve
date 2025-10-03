@@ -329,10 +329,11 @@ main() {
             # Get session directory from path resolver (with fallback)
             local session_dir="$DELVE_ROOT/research-sessions"
             if [ -f "$DELVE_ROOT/src/utils/path-resolver.sh" ]; then
+                # shellcheck disable=SC1091
                 source "$DELVE_ROOT/src/utils/path-resolver.sh" 2>/dev/null
-                local resolved=$(resolve_path "session_dir" 2>/dev/null)
-                # Only use resolved path if it's valid and not an error
-                if [ -n "$resolved" ] && [ "${resolved:0:5}" != "ERROR" ]; then
+                local resolved
+                # Use return code instead of string check
+                if resolved=$(resolve_path "session_dir" 2>/dev/null) && [ -n "$resolved" ]; then
                     session_dir="$resolved"
                 fi
             fi
@@ -348,9 +349,12 @@ main() {
                     
                     # Show session metadata if available
                     if [ -f "$LATEST_PATH/session.json" ]; then
-                        local question=$(jq -r '.research_question // "N/A"' "$LATEST_PATH/session.json" 2>/dev/null)
-                        local status=$(jq -r '.status // "unknown"' "$LATEST_PATH/session.json" 2>/dev/null)
-                        local created=$(jq -r '.created_at // "N/A"' "$LATEST_PATH/session.json" 2>/dev/null)
+                        local question
+                        question=$(jq -r '.research_question // "N/A"' "$LATEST_PATH/session.json" 2>/dev/null || echo "N/A")
+                        local status
+                        status=$(jq -r '.status // "unknown"' "$LATEST_PATH/session.json" 2>/dev/null || echo "unknown")
+                        local created
+                        created=$(jq -r '.created_at // "N/A"' "$LATEST_PATH/session.json" 2>/dev/null || echo "N/A")
                         
                         echo "Question: $question"
                         echo "Status: $status"

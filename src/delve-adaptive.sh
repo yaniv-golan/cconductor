@@ -136,9 +136,16 @@ print_banner() {
 initialize_session() {
     local research_question="$1"
 
-    # Create session directory
+    # Create session directory with unique timestamp to prevent collisions
     local timestamp
-    timestamp=$(date +%s)
+    # Check if we can get subsecond precision (GNU date with %N)
+    if date +%s%N &>/dev/null 2>&1 && [[ "$(date +%s%N)" =~ ^[0-9]+$ ]]; then
+        # GNU date (Linux) - use nanoseconds
+        timestamp=$(date +%s%N)
+    else
+        # macOS or other - use seconds + PID + random
+        timestamp="$(date +%s)_$$_${RANDOM}"
+    fi
     local session_dir="$PROJECT_ROOT/research-sessions/session_${timestamp}"
     mkdir -p "$session_dir"
     mkdir -p "$session_dir/raw"
@@ -252,6 +259,14 @@ initial_planning() {
     # Extract initial tasks (agent returns .initial_tasks in Phase 2 format)
     local initial_tasks
     initial_tasks=$(cat "$planning_output" | jq '.initial_tasks // .tasks')
+    
+    # Validate that result is an array
+    if ! echo "$initial_tasks" | jq -e 'type == "array"' >/dev/null 2>&1; then
+        echo "Error: Planning output is not a valid array" >&2
+        echo "Received: ${initial_tasks:0:200}..." >&2
+        return 1
+    fi
+    
     echo "$initial_tasks"
 }
 
@@ -378,7 +393,11 @@ execute_pending_tasks() {
         else
             # Execute sequentially
             if ! execute_single_agent "$agent" "$agent_input" "$agent_output" "$session_dir"; then
-                echo "Warning: Agent $agent failed, continuing with other agents..." >&2
+                echo "Warning: Agent $agent failed, marking tasks as failed..." >&2
+                # Mark agent's tasks as failed
+                echo "$agent_tasks" | jq -r '.[].id' | while read -r task_id; do
+                    tq_fail_task "$session_dir" "$task_id" "Agent $agent failed to execute"
+                done
             fi
         fi
 
@@ -399,6 +418,13 @@ execute_pending_tasks() {
             else
                 echo "    ✗ $agent_name failed" >&2
                 failed_agents+=("$agent_name")
+                
+                # Mark agent's tasks as failed
+                local agent_tasks
+                agent_tasks=$(echo "$pending" | jq -c --arg agent "$agent_name" '[.[] | select(.agent == $agent)]')
+                echo "$agent_tasks" | jq -r '.[].id' | while read -r task_id; do
+                    tq_fail_task "$session_dir" "$task_id" "Agent $agent_name failed during parallel execution"
+                done
             fi
         done
         
@@ -654,7 +680,7 @@ should_terminate() {
     local coordinator_output_file="$1"
 
     local should_stop
-    should_stop=$(cat "$coordinator_output_file" | jq -r '.termination_recommendation')
+    should_stop=$(cat "$coordinator_output_file" | jq -r '.termination_recommendation // false')
     [ "$should_stop" = "true" ]
 }
 
@@ -682,7 +708,9 @@ interactive_prompt() {
     local recommendations
     recommendations=$(echo "$coordinator_output" | jq -r '.recommendations | join("\n  - ")')
 
-    cat <<EOF
+    # Use loop instead of recursion to prevent stack overflow
+    while true; do
+        cat <<EOF
 
 ╔════════════════════════════════════════════════════════════╗
 ║  Iteration $iteration Complete                                      ║
@@ -708,31 +736,36 @@ Options:
 
 EOF
 
-    read -r -p "Your choice: " choice
+        read -r -p "Your choice: " choice
 
-    case "$choice" in
-        c|C|"")
-            return 0  # Continue
-            ;;
-        s|S)
-            return 1  # Stop
-            ;;
-        d|D)
-            kg_read "$session_dir" | jq '.'
-            interactive_prompt "$session_dir" "$iteration" "$coordinator_output"
-            ;;
-        r|R)
-            echo "$coordinator_output" | jq -r '.recommendations | join("\n")'
-            interactive_prompt "$session_dir" "$iteration" "$coordinator_output"
-            ;;
-        q|Q)
-            exit 0
-            ;;
-        *)
-            echo "Invalid option"
-            interactive_prompt "$session_dir" "$iteration" "$coordinator_output"
-            ;;
-    esac
+        case "$choice" in
+            c|C|"")
+                return 0  # Continue
+                ;;
+            s|S)
+                return 1  # Stop
+                ;;
+            d|D)
+                echo ""
+                kg_read "$session_dir" | jq '.'
+                echo ""
+                # Loop continues to show menu again
+                ;;
+            r|R)
+                echo ""
+                echo "$coordinator_output" | jq -r '.recommendations | join("\n")'
+                echo ""
+                # Loop continues to show menu again
+                ;;
+            q|Q)
+                exit 0
+                ;;
+            *)
+                echo "Invalid option"
+                # Loop continues to show menu again
+                ;;
+        esac
+    done
 }
 
 # Final synthesis
@@ -1045,9 +1078,21 @@ main() {
     echo "→ Creating initial research plan..."
     local initial_tasks
     initial_tasks=$(initial_planning "$session_dir" "$research_question")
-    tq_add_tasks "$session_dir" "$initial_tasks" >/dev/null
+    
+    # Validate that we got tasks
     local task_count
     task_count=$(echo "$initial_tasks" | jq 'length' 2>/dev/null || echo "0")
+    
+    if [ "$task_count" -eq 0 ]; then
+        echo "  ✗ Error: Planning failed to generate any tasks" >&2
+        echo "  This could indicate an issue with the research-planner agent." >&2
+        echo "" >&2
+        echo "  Session saved at: $session_dir" >&2
+        echo "  You can try to resume it later with: ./delve resume $(basename "$session_dir")" >&2
+        exit 1
+    fi
+    
+    tq_add_tasks "$session_dir" "$initial_tasks" >/dev/null
     echo "  ✓ Generated $task_count initial tasks"
     echo ""
 
@@ -1285,7 +1330,7 @@ finalize_research() {
     fi
     echo ""
     echo "Resume this session:"
-    echo "   ./research resume $(basename "$session_dir")"
+    echo "   ./delve resume $(basename "$session_dir")"
     echo ""
 }
 

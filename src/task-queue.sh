@@ -84,8 +84,10 @@ tq_add_task() {
         return 1
     }
 
-    local task_id
-    task_id="t$(jq '.stats.total_tasks' "$queue_file")"
+    # Get max existing task ID to prevent collisions
+    local max_id
+    max_id=$(jq '[.tasks[] | .id | ltrimstr("t") | tonumber] | max // -1' "$queue_file")
+    local task_id="t$((max_id + 1))"
 
     jq --argjson task "$task_json" \
        --arg id "$task_id" \
@@ -264,18 +266,41 @@ tq_complete_task() {
     local queue_file
     queue_file=$(tq_get_path "$session_dir")
 
-    # Update status first (which handles locking)
-    tq_update_status "$session_dir" "$task_id" "completed"
-
-    # Then add findings file reference (with its own lock)
+    # Single atomic operation to update status and add findings (prevents race condition)
     lock_acquire "$queue_file" || {
         echo "Error: Failed to acquire lock for completing task" >&2
         return 1
     }
 
+    # Get current status to update stats correctly
+    local old_status
+    old_status=$(jq -r --arg id "$task_id" \
+                          '.tasks[] | select(.id == $id) | .status' \
+                          "$queue_file")
+
+    if [ -z "$old_status" ]; then
+        echo "Error: Task not found: $task_id" >&2
+        lock_release "$queue_file"
+        return 1
+    fi
+
+    # Build stats updates
+    local stats_old_dec=""
+    case "$old_status" in
+        pending) stats_old_dec='| .stats.pending -= 1' ;;
+        in_progress) stats_old_dec='| .stats.in_progress -= 1' ;;
+        completed) stats_old_dec='| .stats.completed -= 1' ;;
+        failed) stats_old_dec='| .stats.failed -= 1' ;;
+    esac
+
+    # Single atomic jq operation
     jq --arg id "$task_id" \
        --arg findings "$findings_file" \
-       '(.tasks[] | select(.id == $id)) |= (. + {findings_file: $findings})' \
+       --arg date "$(date -u +"%Y-%m-%dT%H:%M:%SZ")" \
+       "(.tasks[] | select(.id == \$id)) |= (. + {status: \"completed\", findings_file: \$findings, completed_at: \$date, updated_at: \$date}) |
+        .last_updated = \$date
+        $stats_old_dec
+        | .stats.completed += 1" \
        "$queue_file" > "${queue_file}.tmp"
 
     mv "${queue_file}.tmp" "$queue_file"
