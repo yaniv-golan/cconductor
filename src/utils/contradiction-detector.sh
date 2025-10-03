@@ -11,18 +11,24 @@ detect_contradictions() {
     local kg_json="$1"
 
     local contradictions='[]'
-    local claims=$(echo "$kg_json" | jq -c '.claims[]')
+    local claims
+    claims=$(echo "$kg_json" | jq -c '.claims[]')
 
     # Compare all pairs of claims for conflicts
-    local claims_array=$(echo "$kg_json" | jq -c '.claims')
-    local claim_count=$(echo "$claims_array" | jq 'length')
+    local claims_array
+    claims_array=$(echo "$kg_json" | jq -c '.claims')
+    local claim_count
+    claim_count=$(echo "$claims_array" | jq 'length')
 
     for ((i=0; i<claim_count; i++)); do
         for ((j=i+1; j<claim_count; j++)); do
-            local claim1=$(echo "$claims_array" | jq ".[$i]")
-            local claim2=$(echo "$claims_array" | jq ".[$j]")
+            local claim1
+            claim1=$(echo "$claims_array" | jq ".[$i]")
+            local claim2
+            claim2=$(echo "$claims_array" | jq ".[$j]")
 
-            local contradiction=$(compare_claims "$claim1" "$claim2")
+            local contradiction
+            contradiction=$(compare_claims "$claim1" "$claim2")
 
             if [ "$contradiction" != "null" ]; then
                 contradictions=$(echo "$contradictions" | jq --argjson con "$contradiction" '. += [$con]')
@@ -38,10 +44,14 @@ compare_claims() {
     local claim1_json="$1"
     local claim2_json="$2"
 
-    local stmt1=$(echo "$claim1_json" | jq -r '.statement' | tr '[:upper:]' '[:lower:]')
-    local stmt2=$(echo "$claim2_json" | jq -r '.statement' | tr '[:upper:]' '[:lower:]')
-    local id1=$(echo "$claim1_json" | jq -r '.id')
-    local id2=$(echo "$claim2_json" | jq -r '.id')
+    local stmt1
+    stmt1=$(echo "$claim1_json" | jq -r '.statement' | tr '[:upper:]' '[:lower:]')
+    local stmt2
+    stmt2=$(echo "$claim2_json" | jq -r '.statement' | tr '[:upper:]' '[:lower:]')
+    local id1
+    id1=$(echo "$claim1_json" | jq -r '.id')
+    local id2
+    id2=$(echo "$claim2_json" | jq -r '.id')
 
     # Contradiction indicators
     local contradicts=false
@@ -49,8 +59,10 @@ compare_claims() {
     # Check for negation patterns
     if echo "$stmt1" | grep -qE "(not|never|no|false)" && echo "$stmt2" | grep -qvE "(not|never|no|false)"; then
         # One is negated, other is not - potential contradiction
-        local stmt1_normalized=$(echo "$stmt1" | sed 's/ not / /g; s/ never / /g; s/ no / /g')
-        local stmt2_normalized=$(echo "$stmt2" | sed 's/ not / /g; s/ never / /g; s/ no / /g')
+        local stmt1_normalized
+        stmt1_normalized=$(echo "$stmt1" | sed 's/ not / /g; s/ never / /g; s/ no / /g')
+        local stmt2_normalized
+        stmt2_normalized=$(echo "$stmt2" | sed 's/ not / /g; s/ never / /g; s/ no / /g')
 
         if echo "$stmt1_normalized" | grep -qF "$stmt2_normalized" || echo "$stmt2_normalized" | grep -qF "$stmt1_normalized"; then
             contradicts=true
@@ -63,13 +75,17 @@ compare_claims() {
     fi
 
     # Check for numeric contradictions
-    local num1=$(echo "$stmt1" | grep -oE '[0-9]+(\.[0-9]+)?' | head -1)
-    local num2=$(echo "$stmt2" | grep -oE '[0-9]+(\.[0-9]+)?' | head -1)
+    local num1
+    num1=$(echo "$stmt1" | grep -oE '[0-9]+(\.[0-9]+)?' | head -1)
+    local num2
+    num2=$(echo "$stmt2" | grep -oE '[0-9]+(\.[0-9]+)?' | head -1)
 
     if [ -n "$num1" ] && [ -n "$num2" ]; then
         # If both have numbers and statements are similar, check if numbers differ significantly
-        local stmt1_no_num=$(echo "$stmt1" | sed 's/[0-9]\+\(\.[0-9]\+\)\?//g')
-        local stmt2_no_num=$(echo "$stmt2" | sed 's/[0-9]\+\(\.[0-9]\+\)\?//g')
+        local stmt1_no_num
+        stmt1_no_num=$(echo "$stmt1" | sed 's/[0-9]\+\(\.[0-9]\+\)\?//g')
+        local stmt2_no_num
+        stmt2_no_num=$(echo "$stmt2" | sed 's/[0-9]\+\(\.[0-9]\+\)\?//g')
 
         if echo "$stmt1_no_num" | grep -qF "$stmt2_no_num" || echo "$stmt2_no_num" | grep -qF "$stmt1_no_num"; then
             # Same statement but different numbers
@@ -111,8 +127,10 @@ detect_from_agent() {
 generate_investigation_query() {
     local contradiction_json="$1"
 
-    local claim1=$(echo "$contradiction_json" | jq -r '.claim1')
-    local claim2=$(echo "$contradiction_json" | jq -r '.claim2')
+    local claim1
+    claim1=$(echo "$contradiction_json" | jq -r '.claim1')
+    local claim2
+    claim2=$(echo "$contradiction_json" | jq -r '.claim2')
 
     # Extract key terms from both claims
     local query="Investigate contradiction between claims: $claim1 vs $claim2. Which is correct?"

@@ -39,7 +39,8 @@ load_config() {
 
     # Get file locations
     local default_file="$project_config_dir/${config_name}.default.json"
-    local user_config_dir=$(get_user_config_dir)
+    local user_config_dir
+    user_config_dir=$(get_user_config_dir)
     local user_file="$user_config_dir/${config_name}.json"
 
     # Validate default config exists (required)
@@ -56,7 +57,8 @@ load_config() {
     fi
 
     # Start with default config
-    local merged_config=$(cat "$default_file")
+    local merged_config
+    merged_config=$(cat "$default_file")
 
     # Overlay user config if exists
     if [ -f "$user_file" ]; then
@@ -79,7 +81,8 @@ get_config_value() {
     local path="$2"
     local default_value="${3:-null}"
 
-    local config=$(load_config "$config_name")
+    local config
+    config=$(load_config "$config_name")
 
     # Extract value with default fallback
     echo "$config" | jq -r "${path} // ${default_value}"
@@ -90,7 +93,8 @@ get_config_value() {
 # Returns: 0 if exists, 1 if not
 has_user_config() {
     local config_name="$1"
-    local user_config_dir=$(get_user_config_dir)
+    local user_config_dir
+    user_config_dir=$(get_user_config_dir)
     local user_file="$user_config_dir/${config_name}.json"
 
     [ -f "$user_file" ]
@@ -101,7 +105,8 @@ has_user_config() {
 # Returns: Path to user config or empty if none exists
 get_user_config_location() {
     local config_name="$1"
-    local user_config_dir=$(get_user_config_dir)
+    local user_config_dir
+    user_config_dir=$(get_user_config_dir)
     local user_file="$user_config_dir/${config_name}.json"
     
     if [ -f "$user_file" ]; then
@@ -116,7 +121,8 @@ init_user_config() {
     local project_config_dir="${2:-$PROJECT_ROOT/config}"
 
     local default_file="$project_config_dir/${config_name}.default.json"
-    local user_config_dir=$(get_user_config_dir)
+    local user_config_dir
+    user_config_dir=$(get_user_config_dir)
     local user_file="$user_config_dir/${config_name}.json"
 
     if [ ! -f "$default_file" ]; then
@@ -145,7 +151,8 @@ init_user_config() {
 # Usage: list_configs
 list_configs() {
     local config_dir="${1:-$PROJECT_ROOT/config}"
-    local user_config_dir=$(get_user_config_dir)
+    local user_config_dir
+    user_config_dir=$(get_user_config_dir)
 
     echo "Available configurations:"
     echo ""
@@ -155,7 +162,8 @@ list_configs() {
             continue
         fi
 
-        local basename=$(basename "$default_file" .default.json)
+        local basename
+        basename=$(basename "$default_file" .default.json)
         local user_file="$user_config_dir/${basename}.json"
 
         echo -n "  • $basename"
@@ -187,7 +195,8 @@ validate_configs() {
             continue
         fi
 
-        local basename=$(basename "$default_file" .default.json)
+        local basename
+        basename=$(basename "$default_file" .default.json)
 
         # Validate default
         echo -n "  Checking $basename.default.json... "
@@ -228,7 +237,8 @@ show_config_diff() {
     local config_dir="${2:-$PROJECT_ROOT/config}"
 
     local default_file="$config_dir/${config_name}.default.json"
-    local user_config_location=$(get_user_config_location "$config_name")
+    local user_config_location
+    user_config_location=$(get_user_config_location "$config_name")
 
     if [ -z "$user_config_location" ]; then
         echo "No user customizations for $config_name"

@@ -30,7 +30,8 @@ detect_os() {
 # Get application data directory (persistent user data)
 # Examples: databases, user configs, session data
 get_data_dir() {
-    local os=$(detect_os)
+    local os
+    os=$(detect_os)
     
     case "$os" in
         macos)
@@ -57,7 +58,8 @@ get_data_dir() {
 # Get cache directory (temporary, can be cleared)
 # Examples: PDF cache, downloaded files, temporary processing
 get_cache_dir() {
-    local os=$(detect_os)
+    local os
+    os=$(detect_os)
     
     case "$os" in
         macos)
@@ -82,7 +84,8 @@ get_cache_dir() {
 # Get log directory (for application logs)
 # Examples: audit logs, debug logs, error logs
 get_log_dir() {
-    local os=$(detect_os)
+    local os
+    os=$(detect_os)
     
     case "$os" in
         macos)
@@ -108,7 +111,8 @@ get_log_dir() {
 # Note: Delve stores configs in PROJECT_ROOT/config by default
 # This is for future user-level config support
 get_config_dir() {
-    local os=$(detect_os)
+    local os
+    os=$(detect_os)
     
     case "$os" in
         macos)
@@ -134,7 +138,8 @@ get_config_dir() {
 
 # Print all platform paths (for debugging)
 show_platform_paths() {
-    local os=$(detect_os)
+    local os
+    os=$(detect_os)
     
     cat <<EOF
 Platform: $os

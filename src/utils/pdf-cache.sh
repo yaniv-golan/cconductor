@@ -117,7 +117,8 @@ get_cache_key() {
 # Check if PDF is already cached
 is_pdf_cached() {
     local url="$1"
-    local cache_key=$(get_cache_key "$url")
+    local cache_key
+    cache_key=$(get_cache_key "$url")
     local pdf_file="$PDF_CACHE_DIR/${cache_key}.pdf"
 
     [ -f "$pdf_file" ]
@@ -126,14 +127,16 @@ is_pdf_cached() {
 # Get cached PDF path
 get_cached_pdf_path() {
     local url="$1"
-    local cache_key=$(get_cache_key "$url")
+    local cache_key
+    cache_key=$(get_cache_key "$url")
     echo "$PDF_CACHE_DIR/${cache_key}.pdf"
 }
 
 # Get PDF metadata path
 get_pdf_metadata_path() {
     local url="$1"
-    local cache_key=$(get_cache_key "$url")
+    local cache_key
+    cache_key=$(get_cache_key "$url")
     echo "$PDF_METADATA_DIR/${cache_key}.json"
 }
 
@@ -156,7 +159,8 @@ cache_pdf() {
         return 1
     fi
 
-    local cache_key=$(get_cache_key "$url")
+    local cache_key
+    cache_key=$(get_cache_key "$url")
     local cached_pdf="$PDF_CACHE_DIR/${cache_key}.pdf"
     local metadata_file="$PDF_METADATA_DIR/${cache_key}.json"
 
@@ -167,8 +171,10 @@ cache_pdf() {
     fi
 
     # Get file metadata
-    local file_size=$(stat -f%z "$cached_pdf" 2>/dev/null || stat -c%s "$cached_pdf" 2>/dev/null || echo 0)
-    local sha256=$(shasum -a 256 "$cached_pdf" | cut -d' ' -f1)
+    local file_size
+    file_size=$(stat -f%z "$cached_pdf" 2>/dev/null || stat -c%s "$cached_pdf" 2>/dev/null || echo 0)
+    local sha256
+    sha256=$(shasum -a 256 "$cached_pdf" | cut -d' ' -f1)
 
     # Create metadata using jq (prevents injection attacks)
     if ! jq -n \
@@ -295,7 +301,8 @@ fetch_and_cache_pdf() {
 
     # Check disk space (require 200MB free for safety)
     if command -v df &> /dev/null; then
-        local free_space=$(df -k "$PDF_CACHE_DIR" 2>/dev/null | awk 'NR==2 {print $4}' || echo "999999999")
+        local free_space
+        free_space=$(df -k "$PDF_CACHE_DIR" 2>/dev/null | awk 'NR==2 {print $4}' || echo "999999999")
         if [ "$free_space" -lt 204800 ]; then
             echo "Error: Insufficient disk space in cache directory" >&2
             echo "       Need at least 200MB free, have $(( free_space / 1024 ))MB" >&2
@@ -304,8 +311,10 @@ fetch_and_cache_pdf() {
     fi
 
     # Download with timeout and size limit
-    local temp_pdf=$(mktemp /tmp/pdf-XXXXXX.pdf)
-    local max_size_bytes=$((MAX_PDF_SIZE_MB * 1024 * 1024))
+    local temp_pdf
+    temp_pdf=$(mktemp /tmp/pdf-XXXXXX.pdf)
+    local max_size_bytes
+    max_size_bytes=$((MAX_PDF_SIZE_MB * 1024 * 1024))
     
     echo "Downloading PDF from: $url" >&2
 
@@ -355,7 +364,8 @@ fetch_and_cache_pdf() {
 # Get PDF metadata
 get_pdf_metadata() {
     local url="$1"
-    local metadata_file=$(get_pdf_metadata_path "$url")
+    local metadata_file
+    metadata_file=$(get_pdf_metadata_path "$url")
 
     if [ -f "$metadata_file" ]; then
         cat "$metadata_file"
@@ -396,11 +406,15 @@ clear_pdf_cache() {
 get_cache_stats() {
     init_pdf_cache || return 1
 
-    local pdf_count=$(find "$PDF_CACHE_DIR" -name "*.pdf" 2>/dev/null | wc -l | tr -d ' ')
-    local total_size=$(du -sh "$PDF_CACHE_DIR" 2>/dev/null | cut -f1 || echo "Unknown")
-    local size_mb=$(get_cache_size_mb)
+    local pdf_count
+    pdf_count=$(find "$PDF_CACHE_DIR" -name "*.pdf" 2>/dev/null | wc -l | tr -d ' ')
+    local total_size
+    total_size=$(du -sh "$PDF_CACHE_DIR" 2>/dev/null | cut -f1 || echo "Unknown")
+    local size_mb
+    size_mb=$(get_cache_size_mb)
     local limit_mb="$MAX_CACHE_SIZE_MB"
-    local usage_percent=$(( (size_mb * 100) / limit_mb ))
+    local usage_percent
+    usage_percent=$(( (size_mb * 100) / limit_mb ))
 
     cat <<EOF
 {
@@ -439,7 +453,8 @@ deduplicate_cache_index() {
     
     release_cache_lock
     
-    local count=$(jq '.pdfs | length' "$index_file")
+    local count
+    count=$(jq '.pdfs | length' "$index_file")
     echo "Index deduplicated: $count unique entries" >&2
     return 0
 }
@@ -477,9 +492,11 @@ verify_cache_integrity() {
             issues=$((issues + 1))
         else
             # Verify file integrity with stored hash
-            local stored_hash=$(jq -r '.sha256' "$metadata_file" 2>/dev/null || echo "")
+            local stored_hash
+            stored_hash=$(jq -r '.sha256' "$metadata_file" 2>/dev/null || echo "")
             if [ -n "$stored_hash" ]; then
-                local actual_hash=$(shasum -a 256 "$pdf_file" | cut -d' ' -f1)
+                local actual_hash
+                actual_hash=$(shasum -a 256 "$pdf_file" | cut -d' ' -f1)
                 
                 if [ "$stored_hash" != "$actual_hash" ]; then
                     echo "  ✗ Hash mismatch: $cache_key" >&2
@@ -520,14 +537,18 @@ rebuild_cache_index() {
     for metadata_file in "$PDF_METADATA_DIR"/*.json; do
         [ -f "$metadata_file" ] || continue
         if [ -f "$metadata_file" ]; then
-            local cache_key=$(basename "$metadata_file" .json)
+            local cache_key
+            cache_key=$(basename "$metadata_file" .json)
             local pdf_file="$PDF_CACHE_DIR/${cache_key}.pdf"
             
             # Only include if PDF exists
             if [ -f "$pdf_file" ]; then
-                local url=$(jq -r '.url' "$metadata_file" 2>/dev/null || echo "")
-                local title=$(jq -r '.title' "$metadata_file" 2>/dev/null || echo "Unknown")
-                local cached_at=$(jq -r '.cached_at' "$metadata_file" 2>/dev/null || echo "")
+                local url
+                url=$(jq -r '.url' "$metadata_file" 2>/dev/null || echo "")
+                local title
+                title=$(jq -r '.title' "$metadata_file" 2>/dev/null || echo "Unknown")
+                local cached_at
+                cached_at=$(jq -r '.cached_at' "$metadata_file" 2>/dev/null || echo "")
                 
                 if [ -n "$url" ]; then
                     new_index=$(echo "$new_index" | jq \
@@ -545,7 +566,8 @@ rebuild_cache_index() {
     
     release_cache_lock
     
-    local count=$(echo "$new_index" | jq '.pdfs | length')
+    local count
+    count=$(echo "$new_index" | jq '.pdfs | length')
     echo "Index rebuilt: $count entries" >&2
     return 0
 }
@@ -559,7 +581,8 @@ cleanup_orphaned_metadata() {
     for metadata_file in "$PDF_METADATA_DIR"/*.json; do
         [ -f "$metadata_file" ] || continue
         
-        local cache_key=$(basename "$metadata_file" .json)
+        local cache_key
+        cache_key=$(basename "$metadata_file" .json)
         local pdf_file="$PDF_CACHE_DIR/${cache_key}.pdf"
         
         if [ ! -f "$pdf_file" ]; then
@@ -592,7 +615,8 @@ repair_cache() {
 get_cache_size_mb() {
     init_pdf_cache || return 1
     
-    local size_kb=$(du -sk "$PDF_CACHE_DIR" 2>/dev/null | cut -f1 || echo "0")
+    local size_kb
+    size_kb=$(du -sk "$PDF_CACHE_DIR" 2>/dev/null | cut -f1 || echo "0")
     echo $((size_kb / 1024))
 }
 
@@ -605,7 +629,8 @@ cleanup_cache() {
     
     echo "Starting cache cleanup (policy: $policy, target: ${target_size_mb}MB)..." >&2
     
-    local current_size=$(get_cache_size_mb)
+    local current_size
+    current_size=$(get_cache_size_mb)
     echo "Current cache size: ${current_size}MB" >&2
     
     if [ "$current_size" -le "$target_size_mb" ]; then
@@ -613,7 +638,8 @@ cleanup_cache() {
         return 0
     fi
     
-    local to_remove_mb=$((current_size - target_size_mb))
+    local to_remove_mb
+    to_remove_mb=$((current_size - target_size_mb))
     echo "Need to free: ${to_remove_mb}MB" >&2
     
     case "$policy" in
@@ -633,7 +659,8 @@ cleanup_cache() {
     cleanup_orphaned_metadata
     rebuild_cache_index
     
-    local new_size=$(get_cache_size_mb)
+    local new_size
+    new_size=$(get_cache_size_mb)
     echo "Cleanup complete. New size: ${new_size}MB" >&2
     return 0
 }
@@ -653,8 +680,10 @@ cleanup_lru() {
             break
         fi
         
-        local size_mb=$(du -m "$pdf_path" 2>/dev/null | cut -f1)
-        local filename=$(basename "$pdf_path")
+        local size_mb
+        size_mb=$(du -m "$pdf_path" 2>/dev/null | cut -f1)
+        local filename
+        filename=$(basename "$pdf_path")
         
         rm -f "$pdf_path"
         echo "  Removed: $filename (${size_mb}MB, freed so far: $((freed_mb + size_mb))MB)" >&2
@@ -678,7 +707,8 @@ cleanup_by_age() {
     
     local removed=0
     find "$PDF_CACHE_DIR" -name "*.pdf" -type f -mtime +$max_days 2>/dev/null | while read -r pdf_path; do
-        local filename=$(basename "$pdf_path")
+        local filename
+        filename=$(basename "$pdf_path")
         local cache_key="${filename%.pdf}"
         
         rm -f "$pdf_path"
@@ -694,12 +724,14 @@ cleanup_by_age() {
 
 # Auto cleanup if cache exceeds limit
 auto_cleanup_if_needed() {
-    local current_size=$(get_cache_size_mb)
+    local current_size
+    current_size=$(get_cache_size_mb)
     
     if [ "$current_size" -gt "$MAX_CACHE_SIZE_MB" ]; then
         echo "Cache size (${current_size}MB) exceeds limit (${MAX_CACHE_SIZE_MB}MB)" >&2
         # Clean to 80% of limit to avoid constant cleanup
-        local target=$((MAX_CACHE_SIZE_MB * 80 / 100))
+        local target
+        target=$((MAX_CACHE_SIZE_MB * 80 / 100))
         cleanup_cache "$EVICTION_POLICY" "$target"
     fi
 }

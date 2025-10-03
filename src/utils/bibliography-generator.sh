@@ -167,7 +167,8 @@ generate_bibliography() {
     local output_format="${3:-text}"
 
     # Get all citations from knowledge graph
-    local citations=$(jq -c '.citations[]?' "$kg_file")
+    local citations
+    citations=$(jq -c '.citations[]?' "$kg_file")
 
     if [ -z "$citations" ]; then
         echo "No citations found in knowledge graph" >&2
@@ -257,7 +258,8 @@ generate_inline_citation() {
             ;;
         vancouver)
             # Numeric format: [1]
-            local citation_id=$(echo "$citation_json" | jq -r '.id')
+            local citation_id
+            citation_id=$(echo "$citation_json" | jq -r '.id')
             echo "[$citation_id]"
             ;;
         *)
@@ -273,7 +275,8 @@ get_inline_citation_by_id() {
     local citation_id="$2"
     local style="${3:-apa}"
 
-    local citation=$(jq --arg id "$citation_id" \
+    local citation
+    citation=$(jq --arg id "$citation_id" \
         '.citations[]? | select(.id == $id)' \
         "$kg_file")
 
@@ -292,7 +295,8 @@ generate_claim_bibliography() {
     local style="${3:-apa}"
 
     # Get citation IDs for this claim
-    local citation_ids=$(jq -r --arg claim "$claim_id" \
+    local citation_ids
+    citation_ids=$(jq -r --arg claim "$claim_id" \
         '.claims[]? | select(.id == $claim) | .sources[]?.citation_id' \
         "$kg_file")
 
@@ -305,7 +309,8 @@ generate_claim_bibliography() {
     local citation_num=1
 
     while IFS= read -r citation_id; do
-        local citation=$(jq --arg id "$citation_id" \
+        local citation
+        citation=$(jq --arg id "$citation_id" \
             '.citations[]? | select(.id == $id)' \
             "$kg_file")
 

@@ -33,10 +33,12 @@ resolve_path() {
     local path_key="$1"
 
     # Load paths config (overlay pattern)
-    local paths_config=$(load_config "paths")
+    local paths_config
+    paths_config=$(load_config "paths")
 
     # Get raw path
-    local raw_path=$(echo "$paths_config" | jq -r ".$path_key // empty")
+    local raw_path
+    raw_path=$(echo "$paths_config" | jq -r ".$path_key // empty")
 
     if [ -z "$raw_path" ]; then
         echo "ERROR: Path key not found: $path_key" >&2
@@ -59,7 +61,8 @@ resolve_path() {
 
     # Normalize path (remove trailing slashes, resolve ..)
     # Only normalize if parent directory exists, otherwise keep the expanded path
-    local parent_dir=$(dirname -- "$expanded_path")
+    local parent_dir
+    parent_dir=$(dirname -- "$expanded_path")
     if [ -d "$parent_dir" ]; then
         expanded_path=$(cd -P -- "$parent_dir" && pwd -P)/$(basename -- "$expanded_path")
     fi
@@ -72,7 +75,8 @@ resolve_path() {
 # Returns: Expanded absolute path (creates if missing)
 ensure_path_exists() {
     local path_key="$1"
-    local path=$(resolve_path "$path_key")
+    local path
+    path=$(resolve_path "$path_key")
 
     # Create directory if it doesn't exist
     if [ ! -d "$path" ]; then
@@ -89,7 +93,8 @@ ensure_path_exists() {
 # Usage: list_paths
 # Prints: Table of path keys, configured values, and resolved paths
 list_paths() {
-    local paths_config=$(load_config "paths")
+    local paths_config
+    paths_config=$(load_config "paths")
 
     echo "Configured Paths"
     echo "════════════════════════════════════════════════════════"
@@ -102,7 +107,8 @@ list_paths() {
     echo "════════════════════════════════════════════════════════"
     echo ""
     echo "$paths_config" | jq -r 'keys[]' | while read -r key; do
-        local resolved=$(resolve_path "$key" 2>/dev/null || echo "ERROR")
+        local resolved
+        resolved=$(resolve_path "$key" 2>/dev/null || echo "ERROR")
         local exists_marker=""
         if [ -d "$resolved" ]; then
             exists_marker="✓"
@@ -119,7 +125,8 @@ list_paths() {
 # Usage: validate_paths
 # Returns: 0 if all keys valid, 1 if any missing
 validate_paths() {
-    local paths_config=$(load_config "paths")
+    local paths_config
+    paths_config=$(load_config "paths")
 
     local required_keys=(
         "cache_dir"
@@ -134,7 +141,8 @@ validate_paths() {
     echo ""
 
     for key in "${required_keys[@]}"; do
-        local path=$(echo "$paths_config" | jq -r ".$key // empty")
+        local path
+        path=$(echo "$paths_config" | jq -r ".$key // empty")
         if [ -z "$path" ]; then
             echo "  ✗ Missing required path key: $key"
             ((errors++))
@@ -158,19 +166,22 @@ validate_paths() {
 # Usage: init_all_paths
 # Returns: Number of directories created
 init_all_paths() {
-    local paths_config=$(load_config "paths")
+    local paths_config
+    paths_config=$(load_config "paths")
     local created=0
 
     echo "Initializing configured paths..."
     echo ""
 
     echo "$paths_config" | jq -r 'keys[]' | while read -r key; do
-        local path=$(resolve_path "$key" 2>/dev/null)
+        local path
+        path=$(resolve_path "$key" 2>/dev/null)
 
         # Skip file paths (not directories)
         if [[ "$key" == *"_file" ]] || [[ "$key" == *"_db" ]] || [[ "$key" == *"_log" ]]; then
             # Ensure parent directory exists
-            local parent_dir=$(dirname "$path")
+            local parent_dir
+            parent_dir=$(dirname "$path")
             if [ ! -d "$parent_dir" ]; then
                 mkdir -p "$parent_dir" 2>/dev/null && {
                     echo "  ✓ Created parent directory: $parent_dir"

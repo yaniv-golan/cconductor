@@ -53,16 +53,24 @@ compare_versions() {
     local v1="$1"
     local v2="$2"
 
-    local parsed1=$(parse_version "$v1")
-    local parsed2=$(parse_version "$v2")
+    local parsed1
+    parsed1=$(parse_version "$v1")
+    local parsed2
+    parsed2=$(parse_version "$v2")
 
-    local major1=$(echo "$parsed1" | jq -r '.major')
-    local minor1=$(echo "$parsed1" | jq -r '.minor')
-    local patch1=$(echo "$parsed1" | jq -r '.patch')
+    local major1
+    major1=$(echo "$parsed1" | jq -r '.major')
+    local minor1
+    minor1=$(echo "$parsed1" | jq -r '.minor')
+    local patch1
+    patch1=$(echo "$parsed1" | jq -r '.patch')
 
-    local major2=$(echo "$parsed2" | jq -r '.major')
-    local minor2=$(echo "$parsed2" | jq -r '.minor')
-    local patch2=$(echo "$parsed2" | jq -r '.patch')
+    local major2
+    major2=$(echo "$parsed2" | jq -r '.major')
+    local minor2
+    minor2=$(echo "$parsed2" | jq -r '.minor')
+    local patch2
+    patch2=$(echo "$parsed2" | jq -r '.patch')
 
     # Compare major
     if [ "$major1" -lt "$major2" ]; then
@@ -102,11 +110,15 @@ is_compatible() {
     local v1="$1"
     local v2="$2"
 
-    local parsed1=$(parse_version "$v1")
-    local parsed2=$(parse_version "$v2")
+    local parsed1
+    parsed1=$(parse_version "$v1")
+    local parsed2
+    parsed2=$(parse_version "$v2")
 
-    local major1=$(echo "$parsed1" | jq -r '.major')
-    local major2=$(echo "$parsed2" | jq -r '.major')
+    local major1
+    major1=$(echo "$parsed1" | jq -r '.major')
+    local major2
+    major2=$(echo "$parsed2" | jq -r '.major')
 
     if [ "$major1" -eq "$major2" ]; then
         return 0
@@ -127,7 +139,8 @@ get_engine_version() {
         return 1
     fi
 
-    local version=$(head -n1 "$version_file" | tr -d '[:space:]')
+    local version
+    version=$(head -n1 "$version_file" | tr -d '[:space:]')
 
     if [ -z "$version" ]; then
         echo "Error: VERSION file is empty" >&2
@@ -149,7 +162,8 @@ get_session_version() {
         return 1
     fi
 
-    local version=$(jq -r '.engine_version // "unknown"' "$metadata_file")
+    local version
+    version=$(jq -r '.engine_version // "unknown"' "$metadata_file")
 
     if [ "$version" = "unknown" ]; then
         echo "Error: Session has no engine version in metadata" >&2
@@ -166,8 +180,10 @@ get_session_version() {
 validate_session_compatibility() {
     local session_dir="$1"
 
-    local engine_version=$(get_engine_version)
-    local session_version=$(get_session_version "$session_dir")
+    local engine_version
+    engine_version=$(get_engine_version)
+    local session_version
+    session_version=$(get_session_version "$session_dir")
 
     if [ $? -ne 0 ]; then
         return 1
@@ -182,7 +198,8 @@ validate_session_compatibility() {
         echo "  Engine version:   $engine_version" >&2
         echo "" >&2
 
-        local comparison=$(compare_versions "$engine_version" "$session_version")
+        local comparison
+        comparison=$(compare_versions "$engine_version" "$session_version")
 
         if [ "$comparison" = "1" ]; then
             # Engine is newer
@@ -205,8 +222,10 @@ validate_session_compatibility() {
 needs_migration() {
     local session_dir="$1"
 
-    local engine_version=$(get_engine_version)
-    local session_version=$(get_session_version "$session_dir")
+    local engine_version
+    engine_version=$(get_engine_version)
+    local session_version
+    session_version=$(get_session_version "$session_dir")
 
     if [ $? -ne 0 ]; then
         return 1
@@ -214,7 +233,8 @@ needs_migration() {
 
     # If versions are compatible but engine is newer, migration may be beneficial
     if is_compatible "$engine_version" "$session_version"; then
-        local comparison=$(compare_versions "$engine_version" "$session_version")
+        local comparison
+        comparison=$(compare_versions "$engine_version" "$session_version")
         if [ "$comparison" = "1" ]; then
             # Engine is newer, migration possible
             return 0
@@ -234,7 +254,8 @@ version_report() {
     echo "══════════════════════════════════════════"
     echo ""
 
-    local engine_version=$(get_engine_version)
+    local engine_version
+    engine_version=$(get_engine_version)
     echo "Engine version:  $engine_version"
 
     if [ -z "$session_dir" ] || [ "$session_dir" = "-" ]; then
@@ -243,7 +264,8 @@ version_report() {
         return 0
     fi
 
-    local session_version=$(get_session_version "$session_dir" 2>/dev/null)
+    local session_version
+    session_version=$(get_session_version "$session_dir" 2>/dev/null)
 
     if [ $? -ne 0 ]; then
         echo "Session version: (unknown - metadata missing)"
@@ -258,7 +280,8 @@ version_report() {
     if is_compatible "$engine_version" "$session_version"; then
         echo "Status: ✓ Compatible"
 
-        local comparison=$(compare_versions "$engine_version" "$session_version")
+        local comparison
+        comparison=$(compare_versions "$engine_version" "$session_version")
         if [ "$comparison" = "1" ]; then
             echo ""
             echo "Note: Engine is newer than session."
@@ -275,7 +298,8 @@ version_report() {
         echo "Status: ✗ Incompatible"
         echo ""
 
-        local comparison=$(compare_versions "$engine_version" "$session_version")
+        local comparison
+        comparison=$(compare_versions "$engine_version" "$session_version")
         if [ "$comparison" = "1" ]; then
             echo "Issue: Session created with older major version"
             echo ""

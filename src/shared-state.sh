@@ -16,7 +16,8 @@ lock_acquire() {
     local file="$1"
     local lock_file="${file}.lock"
     local timeout="${2:-30}"  # seconds
-    local start_time=$(date +%s)
+    local start_time
+    start_time=$(date +%s)
 
     while true; do
         if mkdir "$lock_file" 2>/dev/null; then
@@ -27,7 +28,8 @@ lock_acquire() {
 
         # Check if lock holder is still alive
         if [ -f "$lock_file/pid" ]; then
-            local lock_pid=$(cat "$lock_file/pid" 2>/dev/null || echo "")
+            local lock_pid
+            lock_pid=$(cat "$lock_file/pid" 2>/dev/null || echo "")
             if [ -n "$lock_pid" ]; then
                 if ! kill -0 "$lock_pid" 2>/dev/null; then
                     # Lock holder is dead, remove stale lock
@@ -38,7 +40,8 @@ lock_acquire() {
         fi
 
         # Check if timeout exceeded (using actual elapsed time)
-        local elapsed=$(($(date +%s) - start_time))
+        local elapsed
+        elapsed=$(($(date +%s) - start_time))
         if [ $elapsed -ge $timeout ]; then
             # Use user-friendly error message if available
             if type error_lock_failed &>/dev/null; then

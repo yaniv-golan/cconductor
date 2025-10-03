@@ -24,20 +24,25 @@ analyze_gaps() {
     local min_priority="${2:-6}"
 
     # Extract entities and claims
-    local entities=$(echo "$kg_json" | jq -c '.entities[]')
-    local claims=$(echo "$kg_json" | jq -c '.claims[]')
+    local entities
+    entities=$(echo "$kg_json" | jq -c '.entities[]')
+    local claims
+    claims=$(echo "$kg_json" | jq -c '.claims[]')
 
     local gaps='[]'
 
     # Gap type 1: Mentioned but unexplained entities
     while IFS= read -r entity; do
-        local entity_name=$(echo "$entity" | jq -r '.name')
-        local entity_desc=$(echo "$entity" | jq -r '.description // ""')
+        local entity_name
+        entity_name=$(echo "$entity" | jq -r '.name')
+        local entity_desc
+        entity_desc=$(echo "$entity" | jq -r '.description // ""')
 
         # Check if entity has sufficient explanation
         if [ ${#entity_desc} -lt $MIN_ENTITY_DESCRIPTION_LENGTH ]; then
             # Entity lacks detailed explanation
-            local gap=$(jq -n \
+            local gap
+            gap=$(jq -n \
                 --arg question "What is $entity_name in detail?" \
                 --arg priority "7" \
                 --arg reason "Entity mentioned but not explained in detail" \
@@ -50,12 +55,15 @@ analyze_gaps() {
 
     # Gap type 2: Low-confidence claims
     while IFS= read -r claim; do
-        local confidence=$(echo "$claim" | jq -r '.confidence // 0')
-        local statement=$(echo "$claim" | jq -r '.statement')
+        local confidence
+        confidence=$(echo "$claim" | jq -r '.confidence // 0')
+        local statement
+        statement=$(echo "$claim" | jq -r '.statement')
 
         if (( $(echo "$confidence < 0.70" | bc -l) )); then
             # Low confidence claim needs more evidence
-            local gap=$(jq -n \
+            local gap
+            gap=$(jq -n \
                 --arg question "Find more evidence for: $statement" \
                 --arg priority "8" \
                 --arg reason "Claim has low confidence ($confidence), needs more sources" \
@@ -66,15 +74,21 @@ analyze_gaps() {
     done <<< "$claims"
 
     # Gap type 3: Relationships without explanations
-    local relationships=$(echo "$kg_json" | jq -c '.relationships[]')
+    local relationships
+    relationships=$(echo "$kg_json" | jq -c '.relationships[]')
     while IFS= read -r rel; do
-        local from=$(echo "$rel" | jq -r '.from')
-        local to=$(echo "$rel" | jq -r '.to')
-        local type=$(echo "$rel" | jq -r '.type')
-        local note=$(echo "$rel" | jq -r '.note // ""')
+        local from
+        from=$(echo "$rel" | jq -r '.from')
+        local to
+        to=$(echo "$rel" | jq -r '.to')
+        local type
+        type=$(echo "$rel" | jq -r '.type')
+        local note
+        note=$(echo "$rel" | jq -r '.note // ""')
 
         if [ -z "$note" ]; then
-            local gap=$(jq -n \
+            local gap
+            gap=$(jq -n \
                 --arg question "How does $from relate to $to (via $type)?" \
                 --arg priority "6" \
                 --arg reason "Relationship exists but mechanism not explained" \
@@ -117,10 +131,12 @@ score_gap_priority() {
     local gap_json="$1"
     local kg_json="$2"
 
-    local base_priority=$(echo "$gap_json" | jq '.priority // 5')
+    local base_priority
+    base_priority=$(echo "$gap_json" | jq '.priority // 5')
 
     # Boost priority if related to many entities
-    local related_count=$(echo "$gap_json" | jq '.related_entities | length')
+    local related_count
+    related_count=$(echo "$gap_json" | jq '.related_entities | length')
     local entity_boost=0
     if [ "$related_count" -gt $HIGH_RELATED_COUNT ]; then
         entity_boost=2
@@ -129,13 +145,17 @@ score_gap_priority() {
     fi
 
     # Boost priority if related to research question core concepts
-    local research_question=$(echo "$kg_json" | jq -r '.research_question')
-    local question_text=$(echo "$gap_json" | jq -r '.question')
+    local research_question
+    research_question=$(echo "$kg_json" | jq -r '.research_question')
+    local question_text
+    question_text=$(echo "$gap_json" | jq -r '.question')
 
     # Simple keyword matching (would be better with NLP)
     local relevance_boost=0
-    local rq_words=$(echo "$research_question" | tr '[:upper:]' '[:lower:]' | tr -cs '[:alnum:]' '\n')
-    local gap_words=$(echo "$question_text" | tr '[:upper:]' '[:lower:]' | tr -cs '[:alnum:]' '\n')
+    local rq_words
+    rq_words=$(echo "$research_question" | tr '[:upper:]' '[:lower:]' | tr -cs '[:alnum:]' '\n')
+    local gap_words
+    gap_words=$(echo "$question_text" | tr '[:upper:]' '[:lower:]' | tr -cs '[:alnum:]' '\n')
 
     local match_count=0
     while IFS= read -r word; do
@@ -151,7 +171,8 @@ score_gap_priority() {
     fi
 
     # Calculate final priority
-    local final_priority=$((base_priority + entity_boost + relevance_boost))
+    local final_priority
+    final_priority=$((base_priority + entity_boost + relevance_boost))
 
     # Cap at max priority
     if [ "$final_priority" -gt $GAP_PRIORITY_MAX ]; then

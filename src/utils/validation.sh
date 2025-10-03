@@ -90,7 +90,8 @@ validate_json_field() {
     local field_type="${3:-}"
 
     # Check field exists
-    local field_value=$(echo "$json_string" | jq -r ".${field_name} // \"__MISSING__\"")
+    local field_value
+    field_value=$(echo "$json_string" | jq -r ".${field_name} // \"__MISSING__\"")
 
     if [ "$field_value" = "__MISSING__" ] || [ "$field_value" = "null" ]; then
         echo "Error: JSON must have '$field_name' field" >&2
@@ -99,7 +100,8 @@ validate_json_field() {
 
     # Check field type if specified
     if [ -n "$field_type" ]; then
-        local actual_type=$(echo "$json_string" | jq -r ".${field_name} | type")
+        local actual_type
+        actual_type=$(echo "$json_string" | jq -r ".${field_name} | type")
 
         if [ "$actual_type" != "$field_type" ]; then
             echo "Error: JSON field '$field_name' must be type '$field_type', got '$actual_type'" >&2
@@ -228,7 +230,8 @@ validate_enum() {
     done
 
     if [ $found -eq 0 ]; then
-        local allowed_str=$(IFS=", "; echo "${allowed_values[*]}")
+        local allowed_str
+        allowed_str=$(IFS=", "; echo "${allowed_values[*]}")
         echo "Error: $param_name must be one of: $allowed_str (got: $value)" >&2
         return 1
     fi

@@ -138,7 +138,8 @@ prepare_pdf_for_read() {
     fi
 
     # Get metadata from cache
-    local metadata=$(get_pdf_metadata "$url")
+    local metadata
+    metadata=$(get_pdf_metadata "$url")
 
     # Output structured info for agent to use
     cat <<EOF
@@ -217,7 +218,8 @@ batch_prepare_pdfs() {
         return 1
     fi
 
-    local output_dir="$(dirname "$urls_file")/pdf-cache-info"
+    local output_dir
+    output_dir="$(dirname "$urls_file")/pdf-cache-info"
     mkdir -p "$output_dir"
 
     echo "Batch preparing PDFs from: $urls_file" >&2

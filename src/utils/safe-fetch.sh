@@ -5,9 +5,9 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 
 # Source config loader
+# shellcheck disable=SC1091
 source "$SCRIPT_DIR/config-loader.sh"
 
 # Parse arguments
@@ -31,7 +31,7 @@ MAX_SIZE_BYTES=$((MAX_SIZE_MB * 1024 * 1024))
 
 # Create temporary file for fetch
 TEMP_FILE=$(mktemp)
-trap "rm -f $TEMP_FILE" EXIT
+trap 'rm -f "$TEMP_FILE"' EXIT
 
 # Perform fetch with security limits
 if ! curl -L \

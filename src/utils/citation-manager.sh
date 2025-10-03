@@ -19,7 +19,8 @@ cm_add_citation() {
     }
 
     # Generate citation ID if not provided
-    local citation_with_id=$(echo "$citation_json" | jq --arg date "$(date -u +"%Y-%m-%dT%H:%M:%SZ")" '
+    local citation_with_id
+    citation_with_id=$(echo "$citation_json" | jq --arg date "$(date -u +"%Y-%m-%dT%H:%M:%SZ")" '
         if .id then . else
             . + {
                 id: ("cite_" + (now | tostring)),
@@ -70,7 +71,8 @@ cm_link_citation_to_claim() {
     }
 
     # Build source object
-    local source_obj=$(jq -n \
+    local source_obj
+    source_obj=$(jq -n \
         --arg cite "$citation_id" \
         --arg excerpt "$excerpt" \
         --arg page "$page_number" \
@@ -150,7 +152,8 @@ cm_count_citations() {
 cm_validate_all_cited() {
     local kg_file="$1"
 
-    local uncited=$(jq -r '
+    local uncited
+    uncited=$(jq -r '
         [.claims[]? | select((.sources? | length) == 0 or .sources == null) | .id] |
         if length > 0 then . else empty end
     ' "$kg_file")

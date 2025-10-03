@@ -34,7 +34,8 @@ get_latest_version() {
     local api_url="https://api.github.com/repos/${REPO}/releases/latest"
     
     # Try API first (2 second timeout)
-    local latest=$(curl -s -m 2 "$api_url" 2>/dev/null | \
+    local latest
+    latest=$(curl -s -m 2 "$api_url" 2>/dev/null | \
                    grep -oP '"tag_name": "\K[^"]+' 2>/dev/null | \
                    sed 's/^v//' | head -1)
     
@@ -78,15 +79,19 @@ should_check_for_updates() {
     # Check if disabled in config
     local config="$PROJECT_ROOT/config/delve-config.json"
     if [ -f "$config" ]; then
-        local enabled=$(jq -r '.update_settings.check_for_updates // true' "$config" 2>/dev/null)
+        local enabled
+        enabled=$(jq -r '.update_settings.check_for_updates // true' "$config" 2>/dev/null)
         [ "$enabled" != "true" ] && return 1
     fi
     
     # Check cache age
     if [ -f "$CACHE_FILE" ]; then
-        local last_check=$(stat -f %m "$CACHE_FILE" 2>/dev/null || stat -c %Y "$CACHE_FILE" 2>/dev/null || echo 0)
-        local now=$(date +%s)
-        local age=$((now - last_check))
+        local last_check
+        last_check=$(stat -f %m "$CACHE_FILE" 2>/dev/null || stat -c %Y "$CACHE_FILE" 2>/dev/null || echo 0)
+        local now
+        now=$(date +%s)
+        local age
+        age=$((now - last_check))
         
         [ $age -lt $CACHE_TTL_SECONDS ] && return 1
     fi
@@ -164,8 +169,10 @@ check_for_updates_async() {
 
 # Check for updates (synchronous)
 check_for_updates_sync() {
-    local current=$(get_current_version)
-    local latest=$(get_latest_version)
+    local current
+    current=$(get_current_version)
+    local latest
+    latest=$(get_latest_version)
     
     if [ -z "$latest" ] || [ "$latest" = "unknown" ]; then
         echo "Unable to check for updates (offline or API unavailable)"
@@ -192,11 +199,14 @@ check_for_updates_sync() {
 show_cached_notification() {
     [ ! -f "$CACHE_FILE" ] && return 1
     
-    local update_available=$(jq -r '.update_available // false' "$CACHE_FILE" 2>/dev/null)
+    local update_available
+    update_available=$(jq -r '.update_available // false' "$CACHE_FILE" 2>/dev/null)
     
     if [ "$update_available" = "true" ]; then
-        local current=$(jq -r '.current_version // "unknown"' "$CACHE_FILE")
-        local latest=$(jq -r '.latest_version // "unknown"' "$CACHE_FILE")
+        local current
+        current=$(jq -r '.current_version // "unknown"' "$CACHE_FILE")
+        local latest
+        latest=$(jq -r '.latest_version // "unknown"' "$CACHE_FILE")
         local config="$PROJECT_ROOT/config/delve-config.json"
         local style="full"
         

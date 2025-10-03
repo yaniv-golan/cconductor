@@ -4,6 +4,8 @@
 
 set -euo pipefail
 
+# SCRIPT_DIR reserved for future use
+# shellcheck disable=SC2034
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # Constants - Citation thresholds
@@ -31,11 +33,15 @@ evaluate_leads() {
     local leads='[]'
 
     # Lead type 1: Highly cited papers
-    local entities=$(echo "$kg_json" | jq -c '.entities[] | select(.type == "paper")')
+    local entities
+    entities=$(echo "$kg_json" | jq -c '.entities[] | select(.type == "paper")')
     while IFS= read -r entity; do
-        local name=$(echo "$entity" | jq -r '.name')
-        local citations=$(echo "$entity" | jq -r '.citations // 0')
-        local pdf_path=$(echo "$entity" | jq -r '.cached_pdf // ""')
+        local name
+        name=$(echo "$entity" | jq -r '.name')
+        local citations
+        citations=$(echo "$entity" | jq -r '.citations // 0')
+        local pdf_path
+        pdf_path=$(echo "$entity" | jq -r '.cached_pdf // ""')
 
         # High citation count = important paper
         local priority=$PRIORITY_LOW
@@ -53,7 +59,8 @@ evaluate_leads() {
         fi
 
         if [ "$priority" -ge "$min_priority" ]; then
-            local lead=$(jq -n \
+            local lead
+            lead=$(jq -n \
                 --arg desc "Analyze highly cited paper: $name" \
                 --arg priority "$priority" \
                 --arg reason "Paper has $citations citations, likely contains valuable insights" \
@@ -73,12 +80,16 @@ evaluate_leads() {
     done <<< "$entities"
 
     # Lead type 2: Foundational concepts mentioned but not deeply explored
-    local relationships=$(echo "$kg_json" | jq -c '.relationships[] | select(.type == "theoretical_foundation")')
+    local relationships
+    relationships=$(echo "$kg_json" | jq -c '.relationships[] | select(.type == "theoretical_foundation")')
     while IFS= read -r rel; do
-        local from=$(echo "$rel" | jq -r '.from')
-        local to=$(echo "$rel" | jq -r '.to')
+        local from
+        from=$(echo "$rel" | jq -r '.from')
+        local to
+        to=$(echo "$rel" | jq -r '.to')
 
-        local lead=$(jq -n \
+        local lead
+        lead=$(jq -n \
             --arg desc "Explore theoretical foundation: $from" \
             --arg priority "7" \
             --arg reason "This is a foundational concept for $to" \
@@ -95,19 +106,27 @@ evaluate_leads() {
     done <<< "$relationships"
 
     # Lead type 3: Frequently mentioned entities with low coverage
-    local entities_all=$(echo "$kg_json" | jq -c '.entities[]')
+    local entities_all
+    entities_all=$(echo "$kg_json" | jq -c '.entities[]')
     while IFS= read -r entity; do
-        local name=$(echo "$entity" | jq -r '.name')
-        local confidence=$(echo "$entity" | jq -r '.confidence // 0.5')
-        local desc_length=$(echo "$entity" | jq -r '.description // ""' | wc -c | xargs)
+        local name
+        name=$(echo "$entity" | jq -r '.name')
+        # confidence reserved for future scoring logic
+        local confidence
+        # shellcheck disable=SC2034
+        confidence=$(echo "$entity" | jq -r '.confidence // 0.5')
+        local desc_length
+        desc_length=$(echo "$entity" | jq -r '.description // ""' | wc -c | xargs)
 
         # Mentioned multiple times (check in claims and relationships)
-        local mentions=$(echo "$kg_json" | jq --arg name "$name" \
+        local mentions
+        mentions=$(echo "$kg_json" | jq --arg name "$name" \
             '[.claims[], .relationships[]] | map(select(. | tostring | contains($name))) | length')
 
         if [ "$mentions" -gt $MIN_MENTIONS_THRESHOLD ] && [ "$desc_length" -lt $MIN_DESCRIPTION_LENGTH ]; then
             # Frequently mentioned but not well understood
-            local lead=$(jq -n \
+            local lead
+            lead=$(jq -n \
                 --arg desc "Deep dive into frequently mentioned concept: $name" \
                 --arg priority "7" \
                 --arg reason "Mentioned $mentions times but lacks detail" \
@@ -125,12 +144,15 @@ evaluate_leads() {
     done <<< "$entities_all"
 
     # Lead type 4: Cross-domain connections
-    local entity_types=$(echo "$kg_json" | jq '[.entities[].type] | unique')
-    local type_count=$(echo "$entity_types" | jq 'length')
+    local entity_types
+    entity_types=$(echo "$kg_json" | jq '[.entities[].type] | unique')
+    local type_count
+    type_count=$(echo "$entity_types" | jq 'length')
 
     if [ "$type_count" -gt $MIN_TYPE_COUNT_THRESHOLD ]; then
         # Multiple domains involved - might be worth exploring connections
-        local lead=$(jq -n \
+        local lead
+        lead=$(jq -n \
             --arg desc "Explore cross-domain connections" \
             --arg priority "6" \
             --arg reason "Research spans multiple domains, connections may reveal insights" \
@@ -162,10 +184,12 @@ score_lead() {
     local lead_json="$1"
     local kg_json="$2"
 
-    local base_priority=$(echo "$lead_json" | jq '.priority // 5')
+    local base_priority
+    base_priority=$(echo "$lead_json" | jq '.priority // 5')
 
     # Boost for certain lead types
-    local lead_type=$(echo "$lead_json" | jq -r '.type')
+    local lead_type
+    lead_type=$(echo "$lead_json" | jq -r '.type')
     local type_boost=0
 
     case "$lead_type" in
@@ -184,12 +208,15 @@ score_lead() {
     esac
 
     # Check if lead addresses a gap
-    local description=$(echo "$lead_json" | jq -r '.description')
-    local gaps=$(echo "$kg_json" | jq -c '.gaps[]')
+    local description
+    description=$(echo "$lead_json" | jq -r '.description')
+    local gaps
+    gaps=$(echo "$kg_json" | jq -c '.gaps[]')
     local gap_match=0
 
     while IFS= read -r gap; do
-        local gap_question=$(echo "$gap" | jq -r '.question')
+        local gap_question
+        gap_question=$(echo "$gap" | jq -r '.question')
         if echo "$description" | grep -qiF "$(echo "$gap_question" | head -c 20)"; then
             gap_match=1
             break
@@ -201,7 +228,8 @@ score_lead() {
     fi
 
     # Final priority
-    local final_priority=$((base_priority + type_boost))
+    local final_priority
+    final_priority=$((base_priority + type_boost))
 
     # Cap at 10
     if [ "$final_priority" -gt $PRIORITY_MAX ]; then
@@ -215,10 +243,14 @@ score_lead() {
 generate_lead_task() {
     local lead_json="$1"
 
-    local description=$(echo "$lead_json" | jq -r '.description')
-    local source=$(echo "$lead_json" | jq -r '.source')
-    local pdf_path=$(echo "$lead_json" | jq -r '.pdf_path // ""')
-    local priority=$(echo "$lead_json" | jq -r '.priority')
+    local description
+    description=$(echo "$lead_json" | jq -r '.description')
+    local source
+    source=$(echo "$lead_json" | jq -r '.source')
+    local pdf_path
+    pdf_path=$(echo "$lead_json" | jq -r '.pdf_path // ""')
+    local priority
+    priority=$(echo "$lead_json" | jq -r '.priority')
 
     local agent="web-researcher"
     local query="$description"

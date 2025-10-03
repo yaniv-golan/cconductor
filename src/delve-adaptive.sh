@@ -39,7 +39,8 @@ validate_field_exists() {
     local field_desc="$1"
     local jq_expr="$2"
     
-    local value=$(echo "$ADAPTIVE_CONFIG" | jq -r "$jq_expr" 2>/dev/null)
+    local value
+    value=$(echo "$ADAPTIVE_CONFIG" | jq -r "$jq_expr" 2>/dev/null)
     if [ "$value" = "null" ] || [ -z "$value" ]; then
         echo "❌ Error: Required config field missing or null: $field_desc" >&2
         return 1
@@ -52,9 +53,11 @@ validate_field_type() {
     local jq_expr="$2"
     local expected_type="$3"
     
-    local actual_type=$(echo "$ADAPTIVE_CONFIG" | jq -r "$jq_expr | type" 2>/dev/null)
+    local actual_type
+    actual_type=$(echo "$ADAPTIVE_CONFIG" | jq -r "$jq_expr | type" 2>/dev/null)
     if [ "$actual_type" != "$expected_type" ]; then
-        local value=$(echo "$ADAPTIVE_CONFIG" | jq -r "$jq_expr" 2>/dev/null)
+        local value
+        value=$(echo "$ADAPTIVE_CONFIG" | jq -r "$jq_expr" 2>/dev/null)
         echo "❌ Error: Config field $field_desc has wrong type" >&2
         echo "   Expected: $expected_type, got: $actual_type (value: $value)" >&2
         return 1
@@ -121,7 +124,8 @@ initialize_session() {
     local research_question="$1"
 
     # Create session directory
-    local timestamp=$(date +%s)
+    local timestamp
+    timestamp=$(date +%s)
     local session_dir="$PROJECT_ROOT/research-sessions/session_${timestamp}"
     mkdir -p "$session_dir"
     mkdir -p "$session_dir/raw"
@@ -132,11 +136,14 @@ initialize_session() {
     source "$DELVE_SCRIPT_DIR/utils/version-check.sh"
 
     # Get system version
-    local system_version=$(get_engine_version)
+    local system_version
+    system_version=$(get_engine_version)
 
     # Capture config snapshot
-    local exploration_mode=$(echo "$ADAPTIVE_CONFIG" | jq -r '.task_generation.exploration_mode // "balanced"')
-    local security_profile=$(get_config_value "security-config" ".security_profile" "\"strict\"" | tr -d '"')
+    local exploration_mode
+    exploration_mode=$(echo "$ADAPTIVE_CONFIG" | jq -r '.task_generation.exploration_mode // "balanced"')
+    local security_profile
+    security_profile=$(get_config_value "security-config" ".security_profile" "\"strict\"" | tr -d '"')
 
     # Create session metadata with version tracking
     jq -n \
@@ -213,7 +220,8 @@ EOF
     fi
 
     # Extract initial tasks
-    local initial_tasks=$(cat "$planning_output" | jq '.tasks')
+    local initial_tasks
+    initial_tasks=$(cat "$planning_output" | jq '.tasks')
     echo "$initial_tasks"
 }
 
@@ -221,8 +229,10 @@ EOF
 execute_pending_tasks() {
     local session_dir="$1"
 
-    local pending=$(tq_get_pending "$session_dir")
-    local pending_count=$(echo "$pending" | jq 'length')
+    local pending
+    pending=$(tq_get_pending "$session_dir")
+    local pending_count
+    pending_count=$(echo "$pending" | jq 'length')
 
     if [ "$pending_count" -eq 0 ]; then
         echo "No pending tasks"
@@ -232,12 +242,15 @@ execute_pending_tasks() {
     echo "Executing $pending_count pending tasks..."
 
     # Get tasks by agent type
-    local agents=$(echo "$pending" | jq -r '.[].agent' | sort -u)
+    local agents
+    agents=$(echo "$pending" | jq -r '.[].agent' | sort -u)
 
     # Execute each agent's tasks
     while IFS= read -r agent; do
-        local agent_tasks=$(echo "$pending" | jq -c --arg agent "$agent" '[.[] | select(.agent == $agent)]')
-        local task_count=$(echo "$agent_tasks" | jq 'length')
+        local agent_tasks
+        agent_tasks=$(echo "$pending" | jq -c --arg agent "$agent" '[.[] | select(.agent == $agent)]')
+        local task_count
+        task_count=$(echo "$agent_tasks" | jq 'length')
 
         if [ "$task_count" -eq 0 ]; then
             continue
@@ -292,16 +305,21 @@ run_coordinator() {
     kg_increment_iteration "$session_dir"
 
     # Prepare coordinator input
-    local kg=$(kg_read "$session_dir")
-    local queue=$(tq_read "$session_dir")
-    local completed_tasks=$(tq_get_completed "$session_dir")
+    local kg
+    kg=$(kg_read "$session_dir")
+    local queue
+    queue=$(tq_read "$session_dir")
+    local completed_tasks
+    completed_tasks=$(tq_get_completed "$session_dir")
 
     # Get new findings since last coordinator run
     local new_findings='[]'
     while IFS= read -r task; do
-        local findings_file=$(echo "$task" | jq -r '.findings_file // ""')
+        local findings_file
+        findings_file=$(echo "$task" | jq -r '.findings_file // ""')
         if [ -n "$findings_file" ] && [ -f "$findings_file" ]; then
-            local finding=$(cat "$findings_file")
+            local finding
+            finding=$(cat "$findings_file")
             new_findings=$(echo "$new_findings" | jq --argjson f "$finding" '. += [$f]')
         fi
     done <<< "$(echo "$completed_tasks" | jq -c '.[]')"
@@ -363,13 +381,15 @@ update_knowledge_graph() {
     kg_bulk_update "$session_dir" "$coordinator_output_file"
 
     # Update confidence
-    local confidence=$(cat "$coordinator_output_file" | jq '.knowledge_graph_updates.confidence_scores // null')
+    local confidence
+    confidence=$(cat "$coordinator_output_file" | jq '.knowledge_graph_updates.confidence_scores // null')
     if [ "$confidence" != "null" ]; then
         kg_update_confidence "$session_dir" "$confidence"
     fi
 
     # Update coverage
-    local coverage=$(cat "$coordinator_output_file" | jq '.knowledge_graph_updates.coverage // null')
+    local coverage
+    coverage=$(cat "$coordinator_output_file" | jq '.knowledge_graph_updates.coverage // null')
     if [ "$coverage" != "null" ]; then
         kg_update_coverage "$session_dir" "$coverage"
     fi
@@ -380,8 +400,10 @@ add_coordinator_tasks() {
     local session_dir="$1"
     local coordinator_output_file="$2"
 
-    local new_tasks=$(cat "$coordinator_output_file" | jq '.new_tasks // []')
-    local task_count=$(echo "$new_tasks" | jq 'length')
+    local new_tasks
+    new_tasks=$(cat "$coordinator_output_file" | jq '.new_tasks // []')
+    local task_count
+    task_count=$(echo "$new_tasks" | jq 'length')
 
     if [ "$task_count" -gt 0 ]; then
         echo "Adding $task_count new tasks to queue..."
@@ -395,7 +417,8 @@ add_coordinator_tasks() {
 should_terminate() {
     local coordinator_output_file="$1"
 
-    local should_stop=$(cat "$coordinator_output_file" | jq -r '.termination_recommendation')
+    local should_stop
+    should_stop=$(cat "$coordinator_output_file" | jq -r '.termination_recommendation')
     [ "$should_stop" = "true" ]
 }
 
@@ -405,15 +428,23 @@ interactive_prompt() {
     local iteration="$2"
     local coordinator_output="$3"
 
-    local kg_summary=$(kg_get_summary "$session_dir")
-    local confidence=$(echo "$kg_summary" | jq -r '.confidence')
-    local entities=$(echo "$kg_summary" | jq -r '.entities')
-    local claims=$(echo "$kg_summary" | jq -r '.claims')
-    local gaps=$(echo "$kg_summary" | jq -r '.unresolved_gaps')
-    local contradictions=$(echo "$kg_summary" | jq -r '.unresolved_contradictions')
-    local pending=$(tq_get_stats "$session_dir" | jq -r '.pending')
+    local kg_summary
+    kg_summary=$(kg_get_summary "$session_dir")
+    local confidence
+    confidence=$(echo "$kg_summary" | jq -r '.confidence')
+    local entities
+    entities=$(echo "$kg_summary" | jq -r '.entities')
+    local claims
+    claims=$(echo "$kg_summary" | jq -r '.claims')
+    local gaps
+    gaps=$(echo "$kg_summary" | jq -r '.unresolved_gaps')
+    local contradictions
+    contradictions=$(echo "$kg_summary" | jq -r '.unresolved_contradictions')
+    local pending
+    pending=$(tq_get_stats "$session_dir" | jq -r '.pending')
 
-    local recommendations=$(echo "$coordinator_output" | jq -r '.recommendations | join("\n  - ")')
+    local recommendations
+    recommendations=$(echo "$coordinator_output" | jq -r '.recommendations | join("\n  - ")')
 
     cat <<EOF
 
@@ -475,7 +506,8 @@ final_synthesis() {
     echo ""
     echo "=== Final Synthesis ==="
 
-    local kg=$(kg_read "$session_dir")
+    local kg
+    kg=$(kg_read "$session_dir")
     local synthesis_input="$session_dir/intermediate/synthesis-input.json"
     echo "$kg" > "$synthesis_input"
 
@@ -508,7 +540,8 @@ run_single_iteration() {
     echo ""
 
     # Show pending tasks count
-    local pending=$(jq '.stats.pending' "$session_dir/task-queue.json" 2>/dev/null || echo "0")
+    local pending
+    pending=$(jq '.stats.pending' "$session_dir/task-queue.json" 2>/dev/null || echo "0")
     echo "📋 Tasks: $pending pending"
     echo ""
 
@@ -520,7 +553,8 @@ run_single_iteration() {
 
     # Run coordinator analysis
     echo "→ Running coordinator analysis..."
-    local coordinator_output=$(run_coordinator "$session_dir" "$iteration")
+    local coordinator_output
+    coordinator_output=$(run_coordinator "$session_dir" "$iteration")
     local coordinator_file="$session_dir/intermediate/coordinator-output-${iteration}.json"
     echo "  ✓ Coordinator analysis complete"
     echo ""
@@ -532,11 +566,16 @@ run_single_iteration() {
     # Show knowledge graph statistics
     local kg_file="$session_dir/knowledge-graph.json"
     if [ -f "$kg_file" ]; then
-        local claims=$(jq '.stats.total_claims' "$kg_file" 2>/dev/null || echo "0")
-        local entities=$(jq '.stats.total_entities' "$kg_file" 2>/dev/null || echo "0")
-        local citations=$(jq '.stats.total_citations' "$kg_file" 2>/dev/null || echo "0")
-        local confidence=$(jq '.confidence_scores.overall' "$kg_file" 2>/dev/null || echo "0")
-        local gaps=$(jq '.stats.unresolved_gaps' "$kg_file" 2>/dev/null || echo "0")
+        local claims
+        claims=$(jq '.stats.total_claims' "$kg_file" 2>/dev/null || echo "0")
+        local entities
+        entities=$(jq '.stats.total_entities' "$kg_file" 2>/dev/null || echo "0")
+        local citations
+        citations=$(jq '.stats.total_citations' "$kg_file" 2>/dev/null || echo "0")
+        local confidence
+        confidence=$(jq '.confidence_scores.overall' "$kg_file" 2>/dev/null || echo "0")
+        local gaps
+        gaps=$(jq '.stats.unresolved_gaps' "$kg_file" 2>/dev/null || echo "0")
 
         echo "  ✓ Knowledge graph updated"
         echo ""
@@ -552,13 +591,15 @@ run_single_iteration() {
     # Generate new tasks based on coordinator analysis
     echo "→ Generating new tasks..."
     add_coordinator_tasks "$session_dir" "$coordinator_file"
-    local new_pending=$(jq '.stats.pending' "$session_dir/task-queue.json" 2>/dev/null || echo "0")
+    local new_pending
+    new_pending=$(jq '.stats.pending' "$session_dir/task-queue.json" 2>/dev/null || echo "0")
     echo "  ✓ Generated tasks (now $new_pending pending)"
     echo ""
 
     # Check termination conditions
     if should_terminate "$coordinator_file"; then
-        local reason=$(cat "$coordinator_file" | jq -r '.termination_reason')
+        local reason
+        reason=$(cat "$coordinator_file" | jq -r '.termination_reason')
         echo ""
         echo "✓ Research Complete: $reason"
         return 1  # Signal termination
@@ -673,9 +714,12 @@ list_sessions() {
     
     for session_path in $(ls -1dt "$sessions_dir"/session_* 2>/dev/null); do
         if [ -f "$session_path/session.json" ]; then
-            local session_id=$(basename "$session_path")
-            local question=$(jq -r '.research_question // "N/A"' "$session_path/session.json" 2>/dev/null)
-            local status=$(jq -r '.status // "unknown"' "$session_path/session.json" 2>/dev/null)
+            local session_id
+            session_id=$(basename "$session_path")
+            local question
+            question=$(jq -r '.research_question // "N/A"' "$session_path/session.json" 2>/dev/null)
+            local status
+            status=$(jq -r '.status // "unknown"' "$session_path/session.json" 2>/dev/null)
             
             # Truncate question if too long
             if [ ${#question} -gt 47 ]; then
@@ -716,7 +760,8 @@ main() {
 
     # Initialize session
     echo "→ Initializing research session..."
-    local session_dir=$(initialize_session "$research_question")
+    local session_dir
+    session_dir=$(initialize_session "$research_question")
     echo "  ✓ Session created: $(basename "$session_dir")"
     echo ""
 
@@ -737,9 +782,11 @@ main() {
 
     # Initial planning
     echo "→ Creating initial research plan..."
-    local initial_tasks=$(initial_planning "$session_dir" "$research_question")
+    local initial_tasks
+    initial_tasks=$(initial_planning "$session_dir" "$research_question")
     tq_add_tasks "$session_dir" "$initial_tasks" >/dev/null
-    local task_count=$(echo "$initial_tasks" | jq 'length' 2>/dev/null || echo "0")
+    local task_count
+    task_count=$(echo "$initial_tasks" | jq 'length' 2>/dev/null || echo "0")
     echo "  ✓ Generated $task_count initial tasks"
     echo ""
 
@@ -774,7 +821,8 @@ main() {
     finalize_research "$session_dir" "$research_question"
 
     # Print summary
-    local kg_summary=$(kg_get_summary "$session_dir")
+    local kg_summary
+    kg_summary=$(kg_get_summary "$session_dir")
     echo ""
     echo "╔════════════════════════════════════════════════════════════╗"
     echo "║  Research Complete                                         ║"
@@ -799,7 +847,8 @@ main_resume() {
     
     # Load existing session
     echo "→ Loading session..."
-    local session_dir=$(resume_session "$session_id")
+    local session_dir
+    session_dir=$(resume_session "$session_id")
     if [ $? -ne 0 ]; then
         exit 1
     fi
@@ -807,19 +856,26 @@ main_resume() {
     echo ""
     
     # Load session metadata
-    local research_question=$(jq -r '.research_question' "$session_dir/session.json")
-    local created_at=$(jq -r '.created_at' "$session_dir/session.json")
+    local research_question
+    research_question=$(jq -r '.research_question' "$session_dir/session.json")
+    local created_at
+    created_at=$(jq -r '.created_at' "$session_dir/session.json")
     
     echo "Question: $research_question"
     echo "Originally created: $created_at"
     echo ""
     
     # Show current state
-    local kg_summary=$(kg_get_summary "$session_dir")
-    local current_iteration=$(echo "$kg_summary" | jq -r '.iteration')
-    local confidence=$(echo "$kg_summary" | jq -r '.confidence')
-    local pending_tasks=$(jq '.stats.pending' "$session_dir/task-queue.json")
-    local completed_tasks=$(jq '.stats.completed' "$session_dir/task-queue.json")
+    local kg_summary
+    kg_summary=$(kg_get_summary "$session_dir")
+    local current_iteration
+    current_iteration=$(echo "$kg_summary" | jq -r '.iteration')
+    local confidence
+    confidence=$(echo "$kg_summary" | jq -r '.confidence')
+    local pending_tasks
+    pending_tasks=$(jq '.stats.pending' "$session_dir/task-queue.json")
+    local completed_tasks
+    completed_tasks=$(jq '.stats.completed' "$session_dir/task-queue.json")
     
     echo "Current State:"
     echo "  • Iteration: $current_iteration"
@@ -838,7 +894,8 @@ main_resume() {
         if [[ ! $REPLY =~ ^[Nn]$ ]]; then
             echo ""
             echo "→ Running coordinator to generate new tasks..."
-            local next_iteration=$((current_iteration + 1))
+            local next_iteration
+            next_iteration=$((current_iteration + 1))
             run_coordinator "$session_dir" "$next_iteration" >/dev/null 2>&1 || true
             local coordinator_file="$session_dir/intermediate/coordinator-output-${next_iteration}.json"
             if [ -f "$coordinator_file" ]; then
@@ -924,8 +981,10 @@ finalize_research() {
     mkdir -p "$PROJECT_ROOT/reports"
 
     # Generate filename
-    local date=$(date +%Y-%m-%d)
-    local slug=$(echo "$question" | \
+    local date
+    date=$(date +%Y-%m-%d)
+    local slug
+    slug=$(echo "$question" | \
         tr '[:upper:]' '[:lower:]' | \
         tr -cs '[:alnum:]' '-' | \
         sed 's/^-*//' | sed 's/-*$//' | \

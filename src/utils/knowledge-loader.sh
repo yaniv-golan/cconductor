@@ -194,7 +194,7 @@ is_excluded() {
         if [ -z "$exclude_pattern" ]; then
             continue
         fi
-        if [[ "$filename" == $exclude_pattern ]]; then
+        if [[ "$filename" == "$exclude_pattern" ]]; then
             return 0
         fi
     done <<< "$excludes"

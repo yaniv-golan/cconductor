@@ -75,8 +75,10 @@ estimate_tokens() {
     local file="$1"
 
     # Rough estimate: 1 token ≈ 4 characters
-    local char_count=$(wc -m < "$file")
-    local token_estimate=$((char_count / 4))
+    local char_count
+    char_count=$(wc -m < "$file")
+    local token_estimate
+    token_estimate=$((char_count / 4))
 
     echo "$token_estimate"
 }
@@ -86,7 +88,8 @@ check_context_limit() {
     local file="$1"
     local limit="${2:-180000}"  # Default: 180k tokens (safe margin)
 
-    local tokens=$(estimate_tokens "$file")
+    local tokens
+    tokens=$(estimate_tokens "$file")
 
     if [ "$tokens" -gt "$limit" ]; then
         echo "WARNING: Context exceeds limit ($tokens > $limit)"
