@@ -28,8 +28,7 @@ source "$DELVE_SCRIPT_DIR/utils/confidence-scorer.sh"
 source "$DELVE_SCRIPT_DIR/utils/config-loader.sh"
 
 # Load configuration using overlay pattern
-# This automatically merges user config (config/adaptive-config.json)
-# over defaults (config/adaptive-config.default.json)
+# This automatically merges user config over defaults
 if ! ADAPTIVE_CONFIG=$(load_config "adaptive-config"); then
     echo "❌ Error: Failed to load adaptive configuration" >&2
     echo "" >&2
@@ -37,6 +36,12 @@ if ! ADAPTIVE_CONFIG=$(load_config "adaptive-config"); then
     echo "  $DELVE_SCRIPT_DIR/utils/config-loader.sh init adaptive-config" >&2
     echo "  vim $PROJECT_ROOT/config/adaptive-config.json" >&2
     echo "" >&2
+    exit 1
+fi
+
+# Load delve configuration (for agent settings)
+if ! DELVE_CONFIG=$(load_config "delve-config"); then
+    echo "❌ Error: Failed to load delve configuration" >&2
     exit 1
 fi
 
@@ -119,10 +124,11 @@ fi
 
 # Print banner
 print_banner() {
-    echo "╔════════════════════════════════════════════════════════════╗"
-    echo "║        ADAPTIVE RESEARCH ENGINE - Sonnet 4.5               ║"
-    echo "║  Intelligent, self-improving research with dynamic goals   ║"
-    echo "╚════════════════════════════════════════════════════════════╝"
+    echo "╔═══════════════════════════════════════════════════════════╗"
+    echo "║             DELVE - ADAPTIVE RESEARCH ENGINE              ║"
+    echo "║  Intelligent, self-improving research with dynamic goals  ║"
+    echo "║                  Powered by Claude Code                   ║"
+    echo "╚═══════════════════════════════════════════════════════════╝"
     echo ""
 }
 
@@ -187,49 +193,42 @@ initial_planning() {
     local session_dir="$1"
     local research_question="$2"
 
-    echo "=== Phase 0: Initial Planning ==="
-    echo "Research Question: $research_question"
-    echo ""
+    # All progress messages to stderr to avoid polluting JSON output
+    echo "=== Phase 0: Initial Planning ===" >&2
+    echo "Research Question: $research_question" >&2
+    echo "" >&2
 
-    # Create planning input
-    local planning_input="$session_dir/raw/planning-input.json"
-    jq -n \
-        --arg question "$research_question" \
-        --arg mode "$EXPLORATION_MODE" \
-        '{research_question: $question, exploration_mode: $mode}' \
-        > "$planning_input"
-
-    # Invoke research planner
-    echo "⚡ Invoking research-planner agent..."
+    # Invoke research planner with explicit instructions for automated mode
+    echo "⚡ Invoking research-planner agent..." >&2
     local planning_output="$session_dir/raw/planning-output.json"
-
-    # NOTE: In actual implementation, this would use Claude Code's Task tool
-    # For now, provide manual invocation instructions
-    cat <<EOF
-
-Claude Code: Please invoke the research-planner agent:
-  Agent: research-planner
-  Input: $planning_input
-  Output: $planning_output
-
-The planner will:
-1. Understand the question
-2. Decompose into initial research tasks
-3. Create task list with priorities
-
-EOF
-
-    # Wait for planning completion
-    read -r -p "Press Enter when planning is complete..."
+    local planning_output_raw="$session_dir/raw/planning-output-raw.txt"
+    
+    # Use invoke-simple with explicit prompt for automated pipeline
+    if ! bash "$DELVE_SCRIPT_DIR/utils/invoke-agent.sh" invoke-simple \
+        "research-planner" \
+        "Create initial research tasks for: '$research_question'. Return ONLY valid JSON with 'initial_tasks' array. Each task must have: type (research), agent (web-researcher/code-analyzer/academic-researcher/market-analyzer), priority (1-10), query (specific search query). NO explanatory text, just the JSON object starting with {." \
+        "$planning_output_raw" \
+        600; then
+        echo "Error: Research planner failed" >&2
+        return 1
+    fi
+    
+    # Extract JSON from output
+    if ! bash "$DELVE_SCRIPT_DIR/utils/invoke-agent.sh" extract-json \
+        "$planning_output_raw" \
+        "$planning_output"; then
+        echo "Warning: Could not extract JSON, using raw output" >&2
+        cp "$planning_output_raw" "$planning_output"
+    fi
 
     if [ ! -f "$planning_output" ]; then
         echo "Error: Planning output not found" >&2
         return 1
     fi
 
-    # Extract initial tasks
+    # Extract initial tasks (agent returns .initial_tasks in Phase 2 format)
     local initial_tasks
-    initial_tasks=$(cat "$planning_output" | jq '.tasks')
+    initial_tasks=$(cat "$planning_output" | jq '.initial_tasks // .tasks')
     echo "$initial_tasks"
 }
 
@@ -252,6 +251,21 @@ execute_pending_tasks() {
     # Get tasks by agent type
     local agents
     agents=$(echo "$pending" | jq -r '.[].agent' | sort -u)
+    
+    # Check if parallel execution is enabled
+    local parallel_enabled
+    parallel_enabled=$(echo "$DELVE_CONFIG" | jq -r '.agents.parallel_execution // false')
+    local max_parallel
+    max_parallel=$(echo "$DELVE_CONFIG" | jq -r '.agents.max_parallel_agents // 4')
+    
+    if [ "$parallel_enabled" = "true" ]; then
+        echo "  → Parallel execution enabled (max $max_parallel concurrent agents)"
+    fi
+
+    # Arrays to track background jobs
+    declare -a agent_pids=()
+    declare -a agent_names=()
+    local active_jobs=0
 
     # Execute each agent's tasks
     while IFS= read -r agent; do
@@ -275,29 +289,119 @@ execute_pending_tasks() {
         local agent_input="$session_dir/raw/${agent}-input.json"
         echo "$agent_tasks" > "$agent_input"
 
-        # Invoke agent
-        cat <<EOF
+        # Function to execute agent (can be run in background)
+        execute_single_agent() {
+            local agent_name="$1"
+            local input_file="$2"
+            local output_file="$3"
+            local session_dir_param="$4"
+            
+            # Invoke agent using Claude CLI with JSON extraction
+            local agent_output_raw="${output_file}.raw"
+            if bash "$DELVE_SCRIPT_DIR/utils/invoke-agent.sh" invoke \
+                "$agent_name" \
+                "$input_file" \
+                "$agent_output_raw" \
+                900; then
+                
+                # Extract JSON from output
+                if bash "$DELVE_SCRIPT_DIR/utils/invoke-agent.sh" extract-json \
+                    "$agent_output_raw" \
+                    "$output_file"; then
+                    rm -f "$agent_output_raw"
+                    return 0
+                else
+                    echo "Warning: JSON extraction failed for $agent_name, using raw output" >&2
+                    mv "$agent_output_raw" "$output_file"
+                    return 0
+                fi
+            else
+                echo "Error: Agent $agent_name failed" >&2
+                return 1
+            fi
+        }
+        
+        export -f execute_single_agent
+        export DELVE_SCRIPT_DIR
 
-Claude Code: Please invoke the $agent agent:
-  Agent: $agent
-  Input: $agent_input
+        # Invoke agent (parallel or sequential)
+        local agent_output="$session_dir/raw/${agent}-output.json"
+        
+        if [ "$parallel_enabled" = "true" ]; then
+            # Wait if we've hit the parallel limit
+            while [ "$active_jobs" -ge "$max_parallel" ]; do
+                # Check if any jobs have completed
+                local new_active=0
+                for i in "${!agent_pids[@]}"; do
+                    if kill -0 "${agent_pids[$i]}" 2>/dev/null; then
+                        ((new_active++))
+                    fi
+                done
+                active_jobs=$new_active
+                
+                if [ "$active_jobs" -ge "$max_parallel" ]; then
+                    sleep 1
+                fi
+            done
+            
+            # Execute in background
+            execute_single_agent "$agent" "$agent_input" "$agent_output" "$session_dir" &
+            local pid=$!
+            agent_pids+=("$pid")
+            agent_names+=("$agent")
+            ((active_jobs++))
+            echo "    Started $agent (PID $pid)"
+        else
+            # Execute sequentially
+            if ! execute_single_agent "$agent" "$agent_input" "$agent_output" "$session_dir"; then
+                echo "Warning: Agent $agent failed, continuing with other agents..." >&2
+            fi
+        fi
 
-For each task in the input, research and output findings in adaptive format.
-
-EOF
-
-        read -r -p "Press Enter when $agent is complete..."
-
-        # Mark tasks as completed
+    done <<< "$agents"
+    
+    # Wait for all background jobs to complete
+    if [ "$parallel_enabled" = "true" ] && [ "${#agent_pids[@]}" -gt 0 ]; then
+        echo ""
+        echo "  → Waiting for ${#agent_pids[@]} agents to complete..."
+        
+        local failed_agents=()
+        for i in "${!agent_pids[@]}"; do
+            local pid="${agent_pids[$i]}"
+            local agent_name="${agent_names[$i]}"
+            
+            if wait "$pid"; then
+                echo "    ✓ $agent_name completed"
+            else
+                echo "    ✗ $agent_name failed" >&2
+                failed_agents+=("$agent_name")
+            fi
+        done
+        
+        if [ "${#failed_agents[@]}" -gt 0 ]; then
+            echo "Warning: ${#failed_agents[@]} agent(s) failed: ${failed_agents[*]}" >&2
+        fi
+    fi
+    
+    # Mark tasks as completed (post-processing)
+    while IFS= read -r agent; do
+        local agent_tasks
+        agent_tasks=$(echo "$pending" | jq -c --arg agent "$agent" '[.[] | select(.agent == $agent)]')
+        
         echo "$agent_tasks" | jq -r '.[].id' | while read -r task_id; do
             local findings_file="$session_dir/raw/${agent}-${task_id}-findings.json"
             if [ -f "$findings_file" ]; then
                 tq_complete_task "$session_dir" "$task_id" "$findings_file"
             else
-                echo "Warning: Findings file not found for $task_id" >&2
+                # Try to use the agent output as findings
+                local agent_output="$session_dir/raw/${agent}-output.json"
+                if [ -f "$agent_output" ]; then
+                    tq_complete_task "$session_dir" "$task_id" "$agent_output"
+                else
+                    echo "Warning: No findings for task $task_id" >&2
+                fi
             fi
         done
-
     done <<< "$agents"
 }
 
@@ -352,23 +456,24 @@ run_coordinator() {
     echo "⚡ Invoking research-coordinator agent..."
     local coordinator_output="$session_dir/intermediate/coordinator-output-${iteration}.json"
 
-    cat <<EOF
-
-Claude Code: Please invoke the research-coordinator agent:
-  Agent: research-coordinator
-  Input: $coordinator_input
-  Output: $coordinator_output
-
-The coordinator will:
-1. Integrate new findings into knowledge graph
-2. Detect gaps, contradictions, promising leads
-3. Generate new research tasks
-4. Update confidence scores
-5. Decide if research is complete
-
-EOF
-
-    read -r -p "Press Enter when coordinator is complete..."
+    # Invoke coordinator using Claude CLI with JSON extraction
+    local coordinator_output_raw="${coordinator_output}.raw"
+    if ! bash "$DELVE_SCRIPT_DIR/utils/invoke-agent.sh" invoke \
+        "research-coordinator" \
+        "$coordinator_input" \
+        "$coordinator_output_raw" \
+        900; then
+        echo "Error: Research coordinator failed" >&2
+        return 1
+    fi
+    
+    # Extract JSON from output
+    if ! bash "$DELVE_SCRIPT_DIR/utils/invoke-agent.sh" extract-json \
+        "$coordinator_output_raw" \
+        "$coordinator_output"; then
+        echo "Warning: Could not extract JSON, using raw output" >&2
+        cp "$coordinator_output_raw" "$coordinator_output"
+    fi
 
     if [ ! -f "$coordinator_output" ]; then
         echo "Error: Coordinator output not found" >&2

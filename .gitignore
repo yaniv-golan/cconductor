@@ -29,3 +29,9 @@ logs/
 .DS_Store
 
 # Note: User configs are stored in ~/.config/delve/ (not in project)
+memory-bank/activeContext.md
+memory-bank/productContext.md
+memory-bank/progress.md
+memory-bank/projectbrief.md
+memory-bank/systemPatterns.md
+memory-bank/techContext.md

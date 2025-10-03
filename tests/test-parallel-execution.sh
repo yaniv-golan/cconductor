@@ -15,7 +15,7 @@ echo "Question: $QUESTION"
 # Measure execution time
 START_TIME=$(date +%s)
 
-"$PROJECT_ROOT/src/research.sh" "$QUESTION"
+"$PROJECT_ROOT/delve" "$QUESTION"
 
 END_TIME=$(date +%s)
 DURATION=$((END_TIME - START_TIME))
@@ -23,7 +23,9 @@ DURATION=$((END_TIME - START_TIME))
 echo "✓ Research completed in $DURATION seconds"
 
 # Check if multiple agents were used (from logs)
-AGENT_COUNT=$(grep -c "agent" "$PROJECT_ROOT/logs/research.log" | tail -1 || echo "0")
+# Get log directory using path resolver
+LOG_DIR=$("$PROJECT_ROOT/src/utils/path-resolver.sh" resolve log_dir)
+AGENT_COUNT=$(grep -c "agent" "$LOG_DIR/research.log" 2>/dev/null | tail -1 || echo "0")
 
 echo "✓ Used agents: $AGENT_COUNT"
 

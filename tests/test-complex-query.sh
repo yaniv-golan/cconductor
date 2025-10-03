@@ -14,10 +14,12 @@ QUESTION="How does Rust's borrow checker work, and how does it compare to C++'s 
 echo "Question: $QUESTION"
 
 # Run research
-"$PROJECT_ROOT/src/research.sh" "$QUESTION"
+"$PROJECT_ROOT/delve" "$QUESTION"
 
 # Validation
-SESSION_DIR=$(find "$PROJECT_ROOT/research-sessions" -mindepth 1 -maxdepth 1 -type d -print0 | xargs -0 ls -td 2>/dev/null | head -1)
+# Get session directory using path resolver
+SESSION_DIR_BASE=$("$PROJECT_ROOT/src/utils/path-resolver.sh" resolve session_dir)
+SESSION_DIR=$(find "$SESSION_DIR_BASE" -mindepth 1 -maxdepth 1 -type d -print0 | xargs -0 ls -td 2>/dev/null | head -1)
 
 if [ -f "$SESSION_DIR/research-report.md" ]; then
     echo "✓ Complex query handled successfully"

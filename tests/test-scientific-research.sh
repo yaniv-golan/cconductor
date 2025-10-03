@@ -13,11 +13,13 @@ QUESTION="What is the current state of research on quantum error correction in t
 
 echo "Question: $QUESTION"
 
-# Run research in scientific mode
-"$PROJECT_ROOT/src/research.sh" --mode scientific --template scientific-report "$QUESTION"
+# Run research (mode detection is automatic based on question)
+"$PROJECT_ROOT/delve" "$QUESTION"
 
 # Validation
-SESSION_DIR=$(find "$PROJECT_ROOT/research-sessions" -mindepth 1 -maxdepth 1 -type d -print0 | xargs -0 ls -td 2>/dev/null | head -1)
+# Get session directory using path resolver
+SESSION_DIR_BASE=$("$PROJECT_ROOT/src/utils/path-resolver.sh" resolve session_dir)
+SESSION_DIR=$(find "$SESSION_DIR_BASE" -mindepth 1 -maxdepth 1 -type d -print0 | xargs -0 ls -td 2>/dev/null | head -1)
 
 if [ -f "$SESSION_DIR/research-report.md" ]; then
     echo "✓ Scientific research report generated"

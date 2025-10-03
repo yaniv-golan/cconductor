@@ -16,6 +16,7 @@ TESTS=(
     "test-parallel-execution.sh"
     "test-scientific-research.sh"
     "test-market-research.sh"
+    "test-pdf-cache-phase1.sh"
 )
 
 PASSED=0

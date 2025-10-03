@@ -13,11 +13,13 @@ QUESTION="What is the TAM for AI-powered customer service tools, and who are the
 
 echo "Question: $QUESTION"
 
-# Run research in VC/market mode
-"$PROJECT_ROOT/src/research.sh" --mode vc --template vc-memo "$QUESTION"
+# Run research (mode detection is automatic based on question)
+"$PROJECT_ROOT/delve" "$QUESTION"
 
 # Validation
-SESSION_DIR=$(find "$PROJECT_ROOT/research-sessions" -mindepth 1 -maxdepth 1 -type d -print0 | xargs -0 ls -td 2>/dev/null | head -1)
+# Get session directory using path resolver
+SESSION_DIR_BASE=$("$PROJECT_ROOT/src/utils/path-resolver.sh" resolve session_dir)
+SESSION_DIR=$(find "$SESSION_DIR_BASE" -mindepth 1 -maxdepth 1 -type d -print0 | xargs -0 ls -td 2>/dev/null | head -1)
 
 if [ -f "$SESSION_DIR/research-report.md" ]; then
     echo "✓ Market research memo generated"
