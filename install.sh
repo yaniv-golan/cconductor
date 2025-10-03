@@ -45,7 +45,8 @@ detect_shell() {
 
 # Get shell config file
 get_shell_config() {
-    local shell_type=$(detect_shell)
+    local shell_type
+    shell_type=$(detect_shell)
     
     case "$shell_type" in
         bash)
@@ -72,8 +73,10 @@ get_shell_config() {
 # Add to PATH
 add_to_path() {
     local install_dir="$1"
-    local shell_config=$(get_shell_config)
-    local shell_type=$(detect_shell)
+    local shell_config
+    local shell_type
+    shell_config=$(get_shell_config)
+    shell_type=$(detect_shell)
     
     # Check if already in PATH
     if echo "$PATH" | grep -q "$install_dir"; then
