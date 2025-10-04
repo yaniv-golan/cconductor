@@ -906,16 +906,34 @@ run_single_iteration() {
     echo "  ✓ Coordinator analysis complete"
     echo ""
     
-    # Extract and clean coordinator result (strip markdown fences)
+    # Extract and clean coordinator result (strip markdown fences and text before JSON)
     local coordinator_cleaned="$session_dir/intermediate/coordinator-cleaned-${iteration}.json"
-    jq -r '.result // empty' "$coordinator_file" | \
-        sed -e 's/^```json$//' -e 's/^```$//' | sed '/^$/d' > "$coordinator_cleaned"
+    local raw_result
+    raw_result=$(jq -r '.result // empty' "$coordinator_file")
+    
+    # Strip markdown fences
+    raw_result=$(echo "$raw_result" | sed -e 's/^```json$//' -e 's/^```$//' | sed '/^$/d')
+    
+    # Extract JSON object (from first { to last })
+    # This handles cases where coordinator adds explanatory text before JSON
+    echo "$raw_result" | sed -n '/{/,$ p' > "$coordinator_cleaned"
     
     # Validate cleaned JSON
     if ! jq '.' "$coordinator_cleaned" >/dev/null 2>&1; then
         echo "Error: Failed to extract valid JSON from coordinator output" >&2
-        cat "$coordinator_cleaned" >&2
-        return 1
+        echo "Attempting to extract JSON object from text..." >&2
+        # Try to find JSON object boundaries more aggressively
+        echo "$raw_result" | grep -o '{.*}' > "$coordinator_cleaned" 2>/dev/null || {
+            echo "Raw result:" >&2
+            echo "$raw_result" | head -20 >&2
+            return 1
+        }
+        # Re-validate
+        if ! jq '.' "$coordinator_cleaned" >/dev/null 2>&1; then
+            echo "Failed to extract valid JSON after fallback" >&2
+            return 1
+        fi
+        echo "  ✓ Extracted JSON from mixed text/JSON output" >&2
     fi
     
     # Phase 2: Update metrics after coordinator
@@ -1377,8 +1395,12 @@ main_resume() {
             if [ -f "$coordinator_file" ]; then
                 # Extract and clean coordinator result
                 local coordinator_cleaned="$session_dir/intermediate/coordinator-cleaned-${next_iteration}.json"
-                jq -r '.result // empty' "$coordinator_file" | \
-                    sed -e 's/^```json$//' -e 's/^```$//' | sed '/^$/d' > "$coordinator_cleaned"
+                local raw_result
+                raw_result=$(jq -r '.result // empty' "$coordinator_file")
+                
+                # Strip markdown fences and extract JSON from first {
+                raw_result=$(echo "$raw_result" | sed -e 's/^```json$//' -e 's/^```$//' | sed '/^$/d')
+                echo "$raw_result" | sed -n '/{/,$ p' > "$coordinator_cleaned"
                 
                 if jq '.' "$coordinator_cleaned" >/dev/null 2>&1; then
                     add_coordinator_tasks "$session_dir" "$coordinator_cleaned"
