@@ -49,6 +49,26 @@
             margin-bottom: 20px;
         }
 
+        .main-layout {
+            display: grid;
+            grid-template-columns: 1fr 350px;
+            gap: 20px;
+        }
+
+        .main-content {
+            min-width: 0;
+        }
+
+        .sidebar {
+            min-width: 0;
+        }
+
+        @media (max-width: 1024px) {
+            .main-layout {
+                grid-template-columns: 1fr;
+            }
+        }
+
         .card {
             background: #1a1f3a;
             border-radius: 12px;
@@ -132,34 +152,63 @@
 
         .tool-item {
             padding: 10px 12px;
-            margin-bottom: 8px;
+            margin-bottom: 6px;
             background: rgba(255, 255, 255, 0.03);
-            border-radius: 4px;
-            font-size: 13px;
+            border-radius: 6px;
+            font-size: 12px;
+            border-left: 3px solid transparent;
+            transition: all 0.3s;
+        }
+
+        .tool-item.pending {
+            border-left-color: #fbbf24;
+            animation: pulse-border 1.5s infinite;
+        }
+
+        .tool-item.success {
+            border-left-color: #10b981;
+        }
+
+        .tool-item.failed {
+            border-left-color: #ef4444;
+        }
+
+        @keyframes pulse-border {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.6; }
+        }
+
+        .tool-header {
             display: flex;
             align-items: center;
             justify-content: space-between;
+            margin-bottom: 4px;
         }
 
         .tool-name {
             font-weight: 600;
             color: #667eea;
-            margin-right: 8px;
+            font-size: 13px;
+        }
+
+        .tool-status {
+            font-size: 14px;
         }
 
         .tool-details {
-            flex: 1;
-            opacity: 0.7;
-            margin: 0 8px;
+            opacity: 0.6;
             overflow: hidden;
             text-overflow: ellipsis;
             white-space: nowrap;
+            font-size: 11px;
         }
 
-        .tool-duration {
+        .tool-footer {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 4px;
+            font-size: 10px;
             opacity: 0.5;
-            font-size: 11px;
-            margin-left: auto;
         }
 
         .tool-status-success {
@@ -168,6 +217,10 @@
 
         .tool-status-failed {
             color: #ef4444;
+        }
+
+        .tool-status-pending {
+            color: #fbbf24;
         }
 
         .event-time {
@@ -298,26 +351,32 @@
             </div>
         </div>
 
-        <div class="panel">
-            <div class="panel-title">Task Queue</div>
-            <div id="tasks-container">
-                <div class="empty-state">No tasks</div>
-            </div>
-        </div>
+        <div class="main-layout">
+            <div class="main-content">
+                <div class="panel">
+                    <div class="panel-title">Task Queue</div>
+                    <div id="tasks-container">
+                        <div class="empty-state">No tasks</div>
+                    </div>
+                </div>
 
-        <div class="panel">
-            <div class="panel-title">Recent Tool Calls</div>
-            <div id="tools-container">
-                <div class="empty-state">No tool calls yet</div>
+                <div class="panel">
+                    <div class="panel-title">Recent Activity</div>
+                    <div id="events-container">
+                        <div class="empty-state">No events</div>
+                    </div>
+                    <div class="last-updated" id="last-updated">Updating...</div>
+                </div>
             </div>
-        </div>
 
-        <div class="panel">
-            <div class="panel-title">Recent Activity</div>
-            <div id="events-container">
-                <div class="empty-state">No events</div>
+            <div class="sidebar">
+                <div class="panel">
+                    <div class="panel-title">🔧 Live Tools</div>
+                    <div id="tools-container">
+                        <div class="empty-state">No activity yet</div>
+                    </div>
+                </div>
             </div>
-            <div class="last-updated" id="last-updated">Updating...</div>
         </div>
     </div>
 

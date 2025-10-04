@@ -99,7 +99,7 @@ class Dashboard {
         const mins = Math.floor(elapsed / 60);
         const hours = Math.floor(mins / 60);
         const secs = elapsed % 60;
-        
+
         let runtimeText;
         if (hours > 0) {
             runtimeText = `${hours}h ${mins % 60}m`;
@@ -257,9 +257,18 @@ class Dashboard {
         }
 
         container.innerHTML = recentCalls.map(call => {
-            const time = new Date(call.timestamp).toLocaleTimeString();
-            const statusClass = call.status === 'success' ? 'tool-status-success' : 'tool-status-failed';
-            const statusIcon = call.status === 'success' ? '✓' : (call.status === 'failed' ? '✗' : '⏳');
+            const time = new Date(call.timestamp).toLocaleTimeString('en-US', { 
+                hour: '2-digit', 
+                minute: '2-digit', 
+                second: '2-digit' 
+            });
+            
+            const statusClass = call.status === 'success' ? 'success' : 
+                               (call.status === 'failed' ? 'failed' : 'pending');
+            const statusIconClass = call.status === 'success' ? 'tool-status-success' : 
+                                   (call.status === 'failed' ? 'tool-status-failed' : 'tool-status-pending');
+            const statusIcon = call.status === 'success' ? '✓' : 
+                              (call.status === 'failed' ? '✗' : '⏳');
 
             let durationText = '';
             if (call.duration !== null) {
@@ -270,17 +279,22 @@ class Dashboard {
                 }
             }
 
-            // Truncate summary
-            const truncSummary = call.summary.length > 50 ?
-                call.summary.substring(0, 50) + '...' :
+            // Truncate summary intelligently
+            const truncSummary = call.summary.length > 35 ?
+                call.summary.substring(0, 35) + '...' :
                 call.summary;
 
             return `
-                <div class="tool-item">
-                    <span class="tool-name">${call.tool}</span>
-                    <span class="tool-details" title="${this.escapeHtml(call.summary)}">${truncSummary}</span>
-                    <span class="${statusClass}">${statusIcon}</span>
-                    ${durationText ? `<span class="tool-duration">${durationText}</span>` : ''}
+                <div class="tool-item ${statusClass}" title="${this.escapeHtml(call.summary)}">
+                    <div class="tool-header">
+                        <span class="tool-name">${call.tool}</span>
+                        <span class="tool-status ${statusIconClass}">${statusIcon}</span>
+                    </div>
+                    <div class="tool-details">${this.escapeHtml(truncSummary)}</div>
+                    <div class="tool-footer">
+                        <span>${call.agent}</span>
+                        <span>${durationText || time}</span>
+                    </div>
                 </div>
             `;
         }).join('');
@@ -289,8 +303,19 @@ class Dashboard {
     renderEvents(events) {
         if (!events || events.length === 0) return;
 
+        // Filter out tool_use events - they're shown in the sidebar
+        const meaningfulEvents = events.filter(e => 
+            e.type !== 'tool_use_start' && 
+            e.type !== 'tool_use_complete'
+        );
+
         const container = document.getElementById('events-container');
-        container.innerHTML = events.reverse().map((event, index) => {
+        if (meaningfulEvents.length === 0) {
+            container.innerHTML = '<div class="empty-state">No activity yet</div>';
+            return;
+        }
+
+        container.innerHTML = meaningfulEvents.reverse().map((event, index) => {
             const time = new Date(event.timestamp).toLocaleTimeString();
             const message = this.formatEvent(event);
             const eventJson = JSON.stringify(event, null, 2);

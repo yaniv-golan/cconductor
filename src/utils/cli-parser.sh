@@ -57,6 +57,19 @@ parse_cli_args() {
                     shift
                 fi
                 ;;
+            -*)
+                # Handle single-dash flags like -y
+                local flag="${1#-}"
+                # Check if it's a value flag (next arg doesn't start with dash)
+                if [[ $# -gt 1 ]] && [[ ! "$2" =~ ^- ]]; then
+                    CLI_FLAGS["$flag"]="$2"
+                    shift 2
+                else
+                    # Boolean flag
+                    CLI_FLAGS["$flag"]="true"
+                    shift
+                fi
+                ;;
             *)
                 # Positional argument
                 CLI_ARGS+=("$1")

@@ -116,8 +116,9 @@ atomic_json_update() {
 
     # Last argument is the jq expression, all others are jq args
     local args=("$@")
-    local expr="${args[-1]}"
-    unset 'args[-1]'
+    local last_idx=$((${#args[@]} - 1))
+    local expr="${args[$last_idx]}"
+    unset 'args[$last_idx]'
 
     lock_acquire "$file" || return 1
 
