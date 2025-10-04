@@ -174,8 +174,9 @@ invoke_agent_v2() {
     # Create output directory
     mkdir -p "$(dirname "$output_file")"
 
-    # Export session directory for hooks to use
+    # Export session directory and agent name for hooks to use
     export DELVE_SESSION_DIR="$session_dir"
+    export DELVE_AGENT_NAME="$agent_name"
 
     # Change to session directory for context
     local original_dir

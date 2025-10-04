@@ -10,7 +10,8 @@ hook_data=$(cat)
 
 # Extract tool information
 tool_name=$(echo "$hook_data" | jq -r '.tool_name // "unknown"')
-agent_name=$(echo "$hook_data" | jq -r '.agent_name // "unknown"')
+# Get agent name from environment (set by invoke-agent.sh)
+agent_name="${DELVE_AGENT_NAME:-unknown}"
 
 # Extract tool input (summary only, full data in events.jsonl)
 tool_input_summary=""
