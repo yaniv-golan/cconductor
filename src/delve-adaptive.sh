@@ -164,6 +164,13 @@ initialize_session() {
     if [ -d "$PROJECT_ROOT/src/claude-runtime" ]; then
         cp -r "$PROJECT_ROOT/src/claude-runtime" "$session_dir/.claude"
         
+        # Build agent JSON files from source (metadata.json + system-prompt.md)
+        echo "→ Building agents from source..." >&2
+        bash "$PROJECT_ROOT/src/utils/build-agents.sh" "$session_dir/.claude/agents" >&2 || {
+            echo "Error: Failed to build agents" >&2
+            exit 1
+        }
+        
         # Rename settings.json to settings.local.json for Claude Code
         if [ -f "$session_dir/.claude/settings.json" ]; then
             mv "$session_dir/.claude/settings.json" "$session_dir/.claude/settings.local.json"
@@ -674,23 +681,23 @@ run_coordinator() {
 # Update knowledge graph from coordinator output
 update_knowledge_graph() {
     local session_dir="$1"
-    local coordinator_output_file="$2"
+    local coordinator_cleaned_file="$2"
 
     echo "Updating knowledge graph..."
 
     # Bulk update
-    kg_bulk_update "$session_dir" "$coordinator_output_file"
+    kg_bulk_update "$session_dir" "$coordinator_cleaned_file"
 
     # Update confidence
     local confidence
-    confidence=$(cat "$coordinator_output_file" | jq '.knowledge_graph_updates.confidence_scores // null')
+    confidence=$(jq '.knowledge_graph_updates.confidence_scores // null' "$coordinator_cleaned_file")
     if [ "$confidence" != "null" ]; then
         kg_update_confidence "$session_dir" "$confidence"
     fi
 
     # Update coverage
     local coverage
-    coverage=$(cat "$coordinator_output_file" | jq '.knowledge_graph_updates.coverage // null')
+    coverage=$(jq '.knowledge_graph_updates.coverage // null' "$coordinator_cleaned_file")
     if [ "$coverage" != "null" ]; then
         kg_update_coverage "$session_dir" "$coverage"
     fi
@@ -727,7 +734,7 @@ should_terminate() {
 interactive_prompt() {
     local session_dir="$1"
     local iteration="$2"
-    local coordinator_output="$3"
+    local coordinator_cleaned_file="$3"
 
     local kg_summary
     kg_summary=$(kg_get_summary "$session_dir")
@@ -745,7 +752,7 @@ interactive_prompt() {
     pending=$(tq_get_stats "$session_dir" | jq -r '.pending')
 
     local recommendations
-    recommendations=$(echo "$coordinator_output" | jq -r '.recommendations | join("\n  - ")')
+    recommendations=$(jq -r '.recommendations | join("\n  - ")' "$coordinator_cleaned_file")
 
     # Use loop instead of recursion to prevent stack overflow
     while true; do
@@ -792,10 +799,11 @@ EOF
                 ;;
             r|R)
                 echo ""
-                echo "$coordinator_output" | jq -r '.recommendations | join("\n")'
+                jq -r '.recommendations | join("\n")' "$coordinator_cleaned_file"
                 echo ""
                 # Loop continues to show menu again
                 ;;
+
             q|Q)
                 exit 0
                 ;;
@@ -898,12 +906,24 @@ run_single_iteration() {
     echo "  ✓ Coordinator analysis complete"
     echo ""
     
+    # Extract and clean coordinator result (strip markdown fences)
+    local coordinator_cleaned="$session_dir/intermediate/coordinator-cleaned-${iteration}.json"
+    jq -r '.result // empty' "$coordinator_file" | \
+        sed -e 's/^```json$//' -e 's/^```$//' | sed '/^$/d' > "$coordinator_cleaned"
+    
+    # Validate cleaned JSON
+    if ! jq '.' "$coordinator_cleaned" >/dev/null 2>&1; then
+        echo "Error: Failed to extract valid JSON from coordinator output" >&2
+        cat "$coordinator_cleaned" >&2
+        return 1
+    fi
+    
     # Phase 2: Update metrics after coordinator
     update_metrics "$session_dir"
 
     # Update knowledge graph with coordinator findings
     echo "→ Updating knowledge graph..."
-    update_knowledge_graph "$session_dir" "$coordinator_file"
+    update_knowledge_graph "$session_dir" "$coordinator_cleaned"
 
     # Show knowledge graph statistics
     local kg_file="$session_dir/knowledge-graph.json"
@@ -932,16 +952,16 @@ run_single_iteration() {
 
     # Generate new tasks based on coordinator analysis
     echo "→ Generating new tasks..."
-    add_coordinator_tasks "$session_dir" "$coordinator_file"
+    add_coordinator_tasks "$session_dir" "$coordinator_cleaned"
     local new_pending
     new_pending=$(jq '.stats.pending' "$session_dir/task-queue.json" 2>/dev/null || echo "0")
     echo "  ✓ Generated tasks (now $new_pending pending)"
     echo ""
 
     # Check termination conditions
-    if should_terminate "$coordinator_file"; then
+    if should_terminate "$coordinator_cleaned"; then
         local reason
-        reason=$(cat "$coordinator_file" | jq -r '.termination_reason')
+        reason=$(jq -r '.termination_reason // "Research appears complete"' "$coordinator_cleaned")
         echo ""
         echo "✓ Research Complete: $reason"
         return 1  # Signal termination
@@ -957,7 +977,7 @@ run_single_iteration() {
 
     # Interactive prompt if enabled
     if [ "$INTERACTIVE_MODE" = "true" ]; then
-        if ! interactive_prompt "$session_dir" "$iteration" "$coordinator_output"; then
+        if ! interactive_prompt "$session_dir" "$iteration" "$coordinator_cleaned"; then
             echo "User requested stop"
             return 1  # Signal termination
         fi
@@ -1355,7 +1375,14 @@ main_resume() {
             run_coordinator "$session_dir" "$next_iteration" >/dev/null 2>&1 || true
             local coordinator_file="$session_dir/intermediate/coordinator-output-${next_iteration}.json"
             if [ -f "$coordinator_file" ]; then
-                add_coordinator_tasks "$session_dir" "$coordinator_file"
+                # Extract and clean coordinator result
+                local coordinator_cleaned="$session_dir/intermediate/coordinator-cleaned-${next_iteration}.json"
+                jq -r '.result // empty' "$coordinator_file" | \
+                    sed -e 's/^```json$//' -e 's/^```$//' | sed '/^$/d' > "$coordinator_cleaned"
+                
+                if jq '.' "$coordinator_cleaned" >/dev/null 2>&1; then
+                    add_coordinator_tasks "$session_dir" "$coordinator_cleaned"
+                fi
             fi
             pending_tasks=$(jq '.stats.pending' "$session_dir/task-queue.json")
             echo "  ✓ Generated new tasks (now $pending_tasks pending)"
