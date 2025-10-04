@@ -613,7 +613,7 @@ kg_bulk_update() {
 
        # Add new entities (avoid duplicates by name)
        .entities += (
-           ($new_data.entities_discovered // []) |
+           ($new_data.knowledge_graph_updates.entities_discovered // []) |
            map(select(.name as $n | $existing_names | contains([$n]) | not)) |
            to_entries |
            map(.value + {
@@ -627,7 +627,7 @@ kg_bulk_update() {
        
        # Add new claims with generated IDs
        .claims += (
-           ($new_data.claims // []) |
+           ($new_data.knowledge_graph_updates.claims // []) |
            to_entries |
            map(.value + {
                id: ("c" + (($max_claim_id + 1 + .key) | tostring)),
@@ -641,7 +641,7 @@ kg_bulk_update() {
        
        # Add new relationships with generated IDs
        .relationships += (
-           ($new_data.relationships_discovered // []) |
+           ($new_data.knowledge_graph_updates.relationships_discovered // []) |
            to_entries |
            map(.value + {
                id: ("r" + (($max_rel_id + 1 + .key) | tostring)),
@@ -654,7 +654,7 @@ kg_bulk_update() {
        
        # Add new gaps
        .gaps += (
-           ($new_data.gaps_detected // []) |
+           ($new_data.knowledge_graph_updates.gaps_detected // []) |
            to_entries |
            map(.value + {
                id: ("g" + (($max_gap_id + 1 + .key) | tostring)),
@@ -669,7 +669,7 @@ kg_bulk_update() {
        
        # Add new contradictions
        .contradictions += (
-           ($new_data.contradictions_detected // []) |
+           ($new_data.knowledge_graph_updates.contradictions_detected // []) |
            to_entries |
            map(.value + {
                id: ("con" + (($max_con_id + 1 + .key) | tostring)),
@@ -684,7 +684,7 @@ kg_bulk_update() {
        
        # Add new leads
        .promising_leads += (
-           ($new_data.leads_identified // []) |
+           ($new_data.knowledge_graph_updates.leads_identified // []) |
            to_entries |
            map(.value + {
                id: ("l" + (($max_lead_id + 1 + .key) | tostring)),
@@ -712,16 +712,16 @@ kg_bulk_update() {
 
        # Update confidence if provided
        .confidence_scores = (
-           if ($new_data.confidence_scores != null)
-           then $new_data.confidence_scores
+           if ($new_data.knowledge_graph_updates.confidence_scores != null)
+           then $new_data.knowledge_graph_updates.confidence_scores
            else .confidence_scores
            end
        ) |
 
        # Update coverage if provided
        .coverage = (
-           if ($new_data.coverage != null)
-           then $new_data.coverage
+           if ($new_data.knowledge_graph_updates.coverage != null)
+           then $new_data.knowledge_graph_updates.coverage
            else .coverage
            end
        ) |
