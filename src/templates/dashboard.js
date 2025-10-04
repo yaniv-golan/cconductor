@@ -98,8 +98,17 @@ class Dashboard {
         const elapsed = metrics.runtime?.elapsed_seconds || 0;
         const mins = Math.floor(elapsed / 60);
         const hours = Math.floor(mins / 60);
-        document.getElementById('stat-runtime').textContent =
-            hours > 0 ? `${hours}h ${mins % 60}m` : `${mins}m`;
+        const secs = elapsed % 60;
+        
+        let runtimeText;
+        if (hours > 0) {
+            runtimeText = `${hours}h ${mins % 60}m`;
+        } else if (mins > 0) {
+            runtimeText = `${mins}m ${secs}s`;
+        } else {
+            runtimeText = `${secs}s`;
+        }
+        document.getElementById('stat-runtime').textContent = runtimeText;
     }
 
     renderTasks(tasks) {
