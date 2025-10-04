@@ -1,8 +1,19 @@
 #!/bin/bash
-# Agent Invocation Helper
-# Invokes Claude CLI agents with proper context
+# Agent Invocation Helper (Phase 0 - Validated Implementation)
+# Invokes Claude CLI agents with systemPrompt injection and tool restrictions
+#
+# VALIDATION: All patterns tested in validation_tests/
+# - JSON output: test-01
+# - System prompt injection: test-append-system-prompt.sh
+# - Tool restrictions: test-04, test-05, test-06
+# - JSON extraction: diagnostic-json-structure.sh
 
 set -euo pipefail
+
+# Source event logger for Phase 2 metrics
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck disable=SC1091
+source "$SCRIPT_DIR/event-logger.sh" 2>/dev/null || true
 
 # Check if Claude CLI is available
 check_claude_cli() {
@@ -14,261 +25,246 @@ check_claude_cli() {
     return 0
 }
 
-# Invoke a Claude agent with input/output files
-invoke_agent() {
+# Invoke agent with v2 implementation (uses validated patterns)
+# VALIDATED: All patterns tested in validation_tests/
+# 
+# This function implements the Phase 0 improvements:
+# - Injects systemPrompt via --append-system-prompt
+# - Enforces tool restrictions via --allowedTools/--disallowedTools
+# - Returns clean JSON output via --output-format json
+# - Extracts .result field (not .content[0].text)
+#
+# Usage:
+#   invoke_agent_v2 <agent_name> <input_file> <output_file> [timeout] <session_dir>
+#
+# Args:
+#   agent_name: Name of agent (must exist in session_dir/.claude/agents/)
+#   input_file: File containing the task/query for the agent
+#   output_file: File to write JSON output to
+#   timeout: Optional timeout in seconds (default: 600)
+#   session_dir: REQUIRED - Session directory containing .claude/agents/
+#
+# Returns:
+#   0 on success, 1 on failure
+#
+# Output file format (JSON):
+#   {
+#     "type": "result",
+#     "result": "the agent's response",
+#     "session_id": "...",
+#     "usage": {...}
+#   }
+#
+invoke_agent_v2() {
     local agent_name="$1"
     local input_file="$2"
     local output_file="$3"
-    local timeout="${4:-600}"  # 10 minutes default
-    local session_dir="${5:-}"  # REQUIRED: session directory for context isolation
-    
+    local timeout="${4:-600}"
+    local session_dir="${5:-}"
+
     # Validate inputs
     if [ -z "$agent_name" ]; then
         echo "Error: Agent name required" >&2
         return 1
     fi
-    
+
     if [ ! -f "$input_file" ]; then
         echo "Error: Input file not found: $input_file" >&2
         return 1
     fi
-    
+
     if [ -z "$session_dir" ]; then
         echo "Error: Session directory required" >&2
         return 1
     fi
-    
+
     if [ ! -d "$session_dir/.claude" ]; then
         echo "Error: Session directory missing .claude/ context: $session_dir" >&2
         return 1
     fi
-    
+
     # Check Claude CLI
     check_claude_cli || return 1
-    
-    # Create prompt that references the agent and includes input data
-    local prompt
-    prompt=$(cat <<EOF
-Please process this research task using your capabilities as the $agent_name agent.
 
-Input data:
-$(cat "$input_file")
-
-Provide your response in the structured JSON format specified in your agent definition.
-EOF
-)
-    
-    # Create output directory if needed
-    mkdir -p "$(dirname "$output_file")"
-    
-    # Change to session directory
-    local original_dir
-    original_dir=$(pwd)
-    cd "$session_dir" || return 1
-    
-    echo "⚡ Invoking $agent_name agent from session context..." >&2
-    
-    # Run Claude in non-interactive mode
-    # Claude will auto-discover agents from .claude/ in current directory
-    # Note: MCP config disabled until proper format is implemented
-    if echo "$prompt" | timeout "$timeout" claude \
-        --print \
-        --output-format text \
-        --model sonnet \
-        > "$output_file" 2>&1; then
-        
-        # Return to original directory
-        cd "$original_dir" || true
-        
-        echo "✓ Agent $agent_name completed successfully" >&2
-        return 0
+    # Discover DELVE_ROOT by walking up from session_dir
+    local delve_root
+    if [ -n "${DELVE_ROOT:-}" ]; then
+        delve_root="$DELVE_ROOT"
     else
-        local exit_code=$?
-        
-        # Return to original directory
-        cd "$original_dir" || true
-        
-        if [ $exit_code -eq 124 ]; then
-            echo "✗ Agent $agent_name timed out after ${timeout}s" >&2
-        else
-            echo "✗ Agent $agent_name failed with code $exit_code" >&2
-        fi
-        return 1
-    fi
-}
+        # Walk up from session_dir to find root
+        local search_dir="$session_dir"
+        while [ "$search_dir" != "/" ]; do
+            if [ -f "$search_dir/VERSION" ] && [ -d "$search_dir/src" ]; then
+                delve_root="$search_dir"
+                break
+            fi
+            search_dir="$(dirname "$search_dir")"
+        done
 
-# Invoke agent with JSON input/output
-invoke_agent_json() {
-    local agent_name="$1"
-    local input_json="$2"
-    local output_file="$3"
-    local timeout="${4:-600}"
-    local session_dir="${5:-}"  # REQUIRED: session directory
-    
-    # Create temp input file
-    local temp_input
-    temp_input=$(mktemp)
-    echo "$input_json" > "$temp_input"
-    
-    # Invoke agent with session context
-    invoke_agent "$agent_name" "$temp_input" "$output_file" "$timeout" "$session_dir"
-    local result=$?
-    
-    # Cleanup
-    rm -f "$temp_input"
-    
-    return $result
-}
-
-# Invoke agent with direct prompt (simple interface)
-invoke_agent_simple() {
-    local agent_name="$1"
-    local prompt_text="$2"
-    local output_file="$3"
-    local timeout="${4:-600}"
-    local session_dir="${5:-}"  # REQUIRED: session directory
-    
-    # Validate session_dir
-    if [ -z "$session_dir" ]; then
-        echo "Error: Session directory required" >&2
-        return 1
-    fi
-    
-    if [ ! -d "$session_dir/.claude" ]; then
-        echo "Error: Session directory missing .claude/ context: $session_dir" >&2
-        return 1
-    fi
-    
-    # Check Claude CLI
-    check_claude_cli || return 1
-    
-    # Change to session directory
-    local original_dir
-    original_dir=$(pwd)
-    cd "$session_dir" || return 1
-    
-    echo "⚡ Invoking $agent_name agent from session context..." >&2
-    
-    # Create output directory if needed
-    mkdir -p "$(dirname "$output_file")"
-    
-    # Run Claude directly with the prompt
-    # Note: MCP config disabled until proper format is implemented
-    if echo "$prompt_text" | timeout "$timeout" claude \
-        --print \
-        --output-format text \
-        --model sonnet \
-        > "$output_file" 2>&1; then
-        
-        cd "$original_dir" || true
-        echo "✓ Agent $agent_name completed successfully" >&2
-        return 0
-    else
-        local exit_code=$?
-        cd "$original_dir" || true
-        
-        if [ $exit_code -eq 124 ]; then
-            echo "✗ Agent $agent_name timed out after ${timeout}s" >&2
-        else
-            echo "✗ Agent $agent_name failed with code $exit_code" >&2
-        fi
-        return 1
-    fi
-}
-
-# Parse JSON output from Claude (handle both direct JSON and text wrapper)
-extract_json_output() {
-    local output_file="$1"
-    local extracted_file="$2"
-    
-    if [ ! -f "$output_file" ]; then
-        echo "Error: Output file not found: $output_file" >&2
-        return 1
-    fi
-    
-    # Try to extract JSON from the output
-    # Claude might wrap it in markdown code blocks or text
-    if grep -q '```json' "$output_file"; then
-        # Extract from markdown code block
-        # shellcheck disable=SC2016
-        sed -n '/```json/,/```/p' "$output_file" | \
-            sed '1d;$d' > "$extracted_file"
-    elif grep -q '```' "$output_file"; then
-        # Generic code block without json marker
-        # shellcheck disable=SC2016
-        sed -n '/```/,/```/p' "$output_file" | \
-            sed '1d;$d' > "$extracted_file"
-    elif grep -q '^\s*{' "$output_file"; then
-        # Already JSON (possibly indented), just copy
-        cp "$output_file" "$extracted_file"
-    else
-        # Try to find JSON in the output (look for { ... } blocks, handle indentation)
-        awk '/^\s*{/,/^\s*}/' "$output_file" > "$extracted_file"
-        if [ ! -s "$extracted_file" ]; then
-            echo "Warning: Could not extract JSON from output" >&2
-            cp "$output_file" "$extracted_file"
-        fi
-    fi
-    
-    # Validate extracted JSON
-    if jq '.' "$extracted_file" >/dev/null 2>&1; then
-        return 0
-    else
-        echo "Warning: Extracted content is not valid JSON" >&2
-        # Try to pretty-print anyway for debugging
-        cat "$extracted_file" >&2
-        return 1
-    fi
-}
-
-# Auto-extract JSON after agent invocation
-invoke_agent_with_extraction() {
-    local agent_name="$1"
-    local input_file="$2"
-    local output_file="$3"
-    local timeout="${4:-600}"
-    local session_dir="${5:-}"  # REQUIRED: session directory
-    
-    # Temp file for raw output
-    local raw_output="${output_file}.raw"
-    
-    # Invoke agent with session context
-    if invoke_agent "$agent_name" "$input_file" "$raw_output" "$timeout" "$session_dir"; then
-        # Extract JSON
-        if extract_json_output "$raw_output" "$output_file"; then
-            rm -f "$raw_output"
-            return 0
-        else
-            echo "Warning: JSON extraction failed, using raw output" >&2
-            mv "$raw_output" "$output_file"
+        if [ -z "${delve_root:-}" ]; then
+            echo "Error: Could not find DELVE_ROOT from session_dir: $session_dir" >&2
             return 1
         fi
+    fi
+
+    # Load agent definition
+    local agent_file="$session_dir/.claude/agents/${agent_name}.json"
+
+    if [ ! -f "$agent_file" ]; then
+        echo "Error: Agent definition not found: $agent_file" >&2
+        return 1
+    fi
+
+    # Extract systemPrompt from agent definition
+    # VALIDATED: Correct JSON path in diagnostic-json-structure.sh
+    local system_prompt
+    system_prompt=$(jq -r '.systemPrompt' "$agent_file" 2>/dev/null)
+
+    if [ -z "$system_prompt" ] || [ "$system_prompt" = "null" ]; then
+        echo "Error: Agent $agent_name missing systemPrompt in $agent_file" >&2
+        return 1
+    fi
+
+    # Load tool restrictions from agent-tools.json
+    # Format: {"agent-name": {"allowed": ["Tool1", "Tool2"], "disallowed": ["Tool3"]}}
+    local allowed_tools=""
+    local disallowed_tools=""
+    local agent_tools_file="$delve_root/src/utils/agent-tools.json"
+
+    if [ -f "$agent_tools_file" ]; then
+        allowed_tools=$(jq -r \
+            --arg agent "$agent_name" \
+            '.[$agent].allowed // [] | join(",")' \
+            "$agent_tools_file" 2>/dev/null)
+
+        disallowed_tools=$(jq -r \
+            --arg agent "$agent_name" \
+            '.[$agent].disallowed // [] | join(",")' \
+            "$agent_tools_file" 2>/dev/null)
+    fi
+
+    # Build Claude command with validated flags
+    # VALIDATED:
+    # - --output-format json: test-01
+    # - --append-system-prompt: test-append-system-prompt.sh
+    # - --allowedTools: test-04
+    # - --disallowedTools: test-05
+    local claude_cmd=(
+        claude
+        --print
+        --model sonnet
+        --output-format json          # VALIDATED: test-01
+        --append-system-prompt "$system_prompt"  # VALIDATED: test-append-system-prompt.sh
+    )
+
+    # Add MCP config if present
+    if [ -f "$session_dir/.mcp.json" ]; then
+        claude_cmd+=(--mcp-config "$session_dir/.mcp.json")
+    fi
+
+    # Add tool restrictions
+    # VALIDATED: test-04 (allowed), test-05 (disallowed), test-06 (domains)
+    if [ -n "$allowed_tools" ]; then
+        claude_cmd+=(--allowedTools "$allowed_tools")
+    fi
+    if [ -n "$disallowed_tools" ]; then
+        claude_cmd+=(--disallowedTools "$disallowed_tools")
+    fi
+
+    # Create output directory
+    mkdir -p "$(dirname "$output_file")"
+
+    # Export session directory for hooks to use
+    export DELVE_SESSION_DIR="$session_dir"
+
+    # Change to session directory for context
+    local original_dir
+    original_dir=$(pwd)
+    cd "$session_dir" || return 1
+
+    echo "⚡ Invoking $agent_name with systemPrompt (tools: ${allowed_tools:-all})" >&2
+
+    # Phase 2: Track start time for metrics
+    local start_time
+    # macOS-compatible milliseconds (date +%s gives seconds, multiply by 1000)
+    start_time=$(($(date +%s) * 1000))
+
+    # Phase 2: Log agent invocation
+    if [ -n "${session_dir:-}" ] && command -v log_agent_invocation &>/dev/null; then
+        log_agent_invocation "$session_dir" "$agent_name" "${allowed_tools:-all}" "" || true
+    fi
+
+    # Read task from input file
+    local task
+    task=$(cat "$input_file")
+
+    # Invoke Claude with validated patterns
+    # Output goes to $output_file in JSON format
+    if echo "$task" | timeout "$timeout" "${claude_cmd[@]}" > "$output_file" 2>&1; then
+        # Return to original directory
+        cd "$original_dir" || true
+
+        # Validate JSON output
+        # VALIDATED: diagnostic-json-structure.sh confirmed .result path
+        if ! jq empty "$output_file" 2>/dev/null; then
+            echo "✗ Agent $agent_name returned invalid JSON" >&2
+            echo "Raw output:" >&2
+            cat "$output_file" >&2
+            return 1
+        fi
+
+        # Check for .result field
+        local result
+        result=$(jq -r '.result // empty' "$output_file" 2>/dev/null)
+
+        if [ -z "$result" ]; then
+            echo "✗ Agent $agent_name returned empty .result field" >&2
+            echo "Response structure:" >&2
+            jq 'keys' "$output_file" >&2
+            return 1
+        fi
+
+        # Phase 2: Extract metrics and log result
+        local end_time
+        end_time=$(($(date +%s) * 1000))
+        local duration=$((end_time - start_time))
+        
+        # Try to extract cost from Claude's response
+        # Common paths: .usage.total_cost_usd, .total_cost_usd
+        local cost
+        cost=$(jq -r '.usage.total_cost_usd // .total_cost_usd // 0' "$output_file" 2>/dev/null || echo "0")
+        
+        # Log agent result with metrics
+        if [ -n "${session_dir:-}" ] && command -v log_agent_result &>/dev/null; then
+            log_agent_result "$session_dir" "$agent_name" "$cost" "$duration" || true
+        fi
+
+        echo "✓ Agent $agent_name completed successfully" >&2
+        return 0
     else
+        local exit_code=$?
+
+        # Return to original directory
+        cd "$original_dir" || true
+
+        if [ $exit_code -eq 124 ]; then
+            echo "✗ Agent $agent_name timed out after ${timeout}s" >&2
+        else
+            echo "✗ Agent $agent_name failed with code $exit_code" >&2
+        fi
         return 1
     fi
 }
 
 # Export functions
 export -f check_claude_cli
-export -f invoke_agent
-export -f invoke_agent_json
-export -f invoke_agent_simple
-export -f extract_json_output
+export -f invoke_agent_v2
 
 # CLI interface
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
     case "${1:-help}" in
-        invoke)
-            invoke_agent "$2" "$3" "$4" "${5:-600}" "$6"
-            ;;
-        invoke-json)
-            invoke_agent_json "$2" "$3" "$4" "${5:-600}" "$6"
-            ;;
-        invoke-simple)
-            invoke_agent_simple "$2" "$3" "$4" "${5:-600}" "$6"
-            ;;
-        extract-json)
-            extract_json_output "$2" "$3"
+        invoke-v2)
+            invoke_agent_v2 "$2" "$3" "$4" "${5:-600}" "$6"
             ;;
         check)
             check_claude_cli && echo "✓ Claude CLI is available"
@@ -278,31 +274,53 @@ if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
 Usage: $0 <command> [args...]
 
 Commands:
-  invoke <agent> <input_file> <output_file> [timeout] <session_dir>
-      Invoke agent with input from file
-      
-  invoke-json <agent> <json_string> <output_file> [timeout] <session_dir>
-      Invoke agent with JSON string input
-      
-  invoke-simple <agent> <prompt> <output_file> [timeout] <session_dir>
-      Invoke agent with simple text prompt
-      
-  extract-json <output_file> <extracted_file>
-      Extract JSON from agent output
+  invoke-v2 <agent> <input_file> <output_file> [timeout] <session_dir>
+      Invoke agent with v2 implementation (validated patterns)
+      - Injects systemPrompt via --append-system-prompt
+      - Enforces tool restrictions via agent-tools.json
+      - Returns clean JSON with .result field
       
   check
       Check if Claude CLI is available
 
 Examples:
-  $0 invoke research-planner input.json output.json 600 /path/to/session
-  $0 invoke-simple research-planner "What is Docker?" output.txt 600 /path/to/session
+  $0 invoke-v2 web-researcher input.txt output.json 600 /path/to/session
   $0 check
 
 Notes:
-  - session_dir is REQUIRED and must contain a .claude/ directory
+  - session_dir is REQUIRED and must contain .claude/agents/ directory
   - Timeout default is 600 seconds (10 minutes)
+  - All patterns validated in validation_tests/
+
+Input File Format:
+  The input_file should contain the task/query and explicit JSON formatting instructions:
+  
+  "Your task here. Return ONLY valid JSON with these fields:
+  - field1: description
+  - field2: description
+  
+  NO explanatory text, just the JSON object starting with {."
+
+Output File Format (JSON):
+  {
+    "type": "result",
+    "result": "the agent's response (JSON if requested in prompt)",
+    "session_id": "...",
+    "usage": {...}
+  }
+
+Tool Restrictions:
+  Tool access is controlled by src/utils/agent-tools.json
+  Format: {"agent-name": {"allowed": ["Tool1"], "disallowed": ["Tool2"]}}
+  Domain restrictions: "WebFetch(*.edu)" or "WebFetch(arxiv.org)"
+
+Validation:
+  All patterns tested in validation_tests/:
+  - JSON output: test-01
+  - System prompts: test-append-system-prompt.sh  
+  - Tool restrictions: test-04, test-05, test-06
+  - JSON extraction: diagnostic-json-structure.sh
 EOF
             ;;
     esac
 fi
-

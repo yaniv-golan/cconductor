@@ -11,6 +11,8 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/shared-state.sh"
 # shellcheck disable=SC1091
 source "$SCRIPT_DIR/utils/validation.sh"
+# shellcheck disable=SC1091
+source "$SCRIPT_DIR/utils/event-logger.sh" 2>/dev/null || true
 
 # Initialize a new knowledge graph
 kg_init() {
@@ -155,6 +157,11 @@ kg_add_entity() {
 
     mv "${kg_file}.tmp" "$kg_file"
     lock_release "$kg_file"
+    
+    # Phase 2: Log entity added (only for new entities)
+    if [ -z "$exists" ] && command -v log_entity_added &>/dev/null; then
+        log_entity_added "$session_dir" "${entity_id:-unknown}" "$entity_name" || true
+    fi
 }
 
 # Add claim
@@ -189,6 +196,13 @@ kg_add_claim() {
 
     mv "${kg_file}.tmp" "$kg_file"
     lock_release "$kg_file"
+    
+    # Phase 2: Log claim added
+    if command -v log_claim_added &>/dev/null; then
+        local confidence
+        confidence=$(echo "$claim_json" | jq -r '.confidence // 0.5')
+        log_claim_added "$session_dir" "$claim_id" "$confidence" || true
+    fi
 }
 
 # Add relationship
@@ -260,6 +274,13 @@ kg_add_gap() {
 
     mv "${kg_file}.tmp" "$kg_file"
     lock_release "$kg_file"
+    
+    # Phase 2: Log gap detected
+    if command -v log_gap_detected &>/dev/null; then
+        local priority
+        priority=$(echo "$gap_json" | jq -r '.priority // "medium"')
+        log_gap_detected "$session_dir" "$gap_id" "$priority" || true
+    fi
 }
 
 # Update gap status

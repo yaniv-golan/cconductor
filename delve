@@ -134,6 +134,7 @@ show_help() {
 USAGE:
   delve <question>                 Start new research
   delve <question> --input-dir DIR Analyze local files with your research
+  delve <question> --non-interactive  Skip plan confirmation (for automation)
   delve latest                     Show latest research session
   delve resume <session>           Continue previous research
   delve sessions                   List all research sessions
@@ -150,11 +151,18 @@ OPTIONS:
   --input-dir DIR                  Directory with local files to analyze
                                    Supported: PDFs (.pdf), Markdown (.md), Text (.txt)
                                    PDFs are cached; text files are loaded into session
+  --non-interactive, -y            Skip interactive plan confirmation
+                                   Useful for automation and testing
+                                   Note: Flag must come AFTER the question
 
 EXAMPLES:
   # Basic research
   delve "What are the latest advances in CRISPR?"
   delve "SaaS market size 2024"
+  
+  # Non-interactive research (no confirmation prompts)
+  delve "What are neural networks?" --non-interactive
+  delve "What is quantum computing?" -y
   
   # Research with local materials
   delve "Analyze this pitch deck" --input-dir ./pitch-materials/
@@ -225,6 +233,11 @@ handle_research() {
         
         # Pass to delve-adaptive.sh via environment variable
         export DELVE_INPUT_DIR="$input_dir"
+    fi
+    
+    # Check for --non-interactive or -y flag
+    if has_flag "non-interactive" || has_flag "y"; then
+        export DELVE_NON_INTERACTIVE=1
     fi
     
     # Call delve-adaptive.sh
@@ -400,6 +413,105 @@ main() {
             else
                 echo "No research sessions yet. Start one with:"
                 echo "  ./delve \"your research question\""
+            fi
+            ;;
+        view-dashboard)
+            # Get session directory (optional parameter)
+            local session_arg
+            session_arg=$(get_arg 1)
+            local session_dir=""
+            
+            if [ -z "$session_arg" ]; then
+                # No argument - use latest session
+                local latest_file="$DELVE_ROOT/research-sessions/.latest"
+                if [ ! -f "$latest_file" ]; then
+                    echo "Error: No active session found" >&2
+                    echo "Run a research query first: ./delve \"your question\"" >&2
+                    exit 1
+                fi
+                local session_id
+                session_id=$(cat "$latest_file")
+                session_dir="$DELVE_ROOT/research-sessions/$session_id"
+            elif [[ "$session_arg" == /* ]]; then
+                # Absolute path provided
+                session_dir="$session_arg"
+            else
+                # Session ID provided (with or without 'session_' prefix)
+                local session_id="$session_arg"
+                if [[ ! "$session_id" == session_* ]]; then
+                    session_id="session_${session_id}"
+                fi
+                session_dir="$DELVE_ROOT/research-sessions/$session_id"
+            fi
+            
+            # Validate session directory exists
+            if [ ! -d "$session_dir" ]; then
+                echo "Error: Session directory not found: $session_dir" >&2
+                exit 1
+            fi
+            
+            # Check if dashboard exists, generate if needed
+            local dashboard_file="$session_dir/dashboard.html"
+            if [ ! -f "$dashboard_file" ]; then
+                echo "Generating dashboard..."
+                if ! bash "$DELVE_ROOT/src/utils/dashboard-generator.sh" "$session_dir"; then
+                    echo "Error: Failed to generate dashboard" >&2
+                    exit 1
+                fi
+            fi
+            
+            # Generate dashboard metrics if missing
+            if [ ! -f "$session_dir/dashboard-metrics.json" ]; then
+                bash -c "source '$DELVE_ROOT/src/utils/dashboard-metrics.sh' && generate_dashboard_metrics '$session_dir'" 2>/dev/null || true
+            fi
+            
+            # Find an available port (8890-8899)
+            local port=""
+            for p in {8890..8899}; do
+                if ! lsof -i ":$p" >/dev/null 2>&1; then
+                    port=$p
+                    break
+                fi
+            done
+            
+            if [ -z "$port" ]; then
+                echo "Error: No available ports in range 8890-8899" >&2
+                echo "Try: pkill -f 'python.*http.server'" >&2
+                exit 1
+            fi
+            
+            # Start HTTP server in background
+            echo "Starting HTTP server on port $port..."
+            cd "$session_dir"
+            python3 -m http.server "$port" > /dev/null 2>&1 &
+            local server_pid=$!
+            
+            # Save PID for potential cleanup
+            echo "$server_pid" > "$session_dir/.dashboard-server.pid"
+            
+            sleep 2
+            
+            # Open in browser with session ID parameter (prevents caching issues)
+            local session_id
+            session_id=$(basename "$session_dir")
+            local dashboard_url="http://localhost:$port/dashboard.html?session=$session_id"
+            echo "✅ Dashboard server started (PID: $server_pid)"
+            echo "📊 Opening: $dashboard_url"
+            echo ""
+            echo "To stop the server later:"
+            echo "  kill $server_pid"
+            echo "  or: pkill -f 'python.*http.server.*$port'"
+            echo ""
+            
+            if [[ "$OSTYPE" == "darwin"* ]]; then
+                open "$dashboard_url"
+            elif command -v xdg-open &> /dev/null; then
+                xdg-open "$dashboard_url" &
+            elif command -v explorer.exe &> /dev/null; then
+                # WSL
+                explorer.exe "$dashboard_url" 2>/dev/null
+            else
+                echo "Dashboard available at: $dashboard_url"
             fi
             ;;
         configure|config)

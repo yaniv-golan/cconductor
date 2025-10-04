@@ -26,6 +26,14 @@ source "$DELVE_SCRIPT_DIR/utils/lead-evaluator.sh"
 source "$DELVE_SCRIPT_DIR/utils/confidence-scorer.sh"
 # shellcheck disable=SC1091
 source "$DELVE_SCRIPT_DIR/utils/config-loader.sh"
+# shellcheck disable=SC1091
+source "$DELVE_SCRIPT_DIR/utils/session-manager.sh"
+# shellcheck disable=SC1091
+source "$DELVE_SCRIPT_DIR/utils/event-logger.sh"
+# shellcheck disable=SC1091
+source "$DELVE_SCRIPT_DIR/utils/dashboard-metrics.sh"
+# shellcheck disable=SC1091
+source "$DELVE_SCRIPT_DIR/utils/setup-hooks.sh"
 
 # Load configuration using overlay pattern
 # This automatically merges user config over defaults
@@ -173,6 +181,9 @@ initialize_session() {
         echo "Error: Claude runtime template not found at $PROJECT_ROOT/src/claude-runtime" >&2
         exit 1
     fi
+    
+    # Phase 2.5: Set up tool observability hooks
+    setup_tool_hooks "$session_dir" || echo "Warning: Failed to setup tool hooks" >&2
 
     # Source version checker
     # shellcheck disable=SC1091
@@ -214,6 +225,14 @@ initialize_session() {
             }
         }' > "$session_dir/session.json"
 
+    # Phase 2: Initialize event logging
+    init_events "$session_dir"
+    log_event "$session_dir" "session_created" \
+        "{\"question\": $(echo "$research_question" | jq -R .)}"
+    
+    # Phase 2: Generate dashboard
+    bash "$DELVE_SCRIPT_DIR/utils/dashboard-generator.sh" "$session_dir" >/dev/null 2>&1 || true
+
     echo "$session_dir"
 }
 
@@ -230,40 +249,60 @@ initial_planning() {
     # Invoke research planner with explicit instructions for automated mode
     echo "⚡ Invoking research-planner agent..." >&2
     local planning_output="$session_dir/raw/planning-output.json"
-    local planning_output_raw="$session_dir/raw/planning-output-raw.txt"
     
-    # Use invoke-simple with explicit prompt for automated pipeline
-    if ! bash "$DELVE_SCRIPT_DIR/utils/invoke-agent.sh" invoke-simple \
+    # Create input file for invoke-v2
+    local planning_input="$session_dir/intermediate/planning-input.txt"
+    cat > "$planning_input" <<EOF
+Create initial research tasks for: '$research_question'. Return ONLY valid JSON with 'initial_tasks' array. Each task must have: type (research), agent (web-researcher/code-analyzer/academic-researcher/market-analyzer), priority (1-10), query (specific search query). NO explanatory text, just the JSON object starting with {.
+EOF
+    
+    # Use invoke-v2 with systemPrompt injection and clean JSON output
+    if ! bash "$DELVE_SCRIPT_DIR/utils/invoke-agent.sh" invoke-v2 \
         "research-planner" \
-        "Create initial research tasks for: '$research_question'. Return ONLY valid JSON with 'initial_tasks' array. Each task must have: type (research), agent (web-researcher/code-analyzer/academic-researcher/market-analyzer), priority (1-10), query (specific search query). NO explanatory text, just the JSON object starting with {." \
-        "$planning_output_raw" \
+        "$planning_input" \
+        "$planning_output" \
         600 \
         "$session_dir"; then
         echo "Error: Research planner failed" >&2
         return 1
     fi
     
-    # Extract JSON from output
-    if ! bash "$DELVE_SCRIPT_DIR/utils/invoke-agent.sh" extract-json \
-        "$planning_output_raw" \
-        "$planning_output"; then
-        echo "Warning: Could not extract JSON, using raw output" >&2
-        cp "$planning_output_raw" "$planning_output"
-    fi
+    # No extract-json needed - v2 returns clean JSON directly
 
     if [ ! -f "$planning_output" ]; then
         echo "Error: Planning output not found" >&2
         return 1
     fi
 
-    # Extract initial tasks (agent returns .initial_tasks in Phase 2 format)
+    # Extract initial tasks (Phase 0: data is in .result as JSON string)
     local initial_tasks
-    initial_tasks=$(cat "$planning_output" | jq '.initial_tasks // .tasks')
+    # First extract .result (which contains JSON as a string), then parse it
+    local result_json
+    result_json=$(cat "$planning_output" | jq -r '.result // empty')
+    
+    if [ -z "$result_json" ]; then
+        echo "Error: No result field in planning output" >&2
+        echo "Raw output:" >&2
+        cat "$planning_output" | jq '.' >&2
+        return 1
+    fi
+    
+    # Strip markdown code fences if present (```json ... ```)
+    result_json=$(echo "$result_json" | sed '/^```json$/d; /^```$/d')
+    
+    # Parse the JSON string and extract initial_tasks
+    # Also add missing 'type' field if not present (use task_type or default to 'research')
+    initial_tasks=$(echo "$result_json" | jq '[(.initial_tasks // .tasks // [])[] | 
+        if has("type") then . 
+        else . + {type: (.task_type // "research")} 
+        end]')
     
     # Validate that result is an array
     if ! echo "$initial_tasks" | jq -e 'type == "array"' >/dev/null 2>&1; then
         echo "Error: Planning output is not a valid array" >&2
         echo "Received: ${initial_tasks:0:200}..." >&2
+        echo "Full result:" >&2
+        echo "$result_json" | jq '.' >&2
         return 1
     fi
     
@@ -334,26 +373,14 @@ execute_pending_tasks() {
             local output_file="$3"
             local sess_dir="$4"  # Add session_dir parameter
             
-            # Invoke agent using Claude CLI with JSON extraction
-            local agent_output_raw="${output_file}.raw"
-            if bash "$DELVE_SCRIPT_DIR/utils/invoke-agent.sh" invoke \
+            # Invoke agent using v2 (systemPrompt + tool restrictions + clean JSON)
+            if bash "$DELVE_SCRIPT_DIR/utils/invoke-agent.sh" invoke-v2 \
                 "$agent_name" \
                 "$input_file" \
-                "$agent_output_raw" \
+                "$output_file" \
                 900 \
                 "$sess_dir"; then  # Pass session directory
-                
-                # Extract JSON from output
-                if bash "$DELVE_SCRIPT_DIR/utils/invoke-agent.sh" extract-json \
-                    "$agent_output_raw" \
-                    "$output_file"; then
-                    rm -f "$agent_output_raw"
-                    return 0
-                else
-                    echo "Warning: JSON extraction failed for $agent_name, using raw output" >&2
-                    mv "$agent_output_raw" "$output_file"
-                    return 0
-                fi
+                return 0
             else
                 echo "Error: Agent $agent_name failed" >&2
                 return 1
@@ -601,27 +628,39 @@ run_coordinator() {
         > "$coordinator_input"
 
     # Invoke coordinator
-    echo "⚡ Invoking research-coordinator agent..."
     local coordinator_output="$session_dir/intermediate/coordinator-output-${iteration}.json"
 
-    # Invoke coordinator using Claude CLI with JSON extraction
-    local coordinator_output_raw="${coordinator_output}.raw"
-    if ! bash "$DELVE_SCRIPT_DIR/utils/invoke-agent.sh" invoke \
-        "research-coordinator" \
-        "$coordinator_input" \
-        "$coordinator_output_raw" \
-        900 \
-        "$session_dir"; then
-        echo "Error: Research coordinator failed" >&2
-        return 1
-    fi
-    
-    # Extract JSON from output
-    if ! bash "$DELVE_SCRIPT_DIR/utils/invoke-agent.sh" extract-json \
-        "$coordinator_output_raw" \
-        "$coordinator_output"; then
-        echo "Warning: Could not extract JSON, using raw output" >&2
-        cp "$coordinator_output_raw" "$coordinator_output"
+    # Use session continuity for iterations 2+ (Phase 1)
+    if [ "$iteration" = "1" ]; then
+        echo "⚡ Starting coordinator session (iteration 1)..."
+        # Start session with initial context
+        local session_id
+        session_id=$(start_agent_session \
+            "research-coordinator" \
+            "$session_dir" \
+            "$(cat "$coordinator_input")" \
+            900)
+        
+        if [ -z "$session_id" ]; then
+            echo "Error: Failed to start coordinator session" >&2
+            return 1
+        fi
+        
+        # Copy start output to coordinator output
+        cp "$session_dir/.agent-sessions/research-coordinator.start-output.json" \
+           "$coordinator_output"
+    else
+        echo "⚡ Continuing coordinator session (iteration $iteration)..."
+        # Continue existing session
+        if ! continue_agent_session \
+            "research-coordinator" \
+            "$session_dir" \
+            "$(cat "$coordinator_input")" \
+            "$coordinator_output" \
+            900; then
+            echo "Error: Research coordinator failed" >&2
+            return 1
+        fi
     fi
 
     if [ ! -f "$coordinator_output" ]; then
@@ -775,25 +814,42 @@ final_synthesis() {
     echo ""
     echo "=== Final Synthesis ==="
 
+    # Clean up coordinator session (Phase 1)
+    if has_agent_session "research-coordinator" "$session_dir"; then
+        echo "Cleaning up coordinator session..."
+        end_agent_session "research-coordinator" "$session_dir" || true
+    fi
+
     local kg
     kg=$(kg_read "$session_dir")
     local synthesis_input="$session_dir/intermediate/synthesis-input.json"
+    local synthesis_output="$session_dir/research-report.json"
+    
     echo "$kg" > "$synthesis_input"
 
-    cat <<EOF
-
-Claude Code: Please invoke the synthesis-agent:
-  Agent: synthesis-agent
-  Input: $synthesis_input
-  Output: $session_dir/research-report.json
-
-Generate comprehensive final report from knowledge graph.
-
-EOF
-
-    read -r -p "Press Enter when synthesis is complete..."
-
-    echo "Research complete! Output at: $session_dir/research-report.md"
+    echo "→ Generating final report..."
+    
+    # Invoke synthesis agent
+    if bash "$DELVE_SCRIPT_DIR/utils/invoke-agent.sh" invoke-v2 \
+        "synthesis-agent" \
+        "$synthesis_input" \
+        "$synthesis_output" \
+        600 \
+        "$session_dir"; then
+        
+        echo "  ✓ Synthesis complete"
+        
+        # Extract report content and save as markdown
+        if [ -f "$synthesis_output" ]; then
+            jq -r '.result // empty' "$synthesis_output" > "$session_dir/research-report.md" 2>/dev/null
+            echo ""
+            echo "✓ Research complete! Output at: $session_dir/research-report.md"
+        else
+            echo "⚠️  Warning: Synthesis output not found" >&2
+        fi
+    else
+        echo "✗ Synthesis failed" >&2
+    fi
 }
 
 # Run a single research iteration
@@ -808,6 +864,17 @@ run_single_iteration() {
     echo "════════════════════════════════════════════════════════════"
     echo ""
 
+    # Update knowledge graph with current iteration number
+    local kg_file="$session_dir/knowledge-graph.json"
+    local tmp_kg="$session_dir/knowledge-graph.json.tmp"
+    jq --arg iter "$iteration" '.iteration = ($iter | tonumber)' "$kg_file" > "$tmp_kg" && mv "$tmp_kg" "$kg_file"
+
+    # Phase 2: Log iteration start
+    log_iteration_start "$session_dir" "$iteration"
+    
+    # Phase 2: Update metrics immediately after iteration starts
+    update_metrics "$session_dir"
+
     # Show pending tasks count
     local pending
     pending=$(jq '.stats.pending' "$session_dir/task-queue.json" 2>/dev/null || echo "0")
@@ -819,6 +886,9 @@ run_single_iteration() {
     execute_pending_tasks "$session_dir"
     echo "  ✓ Tasks complete"
     echo ""
+    
+    # Phase 2: Update metrics after tasks complete
+    update_metrics "$session_dir"
 
     # Run coordinator analysis
     echo "→ Running coordinator analysis..."
@@ -827,6 +897,9 @@ run_single_iteration() {
     local coordinator_file="$session_dir/intermediate/coordinator-output-${iteration}.json"
     echo "  ✓ Coordinator analysis complete"
     echo ""
+    
+    # Phase 2: Update metrics after coordinator
+    update_metrics "$session_dir"
 
     # Update knowledge graph with coordinator findings
     echo "→ Updating knowledge graph..."
@@ -894,6 +967,12 @@ run_single_iteration() {
     if [ "$iteration" -lt "$MAX_ITERATIONS" ]; then
         echo "Next: Iteration $((iteration + 1))/$MAX_ITERATIONS"
     fi
+
+    # Phase 2: Log iteration complete and update metrics
+    local kg_stats
+    kg_stats=$(jq '.stats' "$session_dir/knowledge-graph.json" 2>/dev/null || echo '{}')
+    log_iteration_complete "$session_dir" "$iteration" "$kg_stats"
+    update_metrics "$session_dir"
 
     return 0  # Continue iterations
 }
@@ -1095,6 +1174,78 @@ main() {
     tq_add_tasks "$session_dir" "$initial_tasks" >/dev/null
     echo "  ✓ Generated $task_count initial tasks"
     echo ""
+    
+    # Phase 2: Update metrics after planning
+    update_metrics "$session_dir"
+    
+    # Check if user guidance is enabled - show plan and ask for confirmation
+    local allow_guidance
+    allow_guidance=$(echo "$ADAPTIVE_CONFIG" | jq -r '.termination.allow_user_guidance // false')
+    
+    # Override if DELVE_NON_INTERACTIVE environment variable is set
+    if [ "${DELVE_NON_INTERACTIVE:-0}" = "1" ]; then
+        allow_guidance="false"
+    fi
+    
+    if [ "$allow_guidance" = "true" ]; then
+        echo "════════════════════════════════════════════════════════════"
+        echo "Research Plan Review"
+        echo "════════════════════════════════════════════════════════════"
+        echo ""
+        echo "I've created an initial research plan with $task_count tasks:"
+        echo ""
+        
+        # Show the tasks in a readable format (with index + priority)
+        echo "$initial_tasks" | jq -r 'to_entries[] | "  [\(.key + 1), P\(.value.priority)] \(.value.agent): \(.value.query)"' | head -10
+        
+        if [ "$task_count" -gt 10 ]; then
+            echo "  ... and $((task_count - 10)) more tasks"
+        fi
+        
+        echo ""
+        echo "Does this research approach look correct?"
+        echo ""
+        echo "Options:"
+        echo "  [y] Yes, proceed with research"
+        echo "  [n] No, let me refine the question"
+        echo "  [s] Show all tasks in detail"
+        echo ""
+        
+        while true; do
+            read -r -p "Your choice [y/n/s]: " choice
+            
+            case "$choice" in
+                y|Y|"")
+                    echo ""
+                    echo "✓ Proceeding with research..."
+                    echo ""
+                    break
+                    ;;
+                n|N)
+                    echo ""
+                    echo "Research cancelled. You can start a new session with a refined question."
+                    echo ""
+                    echo "Session saved at: $session_dir"
+                    echo "You can resume later with: ./delve resume $(basename "$session_dir")"
+                    exit 0
+                    ;;
+                s|S)
+                    echo ""
+                    echo "All planned tasks:"
+                    echo ""
+                    echo "$initial_tasks" | jq -r 'to_entries[] | "[Task \(.key + 1), Priority \(.value.priority)] \(.value.agent):\n  Query: \(.value.query)\n"'
+                    echo ""
+                    echo "Options:"
+                    echo "  [y] Yes, proceed with research"
+                    echo "  [n] No, let me refine the question"
+                    echo ""
+                    ;;
+                *)
+                    echo "Invalid choice. Please enter y, n, or s."
+                    ;;
+            esac
+        done
+    fi
 
     # Update .latest marker
     basename "$session_dir" > "$PROJECT_ROOT/research-sessions/.latest"

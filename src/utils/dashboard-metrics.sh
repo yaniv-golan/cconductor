@@ -1,0 +1,169 @@
+#!/bin/bash
+# Dashboard Metrics - Pre-computed metrics for dashboard
+set -euo pipefail
+
+# Generate dashboard metrics
+generate_dashboard_metrics() {
+    local session_dir="$1"
+    local metrics_file="$session_dir/dashboard-metrics.json"
+    
+    # Read current state directly from files
+    local kg
+    if [ -f "$session_dir/knowledge-graph.json" ]; then
+        kg=$(cat "$session_dir/knowledge-graph.json")
+    else
+        kg='{}'
+    fi
+    
+    local tq
+    if [ -f "$session_dir/task-queue.json" ]; then
+        tq=$(cat "$session_dir/task-queue.json")
+    else
+        tq='{}'
+    fi
+    
+    local session
+    if [ -f "$session_dir/session.json" ]; then
+        session=$(cat "$session_dir/session.json")
+    else
+        session='{}'
+    fi
+    
+    # Extract stats
+    local iteration
+    iteration=$(echo "$kg" | jq '.iteration // 0')
+    local confidence
+    confidence=$(echo "$kg" | jq '.confidence_scores.overall // 0')
+    
+    local total_tasks
+    total_tasks=$(echo "$tq" | jq '.stats.total_tasks // 0')
+    local completed
+    completed=$(echo "$tq" | jq '.stats.completed // 0')
+    local in_progress
+    in_progress=$(echo "$tq" | jq '.stats.in_progress // 0')
+    local pending
+    pending=$(echo "$tq" | jq '.stats.pending // 0')
+    local failed
+    failed=$(echo "$tq" | jq '.stats.failed // 0')
+    
+    local entities
+    entities=$(echo "$kg" | jq '.stats.total_entities // 0')
+    local claims
+    claims=$(echo "$kg" | jq '.stats.total_claims // 0')
+    local citations
+    citations=$(echo "$kg" | jq '.stats.total_citations // 0')
+    local gaps
+    gaps=$(echo "$kg" | jq '.stats.unresolved_gaps // 0')
+    local contradictions
+    contradictions=$(echo "$kg" | jq '.stats.unresolved_contradictions // 0')
+    
+    # Calculate costs from events
+    local total_cost
+    total_cost=$(calculate_total_cost "$session_dir")
+    
+    # Calculate duration
+    local created_at
+    created_at=$(echo "$session" | jq -r '.created_at // ""')
+    local elapsed_seconds
+    elapsed_seconds=$(calculate_elapsed_seconds "$created_at")
+    
+    # Get active agents (from task queue)
+    local active_agents
+    active_agents=$(echo "$tq" | jq -c '[.tasks[]? | select(.status == "in_progress") | .agent] | unique')
+    
+    # Build metrics JSON
+    jq -n \
+        --arg updated "$(date -u +"%Y-%m-%dT%H:%M:%SZ")" \
+        --argjson iter "$iteration" \
+        --argjson confidence "$confidence" \
+        --argjson total "$total_tasks" \
+        --argjson completed "$completed" \
+        --argjson in_progress "$in_progress" \
+        --argjson pending "$pending" \
+        --argjson failed "$failed" \
+        --argjson entities "$entities" \
+        --argjson claims "$claims" \
+        --argjson citations "$citations" \
+        --argjson gaps "$gaps" \
+        --argjson contradictions "$contradictions" \
+        --argjson total_cost "$total_cost" \
+        --argjson elapsed "$elapsed_seconds" \
+        --argjson agents "$active_agents" \
+        '{
+            last_updated: $updated,
+            iteration: $iter,
+            confidence: $confidence,
+            tasks: {
+                total: $total,
+                completed: $completed,
+                in_progress: $in_progress,
+                pending: $pending,
+                failed: $failed
+            },
+            knowledge: {
+                entities: $entities,
+                claims: $claims,
+                citations: $citations
+            },
+            issues: {
+                gaps: $gaps,
+                contradictions: $contradictions
+            },
+            costs: {
+                total_usd: $total_cost,
+                per_iteration: ($total_cost / ($iter + 0.001))
+            },
+            runtime: {
+                elapsed_seconds: $elapsed,
+                active_agents: $agents
+            }
+        }' > "$metrics_file"
+}
+
+# Calculate total cost from events
+calculate_total_cost() {
+    local session_dir="$1"
+    local events_file="$session_dir/events.jsonl"
+    
+    if [ ! -f "$events_file" ] || [ ! -s "$events_file" ]; then
+        echo "0"
+        return
+    fi
+    
+    # Sum cost_usd from all agent_result events
+    # Events have structure: {type: "agent_result", data: {cost_usd: X}}
+    local cost
+    cost=$(cat "$events_file" 2>/dev/null | \
+        jq -s 'map(select(.type == "agent_result") | .data.cost_usd // 0) | add // 0' 2>/dev/null)
+    
+    if [ -z "$cost" ] || [ "$cost" = "null" ]; then
+        echo "0"
+    else
+        echo "$cost"
+    fi
+}
+
+# Calculate elapsed seconds
+calculate_elapsed_seconds() {
+    local start_time="$1"
+    
+    if [ -z "$start_time" ]; then
+        echo "0"
+        return
+    fi
+    
+    # Parse UTC timestamp and get current UTC time to avoid timezone issues
+    local start_epoch
+    start_epoch=$(date -ju -f "%Y-%m-%dT%H:%M:%SZ" "$start_time" +%s 2>/dev/null || echo "0")
+    local now_epoch
+    now_epoch=$(date -ju +%s)
+    
+    echo $((now_epoch - start_epoch))
+}
+
+# Update metrics (call after state changes)
+update_metrics() {
+    local session_dir="$1"
+    generate_dashboard_metrics "$session_dir" 2>/dev/null || true
+}
+
