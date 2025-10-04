@@ -205,30 +205,30 @@ class Dashboard {
 
     renderToolCalls(events) {
         if (!events || events.length === 0) return;
-        
+
         const container = document.getElementById('tools-container');
-        
+
         // Filter for tool use events and group by tool_use_start
         const toolCalls = [];
         const toolStarts = events.filter(e => e.type === 'tool_use_start');
-        
+
         // For each tool start, find its corresponding complete event
         toolStarts.forEach(startEvent => {
             const tool = startEvent.data.tool;
             const agent = startEvent.data.agent || 'unknown';
             const summary = startEvent.data.input_summary || '';
             const timestamp = startEvent.timestamp;
-            
+
             // Find corresponding complete event (within 60s)
-            const completeEvent = events.find(e => 
-                e.type === 'tool_use_complete' && 
+            const completeEvent = events.find(e =>
+                e.type === 'tool_use_complete' &&
                 e.data.tool === tool &&
                 Math.abs(new Date(e.timestamp) - new Date(timestamp)) < 60000
             );
-            
+
             const duration = completeEvent ? completeEvent.data.duration_ms : null;
             const status = completeEvent ? completeEvent.data.status : 'pending';
-            
+
             toolCalls.push({
                 timestamp,
                 tool,
@@ -238,20 +238,20 @@ class Dashboard {
                 status
             });
         });
-        
+
         // Show last 20 tool calls, most recent first
         const recentCalls = toolCalls.slice(-20).reverse();
-        
+
         if (recentCalls.length === 0) {
             container.innerHTML = '<div class="empty-state">No tool calls yet</div>';
             return;
         }
-        
+
         container.innerHTML = recentCalls.map(call => {
             const time = new Date(call.timestamp).toLocaleTimeString();
             const statusClass = call.status === 'success' ? 'tool-status-success' : 'tool-status-failed';
             const statusIcon = call.status === 'success' ? '✓' : (call.status === 'failed' ? '✗' : '⏳');
-            
+
             let durationText = '';
             if (call.duration !== null) {
                 if (call.duration > 1000) {
@@ -260,12 +260,12 @@ class Dashboard {
                     durationText = `${call.duration}ms`;
                 }
             }
-            
+
             // Truncate summary
-            const truncSummary = call.summary.length > 50 ? 
-                call.summary.substring(0, 50) + '...' : 
+            const truncSummary = call.summary.length > 50 ?
+                call.summary.substring(0, 50) + '...' :
                 call.summary;
-            
+
             return `
                 <div class="tool-item">
                     <span class="tool-name">${call.tool}</span>
