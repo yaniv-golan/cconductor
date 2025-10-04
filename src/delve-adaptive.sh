@@ -911,29 +911,40 @@ run_single_iteration() {
     local raw_result
     raw_result=$(jq -r '.result // empty' "$coordinator_file")
     
-    # Strip markdown fences
-    raw_result=$(echo "$raw_result" | sed -e 's/^```json$//' -e 's/^```$//' | sed '/^$/d')
+    # Strip markdown code fences
+    raw_result=$(echo "$raw_result" | sed -e 's/^```json$//' -e 's/^```$//')
     
-    # Extract JSON object (from first { to last })
-    # This handles cases where coordinator adds explanatory text before JSON
-    echo "$raw_result" | sed -n '/{/,$ p' > "$coordinator_cleaned"
+    # Extract JSON object using awk (more reliable for removing text before {)
+    # Finds first line with {, removes any text before { on that line, prints rest
+    echo "$raw_result" | awk '/{/{found=1} found{if(!printed){sub(/^[^{]*/, ""); printed=1} print}' > "$coordinator_cleaned"
     
     # Validate cleaned JSON
     if ! jq '.' "$coordinator_cleaned" >/dev/null 2>&1; then
-        echo "Error: Failed to extract valid JSON from coordinator output" >&2
-        echo "Attempting to extract JSON object from text..." >&2
-        # Try to find JSON object boundaries more aggressively
-        echo "$raw_result" | grep -o '{.*}' > "$coordinator_cleaned" 2>/dev/null || {
-            echo "Raw result:" >&2
-            echo "$raw_result" | head -20 >&2
+        echo "⚠️  Warning: Initial JSON extraction failed" >&2
+        echo "Attempting aggressive extraction..." >&2
+        
+        # Fallback: Extract from first { to last } using Python (most reliable)
+        python3 -c "
+import sys, re
+text = sys.stdin.read()
+match = re.search(r'\{.*\}', text, re.DOTALL)
+if match:
+    print(match.group(0))
+else:
+    sys.exit(1)
+" <<< "$raw_result" > "$coordinator_cleaned" 2>/dev/null || {
+            echo "  ✗ Could not extract JSON object" >&2
+            echo "Raw result (first 30 lines):" >&2
+            echo "$raw_result" | head -30 >&2
             return 1
         }
+        
         # Re-validate
         if ! jq '.' "$coordinator_cleaned" >/dev/null 2>&1; then
-            echo "Failed to extract valid JSON after fallback" >&2
+            echo "  ✗ Extracted text is not valid JSON" >&2
             return 1
         fi
-        echo "  ✓ Extracted JSON from mixed text/JSON output" >&2
+        echo "  ✓ Successfully extracted JSON using fallback" >&2
     fi
     
     # Phase 2: Update metrics after coordinator
