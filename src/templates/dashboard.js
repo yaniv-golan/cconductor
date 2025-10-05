@@ -24,6 +24,7 @@ class Dashboard {
             this.renderHeader(session);
             this.renderStats(metrics);
             this.renderTasks(tasks);
+            this.renderObservations(metrics?.system_health?.observations || []);
             this.renderToolCalls(events || []);
             this.renderEvents(events ? events.slice(-15) : []);
         } catch (error) {
@@ -78,6 +79,90 @@ class Dashboard {
             }
             sessionIdElement.textContent = `Session: ${sessionId}`;
         }
+
+        // Show completion banner if research is complete
+        this.renderCompletionStatus(session);
+
+        // Start live runtime counter
+        if (session.created_at) {
+            this.startLiveRuntime(session.created_at);
+        }
+    }
+
+    renderCompletionStatus(session) {
+        const banner = document.getElementById('completion-banner');
+        const title = document.getElementById('completion-title');
+        const message = document.getElementById('completion-message');
+        const reportLink = document.getElementById('completion-report-link');
+
+        if (session.status === 'completed') {
+            banner.classList.add('show');
+            title.textContent = '✅ Research Complete!';
+
+            const completedTime = session.completed_at ?
+                new Date(session.completed_at).toLocaleString() :
+                'recently';
+            message.textContent = `Research session finished ${completedTime}`;
+
+            // Show report link (assumes research-report.md exists in session dir)
+            reportLink.style.display = 'inline-block';
+
+            // Stop the runtime counter - research is done
+            if (this.runtimeInterval) {
+                clearInterval(this.runtimeInterval);
+                this.runtimeInterval = null;
+            }
+        } else if (session.status === 'failed') {
+            banner.classList.add('show', 'error');
+            title.textContent = '❌ Research Failed';
+            message.textContent = session.error || 'Research encountered an error and could not complete.';
+            reportLink.style.display = 'none';
+
+            // Stop the runtime counter on failure too
+            if (this.runtimeInterval) {
+                clearInterval(this.runtimeInterval);
+                this.runtimeInterval = null;
+            }
+        } else {
+            // In progress - don't show banner
+            banner.classList.remove('show');
+        }
+    }
+
+    startLiveRuntime(createdAt) {
+        const startTime = new Date(createdAt);
+
+        const updateRuntime = () => {
+            const now = new Date();
+            const elapsed = Math.floor((now - startTime) / 1000);
+
+            const hours = Math.floor(elapsed / 3600);
+            const mins = Math.floor(elapsed / 60);
+            const secs = elapsed % 60;
+
+            let runtimeText;
+            if (hours > 0) {
+                runtimeText = `${hours}h ${mins % 60}m`;
+            } else if (mins > 0) {
+                runtimeText = `${mins}m ${secs}s`;
+            } else {
+                runtimeText = `${secs}s`;
+            }
+
+            const runtimeEl = document.getElementById('stat-runtime');
+            if (runtimeEl) {
+                runtimeEl.textContent = runtimeText;
+            }
+        };
+
+        // Update immediately
+        updateRuntime();
+
+        // Update every second for live feel
+        if (this.runtimeInterval) {
+            clearInterval(this.runtimeInterval);
+        }
+        this.runtimeInterval = setInterval(updateRuntime, 1000);
     }
 
     renderStats(metrics) {
@@ -95,20 +180,8 @@ class Dashboard {
         document.getElementById('stat-cost-per-iter').textContent =
             (metrics.costs?.per_iteration || 0).toFixed(2);
 
-        const elapsed = metrics.runtime?.elapsed_seconds || 0;
-        const mins = Math.floor(elapsed / 60);
-        const hours = Math.floor(mins / 60);
-        const secs = elapsed % 60;
-
-        let runtimeText;
-        if (hours > 0) {
-            runtimeText = `${hours}h ${mins % 60}m`;
-        } else if (mins > 0) {
-            runtimeText = `${mins}m ${secs}s`;
-        } else {
-            runtimeText = `${secs}s`;
-        }
-        document.getElementById('stat-runtime').textContent = runtimeText;
+        // Runtime is now calculated dynamically in startLiveRuntime() for live updates
+        // No need to set it here - it updates every second automatically
     }
 
     renderTasks(tasks) {
@@ -212,6 +285,56 @@ class Dashboard {
         `;
     }
 
+    renderObservations(observations) {
+        const container = document.getElementById('health-container');
+
+        if (!observations || observations.length === 0) {
+            container.innerHTML = '<div class="empty-state">✓ No issues detected</div>';
+            return;
+        }
+
+        // Group by severity for display order: critical, warning, info
+        const criticalObs = observations.filter(o => o.data?.severity === 'critical');
+        const warningObs = observations.filter(o => o.data?.severity === 'warning');
+        const infoObs = observations.filter(o => o.data?.severity === 'info');
+        const orderedObs = [...criticalObs, ...warningObs, ...infoObs];
+
+        // Take top 10
+        const displayObs = orderedObs.slice(0, 10);
+
+        container.innerHTML = displayObs.map(obs => {
+            const data = obs.data || {};
+            const severity = data.severity || 'info';
+            const component = data.component || 'unknown';
+            const observation = data.observation || 'No description';
+            const suggestion = data.suggestion || '';
+            const timestamp = obs.timestamp || '';
+
+            // Severity icons
+            const icons = {
+                critical: '🔴',
+                warning: '⚠️',
+                info: 'ℹ️'
+            };
+            const icon = icons[severity] || '•';
+
+            // Format timestamp
+            const timeStr = timestamp ? new Date(timestamp).toLocaleTimeString() : '';
+
+            return `
+                <div class="observation-item ${severity}">
+                    <div class="observation-header">
+                        <span class="observation-severity">${icon}</span>
+                        <span class="observation-component">${this.escapeHtml(component)}</span>
+                    </div>
+                    <div class="observation-text">${this.escapeHtml(observation)}</div>
+                    ${suggestion ? `<div class="observation-suggestion">💡 ${this.escapeHtml(suggestion)}</div>` : ''}
+                    ${timeStr ? `<div class="observation-time">${timeStr}</div>` : ''}
+                </div>
+            `;
+        }).join('');
+    }
+
     renderToolCalls(events) {
         if (!events || events.length === 0) return;
 
@@ -257,18 +380,18 @@ class Dashboard {
         }
 
         container.innerHTML = recentCalls.map(call => {
-            const time = new Date(call.timestamp).toLocaleTimeString('en-US', { 
-                hour: '2-digit', 
-                minute: '2-digit', 
-                second: '2-digit' 
+            const time = new Date(call.timestamp).toLocaleTimeString('en-US', {
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit'
             });
-            
-            const statusClass = call.status === 'success' ? 'success' : 
-                               (call.status === 'failed' ? 'failed' : 'pending');
-            const statusIconClass = call.status === 'success' ? 'tool-status-success' : 
-                                   (call.status === 'failed' ? 'tool-status-failed' : 'tool-status-pending');
-            const statusIcon = call.status === 'success' ? '✓' : 
-                              (call.status === 'failed' ? '✗' : '⏳');
+
+            const statusClass = call.status === 'success' ? 'success' :
+                (call.status === 'failed' ? 'failed' : 'pending');
+            const statusIconClass = call.status === 'success' ? 'tool-status-success' :
+                (call.status === 'failed' ? 'tool-status-failed' : 'tool-status-pending');
+            const statusIcon = call.status === 'success' ? '✓' :
+                (call.status === 'failed' ? '✗' : '⏳');
 
             let durationText = '';
             if (call.duration !== null) {
@@ -304,14 +427,19 @@ class Dashboard {
         if (!events || events.length === 0) return;
 
         // Filter out tool_use events - they're shown in the sidebar
-        const meaningfulEvents = events.filter(e => 
-            e.type !== 'tool_use_start' && 
+        const meaningfulEvents = events.filter(e =>
+            e.type !== 'tool_use_start' &&
             e.type !== 'tool_use_complete'
         );
 
         const container = document.getElementById('events-container');
         if (meaningfulEvents.length === 0) {
-            container.innerHTML = '<div class="empty-state">No activity yet</div>';
+            // Check if research has started (session exists)
+            const hasSession = events && events.length > 0;
+            const message = hasSession ?
+                'Starting research...' :
+                'No activity yet';
+            container.innerHTML = `<div class="empty-state">${message}</div>`;
             return;
         }
 
@@ -392,6 +520,19 @@ class Dashboard {
                     ? ` ${(event.data.duration_ms / 1000).toFixed(1)}s`
                     : '';
                 return `✓ ${event.data.agent}${duration}${agentCost}`;
+            case 'system_observation':
+                const severityIcon = {
+                    critical: '🔴',
+                    warning: '⚠️',
+                    info: 'ℹ️'
+                }[event.data?.severity] || '•';
+                const component = event.data?.component || 'system';
+                const observation = event.data?.observation || 'System observation';
+                // Truncate long observations for display
+                const truncObs = observation.length > 80 ?
+                    observation.substring(0, 80) + '...' :
+                    observation;
+                return `${severityIcon} [${component}] ${truncObs}`;
             default:
                 return `• ${event.type}`;
         }

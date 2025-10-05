@@ -1,0 +1,8 @@
+{
+  "name": "synthesis-agent",
+  "description": "Use after research phase completes. Consolidates knowledge graph into a coherent, well-structured final report",
+  "tools": [
+    "Read"
+  ],
+  "model": "claude-sonnet-4-5"
+}

@@ -1060,9 +1060,9 @@ unset DELVE_SECURITY_PROFILE
 
 **If option is missing**:
 
-- Check if it's in `internal_docs/roadmap.md` (v0.2 feature)
+- Feature may be planned for a future release
 - Use workaround if available
-- Contact support if critical
+- Check GitHub issues or open a new one if critical
 
 ---
 

@@ -71,6 +71,11 @@ generate_dashboard_metrics() {
     local active_agents
     active_agents=$(echo "$tq" | jq -c '[.tasks[]? | select(.status == "in_progress") | .agent] | unique')
     
+    # Get system observations (last 20, most recent first)
+    local observations
+    observations=$(cat "$session_dir/events.jsonl" 2>/dev/null | \
+        jq -s 'map(select(.type == "system_observation")) | .[-20:] | reverse' 2>/dev/null || echo '[]')
+    
     # Build metrics JSON
     jq -n \
         --arg updated "$(date -u +"%Y-%m-%dT%H:%M:%SZ")" \
@@ -89,6 +94,7 @@ generate_dashboard_metrics() {
         --argjson total_cost "$total_cost" \
         --argjson elapsed "$elapsed_seconds" \
         --argjson agents "$active_agents" \
+        --argjson observations "$observations" \
         '{
             last_updated: $updated,
             iteration: $iter,
@@ -116,6 +122,9 @@ generate_dashboard_metrics() {
             runtime: {
                 elapsed_seconds: $elapsed,
                 active_agents: $agents
+            },
+            system_health: {
+                observations: $observations
             }
         }' > "$metrics_file"
 }

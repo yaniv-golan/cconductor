@@ -1,0 +1,9 @@
+{
+  "name": "web-researcher",
+  "description": "Use for web-based research tasks. Performs targeted web searches and extracts factual information with proper citations",
+  "tools": [
+    "WebSearch",
+    "WebFetch"
+  ],
+  "model": "claude-sonnet-4-5"
+}

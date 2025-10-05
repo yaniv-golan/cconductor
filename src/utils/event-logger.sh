@@ -120,3 +120,11 @@ get_recent_events() {
     tail -n "$count" "$session_dir/events.jsonl" | jq -s '.'
 }
 
+# Export functions for use in subprocesses
+export -f log_event
+export -f log_iteration_start
+export -f log_iteration_complete
+export -f log_agent_invocation
+export -f log_agent_result
+export -f init_events
+export -f get_recent_events

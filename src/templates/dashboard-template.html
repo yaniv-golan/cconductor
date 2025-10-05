@@ -174,8 +174,15 @@
         }
 
         @keyframes pulse-border {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0.6; }
+
+            0%,
+            100% {
+                opacity: 1;
+            }
+
+            50% {
+                opacity: 0.6;
+            }
         }
 
         .tool-header {
@@ -303,6 +310,111 @@
             padding: 40px;
             color: #666;
         }
+
+        /* System Health Observations */
+        .observation-item {
+            padding: 12px;
+            margin-bottom: 8px;
+            background: rgba(255, 255, 255, 0.03);
+            border-radius: 6px;
+            font-size: 12px;
+            border-left: 4px solid;
+        }
+
+        .observation-item.critical {
+            border-left-color: #ef4444;
+            background: rgba(239, 68, 68, 0.1);
+        }
+
+        .observation-item.warning {
+            border-left-color: #f59e0b;
+            background: rgba(245, 158, 11, 0.1);
+        }
+
+        .observation-item.info {
+            border-left-color: #3b82f6;
+            background: rgba(59, 130, 246, 0.1);
+        }
+
+        .observation-header {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 6px;
+            font-weight: 600;
+        }
+
+        .observation-component {
+            font-size: 10px;
+            padding: 2px 6px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 3px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .observation-text {
+            line-height: 1.4;
+            opacity: 0.9;
+            margin-bottom: 4px;
+        }
+
+        .observation-suggestion {
+            font-size: 11px;
+            font-style: italic;
+            opacity: 0.7;
+        }
+
+        .observation-time {
+            margin-top: 6px;
+            font-size: 10px;
+            opacity: 0.5;
+        }
+
+        /* Completion Banner */
+        .completion-banner {
+            margin: 0 0 20px 0;
+            padding: 20px;
+            border-radius: 8px;
+            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+            border: 2px solid #34d399;
+            display: none;
+        }
+
+        .completion-banner.show {
+            display: block;
+        }
+
+        .completion-banner.error {
+            background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+            border-color: #f87171;
+        }
+
+        .completion-banner h2 {
+            margin: 0 0 10px 0;
+            font-size: 1.4em;
+        }
+
+        .completion-banner p {
+            margin: 5px 0;
+            opacity: 0.95;
+        }
+
+        .completion-banner .report-link {
+            display: inline-block;
+            margin-top: 12px;
+            padding: 10px 20px;
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 6px;
+            text-decoration: none;
+            color: white;
+            font-weight: 600;
+            transition: all 0.3s;
+        }
+
+        .completion-banner .report-link:hover {
+            background: rgba(255, 255, 255, 0.3);
+        }
     </style>
 </head>
 
@@ -314,6 +426,14 @@
                 <span id="session-title">Delve Research Dashboard</span>
             </h1>
             <div class="question" id="research-question">Loading...</div>
+        </div>
+
+        <!-- Completion Banner -->
+        <div id="completion-banner" class="completion-banner">
+            <h2 id="completion-title">✅ Research Complete!</h2>
+            <p id="completion-message"></p>
+            <a id="completion-report-link" class="report-link" href="research-report.md" target="_blank"
+                style="display:none;">📄 View Final Report</a>
         </div>
 
         <div class="grid">
@@ -370,6 +490,13 @@
             </div>
 
             <div class="sidebar">
+                <div class="panel">
+                    <div class="panel-title">🩺 System Health</div>
+                    <div id="health-container">
+                        <div class="empty-state">No issues detected</div>
+                    </div>
+                </div>
+
                 <div class="panel">
                     <div class="panel-title">🔧 Live Tools</div>
                     <div id="tools-container">

@@ -1,0 +1,4 @@
+{
+  "name": "pdf-analyzer",
+  "description": "Use for deep analysis of PDF documents. Extracts structure, content, figures, and metadata from academic papers and technical documents"
+}

@@ -33,9 +33,23 @@ logs/
 config/*.json
 !config/*.default.json
 
-memory-bank/activeContext.md
-memory-bank/productContext.md
-memory-bank/progress.md
-memory-bank/projectbrief.md
-memory-bank/systemPatterns.md
-memory-bank/techContext.md
+# AI assistant memory/context (internal only, not for repo)
+memory-bank/
+
+# Generated reports (test outputs, not documentation)
+reports/
+
+# POC and experimental directories
+poc-subagent/
+test-json-format-only/
+
+# Temporary fix/debug scripts
+fix-agent-json*.sh
+fix-json-multiline.py
+rebuild-agent-json.py
+test-all-agents.sh
+test-phase0-simple.sh
+
+# Backup files
+*-backup-*/
+*.backup-*

@@ -80,9 +80,29 @@ bash --version  # 4.0 or higher
 jq --version
 curl --version
 
+# Development tools (required for contributing)
+shellcheck --version  # For linting shell scripts
+
 # Optional but recommended
 python3 --version
 ```
+
+### Installing Development Tools
+
+**ShellCheck** (required for pre-commit hooks and CI):
+
+```bash
+# macOS
+brew install shellcheck
+
+# Ubuntu/Debian
+sudo apt-get install shellcheck
+
+# From source (all platforms)
+# Download from: https://github.com/koalaman/shellcheck/releases
+```
+
+**Note**: Our CI uses ShellCheck stable version. Install the latest stable version to match CI behavior.
 
 ### Getting Started
 
@@ -178,6 +198,26 @@ local files=("$@")
 # Run specific test
 ./tests/test-simple-query.sh
 ```
+
+### Linting
+
+Before committing, ensure your code passes ShellCheck:
+
+```bash
+# Lint a specific file
+shellcheck path/to/script.sh
+
+# Lint all shell scripts (what CI does)
+find . -name "*.sh" -type f -not -path "./.history/*" -not -path "./.git/*" | while read -r file; do
+    shellcheck "$file" || exit 1
+done
+
+# Pre-commit hook runs automatically
+# To test it manually:
+.git/hooks/pre-commit
+```
+
+**Pre-commit Hook**: The repository includes a pre-commit hook that automatically runs ShellCheck on all shell scripts. This hook runs automatically when you commit, ensuring code quality.
 
 ### Writing Tests
 

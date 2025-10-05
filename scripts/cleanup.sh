@@ -17,12 +17,15 @@ kill_processes() {
     echo "→ Checking for running processes..."
     
     # Find Delve processes
+    # shellcheck disable=SC2155,SC2009  # Combined declaration+assignment is intentional, ps+grep is portable
     local delve_pids=$(ps aux | grep -E "[d]elve|[D]ELVE" | awk '{print $2}' || true)
     
     # Find Claude processes
+    # shellcheck disable=SC2155,SC2009
     local claude_pids=$(ps aux | grep "[c]laude" | grep -v "claude-runtime" | awk '{print $2}' || true)
     
     # Find HTTP server processes (from dashboard)
+    # shellcheck disable=SC2155,SC2009
     local http_pids=$(ps aux | grep "[p]ython.*http.server" | awk '{print $2}' || true)
     
     local killed=0
@@ -110,15 +113,20 @@ clean_temp_files() {
     fi
     
     # Remove any backup files
+    # shellcheck disable=SC2155  # Combined declaration is intentional
     local backup_count=$(find . -name "*.backup" -o -name "*.bak" -o -name "*~" 2>/dev/null | wc -l | tr -d ' ')
     if [ "$backup_count" -gt 0 ]; then
-        find . -name "*.backup" -o -name "*.bak" -o -name "*~" -delete 2>/dev/null || true
+        # shellcheck disable=SC2146  # Delete each pattern separately
+        find . -name "*.backup" -delete 2>/dev/null || true
+        find . -name "*.bak" -delete 2>/dev/null || true
+        find . -name "*~" -delete 2>/dev/null || true
         echo "  ✓ Removed $backup_count backup file(s)"
         cleaned=$((cleaned + backup_count))
     fi
     
     # Clean old logs (if logs directory exists and has .log files)
     if [ -d "logs" ]; then
+        # shellcheck disable=SC2155  # Combined declaration is intentional
         local log_count=$(find logs -name "*.log" 2>/dev/null | wc -l | tr -d ' ')
         if [ "$log_count" -gt 0 ]; then
             read -r -p "  → Delete $log_count log file(s)? [y/N] " response
@@ -153,6 +161,7 @@ show_summary() {
     
     # Check remaining processes
     local remaining_procs=0
+    # shellcheck disable=SC2009,SC2126  # ps+grep is portable, grep -c doesn't work here
     remaining_procs=$(ps aux | grep -E "[d]elve|[c]laude|[p]ython.*http.server" | wc -l | tr -d ' ')
     
     echo "  Sessions remaining: $remaining_sessions"

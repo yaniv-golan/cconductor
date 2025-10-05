@@ -295,6 +295,7 @@ EOF
     fi
     
     # Strip markdown code fences if present (```json ... ```)
+    # shellcheck disable=SC2016  # Single quotes intentional for sed pattern
     result_json=$(echo "$result_json" | sed '/^```json$/d; /^```$/d')
     
     # Parse the JSON string and extract initial_tasks
@@ -600,17 +601,92 @@ run_coordinator() {
     local completed_tasks
     completed_tasks=$(tq_get_completed "$session_dir")
 
-    # Get new findings since last coordinator run
+    # Get NEW findings from tasks completed THIS iteration only (prevent duplicates)
+    local iteration_start_file="$session_dir/.iteration-$iteration-start"
+    local cutoff_time=""
+    if [ -f "$iteration_start_file" ]; then
+        cutoff_time=$(cat "$iteration_start_file")
+    fi
+    
+    # Filter completed tasks to only those completed after iteration started
+    local new_completed_tasks
+    if [ -n "$cutoff_time" ]; then
+        new_completed_tasks=$(echo "$completed_tasks" | jq --arg cutoff "$cutoff_time" \
+            '[.[] | select(.completed_at >= $cutoff)]')
+    else
+        # Fallback: if no cutoff time, use all completed tasks (iteration 1)
+        new_completed_tasks="$completed_tasks"
+    fi
+    
+    # Count findings for logging (currently unused but kept for future debugging)
+    local findings_count
+    # shellcheck disable=SC2034
+    findings_count=$(echo "$new_completed_tasks" | jq 'length')
+    
+    # Extract and parse findings from new completions only
+    # Deduplicate by findings_file (multiple tasks may share same output file)
     local new_findings='[]'
+    local -a seen_files  # Declare as array explicitly
     while IFS= read -r task; do
         local findings_file
         findings_file=$(echo "$task" | jq -r '.findings_file // ""')
-        if [ -n "$findings_file" ] && [ -f "$findings_file" ]; then
-            local finding
-            finding=$(cat "$findings_file")
-            new_findings=$(echo "$new_findings" | jq --argjson f "$finding" '. += [$f]')
+        
+        # Skip if we've already processed this file
+        # shellcheck disable=SC2076  # Literal match is intentional
+        if [[ " ${seen_files[*]:-} " =~ " ${findings_file} " ]]; then
+            continue
         fi
-    done <<< "$(echo "$completed_tasks" | jq -c '.[]')"
+        seen_files+=("$findings_file")
+        
+        if [ -n "$findings_file" ] && [ -f "$findings_file" ]; then
+            # Read raw agent output (contains .result as string with embedded JSON)
+            local raw_finding
+            raw_finding=$(cat "$findings_file")
+            
+            # Extract and parse the JSON from .result field
+            local result_text
+            result_text=$(echo "$raw_finding" | jq -r '.result // empty')
+            
+            if [ -n "$result_text" ]; then
+                # Strip markdown fences and extract JSON object
+                result_text=$(echo "$result_text" | sed -e 's/^```json$//' -e 's/^```$//')
+                
+                # Extract JSON using awk (find first {, print rest)
+                local parsed_json
+                parsed_json=$(echo "$result_text" | awk '/{/{found=1} found{if(!printed){sub(/^[^{]*/, ""); printed=1} print}')
+                
+                # Validate it's valid JSON
+                if echo "$parsed_json" | jq '.' >/dev/null 2>&1; then
+                    # Use the parsed JSON as the finding (not the raw API response)
+                    new_findings=$(echo "$new_findings" | jq --argjson f "$parsed_json" '. += [$f]')
+                else
+                    echo "⚠️  Warning: Could not parse JSON from findings file: $findings_file" >&2
+                    # Fallback: try Python regex extraction
+                    # shellcheck disable=SC2015  # && { pattern is intentional for success handling
+                    parsed_json=$(python3 -c "
+import sys, re, json
+text = '''$result_text'''
+match = re.search(r'\{.*\}', text, re.DOTALL)
+if match:
+    try:
+        obj = json.loads(match.group(0))
+        print(json.dumps(obj))
+        sys.exit(0)
+    except:
+        pass
+sys.exit(1)
+" 2>/dev/null) && {
+                        new_findings=$(echo "$new_findings" | jq --argjson f "$parsed_json" '. += [$f]')
+                        echo "  ✓ Extracted JSON using fallback method" >&2
+                    } || {
+                        echo "  ✗ Skipping invalid finding" >&2
+                    }
+                fi
+            else
+                echo "⚠️  Warning: No .result field in findings file: $findings_file" >&2
+            fi
+        fi
+    done <<< "$(echo "$new_completed_tasks" | jq -c '.[]')"
 
     # Build input files context if present
     local input_context
@@ -709,9 +785,14 @@ add_coordinator_tasks() {
     local coordinator_output_file="$2"
 
     local new_tasks
-    new_tasks=$(cat "$coordinator_output_file" | jq '.new_tasks // []')
+    new_tasks=$(cat "$coordinator_output_file" | jq '.new_tasks // []' 2>/dev/null)
     local task_count
-    task_count=$(echo "$new_tasks" | jq 'length')
+    task_count=$(echo "$new_tasks" | jq 'length' 2>/dev/null || echo "0")
+
+    # Ensure task_count is a valid integer
+    if ! [[ "$task_count" =~ ^[0-9]+$ ]]; then
+        task_count=0
+    fi
 
     if [ "$task_count" -gt 0 ]; then
         echo "Adding $task_count new tasks to queue..."
@@ -833,7 +914,57 @@ final_synthesis() {
     local synthesis_input="$session_dir/intermediate/synthesis-input.json"
     local synthesis_output="$session_dir/research-report.json"
     
-    echo "$kg" > "$synthesis_input"
+    # Check if KG is empty (no entities, claims, or relationships)
+    local entities_count
+    entities_count=$(echo "$kg" | jq '.stats.total_entities // 0')
+    local claims_count
+    claims_count=$(echo "$kg" | jq '.stats.total_claims // 0')
+    
+    # If KG is empty or nearly empty, include raw agent findings as fallback
+    if [ "$entities_count" -lt 5 ] && [ "$claims_count" -lt 5 ]; then
+        echo "⚠️  Knowledge graph appears empty, providing raw agent findings to synthesis agent..." >&2
+        
+        # Collect all raw agent findings
+        local raw_findings='[]'
+        for findings_file in "$session_dir"/raw/*-output.json; do
+            if [ -f "$findings_file" ]; then
+                local result_text
+                result_text=$(jq -r '.result // empty' "$findings_file" 2>/dev/null)
+                
+                if [ -n "$result_text" ] && [ "$result_text" != "null" ]; then
+                    # Strip markdown fences
+                    result_text=$(echo "$result_text" | sed -e 's/^```json$//' -e 's/^```$//')
+                    
+                    # Extract JSON using awk
+                    local parsed
+                    parsed=$(echo "$result_text" | awk '/{/{found=1} found{if(!printed){sub(/^[^{]*/, ""); printed=1} print}')
+                    
+                    # Validate and add to array
+                    if echo "$parsed" | jq '.' >/dev/null 2>&1; then
+                        raw_findings=$(echo "$raw_findings" | jq --argjson f "$parsed" '. += [$f]' 2>/dev/null) || {
+                            echo "  ⚠️  Warning: Could not parse finding from $(basename "$findings_file")" >&2
+                        }
+                    fi
+                fi
+            fi
+        done
+        
+        # Combine KG and raw findings (validate before using)
+        if echo "$raw_findings" | jq '.' >/dev/null 2>&1 && echo "$kg" | jq '.' >/dev/null 2>&1; then
+            jq -n --argjson kg "$kg" --argjson findings "$raw_findings" \
+                '{knowledge_graph: $kg, raw_agent_findings: $findings, note: "Knowledge graph is empty - using raw agent findings as fallback"}' \
+                > "$synthesis_input" 2>/dev/null || {
+                    echo "  ⚠️  Warning: Could not create synthesis input with fallback, using empty KG" >&2
+                    echo "$kg" > "$synthesis_input"
+                }
+        else
+            echo "  ⚠️  Warning: Invalid JSON in raw findings or KG, using empty KG only" >&2
+            echo "$kg" > "$synthesis_input"
+        fi
+    else
+        # Normal case: KG has data
+        echo "$kg" > "$synthesis_input"
+    fi
 
     echo "→ Generating final report..."
     
@@ -880,6 +1011,11 @@ run_single_iteration() {
     # Phase 2: Log iteration start
     log_iteration_start "$session_dir" "$iteration"
     
+    # Track iteration start time (for filtering new findings later)
+    local iteration_start_time
+    iteration_start_time=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+    echo "$iteration_start_time" > "$session_dir/.iteration-$iteration-start"
+    
     # Phase 2: Update metrics immediately after iteration starts
     update_metrics "$session_dir"
 
@@ -903,28 +1039,45 @@ run_single_iteration() {
     local coordinator_output
     coordinator_output=$(run_coordinator "$session_dir" "$iteration")
     local coordinator_file="$session_dir/intermediate/coordinator-output-${iteration}.json"
+    
+    # Save coordinator output to file
+    echo "$coordinator_output" > "$coordinator_file"
+    
     echo "  ✓ Coordinator analysis complete"
     echo ""
     
     # Extract and clean coordinator result (strip markdown fences and text before JSON)
     local coordinator_cleaned="$session_dir/intermediate/coordinator-cleaned-${iteration}.json"
     local raw_result
-    raw_result=$(jq -r '.result // empty' "$coordinator_file")
+    raw_result=$(jq -r '.result // empty' "$coordinator_file" 2>/dev/null)
     
-    # Strip markdown code fences
-    raw_result=$(echo "$raw_result" | sed -e 's/^```json$//' -e 's/^```$//')
-    
-    # Extract JSON object using awk (more reliable for removing text before {)
-    # Finds first line with {, removes any text before { on that line, prints rest
-    echo "$raw_result" | awk '/{/{found=1} found{if(!printed){sub(/^[^{]*/, ""); printed=1} print}' > "$coordinator_cleaned"
-    
-    # Validate cleaned JSON
-    if ! jq '.' "$coordinator_cleaned" >/dev/null 2>&1; then
-        echo "⚠️  Warning: Initial JSON extraction failed" >&2
-        echo "Attempting aggressive extraction..." >&2
+    # Check if we got anything
+    if [ -z "$raw_result" ] || [ "$raw_result" = "null" ]; then
+        echo "⚠️  Warning: No .result field in coordinator output" >&2
+        # Try reading the file directly (might be already JSON)
+        if jq '.' "$coordinator_file" >/dev/null 2>&1; then
+            cp "$coordinator_file" "$coordinator_cleaned"
+        else
+            echo "  ✗ Coordinator output is not valid JSON" >&2
+            echo "Coordinator file contents:" >&2
+            head -30 "$coordinator_file" >&2
+            return 1
+        fi
+    else
+        # Strip markdown code fences
+        raw_result=$(echo "$raw_result" | sed -e 's/^```json$//' -e 's/^```$//')
         
-        # Fallback: Extract from first { to last } using Python (most reliable)
-        python3 -c "
+        # Extract JSON object using awk (more reliable for removing text before {)
+        # Finds first line with {, removes any text before { on that line, prints rest
+        echo "$raw_result" | awk '/{/{found=1} found{if(!printed){sub(/^[^{]*/, ""); printed=1} print}' > "$coordinator_cleaned"
+        
+        # Validate cleaned JSON
+        if ! jq '.' "$coordinator_cleaned" >/dev/null 2>&1; then
+            echo "⚠️  Warning: Initial JSON extraction failed" >&2
+            echo "Attempting aggressive extraction..." >&2
+            
+            # Fallback: Extract from first { to last } using Python (most reliable)
+            python3 -c "
 import sys, re
 text = sys.stdin.read()
 match = re.search(r'\{.*\}', text, re.DOTALL)
@@ -933,22 +1086,63 @@ if match:
 else:
     sys.exit(1)
 " <<< "$raw_result" > "$coordinator_cleaned" 2>/dev/null || {
-            echo "  ✗ Could not extract JSON object" >&2
-            echo "Raw result (first 30 lines):" >&2
-            echo "$raw_result" | head -30 >&2
-            return 1
-        }
-        
-        # Re-validate
-        if ! jq '.' "$coordinator_cleaned" >/dev/null 2>&1; then
-            echo "  ✗ Extracted text is not valid JSON" >&2
-            return 1
+                echo "  ✗ Could not extract JSON object" >&2
+                echo "Raw result (first 30 lines):" >&2
+                echo "$raw_result" | head -30 >&2
+                return 1
+            }
+            
+            # Re-validate
+            if ! jq '.' "$coordinator_cleaned" >/dev/null 2>&1; then
+                echo "  ✗ Extracted text is not valid JSON" >&2
+                return 1
+            fi
+            echo "  ✓ Successfully extracted JSON using fallback" >&2
         fi
-        echo "  ✓ Successfully extracted JSON using fallback" >&2
     fi
     
     # Phase 2: Update metrics after coordinator
     update_metrics "$session_dir"
+
+    # Phase 2.1: Extract and log system observations
+    local observations
+    observations=$(jq '.system_observations // []' "$coordinator_cleaned" 2>/dev/null)
+    if [ "$observations" != "[]" ] && [ "$observations" != "null" ]; then
+        local obs_count
+        obs_count=$(echo "$observations" | jq 'length')
+        echo "→ Processing $obs_count system observation(s)..."
+        
+        # Log each observation
+        echo "$observations" | jq -c '.[]' | while read -r obs; do
+            local severity
+            severity=$(echo "$obs" | jq -r '.severity // "info"')
+            local component
+            component=$(echo "$obs" | jq -r '.component // "unknown"')
+            local observation_text
+            observation_text=$(echo "$obs" | jq -r '.observation // "No description"')
+            
+            # Log to events.jsonl
+            if command -v log_event &>/dev/null; then
+                log_event "$session_dir" "system_observation" "$obs" || true
+            fi
+            
+            # Display with appropriate symbol
+            case "$severity" in
+                critical)
+                    echo "  🔴 CRITICAL [$component]: $observation_text" >&2
+                    ;;
+                warning)
+                    echo "  ⚠️  WARNING [$component]: $observation_text" >&2
+                    ;;
+                info)
+                    echo "  ℹ️  INFO [$component]: $observation_text" >&2
+                    ;;
+                *)
+                    echo "  • [$component]: $observation_text" >&2
+                    ;;
+            esac
+        done
+    fi
 
     # Update knowledge graph with coordinator findings
     echo "→ Updating knowledge graph..."

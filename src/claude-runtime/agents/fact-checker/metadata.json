@@ -1,0 +1,4 @@
+{
+  "name": "fact-checker",
+  "description": "Use for validation. Verifies claims from knowledge graph, cross-references with authoritative sources, and assesses data quality"
+}

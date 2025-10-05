@@ -9,6 +9,7 @@ Utility scripts for maintenance and development.
 Comprehensive cleanup script for Delve development and testing.
 
 **Usage:**
+
 ```bash
 ./scripts/cleanup.sh
 ```
@@ -31,11 +32,13 @@ Comprehensive cleanup script for Delve development and testing.
    - Log files (with confirmation)
 
 **Interactive:**
+
 - Asks for confirmation before deleting sessions and logs
 - Shows summary of what was cleaned
 - Safe to run anytime
 
 **Example Output:**
+
 ```
 ╔═══════════════════════════════════════════════════════════╗
 ║            DELVE - CLEANUP SCRIPT                         ║
@@ -72,6 +75,7 @@ Comprehensive cleanup script for Delve development and testing.
 Generates SHA256 checksums for distribution files.
 
 **Usage:**
+
 ```bash
 ./scripts/generate-checksums.sh
 ```
@@ -83,6 +87,7 @@ Generates SHA256 checksums for distribution files.
 Verifies version consistency across files.
 
 **Usage:**
+
 ```bash
 ./scripts/verify-version.sh
 ```
@@ -99,4 +104,3 @@ When adding new scripts:
 4. Document in this README
 5. Use `set -e` for safety
 6. Include usage instructions in script comments
-
