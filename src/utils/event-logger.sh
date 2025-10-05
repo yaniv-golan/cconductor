@@ -9,15 +9,56 @@ log_event() {
     local event_data="$3"  # JSON string
     
     local events_file="$session_dir/events.jsonl"
+    local lock_file="$session_dir/.events.lock"
     local timestamp
-    timestamp=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
     
-    jq -n -c \
-        --arg ts "$timestamp" \
-        --arg type "$event_type" \
-        --argjson data "$event_data" \
-        '{timestamp: $ts, type: $type, data: $data}' \
-        >> "$events_file"
+    # Use microseconds for precision (avoids ID collisions)
+    # Try %N (nanoseconds) if supported (GNU date), otherwise use random suffix
+    if date +%N &>/dev/null 2>&1 && [[ "$(date +%N 2>/dev/null)" =~ ^[0-9]+$ ]]; then
+        # GNU date (Linux) - has nanosecond precision
+        local nanos
+        nanos=$(date +%N)
+        local micros=$(( nanos / 1000 ))
+        timestamp=$(date -u +"%Y-%m-%dT%H:%M:%S").${micros}Z
+    else
+        # BSD date (macOS) - use RANDOM for uniqueness within same second
+        # RANDOM gives 0-32767, pad to 6 digits
+        local rand_suffix
+        rand_suffix=$(printf "%06d" $((RANDOM * 1000 + RANDOM)))
+        timestamp=$(date -u +"%Y-%m-%dT%H:%M:%S").${rand_suffix}Z
+    fi
+    
+    # Use atomic mkdir for locking (portable, works on all platforms)
+    # Wait up to 5 seconds for lock
+    local start_time
+    start_time=$(date +%s)
+    local timeout=5
+    
+    while true; do
+        if mkdir "$lock_file" 2>/dev/null; then
+            # Lock acquired - write event
+            jq -n -c \
+                --arg ts "$timestamp" \
+                --arg type "$event_type" \
+                --argjson data "$event_data" \
+                '{timestamp: $ts, type: $type, data: $data}' \
+                >> "$events_file"
+            
+            # Release lock
+            rmdir "$lock_file" 2>/dev/null || true
+            return 0
+        fi
+        
+        # Check timeout
+        local elapsed
+        elapsed=$(($(date +%s) - start_time))
+        if [ "$elapsed" -ge "$timeout" ]; then
+            echo "Warning: Failed to acquire lock for event logging after ${timeout}s" >&2
+            return 1
+        fi
+        
+        sleep 0.05
+    done
 }
 
 # Convenience wrappers for common events

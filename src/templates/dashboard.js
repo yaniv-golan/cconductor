@@ -5,6 +5,8 @@ class Dashboard {
         this.expandedEvents = new Set(); // Track expanded event indices
         this.knownTaskIds = new Set(); // Track tasks we've seen before
         this.newTaskIds = new Set(); // Track newly added tasks
+        this.runtimeInterval = null; // Track runtime interval to avoid duplicates
+        this.sessionStartTime = null; // Cache session start time
     }
 
     async init() {
@@ -47,13 +49,62 @@ class Dashboard {
             const response = await fetch(file);
             if (!response.ok) return [];
             const text = await response.text();
-            return text.trim().split('\n')
-                .filter(line => line.trim())
-                .map(line => JSON.parse(line));
+            
+            const lines = text.trim().split('\n').filter(line => line.trim());
+            const parsed = [];
+            let corruptedCount = 0;
+            
+            // Parse line-by-line, skip corrupted lines instead of failing entirely
+            lines.forEach((line, index) => {
+                try {
+                    parsed.push(JSON.parse(line));
+                } catch (error) {
+                    corruptedCount++;
+                    console.warn(`Corrupted JSONL line ${index + 1} in ${file}:`, line.substring(0, 100), error);
+                }
+            });
+            
+            // Show warning banner if corruption detected
+            if (corruptedCount > 0) {
+                this.showCorruptionWarning(file, corruptedCount, lines.length);
+            }
+            
+            return parsed;
         } catch (error) {
             console.error(`Error fetching ${file}:`, error);
             return [];
         }
+    }
+    
+    showCorruptionWarning(file, corruptedCount, totalLines) {
+        const warningId = 'jsonl-corruption-warning';
+        let warning = document.getElementById(warningId);
+        
+        if (!warning) {
+            warning = document.createElement('div');
+            warning.id = warningId;
+            warning.style.cssText = `
+                position: fixed;
+                top: 20px;
+                right: 20px;
+                background: #fbbf24;
+                color: #92400e;
+                padding: 15px 20px;
+                border-radius: 8px;
+                box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+                z-index: 9999;
+                max-width: 400px;
+                font-size: 13px;
+                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            `;
+            document.body.appendChild(warning);
+        }
+        
+        warning.innerHTML = `
+            <strong>⚠️ Data Corruption Detected</strong><br>
+            ${corruptedCount} of ${totalLines} events in ${file} are corrupted.<br>
+            <span style="font-size: 11px; opacity: 0.8;">Showing ${totalLines - corruptedCount} valid events.</span>
+        `;
     }
 
     renderHeader(session) {
@@ -83,8 +134,9 @@ class Dashboard {
         // Show completion banner if research is complete
         this.renderCompletionStatus(session);
 
-        // Start live runtime counter
-        if (session.created_at) {
+        // Start live runtime counter (only once, not on every refresh)
+        if (session.created_at && !this.sessionStartTime) {
+            this.sessionStartTime = session.created_at;
             this.startLiveRuntime(session.created_at);
         }
     }
@@ -158,15 +210,20 @@ class Dashboard {
         // Update immediately
         updateRuntime();
 
-        // Update every second for live feel
-        if (this.runtimeInterval) {
-            clearInterval(this.runtimeInterval);
-        }
+        // Only create interval once (it's already checked in renderHeader)
+        // This function is now only called once per session
         this.runtimeInterval = setInterval(updateRuntime, 1000);
     }
 
     renderStats(metrics) {
-        if (!metrics) return;
+        if (!metrics) {
+            // Show loading indicator if metrics don't exist yet
+            this.showLoadingState();
+            return;
+        }
+        
+        // Remove loading indicator if it exists
+        this.hideLoadingState();
 
         document.getElementById('stat-iteration').textContent = metrics.iteration || 0;
         document.getElementById('stat-confidence').textContent =
@@ -182,6 +239,29 @@ class Dashboard {
 
         // Runtime is now calculated dynamically in startLiveRuntime() for live updates
         // No need to set it here - it updates every second automatically
+    }
+    
+    showLoadingState() {
+        const statElements = [
+            'stat-iteration',
+            'stat-confidence', 
+            'stat-entities',
+            'stat-claims',
+            'stat-cost',
+            'stat-cost-per-iter'
+        ];
+        
+        statElements.forEach(id => {
+            const el = document.getElementById(id);
+            if (el && el.textContent === '0' || el.textContent === '0%' || el.textContent === '0.00') {
+                el.innerHTML = '<span style="opacity: 0.5; font-size: 0.8em;">...</span>';
+            }
+        });
+    }
+    
+    hideLoadingState() {
+        // Loading state is automatically hidden when real values are set
+        // No action needed
     }
 
     renderTasks(tasks) {
@@ -343,6 +423,7 @@ class Dashboard {
         // Filter for tool use events and group by tool_use_start
         const toolCalls = [];
         const toolStarts = events.filter(e => e.type === 'tool_use_start');
+        const usedCompleteEvents = new Set(); // Track which complete events we've matched
 
         // For each tool start, find its corresponding complete event
         toolStarts.forEach(startEvent => {
@@ -350,16 +431,36 @@ class Dashboard {
             const agent = startEvent.data.agent || 'unknown';
             const summary = startEvent.data.input_summary || '';
             const timestamp = startEvent.timestamp;
+            const startTime = new Date(timestamp).getTime();
 
-            // Find corresponding complete event (within 60s)
-            const completeEvent = events.find(e =>
-                e.type === 'tool_use_complete' &&
-                e.data.tool === tool &&
-                Math.abs(new Date(e.timestamp) - new Date(timestamp)) < 60000
-            );
+            // Find corresponding complete event
+            // Match by: same tool, not yet used, within 60s, closest timestamp
+            let bestMatch = null;
+            let bestTimeDiff = Infinity;
+            
+            events.forEach((e, index) => {
+                if (e.type === 'tool_use_complete' &&
+                    e.data.tool === tool &&
+                    !usedCompleteEvents.has(index)) {
+                    
+                    const completeTime = new Date(e.timestamp).getTime();
+                    const timeDiff = completeTime - startTime;
+                    
+                    // Complete event should be after start, within 60s, and closest
+                    if (timeDiff >= 0 && timeDiff < 60000 && timeDiff < bestTimeDiff) {
+                        bestMatch = { event: e, index };
+                        bestTimeDiff = timeDiff;
+                    }
+                }
+            });
 
-            const duration = completeEvent ? completeEvent.data.duration_ms : null;
-            const status = completeEvent ? completeEvent.data.status : 'pending';
+            // Mark the matched complete event as used
+            if (bestMatch) {
+                usedCompleteEvents.add(bestMatch.index);
+            }
+
+            const duration = bestMatch ? bestMatch.event.data.duration_ms : null;
+            const status = bestMatch ? bestMatch.event.data.status : 'pending';
 
             toolCalls.push({
                 timestamp,

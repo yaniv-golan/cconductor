@@ -51,12 +51,34 @@ event_data=$(jq -n \
 
 # Log to events.jsonl if session directory is available
 if [ -n "$session_dir" ] && [ -d "$session_dir" ]; then
-    echo "$hook_data" | jq -c \
-        --arg ts "$timestamp" \
-        --arg type "tool_use_complete" \
-        --argjson data "$event_data" \
-        '{timestamp: $ts, type: $type, data: $data}' \
-        >> "$session_dir/events.jsonl" 2>/dev/null || true
+    # Use atomic mkdir for locking (portable, works on all platforms)
+    lock_file="$session_dir/.events.lock"
+    start_time=$(date +%s)
+    timeout=5
+    
+    while true; do
+        if mkdir "$lock_file" 2>/dev/null; then
+            # Lock acquired - write event
+            echo "$hook_data" | jq -c \
+                --arg ts "$timestamp" \
+                --arg type "tool_use_complete" \
+                --argjson data "$event_data" \
+                '{timestamp: $ts, type: $type, data: $data}' \
+                >> "$session_dir/events.jsonl" 2>/dev/null
+            
+            # Release lock
+            rmdir "$lock_file" 2>/dev/null || true
+            break
+        fi
+        
+        # Check timeout - but don't fail hook if lock times out
+        elapsed=$(($(date +%s) - start_time))
+        if [ "$elapsed" -ge "$timeout" ]; then
+            break
+        fi
+        
+        sleep 0.05
+    done
 fi
 
 # Print to stdout for real-time visibility

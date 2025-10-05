@@ -2,29 +2,34 @@
 # Dashboard Metrics - Pre-computed metrics for dashboard
 set -euo pipefail
 
+# Get script directory for sourcing shared-state
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck disable=SC1091
+source "$SCRIPT_DIR/../shared-state.sh"
+
 # Generate dashboard metrics
 generate_dashboard_metrics() {
     local session_dir="$1"
     local metrics_file="$session_dir/dashboard-metrics.json"
     
-    # Read current state directly from files
+    # Read current state from files with locking to prevent partial reads
     local kg
     if [ -f "$session_dir/knowledge-graph.json" ]; then
-        kg=$(cat "$session_dir/knowledge-graph.json")
+        kg=$(atomic_read "$session_dir/knowledge-graph.json" 2>/dev/null || echo '{}')
     else
         kg='{}'
     fi
     
     local tq
     if [ -f "$session_dir/task-queue.json" ]; then
-        tq=$(cat "$session_dir/task-queue.json")
+        tq=$(atomic_read "$session_dir/task-queue.json" 2>/dev/null || echo '{}')
     else
         tq='{}'
     fi
     
     local session
     if [ -f "$session_dir/session.json" ]; then
-        session=$(cat "$session_dir/session.json")
+        session=$(atomic_read "$session_dir/session.json" 2>/dev/null || echo '{}')
     else
         session='{}'
     fi
@@ -161,11 +166,20 @@ calculate_elapsed_seconds() {
         return
     fi
     
-    # Parse UTC timestamp and get current UTC time to avoid timezone issues
+    # Platform-agnostic approach to parse ISO 8601 UTC timestamp
     local start_epoch
-    start_epoch=$(date -ju -f "%Y-%m-%dT%H:%M:%SZ" "$start_time" +%s 2>/dev/null || echo "0")
     local now_epoch
-    now_epoch=$(date -ju +%s)
+    
+    # Detect OS type
+    if [[ "$(uname -s)" == "Darwin" ]]; then
+        # macOS (BSD date) - use -j flag to not set system time
+        start_epoch=$(date -ju -f "%Y-%m-%dT%H:%M:%SZ" "$start_time" +%s 2>/dev/null || echo "0")
+        now_epoch=$(date -ju +%s)
+    else
+        # Linux (GNU date) - use -d flag for date parsing
+        start_epoch=$(date -u -d "$start_time" +%s 2>/dev/null || echo "0")
+        now_epoch=$(date -u +%s)
+    fi
     
     echo $((now_epoch - start_epoch))
 }
