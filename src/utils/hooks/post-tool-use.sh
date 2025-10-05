@@ -31,7 +31,7 @@ else
 fi
 
 # Get session directory from environment or derive it
-session_dir="${DELVE_SESSION_DIR:-}"
+session_dir="${CCONDUCTOR_SESSION_DIR:-}"
 if [ -z "$session_dir" ]; then
     if [ -f "events.jsonl" ]; then
         session_dir=$(pwd)

@@ -14,7 +14,7 @@ QUESTION="What is the time complexity of Python's dict lookup?"
 echo "Question: $QUESTION"
 
 # Run research
-"$PROJECT_ROOT/delve" "$QUESTION"
+"$PROJECT_ROOT/cconductor" "$QUESTION"
 
 # Check outputs exist
 # Get session directory using path resolver

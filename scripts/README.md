@@ -1,4 +1,4 @@
-# Delve Scripts
+# CConductor Scripts
 
 Utility scripts for maintenance and development.
 
@@ -6,7 +6,7 @@ Utility scripts for maintenance and development.
 
 ### `cleanup.sh`
 
-Comprehensive cleanup script for Delve development and testing.
+Comprehensive cleanup script for CConductor development and testing.
 
 **Usage:**
 
@@ -17,7 +17,7 @@ Comprehensive cleanup script for Delve development and testing.
 **What it cleans:**
 
 1. **Processes**
-   - Delve processes
+   - CConductor processes
    - Claude CLI processes
    - HTTP server processes (from dashboard)
 
@@ -41,7 +41,7 @@ Comprehensive cleanup script for Delve development and testing.
 
 ```
 ╔═══════════════════════════════════════════════════════════╗
-║            DELVE - CLEANUP SCRIPT                         ║
+║            CCONDUCTOR - CLEANUP SCRIPT                         ║
 ╚═══════════════════════════════════════════════════════════╝
 
 → Checking for running processes...

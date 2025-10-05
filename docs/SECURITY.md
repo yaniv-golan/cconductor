@@ -15,8 +15,8 @@ Always verify checksums when installing in production:
 
 ```bash
 # Download installer and checksum
-curl -LO https://github.com/yaniv-golan/delve/releases/latest/download/install.sh
-curl -LO https://github.com/yaniv-golan/delve/releases/latest/download/install.sh.sha256
+curl -LO https://github.com/yaniv-golan/cconductor/releases/latest/download/install.sh
+curl -LO https://github.com/yaniv-golan/cconductor/releases/latest/download/install.sh.sha256
 
 # Verify integrity
 sha256sum -c install.sh.sha256
@@ -30,8 +30,8 @@ bash install.sh
 All release artifacts include SHA256 checksums:
 
 - `install.sh.sha256` - Installer checksum
-- `delve.sha256` - Main script checksum
-- `delve-v{version}.tar.gz.sha256` - Archive checksum
+- `cconductor.sha256` - Main script checksum
+- `cconductor-v{version}.tar.gz.sha256` - Archive checksum
 - `CHECKSUMS.txt` - Combined checksums file
 
 Verify any downloaded artifact before use:
@@ -42,7 +42,7 @@ sha256sum -c <file>.sha256
 
 ## Update Security
 
-Delve's update checker:
+CConductor's update checker:
 
 - ✅ Only queries GitHub API over HTTPS
 - ✅ Never sends telemetry or usage data
@@ -102,7 +102,7 @@ To disable update checks:
 
 1. **Installer requires curl** - Users must trust curl downloads over HTTPS
 2. **No GPG signing** - Release artifacts are not GPG signed (planned for v1.0)
-3. **Bash required** - Vulnerabilities in bash affect Delve
+3. **Bash required** - Vulnerabilities in bash affect CConductor
 4. **Git clone option** - Cloning from git bypasses checksum verification
 
 ## Security Features
@@ -131,7 +131,7 @@ Last audit: Not yet conducted
 ## Contact
 
 **Security Issues:** <yaniv@golan.name>  
-**General Questions:** <https://github.com/yaniv-golan/delve/discussions>
+**General Questions:** <https://github.com/yaniv-golan/cconductor/discussions>
 
 ---
 

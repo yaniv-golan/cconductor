@@ -8,7 +8,7 @@
 
 ## Overview
 
-Session continuity allows Delve's research coordinator to maintain conversation context across multiple research iterations, improving efficiency and quality.
+Session continuity allows CConductor's research coordinator to maintain conversation context across multiple research iterations, improving efficiency and quality.
 
 ### What It Does
 
@@ -55,7 +55,7 @@ Session continuity is **completely automatic**. Users don't need to do anything 
 
 ```bash
 # Same command as before
-./delve "Your research question"
+./cconductor "Your research question"
 ```
 
 The system automatically:
@@ -196,7 +196,7 @@ TOTAL: 4700 tokens (37% reduction!)
 - Cleaned up at final synthesis
 - No long-term persistence
 
-Claude's servers may expire sessions after inactivity, but this doesn't affect Delve (sessions only used during active research).
+Claude's servers may expire sessions after inactivity, but this doesn't affect CConductor (sessions only used during active research).
 
 ### Q: Does this affect research quality?
 
@@ -307,7 +307,7 @@ end_agent_session "<agent-name>" "$session_dir"
 
 ## Related Documentation
 
-- **User Guide**: `docs/USER_GUIDE.md` - General Delve usage
+- **User Guide**: `docs/USER_GUIDE.md` - General CConductor usage
 - **Validation Tests**: `validation_tests/test-13-session-continuity.sh` - Session continuity tests
 - **Troubleshooting**: `docs/TROUBLESHOOTING.md` - Common issues and solutions
 

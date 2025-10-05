@@ -1,6 +1,6 @@
-# Adding Custom Knowledge to Delve
+# Adding Custom Knowledge to CConductor
 
-**Teach Delve about your domain without coding**
+**Teach CConductor about your domain without coding**
 
 **Version**: 0.1.0  
 **Last Updated**: October 2025  
@@ -24,12 +24,12 @@
 
 ## Introduction
 
-Delve can use your own domain expertise to improve research results. No coding required - just create simple text files!
+CConductor can use your own domain expertise to improve research results. No coding required - just create simple text files!
 
 **What is custom knowledge?**
 
-- Domain expertise you add to Delve
-- Information Delve wouldn't know otherwise
+- Domain expertise you add to CConductor
+- Information CConductor wouldn't know otherwise
 - Company-specific information
 - Regional or specialized knowledge
 - Internal terminology and frameworks
@@ -46,10 +46,10 @@ Delve can use your own domain expertise to improve research results. No coding r
 **How it works**:
 
 1. Create markdown files (`.md`) in your knowledge directory
-   - **macOS**: `~/Library/Application Support/Delve/knowledge-base-custom/`
-   - **Linux**: `~/.local/share/delve/knowledge-base-custom/`
+   - **macOS**: `~/Library/Application Support/CConductor/knowledge-base-custom/`
+   - **Linux**: `~/.local/share/cconductor/knowledge-base-custom/`
 2. Write your knowledge in simple structured format
-3. Delve automatically discovers and uses it
+3. CConductor automatically discovers and uses it
 4. No configuration or code changes needed!
 
 ---
@@ -72,14 +72,14 @@ echo $KNOWLEDGE_DIR
 
 ```bash
 # macOS
-nano ~/Library/Application\ Support/Delve/knowledge-base-custom/my-company.md
+nano ~/Library/Application\ Support/CConductor/knowledge-base-custom/my-company.md
 # or
-open -a TextEdit ~/Library/Application\ Support/Delve/knowledge-base-custom/my-company.md
+open -a TextEdit ~/Library/Application\ Support/CConductor/knowledge-base-custom/my-company.md
 
 # Linux
-nano ~/.local/share/delve/knowledge-base-custom/my-company.md
+nano ~/.local/share/cconductor/knowledge-base-custom/my-company.md
 # or
-gedit ~/.local/share/delve/knowledge-base-custom/my-company.md
+gedit ~/.local/share/cconductor/knowledge-base-custom/my-company.md
 ```
 
 ### 2. Add Your Knowledge
@@ -98,7 +98,7 @@ Brief description of what this knowledge covers.
 ## Important Facts
 - Specific fact with numbers/dates
 - Another important fact
-- Key information Delve should know
+- Key information CConductor should know
 
 ## Sources
 - Where to find authoritative information
@@ -110,10 +110,10 @@ Brief description of what this knowledge covers.
 Save the file, then run research:
 
 ```bash
-./delve "question related to your domain"
+./cconductor "question related to your domain"
 ```
 
-**That's it!** Delve automatically finds and uses your knowledge.
+**That's it!** CConductor automatically finds and uses your knowledge.
 
 ---
 
@@ -254,12 +254,12 @@ for business and market research.
 **Now when you research**:
 
 ```bash
-./delve "ACME Widget competitive analysis"
-./delve "ACME Corp market position in widget automation"
-./delve "Compare ACME Widget Pro vs FastWidget Enterprise"
+./cconductor "ACME Widget competitive analysis"
+./cconductor "ACME Corp market position in widget automation"
+./cconductor "Compare ACME Widget Pro vs FastWidget Enterprise"
 ```
 
-Delve knows all about ACME products, pricing, customers, and competitive positioning!
+CConductor knows all about ACME products, pricing, customers, and competitive positioning!
 
 ---
 
@@ -657,8 +657,8 @@ Use this template for any domain:
 
 **Locations** (OS-appropriate):
 
-- **macOS**: `~/Library/Application Support/Delve/knowledge-base-custom/`
-- **Linux**: `~/.local/share/delve/knowledge-base-custom/`
+- **macOS**: `~/Library/Application Support/CConductor/knowledge-base-custom/`
+- **Linux**: `~/.local/share/cconductor/knowledge-base-custom/`
 
 **Find your exact path**:
 
@@ -676,7 +676,7 @@ knowledge-base-custom/
   technical-domain.md
 ```
 
-**Automatic discovery**: Delve finds all `.md` files in this directory
+**Automatic discovery**: CConductor finds all `.md` files in this directory
 
 ### Organizing Your Knowledge
 
@@ -716,16 +716,16 @@ knowledge-base-custom/
     apac.md
 ```
 
-**Any organization works** - Delve searches all subdirectories automatically!
+**Any organization works** - CConductor searches all subdirectories automatically!
 
 **Tip**: Use the full path when creating directories:
 
 ```bash
 # macOS
-mkdir -p ~/Library/Application\ Support/Delve/knowledge-base-custom/healthcare/
+mkdir -p ~/Library/Application\ Support/CConductor/knowledge-base-custom/healthcare/
 
 # Linux
-mkdir -p ~/.local/share/delve/knowledge-base-custom/healthcare/
+mkdir -p ~/.local/share/cconductor/knowledge-base-custom/healthcare/
 ```
 
 ---
@@ -827,15 +827,15 @@ After creating your knowledge file:
 ```bash
 # 1. Create the file (use your OS-specific path)
 # macOS:
-nano ~/Library/Application\ Support/Delve/knowledge-base-custom/test-domain.md
+nano ~/Library/Application\ Support/CConductor/knowledge-base-custom/test-domain.md
 # Linux:
-# nano ~/.local/share/delve/knowledge-base-custom/test-domain.md
+# nano ~/.local/share/cconductor/knowledge-base-custom/test-domain.md
 
 # 2. Run test research
-./delve "question about your domain"
+./cconductor "question about your domain"
 
 # 3. Check if knowledge was used
-./delve latest
+./cconductor latest
 ```
 
 ### What to Look For
@@ -867,19 +867,19 @@ In your research report:
 
    ```bash
    # macOS
-   ls ~/Library/Application\ Support/Delve/knowledge-base-custom/
+   ls ~/Library/Application\ Support/CConductor/knowledge-base-custom/
    # Should show your-file.md
    
    # Linux
-   ls ~/.local/share/delve/knowledge-base-custom/
+   ls ~/.local/share/cconductor/knowledge-base-custom/
    ```
 
 2. **File ends in .md**:
 
    ```bash
    # Use your OS-specific path
-   # macOS: ls ~/Library/Application\ Support/Delve/knowledge-base-custom/*.md
-   # Linux: ls ~/.local/share/delve/knowledge-base-custom/*.md
+   # macOS: ls ~/Library/Application\ Support/CConductor/knowledge-base-custom/*.md
+   # Linux: ls ~/.local/share/cconductor/knowledge-base-custom/*.md
    ```
 
 3. **Markdown is valid**:
@@ -896,8 +896,8 @@ In your research report:
 
    ```bash
    # Use your OS-specific path
-   # macOS: wc -l ~/Library/Application\ Support/Delve/knowledge-base-custom/your-file.md
-   # Linux: wc -l ~/.local/share/delve/knowledge-base-custom/your-file.md
+   # macOS: wc -l ~/Library/Application\ Support/CConductor/knowledge-base-custom/your-file.md
+   # Linux: wc -l ~/.local/share/cconductor/knowledge-base-custom/your-file.md
    # Should show line count > 0
    ```
 
@@ -907,7 +907,7 @@ In your research report:
 
 ### Multiple Knowledge Files
 
-Delve uses **all** files in `knowledge-base-custom/`:
+CConductor uses **all** files in `knowledge-base-custom/`:
 
 - They work together harmoniously
 - No conflicts if domains are separate
@@ -928,19 +928,19 @@ All four files are used together during research!
 
 **Full paths**:
 
-- **macOS**: `~/Library/Application Support/Delve/knowledge-base-custom/*.md`
-- **Linux**: `~/.local/share/delve/knowledge-base-custom/*.md`
+- **macOS**: `~/Library/Application Support/CConductor/knowledge-base-custom/*.md`
+- **Linux**: `~/.local/share/cconductor/knowledge-base-custom/*.md`
 
 ### Knowledge Prioritization
 
-When multiple files have information, Delve prioritizes:
+When multiple files have information, CConductor prioritizes:
 
 1. **More specific** over more general
 2. **More recent** over older (if dates provided)
 3. **Better sourced** over unsourced
 4. **More detailed** over vague
 
-**Tip**: Include dates to help Delve prefer newer information.
+**Tip**: Include dates to help CConductor prefer newer information.
 
 ### Updating Knowledge
 
@@ -949,15 +949,15 @@ Just edit and save - that's it!
 ```bash
 # Edit existing knowledge (use your OS-specific path)
 # macOS:
-nano ~/Library/Application\ Support/Delve/knowledge-base-custom/my-file.md
+nano ~/Library/Application\ Support/CConductor/knowledge-base-custom/my-file.md
 # Linux:
-# nano ~/.local/share/delve/knowledge-base-custom/my-file.md
+# nano ~/.local/share/cconductor/knowledge-base-custom/my-file.md
 
 # Make changes, add new facts, update dates
 # Save
 
 # Next research automatically uses updated version
-./delve "question"
+./cconductor "question"
 ```
 
 **Best practice**: Add an "Last Updated" date in your overview.
@@ -968,14 +968,14 @@ Simply delete or move the file (use your OS-specific path):
 
 ```bash
 # macOS - Remove knowledge
-rm ~/Library/Application\ Support/Delve/knowledge-base-custom/old-knowledge.md
+rm ~/Library/Application\ Support/CConductor/knowledge-base-custom/old-knowledge.md
 
 # Or move to archive
-mkdir -p ~/delve-knowledge-archive/
-mv ~/Library/Application\ Support/Delve/knowledge-base-custom/old-knowledge.md ~/delve-knowledge-archive/
+mkdir -p ~/cconductor-knowledge-archive/
+mv ~/Library/Application\ Support/CConductor/knowledge-base-custom/old-knowledge.md ~/cconductor-knowledge-archive/
 
 # Linux - Remove knowledge
-# rm ~/.local/share/delve/knowledge-base-custom/old-knowledge.md
+# rm ~/.local/share/cconductor/knowledge-base-custom/old-knowledge.md
 ```
 
 ### Version Controlling Knowledge
@@ -984,9 +984,9 @@ You can use git to track changes in your knowledge directory:
 
 ```bash
 # macOS
-cd ~/Library/Application\ Support/Delve/knowledge-base-custom/
+cd ~/Library/Application\ Support/CConductor/knowledge-base-custom/
 # Linux
-# cd ~/.local/share/delve/knowledge-base-custom/
+# cd ~/.local/share/cconductor/knowledge-base-custom/
 
 git init
 git add *.md
@@ -997,7 +997,7 @@ git add -u
 git commit -m "Updated company information"
 ```
 
-**Note**: Your knowledge directory is separate from the Delve project, so you can version control it independently.
+**Note**: Your knowledge directory is separate from the CConductor project, so you can version control it independently.
 
 ---
 
@@ -1005,7 +1005,7 @@ git commit -m "Updated company information"
 
 ### Knowledge Seems Wrong
 
-**Problem**: Delve uses your knowledge incorrectly.
+**Problem**: CConductor uses your knowledge incorrectly.
 
 **Solutions**:
 
@@ -1026,14 +1026,14 @@ git commit -m "Updated company information"
 
 4. **Make relationships clear**:
    - Explicitly state connections
-   - Don't assume Delve will infer
+   - Don't assume CConductor will infer
    - Be direct
 
 ### Multiple Files Conflict
 
 **Problem**: Two knowledge files have conflicting information.
 
-**Delve's behavior**:
+**CConductor's behavior**:
 
 - Uses more specific information
 - Prefers more recent (if dates provided)
@@ -1041,7 +1041,7 @@ git commit -m "Updated company information"
 
 **Solutions**:
 
-1. **Add dates** to help Delve prefer newer:
+1. **Add dates** to help CConductor prefer newer:
 
    ```markdown
    ## Product Pricing (Updated October 2024)
@@ -1061,7 +1061,7 @@ git commit -m "Updated company information"
 
 ### Knowledge Not Specific Enough
 
-**Problem**: Delve doesn't use your knowledge when you expect.
+**Problem**: CConductor doesn't use your knowledge when you expect.
 
 **Solution**: Make your knowledge more specific and detailed.
 
@@ -1093,7 +1093,7 @@ git commit -m "Updated company information"
 - **Customers**: 2,000+ SMBs
 ```
 
-The specific version gives Delve much more to work with!
+The specific version gives CConductor much more to work with!
 
 ---
 
@@ -1101,7 +1101,7 @@ The specific version gives Delve much more to work with!
 
 ### Built-in Examples
 
-See Delve's built-in knowledge for examples:
+See CConductor's built-in knowledge for examples:
 
 ```bash
 ls knowledge-base/
@@ -1123,7 +1123,7 @@ These are great templates to learn from!
 
 ## See Also
 
-- **[User Guide](USER_GUIDE.md)** - Complete Delve usage
+- **[User Guide](USER_GUIDE.md)** - Complete CConductor usage
 - **[Quick Reference](QUICK_REFERENCE.md)** - Command cheat sheet
 - **[Security Guide](SECURITY_GUIDE.md)** - Keeping research secure
 

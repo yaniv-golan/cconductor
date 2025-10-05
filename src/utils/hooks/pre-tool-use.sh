@@ -11,7 +11,7 @@ hook_data=$(cat)
 # Extract tool information
 tool_name=$(echo "$hook_data" | jq -r '.tool_name // "unknown"')
 # Get agent name from environment (set by invoke-agent.sh)
-agent_name="${DELVE_AGENT_NAME:-unknown}"
+agent_name="${CCONDUCTOR_AGENT_NAME:-unknown}"
 
 # Extract tool input (summary only, full data in events.jsonl)
 tool_input_summary=""
@@ -37,7 +37,7 @@ case "$tool_name" in
 esac
 
 # Get session directory from environment or derive it
-session_dir="${DELVE_SESSION_DIR:-}"
+session_dir="${CCONDUCTOR_SESSION_DIR:-}"
 if [ -z "$session_dir" ]; then
     # Try to find it from current directory
     if [ -f "events.jsonl" ]; then

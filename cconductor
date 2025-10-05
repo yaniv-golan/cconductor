@@ -1,22 +1,22 @@
 #!/usr/bin/env bash
-# Delve - Deep Research, Done Right
+# CConductor - AI Research, Orchestrated
 #
 # Requires: Bash 4.0+
 
 set -euo pipefail
 
 VERSION="0.1.0"
-DELVE_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+CCONDUCTOR_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # Source CLI parser
 # shellcheck disable=SC1091
-source "$DELVE_ROOT/src/utils/cli-parser.sh"
+source "$CCONDUCTOR_ROOT/src/utils/cli-parser.sh"
 
 check_initialization() {
     # Check if user config directory exists (created by init.sh)
     # Platform-aware check
-    if [ -f "$DELVE_ROOT/src/utils/platform-paths.sh" ]; then
-        source "$DELVE_ROOT/src/utils/platform-paths.sh"
+    if [ -f "$CCONDUCTOR_ROOT/src/utils/platform-paths.sh" ]; then
+        source "$CCONDUCTOR_ROOT/src/utils/platform-paths.sh"
         local config_dir=$(get_config_dir)
         
         # Check if config directory exists
@@ -32,12 +32,12 @@ check_initialization() {
 show_init_prompt() {
     cat <<EOF
 ┌─────────────────────────────────────────────────────┐
-│ Welcome to Delve! First-time setup required.        │
+│ Welcome to CConductor! First-time setup required.        │
 └─────────────────────────────────────────────────────┘
 
 I will now:
   1. Check for dependencies (jq, curl, bash)
-  2. Create user config directory (~/.config/delve/)
+  2. Create user config directory (~/.config/cconductor/)
   3. Create OS-appropriate data directories
   4. Configure .gitignore to protect your data
   5. Make scripts executable
@@ -57,50 +57,50 @@ run_initialization() {
         case "${response:-y}" in
             [Yy]|[Yy][Ee][Ss]|"")
                 echo ""
-                "$DELVE_ROOT/src/init.sh"
+                "$CCONDUCTOR_ROOT/src/init.sh"
                 ;;
             *)
                 echo ""
-                echo "Initialization cancelled. Run './delve --init' when ready."
+                echo "Initialization cancelled. Run './cconductor --init' when ready."
                 exit 0
                 ;;
         esac
     else
         # Non-interactive mode
-        "$DELVE_ROOT/src/init.sh"
+        "$CCONDUCTOR_ROOT/src/init.sh"
     fi
 }
 
 # Version management
 show_version() {
-    local version=$(cat "$DELVE_ROOT/VERSION" 2>/dev/null || echo "$VERSION")
-    echo "Delve v$version"
+    local version=$(cat "$CCONDUCTOR_ROOT/VERSION" 2>/dev/null || echo "$VERSION")
+    echo "CConductor v$version"
     
     # Trigger async update check
-    if [ -f "$DELVE_ROOT/src/utils/version-checker.sh" ]; then
-        source "$DELVE_ROOT/src/utils/version-checker.sh"
+    if [ -f "$CCONDUCTOR_ROOT/src/utils/version-checker.sh" ]; then
+        source "$CCONDUCTOR_ROOT/src/utils/version-checker.sh"
         check_for_updates_async
     fi
 }
 
 # Self-update functionality
 perform_update() {
-    echo "🔄 Updating Delve..."
+    echo "🔄 Updating CConductor..."
     echo ""
     
     # Detect installation method
-    if [ -d "$DELVE_ROOT/.git" ]; then
+    if [ -d "$CCONDUCTOR_ROOT/.git" ]; then
         # Git installation
         echo "→ Detected git installation"
         echo "→ Pulling latest changes..."
-        cd "$DELVE_ROOT"
+        cd "$CCONDUCTOR_ROOT"
         git fetch origin
         git pull origin main
         
         echo "→ Running initialization..."
-        "$DELVE_ROOT/src/init.sh"
+        "$CCONDUCTOR_ROOT/src/init.sh"
         
-        local new_version=$(cat "$DELVE_ROOT/VERSION" 2>/dev/null || echo "unknown")
+        local new_version=$(cat "$CCONDUCTOR_ROOT/VERSION" 2>/dev/null || echo "unknown")
         echo ""
         echo "✅ Updated to v$new_version"
     else
@@ -108,12 +108,12 @@ perform_update() {
         echo "→ Detected installer-based installation"
         echo "→ Downloading latest installer..."
         
-        local temp_installer="/tmp/delve-install-$$.sh"
-        if curl -fsSL "https://github.com/yaniv-golan/delve/releases/latest/download/install.sh" \
+        local temp_installer="/tmp/cconductor-install-$$.sh"
+        if curl -fsSL "https://github.com/yaniv-golan/cconductor/releases/latest/download/install.sh" \
             -o "$temp_installer" 2>/dev/null; then
             chmod +x "$temp_installer"
             echo "→ Running installer..."
-            bash "$temp_installer" "$DELVE_ROOT"
+            bash "$temp_installer" "$CCONDUCTOR_ROOT"
             rm "$temp_installer"
             echo ""
             echo "✅ Updated successfully"
@@ -121,7 +121,7 @@ perform_update() {
             echo "✗ Failed to download installer"
             echo ""
             echo "Manual update:"
-            echo "  curl -fsSL https://github.com/yaniv-golan/delve/releases/latest/download/install.sh | bash"
+            echo "  curl -fsSL https://github.com/yaniv-golan/cconductor/releases/latest/download/install.sh | bash"
             exit 1
         fi
     fi
@@ -129,23 +129,23 @@ perform_update() {
 
 show_help() {
     cat <<EOF
-🔍 Delve v$VERSION - Deep Research, Done Right
+🔍 CConductor v$VERSION - AI Research, Orchestrated
 
 USAGE:
-  delve <question>                 Start new research
-  delve <question> --input-dir DIR Analyze local files with your research
-  delve <question> --non-interactive  Skip plan confirmation (for automation)
-  delve latest                     Show latest research session
-  delve resume <session>           Continue previous research
-  delve sessions                   List all research sessions
-  delve status                     Check running research
-  delve configure                  Show configuration files
-  delve --update                   Update to latest version
-  delve --check-update             Check for updates now
-  delve --no-update-check          Disable update check for this run
-  delve --init                     Run/re-run initialization
-  delve --help                     Show this help
-  delve --version                  Show version
+  cconductor <question>                 Start new research
+  cconductor <question> --input-dir DIR Analyze local files with your research
+  cconductor <question> --non-interactive  Skip plan confirmation (for automation)
+  cconductor latest                     Show latest research session
+  cconductor resume <session>           Continue previous research
+  cconductor sessions                   List all research sessions
+  cconductor status                     Check running research
+  cconductor configure                  Show configuration files
+  cconductor --update                   Update to latest version
+  cconductor --check-update             Check for updates now
+  cconductor --no-update-check          Disable update check for this run
+  cconductor --init                     Run/re-run initialization
+  cconductor --help                     Show this help
+  cconductor --version                  Show version
 
 OPTIONS:
   --input-dir DIR                  Directory with local files to analyze
@@ -157,43 +157,43 @@ OPTIONS:
 
 EXAMPLES:
   # Basic research
-  delve "What are the latest advances in CRISPR?"
-  delve "SaaS market size 2024"
+  cconductor "What are the latest advances in CRISPR?"
+  cconductor "SaaS market size 2024"
   
   # Non-interactive research (no confirmation prompts)
-  delve "What are neural networks?" --non-interactive
-  delve "What is quantum computing?" -y
+  cconductor "What are neural networks?" --non-interactive
+  cconductor "What is quantum computing?" -y
   
   # Research with local materials
-  delve "Analyze this pitch deck" --input-dir ./pitch-materials/
-  delve "Summarize these reports" --input-dir ~/Documents/research/
+  cconductor "Analyze this pitch deck" --input-dir ./pitch-materials/
+  cconductor "Summarize these reports" --input-dir ~/Documents/research/
   
   # Session management
-  delve resume session_1759356338
-  delve latest
-  delve --init --yes               Run initialization non-interactively
+  cconductor resume session_1759356338
+  cconductor latest
+  cconductor --init --yes               Run initialization non-interactively
 
 CONFIGURATION:
   Config files are stored in OS-appropriate locations:
-    • macOS:   ~/.config/delve/
-    • Linux:   ~/.config/delve/
-    • Windows: %APPDATA%\\Delve\\
+    • macOS:   ~/.config/cconductor/
+    • Linux:   ~/.config/cconductor/
+    • Windows: %APPDATA%\\CConductor\\
 
   Create custom configs:
-    • ./src/utils/config-loader.sh init delve-config
+    • ./src/utils/config-loader.sh init cconductor-config
     • ./src/utils/config-loader.sh init security-config
     • ./src/utils/config-loader.sh list    (see all configs)
 
   Add custom knowledge:
-    • macOS:   ~/Library/Application Support/Delve/knowledge-base-custom/
-    • Linux:   ~/.local/share/delve/knowledge-base-custom/
-    • Windows: %LOCALAPPDATA%\\Delve\\knowledge-base-custom\\
+    • macOS:   ~/Library/Application Support/CConductor/knowledge-base-custom/
+    • Linux:   ~/.local/share/cconductor/knowledge-base-custom/
+    • Windows: %LOCALAPPDATA%\\CConductor\\knowledge-base-custom\\
 
 RESULTS:
   Reports are saved to OS-appropriate data directories:
-    • macOS:   ~/Library/Application Support/Delve/research-sessions/
-    • Linux:   ~/.local/share/delve/research-sessions/
-    • Windows: %LOCALAPPDATA%\\Delve\\research-sessions\\
+    • macOS:   ~/Library/Application Support/CConductor/research-sessions/
+    • Linux:   ~/.local/share/cconductor/research-sessions/
+    • Windows: %LOCALAPPDATA%\\CConductor\\research-sessions\\
   
   Use: ./src/utils/path-resolver.sh resolve session_dir (to find exact path)
 
@@ -231,22 +231,22 @@ handle_research() {
         echo "📁 Loading input files from: $input_dir"
         echo ""
         
-        # Pass to delve-adaptive.sh via environment variable
-        export DELVE_INPUT_DIR="$input_dir"
+        # Pass to cconductor-adaptive.sh via environment variable
+        export CCONDUCTOR_INPUT_DIR="$input_dir"
     fi
     
     # Check for --non-interactive or -y flag
     if has_flag "non-interactive" || has_flag "y"; then
-        export DELVE_NON_INTERACTIVE=1
+        export CCONDUCTOR_NON_INTERACTIVE=1
     fi
     
-    # Call delve-adaptive.sh
-    "$DELVE_ROOT/src/delve-adaptive.sh" "$question"
+    # Call cconductor-adaptive.sh
+    "$CCONDUCTOR_ROOT/src/cconductor-adaptive.sh" "$question"
     
     # Show update notification after research
-    if [ "${DELVE_NO_UPDATE_CHECK:-0}" != "1" ] && [ -f "$DELVE_ROOT/src/utils/version-checker.sh" ]; then
+    if [ "${CCONDUCTOR_NO_UPDATE_CHECK:-0}" != "1" ] && [ -f "$CCONDUCTOR_ROOT/src/utils/version-checker.sh" ]; then
         # shellcheck disable=SC1091
-        source "$DELVE_ROOT/src/utils/version-checker.sh"
+        source "$CCONDUCTOR_ROOT/src/utils/version-checker.sh"
         show_cached_notification || check_for_updates_async
     fi
 }
@@ -272,9 +272,9 @@ main() {
     fi
     
     if has_flag "check-update"; then
-        if [ -f "$DELVE_ROOT/src/utils/version-checker.sh" ]; then
+        if [ -f "$CCONDUCTOR_ROOT/src/utils/version-checker.sh" ]; then
             # shellcheck disable=SC1091
-            source "$DELVE_ROOT/src/utils/version-checker.sh"
+            source "$CCONDUCTOR_ROOT/src/utils/version-checker.sh"
             check_for_updates_sync
         else
             echo "Version checker not available"
@@ -284,7 +284,7 @@ main() {
     fi
     
     if has_flag "no-update-check"; then
-        export DELVE_NO_UPDATE_CHECK=1
+        export CCONDUCTOR_NO_UPDATE_CHECK=1
     fi
     
     if has_flag "init"; then
@@ -321,29 +321,29 @@ main() {
                 exit 1
             fi
             
-            "$DELVE_ROOT/src/delve-adaptive.sh" --resume "$session_id"
+            "$CCONDUCTOR_ROOT/src/cconductor-adaptive.sh" --resume "$session_id"
             
             # Show update notification after research
-            if [ "${DELVE_NO_UPDATE_CHECK:-0}" != "1" ] && [ -f "$DELVE_ROOT/src/utils/version-checker.sh" ]; then
+            if [ "${CCONDUCTOR_NO_UPDATE_CHECK:-0}" != "1" ] && [ -f "$CCONDUCTOR_ROOT/src/utils/version-checker.sh" ]; then
                 # shellcheck disable=SC1091
-                source "$DELVE_ROOT/src/utils/version-checker.sh"
+                source "$CCONDUCTOR_ROOT/src/utils/version-checker.sh"
                 show_cached_notification || check_for_updates_async
             fi
             ;;
         sessions|list)
-            # Use the formatted list from delve-adaptive.sh
-            "$DELVE_ROOT/src/delve-adaptive.sh" --list
+            # Use the formatted list from cconductor-adaptive.sh
+            "$CCONDUCTOR_ROOT/src/cconductor-adaptive.sh" --list
             ;;
         status)
             echo "Checking for running research sessions..."
-            pgrep -fl "delve-adaptive" || echo "No active sessions"
+            pgrep -fl "cconductor-adaptive" || echo "No active sessions"
             ;;
         latest)
             # Get session directory from path resolver (with fallback)
-            local session_dir="$DELVE_ROOT/research-sessions"
-            if [ -f "$DELVE_ROOT/src/utils/path-resolver.sh" ]; then
+            local session_dir="$CCONDUCTOR_ROOT/research-sessions"
+            if [ -f "$CCONDUCTOR_ROOT/src/utils/path-resolver.sh" ]; then
                 # shellcheck disable=SC1091
-                source "$DELVE_ROOT/src/utils/path-resolver.sh" 2>/dev/null
+                source "$CCONDUCTOR_ROOT/src/utils/path-resolver.sh" 2>/dev/null
                 local resolved
                 # Use return code instead of string check
                 if resolved=$(resolve_path "session_dir" 2>/dev/null) && [ -n "$resolved" ]; then
@@ -399,12 +399,12 @@ main() {
                         echo "  open $LATEST_PATH/research-report.md"
                         echo ""
                         echo "Resume with:"
-                        echo "  ./delve resume $LATEST_SESSION"
+                        echo "  ./cconductor resume $LATEST_SESSION"
                     else
                         echo "⏳ Research in progress or not yet complete"
                         echo ""
                         echo "Resume with:"
-                        echo "  ./delve resume $LATEST_SESSION"
+                        echo "  ./cconductor resume $LATEST_SESSION"
                     fi
                 else
                     echo "Error: Latest session directory not found: $LATEST_SESSION"
@@ -412,7 +412,7 @@ main() {
                 fi
             else
                 echo "No research sessions yet. Start one with:"
-                echo "  ./delve \"your research question\""
+                echo "  ./cconductor \"your research question\""
             fi
             ;;
         view-dashboard)
@@ -423,15 +423,15 @@ main() {
             
             if [ -z "$session_arg" ]; then
                 # No argument - use latest session
-                local latest_file="$DELVE_ROOT/research-sessions/.latest"
+                local latest_file="$CCONDUCTOR_ROOT/research-sessions/.latest"
                 if [ ! -f "$latest_file" ]; then
                     echo "Error: No active session found" >&2
-                    echo "Run a research query first: ./delve \"your question\"" >&2
+                    echo "Run a research query first: ./cconductor \"your question\"" >&2
                     exit 1
                 fi
                 local session_id
                 session_id=$(cat "$latest_file")
-                session_dir="$DELVE_ROOT/research-sessions/$session_id"
+                session_dir="$CCONDUCTOR_ROOT/research-sessions/$session_id"
             elif [[ "$session_arg" == /* ]]; then
                 # Absolute path provided
                 session_dir="$session_arg"
@@ -441,7 +441,7 @@ main() {
                 if [[ ! "$session_id" == session_* ]]; then
                     session_id="session_${session_id}"
                 fi
-                session_dir="$DELVE_ROOT/research-sessions/$session_id"
+                session_dir="$CCONDUCTOR_ROOT/research-sessions/$session_id"
             fi
             
             # Validate session directory exists
@@ -454,7 +454,7 @@ main() {
             local dashboard_file="$session_dir/dashboard.html"
             if [ ! -f "$dashboard_file" ]; then
                 echo "Generating dashboard..."
-                if ! bash "$DELVE_ROOT/src/utils/dashboard-generator.sh" "$session_dir"; then
+                if ! bash "$CCONDUCTOR_ROOT/src/utils/dashboard-generator.sh" "$session_dir"; then
                     echo "Error: Failed to generate dashboard" >&2
                     exit 1
                 fi
@@ -462,7 +462,7 @@ main() {
             
             # Generate dashboard metrics if missing
             if [ ! -f "$session_dir/dashboard-metrics.json" ]; then
-                bash -c "source '$DELVE_ROOT/src/utils/dashboard-metrics.sh' && generate_dashboard_metrics '$session_dir'" 2>/dev/null || true
+                bash -c "source '$CCONDUCTOR_ROOT/src/utils/dashboard-metrics.sh' && generate_dashboard_metrics '$session_dir'" 2>/dev/null || true
             fi
             
             # Find an available port (8890-8899)
@@ -515,12 +515,12 @@ main() {
             fi
             ;;
         configure|config)
-            echo "🔧 Delve Configuration"
+            echo "🔧 CConductor Configuration"
             echo ""
             
             # Get user config directory
-            if [ -f "$DELVE_ROOT/src/utils/config-loader.sh" ]; then
-                source "$DELVE_ROOT/src/utils/config-loader.sh"
+            if [ -f "$CCONDUCTOR_ROOT/src/utils/config-loader.sh" ]; then
+                source "$CCONDUCTOR_ROOT/src/utils/config-loader.sh"
                 
                 echo "═══════════════════════════════════════════════════════"
                 echo ""
@@ -531,7 +531,7 @@ main() {
                 echo ""
                 
                 # List configs
-                "$DELVE_ROOT/src/utils/config-loader.sh" list
+                "$CCONDUCTOR_ROOT/src/utils/config-loader.sh" list
                 echo ""
                 
                 echo "═══════════════════════════════════════════════════════"

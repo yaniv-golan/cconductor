@@ -5,35 +5,35 @@
 set -euo pipefail
 
 # Save script directory before sourcing other files (which redefine SCRIPT_DIR)
-DELVE_SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_ROOT="$(dirname "$DELVE_SCRIPT_DIR")"
+CCONDUCTOR_SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(dirname "$CCONDUCTOR_SCRIPT_DIR")"
 
-# Use DELVE_SCRIPT_DIR for sourcing to avoid conflicts
+# Use CCONDUCTOR_SCRIPT_DIR for sourcing to avoid conflicts
 # (sourced files may redefine SCRIPT_DIR for their own use)
 # shellcheck disable=SC1091
-source "$DELVE_SCRIPT_DIR/knowledge-graph.sh"
+source "$CCONDUCTOR_SCRIPT_DIR/knowledge-graph.sh"
 # shellcheck disable=SC1091
-source "$DELVE_SCRIPT_DIR/task-queue.sh"
+source "$CCONDUCTOR_SCRIPT_DIR/task-queue.sh"
 # shellcheck disable=SC1091
-source "$DELVE_SCRIPT_DIR/shared-state.sh"
+source "$CCONDUCTOR_SCRIPT_DIR/shared-state.sh"
 # shellcheck disable=SC1091
-source "$DELVE_SCRIPT_DIR/utils/gap-analyzer.sh"
+source "$CCONDUCTOR_SCRIPT_DIR/utils/gap-analyzer.sh"
 # shellcheck disable=SC1091
-source "$DELVE_SCRIPT_DIR/utils/contradiction-detector.sh"
+source "$CCONDUCTOR_SCRIPT_DIR/utils/contradiction-detector.sh"
 # shellcheck disable=SC1091
-source "$DELVE_SCRIPT_DIR/utils/lead-evaluator.sh"
+source "$CCONDUCTOR_SCRIPT_DIR/utils/lead-evaluator.sh"
 # shellcheck disable=SC1091
-source "$DELVE_SCRIPT_DIR/utils/confidence-scorer.sh"
+source "$CCONDUCTOR_SCRIPT_DIR/utils/confidence-scorer.sh"
 # shellcheck disable=SC1091
-source "$DELVE_SCRIPT_DIR/utils/config-loader.sh"
+source "$CCONDUCTOR_SCRIPT_DIR/utils/config-loader.sh"
 # shellcheck disable=SC1091
-source "$DELVE_SCRIPT_DIR/utils/session-manager.sh"
+source "$CCONDUCTOR_SCRIPT_DIR/utils/session-manager.sh"
 # shellcheck disable=SC1091
-source "$DELVE_SCRIPT_DIR/utils/event-logger.sh"
+source "$CCONDUCTOR_SCRIPT_DIR/utils/event-logger.sh"
 # shellcheck disable=SC1091
-source "$DELVE_SCRIPT_DIR/utils/dashboard-metrics.sh"
+source "$CCONDUCTOR_SCRIPT_DIR/utils/dashboard-metrics.sh"
 # shellcheck disable=SC1091
-source "$DELVE_SCRIPT_DIR/utils/setup-hooks.sh"
+source "$CCONDUCTOR_SCRIPT_DIR/utils/setup-hooks.sh"
 
 # Load configuration using overlay pattern
 # This automatically merges user config over defaults
@@ -41,15 +41,15 @@ if ! ADAPTIVE_CONFIG=$(load_config "adaptive-config"); then
     echo "❌ Error: Failed to load adaptive configuration" >&2
     echo "" >&2
     echo "To create a custom configuration:" >&2
-    echo "  $DELVE_SCRIPT_DIR/utils/config-loader.sh init adaptive-config" >&2
-    echo "  vim ~/.config/delve/adaptive-config.json" >&2
+    echo "  $CCONDUCTOR_SCRIPT_DIR/utils/config-loader.sh init adaptive-config" >&2
+    echo "  vim ~/.config/cconductor/adaptive-config.json" >&2
     echo "" >&2
     exit 1
 fi
 
-# Load delve configuration (for agent settings)
-if ! DELVE_CONFIG=$(load_config "delve-config"); then
-    echo "❌ Error: Failed to load delve configuration" >&2
+# Load cconductor configuration (for agent settings)
+if ! CCONDUCTOR_CONFIG=$(load_config "cconductor-config"); then
+    echo "❌ Error: Failed to load cconductor configuration" >&2
     exit 1
 fi
 
@@ -133,7 +133,7 @@ fi
 # Print banner
 print_banner() {
     echo "╔═══════════════════════════════════════════════════════════╗"
-    echo "║             DELVE - ADAPTIVE RESEARCH ENGINE              ║"
+    echo "║             CCONDUCTOR - ADAPTIVE RESEARCH ENGINE              ║"
     echo "║  Intelligent, self-improving research with dynamic goals  ║"
     echo "║                  Powered by Claude Code                   ║"
     echo "╚═══════════════════════════════════════════════════════════╝"
@@ -194,7 +194,7 @@ initialize_session() {
 
     # Source version checker
     # shellcheck disable=SC1091
-    source "$DELVE_SCRIPT_DIR/utils/version-check.sh"
+    source "$CCONDUCTOR_SCRIPT_DIR/utils/version-check.sh"
 
     # Get system version
     local system_version
@@ -238,7 +238,7 @@ initialize_session() {
         "{\"question\": $(echo "$research_question" | jq -R .)}"
     
     # Phase 2: Generate dashboard
-    bash "$DELVE_SCRIPT_DIR/utils/dashboard-generator.sh" "$session_dir" >/dev/null 2>&1 || true
+    bash "$CCONDUCTOR_SCRIPT_DIR/utils/dashboard-generator.sh" "$session_dir" >/dev/null 2>&1 || true
 
     echo "$session_dir"
 }
@@ -264,7 +264,7 @@ Create initial research tasks for: '$research_question'. Return ONLY valid JSON 
 EOF
     
     # Use invoke-v2 with systemPrompt injection and clean JSON output
-    if ! bash "$DELVE_SCRIPT_DIR/utils/invoke-agent.sh" invoke-v2 \
+    if ! bash "$CCONDUCTOR_SCRIPT_DIR/utils/invoke-agent.sh" invoke-v2 \
         "research-planner" \
         "$planning_input" \
         "$planning_output" \
@@ -339,9 +339,9 @@ execute_pending_tasks() {
     
     # Check if parallel execution is enabled
     local parallel_enabled
-    parallel_enabled=$(echo "$DELVE_CONFIG" | jq -r '.agents.parallel_execution // false')
+    parallel_enabled=$(echo "$CCONDUCTOR_CONFIG" | jq -r '.agents.parallel_execution // false')
     local max_parallel
-    max_parallel=$(echo "$DELVE_CONFIG" | jq -r '.agents.max_parallel_agents // 4')
+    max_parallel=$(echo "$CCONDUCTOR_CONFIG" | jq -r '.agents.max_parallel_agents // 4')
     
     if [ "$parallel_enabled" = "true" ]; then
         echo "  → Parallel execution enabled (max $max_parallel concurrent agents)"
@@ -382,7 +382,7 @@ execute_pending_tasks() {
             local sess_dir="$4"  # Add session_dir parameter
             
             # Invoke agent using v2 (systemPrompt + tool restrictions + clean JSON)
-            if bash "$DELVE_SCRIPT_DIR/utils/invoke-agent.sh" invoke-v2 \
+            if bash "$CCONDUCTOR_SCRIPT_DIR/utils/invoke-agent.sh" invoke-v2 \
                 "$agent_name" \
                 "$input_file" \
                 "$output_file" \
@@ -396,7 +396,7 @@ execute_pending_tasks() {
         }
         
         export -f execute_single_agent
-        export DELVE_SCRIPT_DIR
+        export CCONDUCTOR_SCRIPT_DIR
 
         # Invoke agent (parallel or sequential)
         local agent_output="$session_dir/raw/${agent}-output.json"
@@ -969,7 +969,7 @@ final_synthesis() {
     echo "→ Generating final report..."
     
     # Invoke synthesis agent
-    if bash "$DELVE_SCRIPT_DIR/utils/invoke-agent.sh" invoke-v2 \
+    if bash "$CCONDUCTOR_SCRIPT_DIR/utils/invoke-agent.sh" invoke-v2 \
         "synthesis-agent" \
         "$synthesis_input" \
         "$synthesis_output" \
@@ -1240,7 +1240,7 @@ resume_session() {
         # shellcheck disable=SC2012
         ls -1t "$PROJECT_ROOT/research-sessions/" 2>/dev/null | head -10 >&2
         echo "" >&2
-        echo "Usage: ./delve resume <session_id>" >&2
+        echo "Usage: ./cconductor resume <session_id>" >&2
         return 1
     fi
     
@@ -1262,7 +1262,7 @@ resume_session() {
     
     # Verify session compatibility
     # shellcheck disable=SC1091
-    source "$DELVE_SCRIPT_DIR/utils/version-check.sh"
+    source "$CCONDUCTOR_SCRIPT_DIR/utils/version-check.sh"
     if ! validate_session_compatibility "$session_dir" 2>/dev/null; then
         echo "" >&2
         echo "⚠️  Warning: Session may be incompatible with current engine version" >&2
@@ -1336,7 +1336,7 @@ list_sessions() {
     fi
     
     echo ""
-    echo "To resume: ./delve resume <session_id>"
+    echo "To resume: ./cconductor resume <session_id>"
 }
 
 # Main adaptive research loop
@@ -1360,17 +1360,17 @@ main() {
     echo ""
 
     # Process input files if --input-dir was provided
-    if [ -n "${DELVE_INPUT_DIR:-}" ]; then
+    if [ -n "${CCONDUCTOR_INPUT_DIR:-}" ]; then
         echo "→ Processing input files..."
         # shellcheck disable=SC1091
-        source "$DELVE_SCRIPT_DIR/utils/input-files-manager.sh"
+        source "$CCONDUCTOR_SCRIPT_DIR/utils/input-files-manager.sh"
         
-        if process_input_directory "$DELVE_INPUT_DIR" "$session_dir"; then
+        if process_input_directory "$CCONDUCTOR_INPUT_DIR" "$session_dir"; then
             echo "  ✓ Input files processed"
             
             # Store input_dir reference in session metadata
             local temp_session="$session_dir/session.json.tmp"
-            jq --arg input_dir "$DELVE_INPUT_DIR" \
+            jq --arg input_dir "$CCONDUCTOR_INPUT_DIR" \
                '.input_dir = $input_dir' \
                "$session_dir/session.json" > "$temp_session" && \
                mv "$temp_session" "$session_dir/session.json"
@@ -1383,7 +1383,7 @@ main() {
     # Verify session compatibility (for existing sessions, if resume added later)
     # For new sessions, this validates the metadata was created correctly
     # shellcheck disable=SC1091
-    source "$DELVE_SCRIPT_DIR/utils/version-check.sh"
+    source "$CCONDUCTOR_SCRIPT_DIR/utils/version-check.sh"
     if ! validate_session_compatibility "$session_dir" 2>/dev/null; then
         echo "⚠️  Warning: Session version mismatch (this shouldn't happen for new sessions)"
         echo "   Continuing anyway..."
@@ -1410,7 +1410,7 @@ main() {
         echo "  This could indicate an issue with the research-planner agent." >&2
         echo "" >&2
         echo "  Session saved at: $session_dir" >&2
-        echo "  You can try to resume it later with: ./delve resume $(basename "$session_dir")" >&2
+        echo "  You can try to resume it later with: ./cconductor resume $(basename "$session_dir")" >&2
         exit 1
     fi
     
@@ -1425,8 +1425,8 @@ main() {
     local allow_guidance
     allow_guidance=$(echo "$ADAPTIVE_CONFIG" | jq -r '.termination.allow_user_guidance // false')
     
-    # Override if DELVE_NON_INTERACTIVE environment variable is set
-    if [ "${DELVE_NON_INTERACTIVE:-0}" = "1" ]; then
+    # Override if CCONDUCTOR_NON_INTERACTIVE environment variable is set
+    if [ "${CCONDUCTOR_NON_INTERACTIVE:-0}" = "1" ]; then
         allow_guidance="false"
     fi
     
@@ -1469,7 +1469,7 @@ main() {
                     echo "Research cancelled. You can start a new session with a refined question."
                     echo ""
                     echo "Session saved at: $session_dir"
-                    echo "You can resume later with: ./delve resume $(basename "$session_dir")"
+                    echo "You can resume later with: ./cconductor resume $(basename "$session_dir")"
                     exit 0
                     ;;
                 s|S)
@@ -1735,7 +1735,7 @@ finalize_research() {
     fi
     echo ""
     echo "Resume this session:"
-    echo "   ./delve resume $(basename "$session_dir")"
+    echo "   ./cconductor resume $(basename "$session_dir")"
     echo ""
 }
 

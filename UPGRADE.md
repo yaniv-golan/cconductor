@@ -1,6 +1,6 @@
 # Upgrade Guide
 
-This guide explains how to upgrade Delve safely, preserving your configurations and data.
+This guide explains how to upgrade CConductor safely, preserving your configurations and data.
 
 ---
 
@@ -9,7 +9,7 @@ This guide explains how to upgrade Delve safely, preserving your configurations 
 **For most users** (installed via `install.sh`):
 
 ```bash
-delve --update
+cconductor --update
 ```
 
 That's it! Your customizations are preserved automatically. 🎉
@@ -18,20 +18,20 @@ That's it! Your customizations are preserved automatically. 🎉
 
 ## Choosing Your Update Method
 
-Delve supports two installation methods with different update procedures:
+CConductor supports two installation methods with different update procedures:
 
 ### Installed via install.sh (Recommended)
 
 If you installed with:
 
 ```bash
-curl -fsSL https://github.com/yaniv-golan/delve/releases/latest/download/install.sh | bash
+curl -fsSL https://github.com/yaniv-golan/cconductor/releases/latest/download/install.sh | bash
 ```
 
 **Update with:**
 
 ```bash
-delve --update
+cconductor --update
 ```
 
 See: [Installer-Based Updates](#installer-based-updates) below.
@@ -41,15 +41,15 @@ See: [Installer-Based Updates](#installer-based-updates) below.
 If you cloned the repository:
 
 ```bash
-git clone https://github.com/yaniv-golan/delve.git
+git clone https://github.com/yaniv-golan/cconductor.git
 ```
 
 **Update with:**
 
 ```bash
-cd /path/to/delve
+cd /path/to/cconductor
 git pull origin main
-./delve --init --yes
+./cconductor --init --yes
 ```
 
 See: [Git-Based Updates](#git-based-updates) below.
@@ -65,7 +65,7 @@ See: [Git-Based Updates](#git-based-updates) below.
 Simply run:
 
 ```bash
-delve --update
+cconductor --update
 ```
 
 **What this does**:
@@ -73,7 +73,7 @@ delve --update
 - Detects your installation location automatically
 - Downloads the latest release from GitHub
 - Verifies checksums for security
-- Updates Delve in place
+- Updates CConductor in place
 - Preserves all your configurations
 - Preserves your research sessions
 - Preserves your custom knowledge base
@@ -81,14 +81,14 @@ delve --update
 **Example**:
 
 ```bash
-$ delve --update
-🔄 Updating Delve...
+$ cconductor --update
+🔄 Updating CConductor...
 
 → Detected installer-based installation
 → Downloading latest installer...
 → Running installer...
 → Verifying checksums...
-→ Installing to /Users/you/.delve...
+→ Installing to /Users/you/.cconductor...
 
 ✅ Updated successfully
 New version: 0.2.0
@@ -96,7 +96,7 @@ New version: 0.2.0
 
 ### Automatic Update Checks
 
-Delve automatically checks for updates **once per day** and notifies you when a new version is available.
+CConductor automatically checks for updates **once per day** and notifies you when a new version is available.
 
 **When an update is available**, you'll see:
 
@@ -107,10 +107,10 @@ Delve automatically checks for updates **once per day** and notifies you when a 
 │ Current version: 0.1.0                        │
 │ Latest version:  0.2.0                        │
 │                                               │
-│ Run 'delve --update' to upgrade              │
+│ Run 'cconductor --update' to upgrade              │
 │                                               │
 │ Release notes:                                │
-│ https://github.com/yaniv-golan/delve/releases │
+│ https://github.com/yaniv-golan/cconductor/releases │
 └───────────────────────────────────────────────┘
 ```
 
@@ -123,7 +123,7 @@ Delve automatically checks for updates **once per day** and notifies you when a 
 ### Check for Updates Manually
 
 ```bash
-delve --check-update
+cconductor --check-update
 ```
 
 This immediately checks GitHub for new versions (bypasses the daily cache).
@@ -133,14 +133,14 @@ This immediately checks GitHub for new versions (bypasses the daily cache).
 **Temporarily** (for one command):
 
 ```bash
-delve --no-update-check "your research question"
+cconductor --no-update-check "your research question"
 ```
 
 **Permanently** - Edit your configuration:
 
 ```bash
 # macOS/Linux
-nano ~/.delve/config/delve-config.json
+nano ~/.cconductor/config/cconductor-config.json
 ```
 
 Add or modify:
@@ -153,13 +153,13 @@ Add or modify:
 }
 ```
 
-Save and exit. Delve will no longer check for updates automatically.
+Save and exit. CConductor will no longer check for updates automatically.
 
 **Re-enable later** by setting `"check_for_updates": true` or removing the setting.
 
 ### What Gets Updated
 
-When you run `delve --update`:
+When you run `cconductor --update`:
 
 ✅ **Updated**:
 
@@ -170,8 +170,8 @@ When you run `delve --update`:
 
 ✅ **Preserved** (never touched):
 
-- Your custom configurations (`~/.config/delve/*.json`)
-- Your data (`~/Library/Application Support/Delve/` or `~/.local/share/delve/`):
+- Your custom configurations (`~/.config/cconductor/*.json`)
+- Your data (`~/Library/Application Support/CConductor/` or `~/.local/share/cconductor/`):
   - Research sessions
   - Custom knowledge
   - Citations database
@@ -196,13 +196,13 @@ When you run `delve --update`:
 **1. Verify version**:
 
 ```bash
-delve --version
+cconductor --version
 ```
 
 **2. Test basic functionality**:
 
 ```bash
-delve "What is Docker?"
+cconductor "What is Docker?"
 ```
 
 **3. Check configuration** (optional):
@@ -212,7 +212,7 @@ delve "What is Docker?"
 ./src/utils/config-loader.sh list
 
 # Check a specific config
-cat ~/.config/delve/delve-config.json | jq .
+cat ~/.config/cconductor/cconductor-config.json | jq .
 ```
 
 ### Troubleshooting Updates
@@ -226,7 +226,7 @@ cat ~/.config/delve/delve-config.json | jq .
 ```bash
 # Try again later, or
 # Manual update:
-curl -fsSL https://github.com/yaniv-golan/delve/releases/latest/download/install.sh | bash
+curl -fsSL https://github.com/yaniv-golan/cconductor/releases/latest/download/install.sh | bash
 ```
 
 #### Update Breaks Configuration
@@ -240,13 +240,13 @@ curl -fsSL https://github.com/yaniv-golan/delve/releases/latest/download/install
 cat PROJECT_ROOT/config/*.default.json
 
 # Reset to defaults if needed
-rm ~/.config/delve/delve-config.json
+rm ~/.config/cconductor/cconductor-config.json
 
 # Or recreate from defaults
-./src/utils/config-loader.sh init delve-config
+./src/utils/config-loader.sh init cconductor-config
 ```
 
-Your research sessions and custom knowledge are always safe in `~/Library/Application Support/Delve/` (macOS) or `~/.local/share/delve/` (Linux)!
+Your research sessions and custom knowledge are always safe in `~/Library/Application Support/CConductor/` (macOS) or `~/.local/share/cconductor/` (Linux)!
 
 ---
 
@@ -259,8 +259,8 @@ Your research sessions and custom knowledge are always safe in `~/Library/Applic
 For updates within the same major version (e.g., 0.1.0 → 0.2.0):
 
 ```bash
-# 1. Navigate to your delve directory
-cd /path/to/delve
+# 1. Navigate to your cconductor directory
+cd /path/to/cconductor
 
 # 2. Pull latest changes
 git pull origin main
@@ -272,7 +272,7 @@ cat VERSION
 git log --oneline --since="1 week ago"
 
 # 5. Re-run initialization (applies updates, validates configs)
-./delve --init --yes
+./cconductor --init --yes
 ```
 
 **What happens**:
@@ -288,7 +288,7 @@ For major version changes (e.g., 0.x → 1.x):
 
 ```bash
 # 1. Pull updates
-cd /path/to/delve
+cd /path/to/cconductor
 git pull origin main
 
 # 2. Check changelog for breaking changes
@@ -302,18 +302,18 @@ echo "Upgrading to: $NEW_VERSION"
 ./src/utils/version-check.sh report research-sessions/session_XXXXX
 
 # 5. Re-run init
-./delve --init --yes
+./cconductor --init --yes
 ```
 
 **Important**: Old sessions may not be compatible with major version changes. Use `version-check.sh` to verify before resuming.
 
 ### How Config Safety Works
 
-Delve uses an **overlay pattern** to prevent merge conflicts:
+CConductor uses an **overlay pattern** to prevent merge conflicts:
 
 ```
 config/adaptive-config.default.json  ← Git-tracked (updated on pull)
-~/.config/delve/adaptive-config.json ← Your customizations (in home dir)
+~/.config/cconductor/adaptive-config.json ← Your customizations (in home dir)
                                      ↓
                            Final config (merged at runtime)
 ```
@@ -321,8 +321,8 @@ config/adaptive-config.default.json  ← Git-tracked (updated on pull)
 When you upgrade:
 
 - `git pull` updates `.default.json` files in project (new features, bug fixes)
-- Your configs in `~/.config/delve/` are **never touched** (not in project)
-- At runtime, Delve loads defaults then overlays your customizations
+- Your configs in `~/.config/cconductor/` are **never touched** (not in project)
+- At runtime, CConductor loads defaults then overlays your customizations
 
 **Result**:
 
@@ -337,7 +337,7 @@ After upgrading, default configs may have new fields you want to use.
 **View what changed**:
 
 ```bash
-cd /path/to/delve
+cd /path/to/cconductor
 ./src/utils/config-loader.sh diff adaptive-config
 ./src/utils/config-loader.sh diff security-config
 ./src/utils/config-loader.sh diff paths
@@ -347,8 +347,8 @@ cd /path/to/delve
 
 ```bash
 # Example: New field "enable_caching" added to adaptive-config.default.json
-jq '.enable_caching = true' ~/.config/delve/adaptive-config.json > ~/.config/delve/adaptive-config.json.tmp
-mv ~/.config/delve/adaptive-config.json.tmp ~/.config/delve/adaptive-config.json
+jq '.enable_caching = true' ~/.config/cconductor/adaptive-config.json > ~/.config/cconductor/adaptive-config.json.tmp
+mv ~/.config/cconductor/adaptive-config.json.tmp ~/.config/cconductor/adaptive-config.json
 
 # Verify
 ./src/utils/config-loader.sh load adaptive-config | jq '.enable_caching'
@@ -358,14 +358,14 @@ mv ~/.config/delve/adaptive-config.json.tmp ~/.config/delve/adaptive-config.json
 
 ```bash
 # Backup first (optional)
-cp ~/.config/delve/adaptive-config.json ~/.config/delve/adaptive-config.json.backup
+cp ~/.config/cconductor/adaptive-config.json ~/.config/cconductor/adaptive-config.json.backup
 
 # Reset to defaults (just delete it)
-rm ~/.config/delve/adaptive-config.json
+rm ~/.config/cconductor/adaptive-config.json
 
 # Or recreate and edit
 ./src/utils/config-loader.sh init adaptive-config
-vim ~/.config/delve/adaptive-config.json
+vim ~/.config/cconductor/adaptive-config.json
 ```
 
 ### After Upgrading (Git)
@@ -373,7 +373,7 @@ vim ~/.config/delve/adaptive-config.json
 **1. Validate installation**:
 
 ```bash
-cd /path/to/delve
+cd /path/to/cconductor
 
 # Validate all configurations
 ./src/utils/config-loader.sh validate
@@ -388,10 +388,10 @@ cd /path/to/delve
 **2. Test basic functionality**:
 
 ```bash
-cd /path/to/delve
+cd /path/to/cconductor
 
 # Test with simple query (2-3 minutes)
-./delve "What is Docker?"
+./cconductor "What is Docker?"
 
 # Verify session created
 ls -lt research-sessions/ | head -1
@@ -404,7 +404,7 @@ cat "$SESSION_DIR/session.json" | jq '.'
 **3. Resume old sessions (if compatible)**:
 
 ```bash
-cd /path/to/delve
+cd /path/to/cconductor
 
 # Find your old session
 ls -lt research-sessions/
@@ -413,7 +413,7 @@ ls -lt research-sessions/
 ./src/utils/version-check.sh validate research-sessions/session_XXXXX
 
 # If compatible, resume
-./delve resume session_XXXXX
+./cconductor resume session_XXXXX
 ```
 
 ### Git Troubleshooting
@@ -425,7 +425,7 @@ ls -lt research-sessions/
 **Solution**:
 
 ```bash
-cd /path/to/delve
+cd /path/to/cconductor
 
 # Check versions
 ./src/utils/version-check.sh report research-sessions/session_XXXXX
@@ -442,7 +442,7 @@ cd /path/to/delve
 **Solution**:
 
 ```bash
-cd /path/to/delve
+cd /path/to/cconductor
 
 # Validate JSON
 jq '.' config/adaptive-config.json
@@ -459,7 +459,7 @@ rm config/adaptive-config.json
 If it happens, you accidentally committed user configs:
 
 ```bash
-cd /path/to/delve
+cd /path/to/cconductor
 
 # Remove from git (keep local file)
 git rm --cached config/*.json
@@ -469,7 +469,7 @@ git commit -m "Remove user configs from git"
 grep "config/\*.json" .gitignore
 
 # If missing, re-run init
-./delve --init
+./cconductor --init
 ```
 
 ---
@@ -482,28 +482,28 @@ grep "config/\*.json" .gitignore
 
 ```
 macOS/Linux:
-  ~/.config/delve/delve-config.json       ← Main settings
-  ~/.config/delve/security-config.json    ← Security policies
-  ~/.config/delve/paths.json              ← File paths
+  ~/.config/cconductor/cconductor-config.json       ← Main settings
+  ~/.config/cconductor/security-config.json    ← Security policies
+  ~/.config/cconductor/paths.json              ← File paths
 
 Windows:
-  %APPDATA%\Delve\delve-config.json       ← Main settings
-  %APPDATA%\Delve\security-config.json    ← Security policies
-  %APPDATA%\Delve\paths.json              ← File paths
+  %APPDATA%\CConductor\cconductor-config.json       ← Main settings
+  %APPDATA%\CConductor\security-config.json    ← Security policies
+  %APPDATA%\CConductor\paths.json              ← File paths
 ```
 
 **User Data** (OS-appropriate location):
 
 ```
 macOS:
-  ~/Library/Application Support/Delve/research-sessions/
-  ~/Library/Application Support/Delve/knowledge-base-custom/
-  ~/Library/Application Support/Delve/citations.json
+  ~/Library/Application Support/CConductor/research-sessions/
+  ~/Library/Application Support/CConductor/knowledge-base-custom/
+  ~/Library/Application Support/CConductor/citations.json
 
 Linux:
-  ~/.local/share/delve/research-sessions/
-  ~/.local/share/delve/knowledge-base-custom/
-  ~/.local/share/delve/citations.json
+  ~/.local/share/cconductor/research-sessions/
+  ~/.local/share/cconductor/knowledge-base-custom/
+  ~/.local/share/cconductor/citations.json
 ```
 
 ### Files You Should NOT Edit
@@ -538,10 +538,10 @@ PROJECT_ROOT/VERSION                      ← Version tracking (auto-generated)
 
 ```bash
 # Installed version
-delve --version
+cconductor --version
 
 # Git version
-cd /path/to/delve
+cd /path/to/cconductor
 cat VERSION
 ```
 
@@ -551,37 +551,37 @@ cat VERSION
 
 ```bash
 # macOS
-tar -czf delve-backup-$(date +%Y%m%d).tar.gz \
-    ~/.config/delve/ \
-    ~/Library/Application\ Support/Delve/ \
+tar -czf cconductor-backup-$(date +%Y%m%d).tar.gz \
+    ~/.config/cconductor/ \
+    ~/Library/Application\ Support/CConductor/ \
     2>/dev/null
 
 # Linux
-tar -czf delve-backup-$(date +%Y%m%d).tar.gz \
-    ~/.config/delve/ \
-    ~/.local/share/delve/ \
+tar -czf cconductor-backup-$(date +%Y%m%d).tar.gz \
+    ~/.config/cconductor/ \
+    ~/.local/share/cconductor/ \
     2>/dev/null
 
-ls -lh delve-backup-*.tar.gz
+ls -lh cconductor-backup-*.tar.gz
 ```
 
 **Or backup just configs**:
 
 ```bash
-tar -czf delve-configs-$(date +%Y%m%d).tar.gz ~/.config/delve/
+tar -czf cconductor-configs-$(date +%Y%m%d).tar.gz ~/.config/cconductor/
 ```
 
 ### Review Active Sessions
 
 ```bash
 # macOS
-ls -lt ~/Library/Application\ Support/Delve/research-sessions/ | head -10
+ls -lt ~/Library/Application\ Support/CConductor/research-sessions/ | head -10
 
 # Linux
-ls -lt ~/.local/share/delve/research-sessions/ | head -10
+ls -lt ~/.local/share/cconductor/research-sessions/ | head -10
 
 # Or use path resolver to find location
-cd /path/to/delve
+cd /path/to/cconductor
 ./src/utils/path-resolver.sh resolve session_dir
 ```
 
@@ -607,10 +607,10 @@ Run updates periodically:
 
 ```bash
 # Check for updates weekly
-delve --check-update
+cconductor --check-update
 
 # Update when available
-delve --update
+cconductor --update
 ```
 
 ### 3. Read Release Notes
@@ -622,7 +622,7 @@ Before major updates, review changes:
 cat CHANGELOG.md | less
 
 # Or visit:
-# https://github.com/yaniv-golan/delve/releases
+# https://github.com/yaniv-golan/cconductor/releases
 ```
 
 ### 4. Test After Updates
@@ -630,17 +630,17 @@ cat CHANGELOG.md | less
 Always test with a simple query after updating:
 
 ```bash
-delve "What is Docker?"
+cconductor "What is Docker?"
 ```
 
 ### 5. Keep Backups of Important Sessions
 
 ```bash
 # macOS
-tar -czf my-research-backup.tar.gz ~/Library/Application\ Support/Delve/research-sessions/session_XXXXX
+tar -czf my-research-backup.tar.gz ~/Library/Application\ Support/CConductor/research-sessions/session_XXXXX
 
 # Linux  
-tar -czf my-research-backup.tar.gz ~/.local/share/delve/research-sessions/session_XXXXX
+tar -czf my-research-backup.tar.gz ~/.local/share/cconductor/research-sessions/session_XXXXX
 
 # Or find and backup by name
 SESSION_DIR=$(./src/utils/path-resolver.sh resolve session_dir)
@@ -651,11 +651,11 @@ tar -czf my-research-backup.tar.gz "$SESSION_DIR/session_XXXXX"
 
 ## Getting Help
 
-- **Configuration**: `delve configure` or see [Configuration Reference](docs/CONFIGURATION_REFERENCE.md)
+- **Configuration**: `cconductor configure` or see [Configuration Reference](docs/CONFIGURATION_REFERENCE.md)
 - **Troubleshooting**: See [Troubleshooting Guide](docs/TROUBLESHOOTING.md)
 - **Full Documentation**: [User Guide](docs/USER_GUIDE.md)
-- **Issues**: [GitHub Issues](https://github.com/yaniv-golan/delve/issues)
-- **Discussions**: [GitHub Discussions](https://github.com/yaniv-golan/delve/discussions)
+- **Issues**: [GitHub Issues](https://github.com/yaniv-golan/cconductor/issues)
+- **Discussions**: [GitHub Discussions](https://github.com/yaniv-golan/cconductor/discussions)
 
 ---
 

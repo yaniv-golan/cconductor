@@ -12,7 +12,7 @@ TESTS_RUN=0
 TESTS_FAILED=0
 
 # Create temporary test environment
-TEST_DIR=$(mktemp -d /tmp/delve-integration-test-XXXXXX)
+TEST_DIR=$(mktemp -d /tmp/cconductor-integration-test-XXXXXX)
 INPUT_DIR="$TEST_DIR/input-files"
 trap 'rm -rf "$TEST_DIR"' EXIT
 

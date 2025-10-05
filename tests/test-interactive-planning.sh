@@ -23,7 +23,7 @@ echo ""
 
 # Test 2: Check that initial_planning uses allow_user_guidance
 echo "Test 2: Checking initial_planning for interactive mode check..."
-if grep -q "allow_user_guidance" "$PROJECT_ROOT/src/delve-adaptive.sh"; then
+if grep -q "allow_user_guidance" "$PROJECT_ROOT/src/cconductor-adaptive.sh"; then
     echo "✓ allow_user_guidance check found in initial_planning"
 else
     echo "✗ allow_user_guidance check NOT found"
@@ -69,7 +69,7 @@ echo ""
 echo "Interactive planning is now available!"
 echo ""
 echo "To test with a real query:"
-echo "  ./delve \"What is quantum computing?\""
+echo "  ./cconductor \"What is quantum computing?\""
 echo ""
 echo "Expected behavior:"
 echo "  1. System shows: '→ Interactive planning mode enabled'"

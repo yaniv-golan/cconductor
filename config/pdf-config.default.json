@@ -17,7 +17,7 @@
         "max_parallel": 5,
         "retry_attempts": 3,
         "retry_delay_seconds": 2,
-        "user_agent": "Delve-ResearchEngine/1.0 (https://github.com/yaniv-golan/delve)",
+        "user_agent": "CConductor-ResearchEngine/1.0 (https://github.com/yaniv-golan/cconductor)",
         "_comment_parallel": "Number of simultaneous PDF downloads",
         "_comment_retry": "Retry failed downloads up to N times"
     },

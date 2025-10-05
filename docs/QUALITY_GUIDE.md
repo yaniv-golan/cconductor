@@ -1,4 +1,4 @@
-# Delve Quality Scoring Guide
+# CConductor Quality Scoring Guide
 
 **Understanding and improving research quality**
 
@@ -22,11 +22,11 @@
 
 ## Introduction
 
-Every Delve research session receives a quality score based on multiple factors. This guide helps you understand what the score means and how to achieve better results.
+Every CConductor research session receives a quality score based on multiple factors. This guide helps you understand what the score means and how to achieve better results.
 
 **Who needs this**:
 
-- Anyone using Delve for important research
+- Anyone using CConductor for important research
 - Academic users who need high-quality sources
 - Business users who need reliable data
 - Users troubleshooting research issues
@@ -270,7 +270,7 @@ Evidence Quality: 40/45 (89%)
 
 ### Confidence (Weighted 10%)
 
-**What it measures**: How confident Delve is in the findings.
+**What it measures**: How confident CConductor is in the findings.
 
 **Score factors**:
 
@@ -443,15 +443,15 @@ The most effective way to improve quality is to continue researching:
 
 ```bash
 # Find your session
-./delve sessions
+./cconductor sessions
 
 # Resume it
-./delve resume session_name
+./cconductor resume session_name
 ```
 
 **What happens**:
 
-- Delve identifies gaps in the research
+- CConductor identifies gaps in the research
 - Finds additional authoritative sources
 - Adds citations to unsupported claims
 - Explores undercover areas
@@ -475,13 +475,13 @@ Quality improves with more specific, focused questions.
 **Instead of vague**:
 
 ```bash
-❌ ./delve "AI trends"
+❌ ./cconductor "AI trends"
 ```
 
 **Be specific**:
 
 ```bash
-✅ ./delve "peer-reviewed research on large language model safety alignment techniques 2023-2024"
+✅ ./cconductor "peer-reviewed research on large language model safety alignment techniques 2023-2024"
 ```
 
 **Why this helps**:
@@ -511,12 +511,12 @@ mkdir -p pdfs/
 cp your-papers/*.pdf pdfs/
 
 # Run research
-./delve "question related to the papers"
+./cconductor "question related to the papers"
 ```
 
 **Why this helps**:
 
-- Delve can analyze papers directly
+- CConductor can analyze papers directly
 - Extracts high-quality citations
 - Builds on known research
 - Links related work
@@ -534,7 +534,7 @@ cp your-papers/*.pdf pdfs/
 
 For consistent quality needs, configure default research mode.
 
-**Edit**: `config/delve-config.json`
+**Edit**: `config/cconductor-config.json`
 
 ```json
 {
@@ -603,7 +603,7 @@ Domain expertise for [topic]
 
 **Why this helps**:
 
-- Directs Delve to best sources
+- Directs CConductor to best sources
 - Provides domain-specific terminology
 - Adds context for evaluation
 - Improves relevance
@@ -619,7 +619,7 @@ Domain expertise for [topic]
 **Question**:
 
 ```bash
-./delve "What are the therapeutic mechanisms and clinical efficacy of CAR-T cell therapy for B-cell lymphomas based on peer-reviewed research?"
+./cconductor "What are the therapeutic mechanisms and clinical efficacy of CAR-T cell therapy for B-cell lymphomas based on peer-reviewed research?"
 ```
 
 **Quality Report**:
@@ -668,7 +668,7 @@ Confidence: 95/100 (VERY HIGH)
 **Question**:
 
 ```bash
-./delve "Global market size and competitive landscape for enterprise CRM software 2024"
+./cconductor "Global market size and competitive landscape for enterprise CRM software 2024"
 ```
 
 **Quality Report**:
@@ -716,7 +716,7 @@ Confidence: 80/100 (HIGH)
 **Question**:
 
 ```bash
-./delve "Docker containerization and Kubernetes orchestration"
+./cconductor "Docker containerization and Kubernetes orchestration"
 ```
 
 **Quality Report**:
@@ -766,7 +766,7 @@ Confidence: 70/100 (MODERATE)
 **Question**:
 
 ```bash
-./delve "tech trends"
+./cconductor "tech trends"
 ```
 
 **Quality Report**:
@@ -865,14 +865,14 @@ Confidence: 45/100 (LOW)
 1. **Resume research**:
 
    ```bash
-   ./delve resume session_name
+   ./cconductor resume session_name
    ```
 
 2. **More specific question**:
    Use precise terminology, mention specific papers/sources
 
 3. **Provide known sources**:
-   Add PDFs to help Delve find citations
+   Add PDFs to help CConductor find citations
 
 4. **Let adaptive mode run longer**:
    Don't interrupt, citations improve over time
@@ -894,12 +894,12 @@ Confidence: 45/100 (LOW)
 1. **Use academic keywords**:
 
    ```bash
-   ./delve "peer-reviewed research on [topic]"
-   ./delve "published studies on [topic]"
+   ./cconductor "peer-reviewed research on [topic]"
+   ./cconductor "published studies on [topic]"
    ```
 
 2. **Configure for scientific mode**:
-   Edit `config/delve-config.json` to default to scientific
+   Edit `config/cconductor-config.json` to default to scientific
 
 3. **Resume research**:
    Additional time finds better sources
@@ -924,7 +924,7 @@ Confidence: 45/100 (LOW)
 1. **Resume research**:
 
    ```bash
-   ./delve resume session_name
+   ./cconductor resume session_name
    ```
 
    Adaptive mode identifies and fills gaps
@@ -933,10 +933,10 @@ Confidence: 45/100 (LOW)
 
    ```bash
    # First research
-   ./delve "CAR-T cell therapy overview"
+   ./cconductor "CAR-T cell therapy overview"
    
    # Follow-up for gap
-   ./delve "CAR-T cell therapy side effects and management"
+   ./cconductor "CAR-T cell therapy side effects and management"
    ```
 
 3. **More specific question**:
@@ -946,11 +946,11 @@ Confidence: 45/100 (LOW)
 
 ## See Also
 
-- **[User Guide](USER_GUIDE.md)** - Complete Delve usage
+- **[User Guide](USER_GUIDE.md)** - Complete CConductor usage
 - **[Citations Guide](CITATIONS_GUIDE.md)** - Understanding citations
 - **[Configuration Reference](CONFIGURATION_REFERENCE.md)** - All config options
 - **[Custom Knowledge](CUSTOM_KNOWLEDGE.md)** - Adding domain expertise
 
 ---
 
-**Delve Quality** - Research you can trust 🎯
+**CConductor Quality** - Research you can trust 🎯

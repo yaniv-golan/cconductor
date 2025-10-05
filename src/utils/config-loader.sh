@@ -15,15 +15,15 @@ if [ -f "$SCRIPT_DIR/platform-paths.sh" ]; then
 fi
 
 # Get user config directory (OS-appropriate location)
-# Can be overridden with DELVE_CONFIG_DIR environment variable
+# Can be overridden with CCONDUCTOR_CONFIG_DIR environment variable
 get_user_config_dir() {
-    if [ -n "${DELVE_CONFIG_DIR:-}" ]; then
-        echo "$DELVE_CONFIG_DIR"
+    if [ -n "${CCONDUCTOR_CONFIG_DIR:-}" ]; then
+        echo "$CCONDUCTOR_CONFIG_DIR"
     elif command -v get_config_dir &> /dev/null; then
         get_config_dir
     else
         # Fallback if platform-paths.sh not available
-        echo "$HOME/.config/delve"
+        echo "$HOME/.config/cconductor"
     fi
 }
 
@@ -33,7 +33,7 @@ get_user_config_dir() {
 # 
 # Loading order:
 # 1. Project default: PROJECT_ROOT/config/foo.default.json (required, git-tracked)
-# 2. User config:     ~/.config/delve/foo.json (optional, user customizations)
+# 2. User config:     ~/.config/cconductor/foo.json (optional, user customizations)
 load_config() {
     local config_name="$1"
     local project_config_dir="${2:-$PROJECT_ROOT/config}"
@@ -341,9 +341,9 @@ Examples:
   # Get specific value
   $0 get adaptive-config .max_iterations
 
-  # Create customizable config (in ~/.config/delve/)
+  # Create customizable config (in ~/.config/cconductor/)
   $0 init adaptive-config
-  vim ~/.config/delve/adaptive-config.json
+  vim ~/.config/cconductor/adaptive-config.json
 
   # View your changes
   $0 diff adaptive-config
@@ -356,11 +356,11 @@ Examples:
 
 Config Locations:
   Defaults:  PROJECT_ROOT/config/*.default.json  (git-tracked, never edit)
-  User:      ~/.config/delve/*.json              (customize these)
+  User:      ~/.config/cconductor/*.json              (customize these)
              
-             On macOS:  ~/.config/delve/
-             On Linux:  ~/.config/delve/  (or \$XDG_CONFIG_HOME/delve/)
-             On Windows: %APPDATA%/Delve/
+             On macOS:  ~/.config/cconductor/
+             On Linux:  ~/.config/cconductor/  (or \$XDG_CONFIG_HOME/cconductor/)
+             On Windows: %APPDATA%/CConductor/
 
 Loading Order:
   1. Load default config from project (git-tracked)
@@ -369,7 +369,7 @@ Loading Order:
   User values override defaults.
 
 Environment Variables:
-  DELVE_CONFIG_DIR - Override user config directory location
+  CCONDUCTOR_CONFIG_DIR - Override user config directory location
 
 Benefits:
   • User configs in OS-standard location

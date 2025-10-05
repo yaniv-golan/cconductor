@@ -1,5 +1,5 @@
 #!/bin/bash
-# Delve Cleanup Script
+# CConductor Cleanup Script
 # Cleans up old sessions, processes, and temporary files
 
 set -e
@@ -8,7 +8,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 echo "╔═══════════════════════════════════════════════════════════╗"
-echo "║            DELVE - CLEANUP SCRIPT                         ║"
+echo "║            CCONDUCTOR - CLEANUP SCRIPT                         ║"
 echo "╚═══════════════════════════════════════════════════════════╝"
 echo ""
 
@@ -16,9 +16,9 @@ echo ""
 kill_processes() {
     echo "→ Checking for running processes..."
     
-    # Find Delve processes
+    # Find CConductor processes
     # shellcheck disable=SC2155,SC2009  # Combined declaration+assignment is intentional, ps+grep is portable
-    local delve_pids=$(ps aux | grep -E "[d]elve|[D]ELVE" | awk '{print $2}' || true)
+    local cconductor_pids=$(ps aux | grep -E "[d]elve|[D]ELVE" | awk '{print $2}' || true)
     
     # Find Claude processes
     # shellcheck disable=SC2155,SC2009
@@ -30,10 +30,10 @@ kill_processes() {
     
     local killed=0
     
-    if [ -n "$delve_pids" ]; then
-        echo "  → Killing Delve processes: $delve_pids"
-        echo "$delve_pids" | xargs kill -9 2>/dev/null || true
-        killed=$((killed + $(echo "$delve_pids" | wc -w)))
+    if [ -n "$cconductor_pids" ]; then
+        echo "  → Killing CConductor processes: $cconductor_pids"
+        echo "$cconductor_pids" | xargs kill -9 2>/dev/null || true
+        killed=$((killed + $(echo "$cconductor_pids" | wc -w)))
     fi
     
     if [ -n "$claude_pids" ]; then

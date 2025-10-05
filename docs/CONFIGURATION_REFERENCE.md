@@ -1,4 +1,4 @@
-# Delve Configuration Reference
+# CConductor Configuration Reference
 
 **Complete reference for all configuration options**
 
@@ -11,8 +11,8 @@
 ## Table of Contents
 
 1. [Configuration Files Overview](#configuration-files-overview)
-2. [Main Configuration (delve-config.json)](#main-configuration-delve-configjson)
-3. [Research Modes (delve-modes.json)](#research-modes-delve-modesjson)
+2. [Main Configuration (cconductor-config.json)](#main-configuration-cconductor-configjson)
+3. [Research Modes (cconductor-modes.json)](#research-modes-cconductor-modesjson)
 4. [Security Configuration (security-config.json)](#security-configuration-security-configjson)
 5. [Adaptive Research (adaptive-config.json)](#adaptive-research-adaptive-configjson)
 6. [Knowledge Base (knowledge-config.json)](#knowledge-base-knowledge-configjson)
@@ -31,9 +31,9 @@ Configuration files are stored in OS-appropriate locations:
 
 **User Configs (your customizations)**:
 
-- **macOS**: `~/.config/delve/`
-- **Linux**: `~/.config/delve/` (or `$XDG_CONFIG_HOME/delve/`)
-- **Windows**: `%APPDATA%\Delve\`
+- **macOS**: `~/.config/cconductor/`
+- **Linux**: `~/.config/cconductor/` (or `$XDG_CONFIG_HOME/cconductor/`)
+- **Windows**: `%APPDATA%\CConductor\`
 
 **Default Configs (git-tracked, don't edit)**:
 
@@ -41,9 +41,9 @@ Configuration files are stored in OS-appropriate locations:
 
 ```
 # User configs (in your home directory)
-~/.config/delve/
-  delve-config.json              Main configuration
-  delve-modes.json               Research mode definitions
+~/.config/cconductor/
+  cconductor-config.json              Main configuration
+  cconductor-modes.json               Research mode definitions
   security-config.json           Security settings
   adaptive-config.json           Adaptive research settings
   knowledge-config.json          Knowledge base paths
@@ -60,8 +60,8 @@ PROJECT_ROOT/config/
 **How configs work**:
 
 1. **Default configs**: In `PROJECT_ROOT/config/*.default.json` (git-tracked, never edit)
-2. **User configs**: In `~/.config/delve/*.json` (your customizations)
-3. **Loading**: Delve loads defaults, then overlays your customizations
+2. **User configs**: In `~/.config/cconductor/*.json` (your customizations)
+3. **Loading**: CConductor loads defaults, then overlays your customizations
 
 **Benefits**:
 
@@ -71,15 +71,15 @@ PROJECT_ROOT/config/
 - ✅ Multi-user support (each user has own configs)
 - ✅ You can always reset: delete your config to use defaults
 
-**Upgrade safety**: Your customizations in `~/.config/delve/` persist across Delve upgrades and reinstalls!
+**Upgrade safety**: Your customizations in `~/.config/cconductor/` persist across CConductor upgrades and reinstalls!
 
 ---
 
-## Main Configuration (delve-config.json)
+## Main Configuration (cconductor-config.json)
 
 ### Overview
 
-**File**: `config/delve-config.json`  
+**File**: `config/cconductor-config.json`  
 **Purpose**: Primary configuration for research behavior  
 **Affects**: All research sessions
 
@@ -406,17 +406,17 @@ PROJECT_ROOT/config/
 
 ---
 
-## Research Modes (delve-modes.json)
+## Research Modes (cconductor-modes.json)
 
 ### Overview
 
-**File**: `config/delve-modes.json`  
+**File**: `config/cconductor-modes.json`  
 **Purpose**: Define detailed research mode configurations  
 **Affects**: Research behavior per mode
 
 ### Available Modes
 
-Delve has 5 built-in research modes:
+CConductor has 5 built-in research modes:
 
 1. **default** - General purpose research
 2. **scientific** - Academic literature with PDF analysis
@@ -457,20 +457,20 @@ Delve has 5 built-in research modes:
 
 **How it works**:
 
-- Delve scans your question for keywords
+- CConductor scans your question for keywords
 - Matches to the most appropriate mode
 - Falls back to `default_mode` if no match
 
 **Example**:
 
 ```bash
-./delve "peer-reviewed research on CRISPR"
+./cconductor "peer-reviewed research on CRISPR"
 # Auto-selects "scientific" mode
 
-./delve "market size for AI-powered CRM"
+./cconductor "market size for AI-powered CRM"
 # Auto-selects "market" mode
 
-./delve "how does Docker containerization work"
+./cconductor "how does Docker containerization work"
 # Auto-selects "technical" mode
 ```
 
@@ -554,7 +554,7 @@ Delve has 5 built-in research modes:
 ### Overview
 
 **File**: `config/security-config.json`  
-**Purpose**: Control which domains and content Delve can access  
+**Purpose**: Control which domains and content CConductor can access  
 **See also**: [Security Guide](SECURITY_GUIDE.md) for complete documentation
 
 ### Security Profiles
@@ -664,7 +664,7 @@ Three built-in profiles:
 
 **File**: `config/adaptive-config.json`  
 **Purpose**: Configure the adaptive research loop (advanced mode)  
-**Note**: This is used by `./delve-adaptive` only, not standard research
+**Note**: This is used by `./cconductor-adaptive` only, not standard research
 
 ### Key Settings
 
@@ -710,7 +710,7 @@ Three built-in profiles:
 
 **File**: `config/knowledge-config.json`  
 **Purpose**: Configure knowledge base directories  
-**Affects**: Where Delve looks for domain knowledge
+**Affects**: Where CConductor looks for domain knowledge
 
 ### Structure
 
@@ -754,7 +754,7 @@ Three built-in profiles:
 
 **File**: `config/paths.json`  
 **Purpose**: Configure all directory paths  
-**Affects**: Where Delve stores data and looks for inputs
+**Affects**: Where CConductor stores data and looks for inputs
 
 ### Structure
 
@@ -796,10 +796,10 @@ Three built-in profiles:
 ```json
 {
   "sessions": "/mnt/research-data/sessions",
-  "logs": "/var/log/delve",
+  "logs": "/var/log/cconductor",
   "pdfs": "/shared/papers",
   "knowledge_base": "../knowledge-base",
-  "knowledge_base_custom": "/company/delve-knowledge",
+  "knowledge_base_custom": "/company/cconductor-knowledge",
   "agents_dir": "../src/claude-runtime/agents",
   "hooks_dir": "../src/claude-runtime/hooks"
 }
@@ -849,9 +849,9 @@ Three built-in profiles:
 **Always use this pattern**:
 
 1. **Never edit `.default.json` files** in `PROJECT_ROOT/config/` - these are tracked in git
-2. **Create user configs** in `~/.config/delve/` using `./src/utils/config-loader.sh init <config-name>`
-3. **Edit user configs** in `~/.config/delve/` - these are in your home directory, never touched by git
-4. **Reset anytime**: Delete `~/.config/delve/config-name.json` to revert to defaults
+2. **Create user configs** in `~/.config/cconductor/` using `./src/utils/config-loader.sh init <config-name>`
+3. **Edit user configs** in `~/.config/cconductor/` - these are in your home directory, never touched by git
+4. **Reset anytime**: Delete `~/.config/cconductor/config-name.json` to revert to defaults
 
 **Result**:
 
@@ -868,21 +868,21 @@ Three built-in profiles:
 
 ```bash
 # Override security profile
-export DELVE_SECURITY_PROFILE=permissive
-./delve "research question"
+export CCONDUCTOR_SECURITY_PROFILE=permissive
+./cconductor "research question"
 
 # Override mode
 export RESEARCH_MODE=scientific
-./delve "research question"
+./cconductor "research question"
 
 # Override log level
 export LOG_LEVEL=debug
-./delve "research question"
+./cconductor "research question"
 ```
 
 **Supported variables**:
 
-- `DELVE_SECURITY_PROFILE` - Security profile
+- `CCONDUCTOR_SECURITY_PROFILE` - Security profile
 - `RESEARCH_MODE` - Research mode
 - `LOG_LEVEL` - Logging level
 - `MAX_PARALLEL_AGENTS` - Agent parallelism
@@ -894,7 +894,7 @@ export LOG_LEVEL=debug
 **Create session-specific config** (coming in v0.2):
 
 ```bash
-# Will be: ./delve "question" --config custom-config.json
+# Will be: ./cconductor "question" --config custom-config.json
 ```
 
 **Current workaround**: Modify main config before running, restore after.
@@ -908,7 +908,7 @@ export LOG_LEVEL=debug
 **Check config syntax**:
 
 ```bash
-jq empty config/delve-config.json
+jq empty config/cconductor-config.json
 # No output = valid JSON
 # Error message = fix syntax
 ```
@@ -934,7 +934,7 @@ mkdir -p backups/$(date +%Y%m%d)
 cp config/*.json backups/$(date +%Y%m%d)/
 
 # Or just your customizations
-cp config/delve-config.json config/delve-config.backup
+cp config/cconductor-config.json config/cconductor-config.backup
 cp config/security-config.json config/security-config.backup
 ```
 
@@ -956,10 +956,10 @@ cp config/security-config.json config/security-config.backup
 **Check version**:
 
 ```bash
-jq .version config/delve-config.json
+jq .version config/cconductor-config.json
 ```
 
-**Version compatibility**: Delve checks config versions and migrates if needed.
+**Version compatibility**: CConductor checks config versions and migrates if needed.
 
 ---
 
@@ -968,14 +968,14 @@ jq .version config/delve-config.json
 **See active configuration**:
 
 ```bash
-./delve configure
+./cconductor configure
 # Shows current settings (planned for v0.2)
 ```
 
 **Current workaround - check config manually**:
 
 ```bash
-jq . config/delve-config.json
+jq . config/cconductor-config.json
 ```
 
 **See what security profile is active**:
@@ -987,7 +987,7 @@ jq .security_profile config/security-config.json
 **See what research mode will be used**:
 
 ```bash
-jq '.mode_selection.default_mode' config/delve-modes.json
+jq '.mode_selection.default_mode' config/cconductor-modes.json
 ```
 
 ---
@@ -1040,11 +1040,11 @@ jq '.mode_selection.default_mode' config/delve-modes.json
 
 ## See Also
 
-- **[User Guide](USER_GUIDE.md)** - How to use Delve
+- **[User Guide](USER_GUIDE.md)** - How to use CConductor
 - **[Security Guide](SECURITY_GUIDE.md)** - Security configuration details
 - **[Custom Knowledge](CUSTOM_KNOWLEDGE.md)** - Adding domain knowledge
 - **[Quality Guide](QUALITY_GUIDE.md)** - Quality scoring configuration
 
 ---
 
-**Delve Configuration** - Fine-tune your research ⚙️
+**CConductor Configuration** - Fine-tune your research ⚙️

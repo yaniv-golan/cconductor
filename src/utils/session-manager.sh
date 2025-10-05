@@ -179,15 +179,15 @@ continue_agent_session() {
     fi
 
     # Get tool restrictions
-    local delve_root
-    if [ -n "${DELVE_ROOT:-}" ]; then
-        delve_root="$DELVE_ROOT"
+    local cconductor_root
+    if [ -n "${CCONDUCTOR_ROOT:-}" ]; then
+        cconductor_root="$CCONDUCTOR_ROOT"
     else
         # Walk up from session_dir to find root
         local search_dir="$session_dir"
         while [ "$search_dir" != "/" ]; do
             if [ -f "$search_dir/VERSION" ] && [ -d "$search_dir/src" ]; then
-                delve_root="$search_dir"
+                cconductor_root="$search_dir"
                 break
             fi
             search_dir="$(dirname "$search_dir")"
@@ -196,7 +196,7 @@ continue_agent_session() {
 
     local allowed_tools=""
     local disallowed_tools=""
-    local agent_tools_file="$delve_root/src/utils/agent-tools.json"
+    local agent_tools_file="$cconductor_root/src/utils/agent-tools.json"
 
     if [ -f "$agent_tools_file" ]; then
         allowed_tools=$(jq -r \

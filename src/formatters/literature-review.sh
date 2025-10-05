@@ -297,7 +297,7 @@ format_literature_review() {
 
 ---
 
-*This literature review was generated using the Deep Delve with full PDF analysis and systematic synthesis. All papers were read in full using Claude's native PDF processing capabilities. Citations have been verified and cross-referenced.*
+*This literature review was generated using the Deep CConductor with full PDF analysis and systematic synthesis. All papers were read in full using Claude's native PDF processing capabilities. Citations have been verified and cross-referenced.*
 
 TEMPLATE_START
 

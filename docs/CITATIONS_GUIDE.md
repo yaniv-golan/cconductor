@@ -1,6 +1,6 @@
-# Delve Citations & Bibliography Guide
+# CConductor Citations & Bibliography Guide
 
-**Understanding and using Delve's automatic citation system**
+**Understanding and using CConductor's automatic citation system**
 
 **Version**: 0.1.0  
 **Last Updated**: October 2025  
@@ -22,7 +22,7 @@
 
 ## Introduction
 
-Delve automatically tracks and cites all sources used during research. This guide explains how the citation system works and how to use it effectively.
+CConductor automatically tracks and cites all sources used during research. This guide explains how the citation system works and how to use it effectively.
 
 **Who needs this**:
 
@@ -31,7 +31,7 @@ Delve automatically tracks and cites all sources used during research. This guid
 - Professionals who need to cite sources
 - Anyone requiring traceable references
 
-**What Delve provides**:
+**What CConductor provides**:
 
 - Automatic source tracking during research
 - In-text citations with numbered references
@@ -45,7 +45,7 @@ Delve automatically tracks and cites all sources used during research. This guid
 
 ### Automatic Source Tracking
 
-Delve tracks every source accessed during research:
+CConductor tracks every source accessed during research:
 
 **What's tracked**:
 
@@ -115,7 +115,7 @@ Every report ends with a complete bibliography:
 
 ## Citations by Research Mode
 
-Delve automatically adjusts citation style and density based on the research mode detected from your question or configured in settings.
+CConductor automatically adjusts citation style and density based on the research mode detected from your question or configured in settings.
 
 ### Scientific/Academic Research
 
@@ -266,7 +266,7 @@ using Docker as of 2023 [3].
 
 ### Meeting Academic Standards
 
-**What Delve provides**:
+**What CConductor provides**:
 
 - ✅ All major claims are cited
 - ✅ Bibliography is complete and formatted
@@ -282,9 +282,9 @@ using Docker as of 2023 [3].
 
 ### Configuring for Academic Research
 
-To get the most academic-focused citations, configure Delve for scientific research:
+To get the most academic-focused citations, configure CConductor for scientific research:
 
-**Edit**: `config/delve-modes.json`
+**Edit**: `config/cconductor-modes.json`
 
 The `scientific` mode is configured to:
 
@@ -297,9 +297,9 @@ The `scientific` mode is configured to:
 **Alternatively**, use keywords in your question to trigger academic mode automatically:
 
 ```bash
-./delve "peer-reviewed research on quantum error correction"
-./delve "systematic review of CRISPR therapeutic applications"
-./delve "meta-analysis of mindfulness interventions for anxiety"
+./cconductor "peer-reviewed research on quantum error correction"
+./cconductor "systematic review of CRISPR therapeutic applications"
+./cconductor "meta-analysis of mindfulness interventions for anxiety"
 ```
 
 Keywords like "peer-reviewed", "systematic review", "meta-analysis", "published research" automatically trigger academic source preferences.
@@ -406,7 +406,7 @@ If citation coverage is lower than you need:
 **Method 1: Resume research** (most effective):
 
 ```bash
-./delve resume session_123
+./cconductor resume session_123
 ```
 
 Continuing research typically:
@@ -417,7 +417,7 @@ Continuing research typically:
 
 **Method 2: Configure for academic sources**:
 
-Edit `config/delve-config.json` to emphasize academic sources:
+Edit `config/cconductor-config.json` to emphasize academic sources:
 
 ```json
 {
@@ -435,14 +435,14 @@ Then research questions with academic keywords.
 
 **Method 3: Provide PDF sources**:
 
-Add academic PDFs to help Delve find papers:
+Add academic PDFs to help CConductor find papers:
 
 ```bash
 mkdir pdfs/
 # Add your PDF files
 cp important-papers/*.pdf pdfs/
 
-./delve "your question based on these papers"
+./cconductor "your question based on these papers"
 ```
 
 **Method 4: Be more specific in questions**:
@@ -472,17 +472,17 @@ More specific questions get better-sourced results:
 1. **Resume research**:
 
    ```bash
-   ./delve resume session_123
+   ./cconductor resume session_123
    ```
 
 2. **Use more specific question**:
 
    ```bash
    # Instead of:
-   ./delve "AI trends"
+   ./cconductor "AI trends"
    
    # Try:
-   ./delve "peer-reviewed research on large language model advances 2023-2024"
+   ./cconductor "peer-reviewed research on large language model advances 2023-2024"
    ```
 
 3. **Add time to research**:
@@ -509,7 +509,7 @@ More specific questions get better-sourced results:
 1. **Check report completion**:
 
    ```bash
-   ./delve latest
+   ./cconductor latest
    # Look for "Research Complete!" message
    ```
 
@@ -522,7 +522,7 @@ More specific questions get better-sourced results:
 3. **Resume research**:
 
    ```bash
-   ./delve resume session_123
+   ./cconductor resume session_123
    ```
 
 4. **Check report file**:
@@ -547,13 +547,13 @@ More specific questions get better-sourced results:
 1. **Use academic keywords in question**:
 
    ```bash
-   ./delve "peer-reviewed studies on [topic]"
-   ./delve "published research on [topic]"
-   ./delve "academic literature on [topic]"
+   ./cconductor "peer-reviewed studies on [topic]"
+   ./cconductor "published research on [topic]"
+   ./cconductor "academic literature on [topic]"
    ```
 
 2. **Configure default mode to scientific**:
-   Edit `config/delve-config.json`:
+   Edit `config/cconductor-config.json`:
 
    ```json
    {
@@ -568,13 +568,13 @@ More specific questions get better-sourced results:
    ```bash
    mkdir pdfs/
    # Add academic PDFs
-   ./delve "question about papers in pdfs/"
+   ./cconductor "question about papers in pdfs/"
    ```
 
 4. **Resume for more academic sources**:
 
    ```bash
-   ./delve resume session_123
+   ./cconductor resume session_123
    ```
 
 ---
@@ -586,7 +586,7 @@ More specific questions get better-sourced results:
 **Question**:
 
 ```bash
-./delve "What are the mechanisms of action for mRNA vaccines and their efficacy data from clinical trials?"
+./cconductor "What are the mechanisms of action for mRNA vaccines and their efficacy data from clinical trials?"
 ```
 
 **Result excerpt**:
@@ -637,7 +637,7 @@ hospitalization, with over 95% protection [5][6].
 **Question**:
 
 ```bash
-./delve "What is the total addressable market for AI-powered customer service platforms in 2024?"
+./cconductor "What is the total addressable market for AI-powered customer service platforms in 2024?"
 ```
 
 **Result excerpt**:
@@ -686,4 +686,4 @@ is projected to grow to $47.1B by 2030, representing a CAGR of 26.8% [1].
 
 ---
 
-**Delve Citations** - Automatic source tracking for credible research 📚
+**CConductor Citations** - Automatic source tracking for credible research 📚

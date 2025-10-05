@@ -1,6 +1,6 @@
 # Research Data Sources
 
-This document describes the research data sources available to Delve agents, including MCP servers and direct API endpoints.
+This document describes the research data sources available to CConductor agents, including MCP servers and direct API endpoints.
 
 ## Academic Sources
 
@@ -162,5 +162,5 @@ To add MCP servers available to ALL sessions, create `~/.claude/mcp.json`:
 }
 ```
 
-These will be available in all Claude Code sessions, including Delve research sessions.
+These will be available in all Claude Code sessions, including CConductor research sessions.
 

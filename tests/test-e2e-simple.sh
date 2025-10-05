@@ -1,6 +1,6 @@
 #!/bin/bash
 # End-to-End Test: Simple Research Query
-# Tests the full research workflow using the delve entry point
+# Tests the full research workflow using the cconductor entry point
 
 set -euo pipefail
 
@@ -19,27 +19,27 @@ TEST_TIMEOUT=120  # 2 minutes for a simple test
 echo "Test Configuration:"
 echo "  Question: $RESEARCH_QUESTION"
 echo "  Timeout: ${TEST_TIMEOUT}s"
-echo "  Entry point: $PROJECT_ROOT/delve"
+echo "  Entry point: $PROJECT_ROOT/cconductor"
 echo ""
 
-# Test 1: Check delve entry point exists
-echo "Test 1: Checking delve entry point..."
-if [ -x "$PROJECT_ROOT/delve" ]; then
-    echo "✅ Pass: delve entry point exists and is executable"
+# Test 1: Check cconductor entry point exists
+echo "Test 1: Checking cconductor entry point..."
+if [ -x "$PROJECT_ROOT/cconductor" ]; then
+    echo "✅ Pass: cconductor entry point exists and is executable"
 else
-    echo "❌ Fail: delve entry point not found or not executable"
+    echo "❌ Fail: cconductor entry point not found or not executable"
     exit 1
 fi
 echo ""
 
 # Test 2: Check initialization
 echo "Test 2: Checking system initialization..."
-if [ -d ~/.config/delve ] || [ -d ~/Library/ApplicationSupport/Delve ]; then
+if [ -d ~/.config/cconductor ] || [ -d ~/Library/ApplicationSupport/CConductor ]; then
     echo "✅ Pass: System appears to be initialized"
 else
     echo "⚠️  Warning: System may not be initialized"
-    echo "  Running: ./delve --init --yes"
-    cd "$PROJECT_ROOT" && ./delve --init --yes
+    echo "  Running: ./cconductor --init --yes"
+    cd "$PROJECT_ROOT" && ./cconductor --init --yes
 fi
 echo ""
 
@@ -58,7 +58,7 @@ echo ""
 # Test 4: Test simple agent invocation (quick validation)
 echo "Test 4: Testing agent invocation system..."
 # Create temporary session with .claude context for testing
-TEST_SESSION="/tmp/delve-test-session-$$"
+TEST_SESSION="/tmp/cconductor-test-session-$$"
 mkdir -p "$TEST_SESSION"
 cp -r "$PROJECT_ROOT/src/claude-runtime" "$TEST_SESSION/.claude"
 mv "$TEST_SESSION/.claude/settings.json" "$TEST_SESSION/.claude/settings.local.json" 2>/dev/null || true
@@ -67,7 +67,7 @@ if [ -f "$PROJECT_ROOT/src/claude-runtime/mcp.json" ]; then
 fi
 chmod +x "$TEST_SESSION/.claude/hooks/"*.sh 2>/dev/null || true
 
-TEST_OUTPUT="/tmp/delve-agent-test-$$.txt"
+TEST_OUTPUT="/tmp/cconductor-agent-test-$$.txt"
 if timeout 60 bash "$PROJECT_ROOT/src/utils/invoke-agent.sh" invoke-simple \
     research-planner \
     "Quick test: What is Git?" \
@@ -92,20 +92,20 @@ echo "  (Limited to 1 iteration for testing)"
 echo ""
 
 # Set environment to limit iterations for testing
-export DELVE_TEST_MODE=1
-export DELVE_MAX_ITERATIONS=1
+export CCONDUCTOR_TEST_MODE=1
+export CCONDUCTOR_MAX_ITERATIONS=1
 
 # Create a test wrapper that limits the research
-TEST_SESSION_ROOT="/tmp/delve-e2e-test-$(date +%s)"
+TEST_SESSION_ROOT="/tmp/cconductor-e2e-test-$(date +%s)"
 mkdir -p "$TEST_SESSION_ROOT"
 
 echo "  Starting research..."
 START_TIME=$(date +%s)
 
-# Run delve with the question
+# Run cconductor with the question
 # Note: This will run the full pipeline but stop after 1 iteration
 cd "$PROJECT_ROOT"
-if timeout "$TEST_TIMEOUT" ./src/delve-adaptive.sh "$RESEARCH_QUESTION" 2>&1 | tee "$TEST_SESSION_ROOT/research.log"; then
+if timeout "$TEST_TIMEOUT" ./src/cconductor-adaptive.sh "$RESEARCH_QUESTION" 2>&1 | tee "$TEST_SESSION_ROOT/research.log"; then
     END_TIME=$(date +%s)
     DURATION=$((END_TIME - START_TIME))
     echo ""
@@ -183,7 +183,7 @@ if [ -n "$LATEST_SESSION" ] && [ -d "$LATEST_SESSION" ]; then
     echo "  cat knowledge-graph.json | jq '.'"
     echo ""
     echo "To continue research:"
-    echo "  ./delve resume $(basename "$LATEST_SESSION")"
+    echo "  ./cconductor resume $(basename "$LATEST_SESSION")"
     echo ""
 fi
 

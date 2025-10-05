@@ -1,12 +1,12 @@
 #!/bin/bash
-# Delve Installer
-# Installs Delve and optionally adds it to PATH
+# CConductor Installer
+# Installs CConductor and optionally adds it to PATH
 
 set -euo pipefail
 
 VERSION="0.1.0"
-REPO_URL="https://github.com/yaniv-golan/delve.git"
-DEFAULT_INSTALL_DIR="$HOME/.delve"
+REPO_URL="https://github.com/yaniv-golan/cconductor.git"
+DEFAULT_INSTALL_DIR="$HOME/.cconductor"
 
 # Colors for output
 RED='\033[0;31m'
@@ -88,17 +88,17 @@ add_to_path() {
     touch "$shell_config"
     
     # Add PATH entry
-    info "Adding Delve to PATH in $shell_config"
+    info "Adding CConductor to PATH in $shell_config"
     
     case "$shell_type" in
         fish)
             echo "" >> "$shell_config"
-            echo "# Delve Research Engine" >> "$shell_config"
+            echo "# CConductor Research Engine" >> "$shell_config"
             echo "set -gx PATH $install_dir \$PATH" >> "$shell_config"
             ;;
         *)
             echo "" >> "$shell_config"
-            echo "# Delve Research Engine" >> "$shell_config"
+            echo "# CConductor Research Engine" >> "$shell_config"
             echo "export PATH=\"$install_dir:\$PATH\"" >> "$shell_config"
             ;;
     esac
@@ -110,7 +110,7 @@ add_to_path() {
 # Main installation
 main() {
     echo "══════════════════════════════════════════════"
-    echo "  Delve Installer v$VERSION"
+    echo "  CConductor Installer v$VERSION"
     echo "══════════════════════════════════════════════"
     echo ""
     
@@ -133,13 +133,13 @@ main() {
     
     # Clone or update repository
     if [ -d "$INSTALL_DIR/.git" ]; then
-        info "Delve already installed at $INSTALL_DIR"
+        info "CConductor already installed at $INSTALL_DIR"
         echo "Updating to latest version..."
         cd "$INSTALL_DIR"
         git pull origin main
         success "Updated to latest version"
     else
-        info "Installing Delve to $INSTALL_DIR"
+        info "Installing CConductor to $INSTALL_DIR"
         git clone "$REPO_URL" "$INSTALL_DIR"
         success "Cloned repository"
     fi
@@ -148,7 +148,7 @@ main() {
     
     # Make scripts executable
     info "Setting permissions..."
-    chmod +x delve
+    chmod +x cconductor
     chmod +x src/init.sh
     chmod +x src/*.sh 2>/dev/null || true
     chmod +x src/utils/*.sh 2>/dev/null || true
@@ -157,7 +157,7 @@ main() {
     # Run initialization
     echo ""
     info "Running first-time setup..."
-    ./delve --init --yes
+    ./cconductor --init --yes
     
     echo ""
     echo "══════════════════════════════════════════════"
@@ -167,8 +167,8 @@ main() {
     
     # Ask about PATH
     if [ "$ADD_TO_PATH" = "ask" ]; then
-        echo "Would you like to add Delve to your PATH?"
-        echo "This allows you to run 'delve' from anywhere."
+        echo "Would you like to add CConductor to your PATH?"
+        echo "This allows you to run 'cconductor' from anywhere."
         echo ""
         read -p "Add to PATH? [Y/n] " -r response
         
@@ -178,8 +178,8 @@ main() {
                 ;;
             *)
                 info "Skipped adding to PATH"
-                info "To use Delve, either:"
-                info "  1. Run: $INSTALL_DIR/delve \"your question\""
+                info "To use CConductor, either:"
+                info "  1. Run: $INSTALL_DIR/cconductor \"your question\""
                 info "  2. Add manually to PATH: export PATH=\"$INSTALL_DIR:\$PATH\""
                 ;;
         esac
@@ -193,13 +193,13 @@ main() {
     
     if echo "$PATH" | grep -q "$INSTALL_DIR"; then
         echo "  • Reload your shell: source $(get_shell_config)"
-        echo "  • Start researching: delve \"your research question\""
+        echo "  • Start researching: cconductor \"your research question\""
     else
-        echo "  • Start researching: $INSTALL_DIR/delve \"your research question\""
+        echo "  • Start researching: $INSTALL_DIR/cconductor \"your research question\""
     fi
     
-    echo "  • View latest results: delve latest"
-    echo "  • Show help: delve --help"
+    echo "  • View latest results: cconductor latest"
+    echo "  • Show help: cconductor --help"
     echo ""
     
     success "Happy researching! 🔬"

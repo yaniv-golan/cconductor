@@ -15,7 +15,7 @@ echo "Question: $QUESTION"
 # Measure execution time
 START_TIME=$(date +%s)
 
-"$PROJECT_ROOT/delve" "$QUESTION"
+"$PROJECT_ROOT/cconductor" "$QUESTION"
 
 END_TIME=$(date +%s)
 DURATION=$((END_TIME - START_TIME))

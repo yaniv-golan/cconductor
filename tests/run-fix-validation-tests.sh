@@ -14,7 +14,7 @@ NC='\033[0m' # No Color
 echo ""
 echo "╔════════════════════════════════════════════════════════════╗"
 echo "║                                                            ║"
-echo "║         DELVE BUG FIX VALIDATION TEST SUITE                ║"
+echo "║         CCONDUCTOR BUG FIX VALIDATION TEST SUITE                ║"
 echo "║                                                            ║"
 echo "╚════════════════════════════════════════════════════════════╝"
 echo ""

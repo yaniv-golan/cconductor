@@ -260,11 +260,11 @@ Commands:
 Examples:
   # Resolve cache directory
   $0 resolve cache_dir
-  # Output: /Users/username/.cache/delve
+  # Output: /Users/username/.cache/cconductor
 
   # Ensure log directory exists
   $0 ensure log_dir
-  # Output: /Users/username/.claude/delve/logs
+  # Output: /Users/username/.claude/cconductor/logs
   # (creates directory if missing)
 
   # List all paths
@@ -287,11 +287,11 @@ Variable Expansion:
 
 Path Configuration:
   Default paths: config/paths.default.json (git-tracked, don't edit)
-  Custom paths:  ~/.config/delve/paths.json (user customizations)
+  Custom paths:  ~/.config/cconductor/paths.json (user customizations)
 
   Create custom config:
     ./src/utils/config-loader.sh init paths
-    vim ~/.config/delve/paths.json
+    vim ~/.config/cconductor/paths.json
 
 EOF
             ;;

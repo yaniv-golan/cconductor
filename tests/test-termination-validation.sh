@@ -12,7 +12,7 @@ echo "║  Test: Termination Validation                             ║"
 echo "╚════════════════════════════════════════════════════════════╝"
 echo ""
 
-# Define should_terminate function (extracted from delve-adaptive.sh)
+# Define should_terminate function (extracted from cconductor-adaptive.sh)
 should_terminate() {
     local coordinator_output_file="$1"
 

@@ -1,10 +1,10 @@
 # Knowledge Extension Guide
 
-This guide explains how to add custom domain knowledge to the Delve without modifying core files.
+This guide explains how to add custom domain knowledge to the CConductor without modifying core files.
 
 ## Overview
 
-The Delve uses a **WordPress-style extensible knowledge system** with convention-based auto-discovery and priority-based loading.
+The CConductor uses a **WordPress-style extensible knowledge system** with convention-based auto-discovery and priority-based loading.
 
 ### Directory Structure
 
@@ -86,7 +86,7 @@ Custom knowledge is **automatically discovered** and loaded by agents!
 
 ```bash
 # Run research - your custom knowledge is automatically included
-./delve "Research question about my domain"
+./cconductor "Research question about my domain"
 ```
 
 ### 3. Verify Loading
@@ -152,8 +152,8 @@ Add to `~/.claude/CLAUDE.md` (user-wide Claude Code configuration):
 ```markdown
 ## Custom Knowledge Imports
 
-@/absolute/path/to/delve/knowledge-base-custom/healthcare-policy.md
-@/absolute/path/to/delve/knowledge-base-custom/crypto-markets.md
+@/absolute/path/to/cconductor/knowledge-base-custom/healthcare-policy.md
+@/absolute/path/to/cconductor/knowledge-base-custom/crypto-markets.md
 ```
 
 **Option 3: Session-specific (one session only)**
@@ -188,7 +188,7 @@ Use updated metrics for this specific research:
 EOF
 
 # Run research - uses session override
-./delve "VC question" --resume session_1234567890
+./cconductor "VC question" --resume session_1234567890
 
 # Other sessions still use default vc-methodology.md
 ```
@@ -501,7 +501,7 @@ Test custom knowledge with simple queries before using in important research:
 
 ```bash
 # Test query
-./delve "Simple test question about my domain"
+./cconductor "Simple test question about my domain"
 
 # Review output for knowledge integration
 cat research-sessions/session_*/research-report.md
@@ -536,7 +536,7 @@ Usage:
 
 ```bash
 # Automatically loaded for relevant queries
-./delve "Analyze FDA approval process for digital health devices"
+./cconductor "Analyze FDA approval process for digital health devices"
 ```
 
 ### Example 2: Cryptocurrency Markets
@@ -565,7 +565,7 @@ Framework for analyzing cryptocurrency projects, tokenomics, and market dynamics
 Usage:
 
 ```bash
-./delve "Analyze DeFi lending protocols market"
+./cconductor "Analyze DeFi lending protocols market"
 ```
 
 ## Configuration Reference

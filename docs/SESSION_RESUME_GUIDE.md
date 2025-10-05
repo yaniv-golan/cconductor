@@ -2,7 +2,7 @@
 
 ## Overview
 
-The Delve research engine supports **resuming existing research sessions**. This allows you to:
+The CConductor research engine supports **resuming existing research sessions**. This allows you to:
 
 - Continue research when interrupted
 - Improve quality scores by running additional iterations
@@ -17,8 +17,8 @@ Each research session creates a directory with complete state in your OS-appropr
 
 **Session locations**:
 
-- **macOS**: `~/Library/Application Support/Delve/research-sessions/session_XXXXX/`
-- **Linux**: `~/.local/share/delve/research-sessions/session_XXXXX/`
+- **macOS**: `~/Library/Application Support/CConductor/research-sessions/session_XXXXX/`
+- **Linux**: `~/.local/share/cconductor/research-sessions/session_XXXXX/`
 
 **Session structure**:
 
@@ -50,10 +50,10 @@ The session tracks:
 
 ```bash
 # Start new research
-./delve "What is quantum computing?"
+./cconductor "What is quantum computing?"
 
 # Later, resume that session
-./delve resume session_1234567890
+./cconductor resume session_1234567890
 ```
 
 ### Finding Sessions
@@ -61,7 +61,7 @@ The session tracks:
 List all available sessions:
 
 ```bash
-./delve sessions
+./cconductor sessions
 ```
 
 Output:
@@ -79,7 +79,7 @@ session_1234567892        Market size for AI coding assistants               res
 Find your latest session:
 
 ```bash
-./delve latest
+./cconductor latest
 ```
 
 ### When to Resume
@@ -88,7 +88,7 @@ Find your latest session:
 
 ```bash
 # Initial run finishes with Quality Score: 65/100
-./delve resume session_1234567890
+./cconductor resume session_1234567890
 # Expected: +10-20 quality points per additional iteration
 ```
 
@@ -96,7 +96,7 @@ Find your latest session:
 
 ```bash
 # Ctrl+C during research, or system crash, or API limits
-./delve resume session_1234567890
+./cconductor resume session_1234567890
 # Picks up where it left off, completed work is preserved
 ```
 
@@ -104,20 +104,20 @@ Find your latest session:
 
 ```bash
 # First pass: overview (score 75)
-./delve "quantum computing"
+./cconductor "quantum computing"
 
 # Second pass: more depth (score 88)
-./delve resume session_XYZ
+./cconductor resume session_XYZ
 
 # Third pass: publication quality (score 94)
-./delve resume session_XYZ
+./cconductor resume session_XYZ
 ```
 
 **4. Found Gaps After Review**
 
 ```bash
 # Read your report and realize more research needed
-./delve resume session_1234567890
+./cconductor resume session_1234567890
 # Coordinator will identify and address remaining gaps
 ```
 
@@ -126,7 +126,7 @@ Find your latest session:
 ### Step 1: Session Validation
 
 ```bash
-./delve resume session_1234567890
+./cconductor resume session_1234567890
 ```
 
 The system:
@@ -184,11 +184,11 @@ Sessions track their status:
 # Research is running...
 # User hits Ctrl+C or system crashes
 
-$ ./delve sessions
+$ ./cconductor sessions
 SESSION ID                QUESTION                STATUS
 session_1234567890        What is Docker?         active
 
-$ ./delve resume session_1234567890
+$ ./cconductor resume session_1234567890
 # Loads session, shows progress
 # Asks if you want to continue or regenerate tasks
 # Resumes from iteration 3 (if that's where it stopped)
@@ -197,12 +197,12 @@ $ ./delve resume session_1234567890
 ### Scenario 2: Improve Quality Score
 
 ```bash
-$ ./delve "What is quantum computing?"
+$ ./cconductor "What is quantum computing?"
 # ... research completes ...
 # Quality Score: 68/100 - FAIR
 # 8 unresolved gaps
 
-$ ./delve resume session_1234567890
+$ ./cconductor resume session_1234567890
 # Current State shows: Confidence: 0.68, Unresolved gaps: 8
 # Runs coordinator to address gaps
 # Quality Score improves to: 85/100 - VERY GOOD
@@ -211,11 +211,11 @@ $ ./delve resume session_1234567890
 ### Scenario 3: API Rate Limit Hit
 
 ```bash
-$ ./delve "comprehensive survey of AI safety research"
+$ ./cconductor "comprehensive survey of AI safety research"
 # ... makes many API calls ...
 # Error: Rate limit exceeded
 
-$ ./delve resume session_1234567890
+$ ./cconductor resume session_1234567890
 # Wait for rate limit to reset (check your API provider)
 # Resume continues from where it failed
 # Completed tasks aren't re-executed
@@ -224,7 +224,7 @@ $ ./delve resume session_1234567890
 ### Scenario 4: No Pending Tasks
 
 ```bash
-$ ./delve resume session_1234567890
+$ ./cconductor resume session_1234567890
 
 ⚠️  No pending tasks found in session.
 
@@ -281,7 +281,7 @@ All session state updates use file locking:
 ### Session Not Found
 
 ```bash
-$ ./delve resume my-session
+$ ./cconductor resume my-session
 ❌ Error: Session not found: my-session
 
 Available sessions:
@@ -289,7 +289,7 @@ session_1234567890
 session_1234567891
 ```
 
-**Solution**: Use exact session ID from `./delve sessions`
+**Solution**: Use exact session ID from `./cconductor sessions`
 
 ### Version Incompatibility
 
@@ -336,7 +336,7 @@ File: knowledge-graph.json
 
 What to do:
 1. Check for running research:
-   ps aux | grep delve
+   ps aux | grep cconductor
 2. If no process found, remove stale lock from your sessions directory:
    SESSION_DIR=$(./src/utils/path-resolver.sh resolve session_dir)
    rm -rf "$SESSION_DIR"/session_*/knowledge-graph.json.lock
@@ -365,9 +365,9 @@ What to do:
 You can resume multiple times:
 
 ```bash
-./delve "question"          # Iteration 1-3
-./delve resume session_XYZ  # Iteration 4-6
-./delve resume session_XYZ  # Iteration 7-9
+./cconductor "question"          # Iteration 1-3
+./cconductor resume session_XYZ  # Iteration 4-6
+./cconductor resume session_XYZ  # Iteration 7-9
 ```
 
 Each resume:
@@ -387,8 +387,8 @@ session_1234567890
 Future enhancement (planned v0.2):
 
 ```bash
-./delve "question" --name my-research-2024
-./delve resume my-research-2024
+./cconductor "question" --name my-research-2024
+./cconductor resume my-research-2024
 ```
 
 ## Advanced Usage
@@ -397,7 +397,7 @@ Future enhancement (planned v0.2):
 
 ```bash
 # Can use full path instead of session ID
-./delve resume session_1234567890
+./cconductor resume session_1234567890
 
 # Find your session directory
 SESSION_DIR=$(./src/utils/path-resolver.sh resolve session_dir)
@@ -433,7 +433,7 @@ For major version upgrades:
 
 ```bash
 # Not yet implemented
-./delve migrate session_1234567890 --to-version 2.0.0
+./cconductor migrate session_1234567890 --to-version 2.0.0
 ```
 
 ## FAQ

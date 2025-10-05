@@ -278,8 +278,8 @@ Agents that read should not write, and vice versa (when possible).
 
 ### Load Order
 
-1. **Default**: `$DELVE_ROOT/src/utils/agent-tools.json` (git-tracked)
-2. **User Override**: `~/.config/delve/agent-tools.json` (optional, user-specific)
+1. **Default**: `$CCONDUCTOR_ROOT/src/utils/agent-tools.json` (git-tracked)
+2. **User Override**: `~/.config/cconductor/agent-tools.json` (optional, user-specific)
 3. **Session Override**: `$session_dir/agent-tools.json` (optional, per-session)
 
 Later files override earlier ones for matching agent names.
@@ -296,7 +296,7 @@ Later files override earlier ones for matching agent names.
 }
 ```
 
-**User Override** (`~/.config/delve/agent-tools.json`):
+**User Override** (`~/.config/cconductor/agent-tools.json`):
 
 ```json
 {
@@ -362,7 +362,7 @@ Verifies that `WebFetch(domain)` syntax works correctly.
 
 1. Verify JSON syntax with `jq empty agent-tools.json`
 2. Check file location (should be `src/utils/agent-tools.json`)
-3. Restart Delve session (agent definitions loaded at session start)
+3. Restart CConductor session (agent definitions loaded at session start)
 
 ### Permission Denied Errors
 

@@ -1,4 +1,4 @@
-# Delve Quick Reference
+# CConductor Quick Reference
 
 **Command cheat sheet for daily use** - v0.1.0
 
@@ -8,41 +8,41 @@
 
 ```bash
 # Start research
-./delve "your question"
+./cconductor "your question"
 
 # Research with local files (PDFs, markdown, text)
-./delve "your question" --input-dir /path/to/files/
+./cconductor "your question" --input-dir /path/to/files/
 
 # View latest results
-./delve latest
+./cconductor latest
 
 # List all sessions
-./delve sessions
+./cconductor sessions
 
 # Continue previous research
-./delve resume session_1759420487
+./cconductor resume session_1759420487
 
 # Check if running
-./delve status
+./cconductor status
 
 # Run/re-run initialization
-./delve --init
+./cconductor --init
 
 # Show help
-./delve --help
+./cconductor --help
 
 # Show version
-./delve --version
+./cconductor --version
 
 # View configuration
-./delve configure
+./cconductor configure
 ```
 
 ---
 
 ## 📁 Important Locations
 
-**Note**: Delve uses OS-appropriate data directories. Find exact paths with:
+**Note**: CConductor uses OS-appropriate data directories. Find exact paths with:
 
 ```bash
 ./src/utils/path-resolver.sh resolve session_dir
@@ -52,29 +52,29 @@
 
 | Location | What's There |
 |----------|-------------|
-| `~/Library/Application Support/Delve/research-sessions/` | All your research |
-| `~/Library/Application Support/Delve/knowledge-base-custom/` | Your custom knowledge |
-| `~/Library/Caches/Delve/pdfs/` | PDF cache |
-| `~/Library/Logs/Delve/` | Log files |
-| `~/.config/delve/` | User configuration files |
+| `~/Library/Application Support/CConductor/research-sessions/` | All your research |
+| `~/Library/Application Support/CConductor/knowledge-base-custom/` | Your custom knowledge |
+| `~/Library/Caches/CConductor/pdfs/` | PDF cache |
+| `~/Library/Logs/CConductor/` | Log files |
+| `~/.config/cconductor/` | User configuration files |
 | Project: `config/*.default.json` | Config templates (never edit) |
 
 ### Linux
 
 | Location | What's There |
 |----------|-------------|
-| `~/.local/share/delve/research-sessions/` | All your research |
-| `~/.local/share/delve/knowledge-base-custom/` | Your custom knowledge |
-| `~/.cache/delve/pdfs/` | PDF cache |
-| `~/.local/state/delve/` | Log files |
-| `~/.config/delve/` | User configuration files |
+| `~/.local/share/cconductor/research-sessions/` | All your research |
+| `~/.local/share/cconductor/knowledge-base-custom/` | Your custom knowledge |
+| `~/.cache/cconductor/pdfs/` | PDF cache |
+| `~/.local/state/cconductor/` | Log files |
+| `~/.config/cconductor/` | User configuration files |
 | Project: `config/*.default.json` | Config templates (never edit) |
 
 ### Quick Access
 
 ```bash
-# Latest report (use delve command)
-./delve latest
+# Latest report (use cconductor command)
+./cconductor latest
 
 # View latest report directly
 SESSION_DIR=$(./src/utils/path-resolver.sh resolve session_dir)
@@ -85,13 +85,13 @@ cat "$SESSION_DIR"/$(cat "$SESSION_DIR"/.latest)/research-report.md
 
 ## 🔧 Configuration Files
 
-**Location**: User configs in `~/.config/delve/`, defaults in project `config/*.default.json`
+**Location**: User configs in `~/.config/cconductor/`, defaults in project `config/*.default.json`
 
 | File | Purpose | Edit Often? |
 |------|---------|-------------|
-| `delve-config.json` | Main settings | Rarely |
+| `cconductor-config.json` | Main settings | Rarely |
 | `security-config.json` | Security profiles | Often |
-| `delve-modes.json` | Mode definitions | Rarely |
+| `cconductor-modes.json` | Mode definitions | Rarely |
 | `knowledge-config.json` | Knowledge sources | Sometimes |
 | `paths.json` | Directory paths | Rarely |
 | `adaptive-config.json` | Advanced tuning | Advanced only |
@@ -103,11 +103,11 @@ cat "$SESSION_DIR"/$(cat "$SESSION_DIR"/.latest)/research-report.md
 ./src/utils/config-loader.sh init security-config
 
 # Then edit in your home directory
-nano ~/.config/delve/security-config.json
+nano ~/.config/cconductor/security-config.json
 # Change: "security_profile": "strict" → "permissive"
 
 # Reset to defaults: delete user config
-rm ~/.config/delve/security-config.json
+rm ~/.config/cconductor/security-config.json
 ```
 
 ---
@@ -116,12 +116,12 @@ rm ~/.config/delve/security-config.json
 
 | Error | Cause | Quick Fix |
 |-------|-------|-----------|
-| "Command not found" | Not in directory | `cd /path/to/delve` first |
-| "Permission denied" | Not executable | `chmod +x delve` |
-| "No such file" | Config missing | `./delve --init` |
-| "Session not found" | Invalid session ID | Use `./delve sessions` to list |
-| "Quality score too low" | Incomplete | `./delve resume SESSION_ID` |
-| ".latest file not found" | No research yet | Run `./delve "test"` first |
+| "Command not found" | Not in directory | `cd /path/to/cconductor` first |
+| "Permission denied" | Not executable | `chmod +x cconductor` |
+| "No such file" | Config missing | `./cconductor --init` |
+| "Session not found" | Invalid session ID | Use `./cconductor sessions` to list |
+| "Quality score too low" | Incomplete | `./cconductor resume SESSION_ID` |
+| ".latest file not found" | No research yet | Run `./cconductor "test"` first |
 | "jq: command not found" | Missing dependency | `brew install jq` (macOS) |
 
 **For detailed troubleshooting**: See [Troubleshooting Guide](TROUBLESHOOTING.md)
@@ -134,29 +134,29 @@ rm ~/.config/delve/security-config.json
 
 ```bash
 # Simple question
-./delve "What is Docker?"
+./cconductor "What is Docker?"
 
 # Detailed question
-./delve "What are the latest advances in CRISPR gene editing?"
+./cconductor "What are the latest advances in CRISPR gene editing?"
 
 # Business question
-./delve "Total addressable market for AI SaaS tools in 2024"
+./cconductor "Total addressable market for AI SaaS tools in 2024"
 
 # Technical question
-./delve "How does Kubernetes handle container orchestration?"
+./cconductor "How does Kubernetes handle container orchestration?"
 ```
 
 ### Research with Local Files
 
 ```bash
 # Analyze pitch deck
-./delve "Evaluate this startup" --input-dir ./pitch-materials/
+./cconductor "Evaluate this startup" --input-dir ./pitch-materials/
 
 # Research with context documents
-./delve "Summarize findings" --input-dir ~/Documents/research/
+./cconductor "Summarize findings" --input-dir ~/Documents/research/
 
 # Market analysis with local reports
-./delve "Market size analysis" --input-dir ./market-reports/
+./cconductor "Market size analysis" --input-dir ./market-reports/
 
 # Supported: PDFs (.pdf), Markdown (.md), Text (.txt)
 ```
@@ -165,39 +165,39 @@ rm ~/.config/delve/security-config.json
 
 ```bash
 # Latest research
-./delve "Latest advances in CRISPR gene editing 2023-2024"
+./cconductor "Latest advances in CRISPR gene editing 2023-2024"
 
 # Specific topic
-./delve "Machine learning in healthcare diagnostics"
+./cconductor "Machine learning in healthcare diagnostics"
 
 # Methodology focus
-./delve "Quantum error correction methods and effectiveness"
+./cconductor "Quantum error correction methods and effectiveness"
 ```
 
 ### Market Research
 
 ```bash
 # Market sizing
-./delve "SaaS CRM market size and growth 2024"
+./cconductor "SaaS CRM market size and growth 2024"
 
 # Competitive analysis
-./delve "Compare top 5 CRM platforms: features and pricing"
+./cconductor "Compare top 5 CRM platforms: features and pricing"
 
 # Industry trends
-./delve "Emerging trends in fintech 2024-2025"
+./cconductor "Emerging trends in fintech 2024-2025"
 ```
 
 ### Technical Research
 
 ```bash
 # Architecture
-./delve "Docker containerization architecture"
+./cconductor "Docker containerization architecture"
 
 # Comparison
-./delve "Kubernetes vs Docker Swarm comparison"
+./cconductor "Kubernetes vs Docker Swarm comparison"
 
 # Best practices
-./delve "Best practices for implementing OAuth 2.0"
+./cconductor "Best practices for implementing OAuth 2.0"
 ```
 
 ---
@@ -207,22 +207,22 @@ rm ~/.config/delve/security-config.json
 ### Quick Research + View
 
 ```bash
-./delve "question" && ./delve latest
+./cconductor "question" && ./cconductor latest
 ```
 
 ### Continue Previous
 
 ```bash
 # Resume most recent session
-./delve latest  # Shows session ID
-./delve resume <session_id_from_above>
+./cconductor latest  # Shows session ID
+./cconductor resume <session_id_from_above>
 ```
 
 ### Export Latest Report
 
 ```bash
-# Use delve latest to get the path, then copy
-./delve latest  # Shows the path
+# Use cconductor latest to get the path, then copy
+./cconductor latest  # Shows the path
 # Or use path-resolver
 SESSION_DIR=$(./src/utils/path-resolver.sh resolve session_dir)
 cp "$SESSION_DIR"/$(cat "$SESSION_DIR"/.latest)/research-report.md ~/Documents/
@@ -233,14 +233,14 @@ cp "$SESSION_DIR"/$(cat "$SESSION_DIR"/.latest)/research-report.md ~/Documents/
 ```bash
 # Find your session directory first
 SESSION_DIR=$(./src/utils/path-resolver.sh resolve session_dir)
-mkdir -p "$HOME/delve-archive/"
-mv "$SESSION_DIR"/session_old* "$HOME/delve-archive/"
+mkdir -p "$HOME/cconductor-archive/"
+mv "$SESSION_DIR"/session_old* "$HOME/cconductor-archive/"
 ```
 
 ### Monitor Progress
 
 ```bash
-watch -n 5 './delve status'
+watch -n 5 './cconductor status'
 ```
 
 ---
@@ -280,7 +280,7 @@ Edit `config/security-config.json`:
 **Improve quality**:
 
 ```bash
-./delve resume session_123  # Most effective way
+./cconductor resume session_123  # Most effective way
 ```
 
 ---
@@ -290,26 +290,26 @@ Edit `config/security-config.json`:
 ### List Sessions
 
 ```bash
-./delve sessions
+./cconductor sessions
 ```
 
 ### Find Latest
 
 ```bash
-./delve latest
+./cconductor latest
 ```
 
 ### Resume Research
 
 ```bash
-./delve resume session_1759420487
-./delve resume $(cat research-sessions/.latest)  # Resume latest
+./cconductor resume session_1759420487
+./cconductor resume $(cat research-sessions/.latest)  # Resume latest
 ```
 
 ### Check Status
 
 ```bash
-./delve status
+./cconductor status
 ```
 
 ### Organize Sessions
@@ -323,8 +323,8 @@ mkdir -p "$SESSION_DIR/project-alpha/"
 mv "$SESSION_DIR"/quantum-* "$SESSION_DIR/project-alpha/"
 
 # Archive by date
-mkdir -p "$HOME/delve-archive/2024-q3/"
-mv "$SESSION_DIR"/session_old* "$HOME/delve-archive/2024-q3/"
+mkdir -p "$HOME/cconductor-archive/2024-q3/"
+mv "$SESSION_DIR"/session_old* "$HOME/cconductor-archive/2024-q3/"
 ```
 
 ---
@@ -334,20 +334,20 @@ mv "$SESSION_DIR"/session_old* "$HOME/delve-archive/2024-q3/"
 Add to `~/.bashrc` or `~/.zshrc`:
 
 ```bash
-# Shortcuts (adjust path to your delve installation)
-alias dl='/path/to/delve/delve'
-alias dll='/path/to/delve/delve latest'
-alias dls='/path/to/delve/delve sessions'
-alias dlr='/path/to/delve/delve resume'
+# Shortcuts (adjust path to your cconductor installation)
+alias dl='/path/to/cconductor/cconductor'
+alias dll='/path/to/cconductor/cconductor latest'
+alias dls='/path/to/cconductor/cconductor sessions'
+alias dlr='/path/to/cconductor/cconductor resume'
 
 # Helper to get session directory
-alias dldir='$(cd /path/to/delve && ./src/utils/path-resolver.sh resolve session_dir)'
+alias dldir='$(cd /path/to/cconductor && ./src/utils/path-resolver.sh resolve session_dir)'
 ```
 
 **Usage after aliasing**:
 
 ```bash
-dl "your question"              # Instead of ./delve
+dl "your question"              # Instead of ./cconductor
 dll                            # Show latest
 dls                            # List sessions
 dlr session_123                # Resume
@@ -357,31 +357,31 @@ dlr session_123                # Resume
 
 ## 🎓 Learning Path
 
-**New to Delve?** Try these in order:
+**New to CConductor?** Try these in order:
 
 1. **Test it works**:
 
    ```bash
-   ./delve "What is Docker?"
+   ./cconductor "What is Docker?"
    ```
 
 2. **Check the result**:
 
    ```bash
-   ./delve latest
+   ./cconductor latest
    ```
 
 3. **Try different topics**:
 
    ```bash
-   ./delve "AI advances 2024"
-   ./delve "SaaS market size"
+   ./cconductor "AI advances 2024"
+   ./cconductor "SaaS market size"
    ```
 
 4. **Resume to improve**:
 
    ```bash
-   ./delve resume $(cat research-sessions/.latest)
+   ./cconductor resume $(cat research-sessions/.latest)
    ```
 
 ---
@@ -392,19 +392,19 @@ The following features are **planned but not yet available**:
 
 ```bash
 # CLI options (NOT available in v0.1, coming in v0.2)
-./delve "question" --mode scientific    # Explicit mode selection
-./delve "question" --speed fast         # Control research depth
-./delve "question" --output html        # HTML/JSON output formats
-./delve "question" --name my-research   # Custom session names
-./delve "question" --iterations 5       # Control iteration count
-./delve "question" --interactive        # Guided research mode
-./delve "question" --quiet              # Minimal output
+./cconductor "question" --mode scientific    # Explicit mode selection
+./cconductor "question" --speed fast         # Control research depth
+./cconductor "question" --output html        # HTML/JSON output formats
+./cconductor "question" --name my-research   # Custom session names
+./cconductor "question" --iterations 5       # Control iteration count
+./cconductor "question" --interactive        # Guided research mode
+./cconductor "question" --quiet              # Minimal output
 ```
 
 **v0.1 alternatives**:
 
 - Mode selection: Use keywords in question (e.g., "peer-reviewed research on...")
-- Speed control: Edit `config/delve-config.json`
+- Speed control: Edit `config/cconductor-config.json`
 - Session naming: Use timestamp-based names (session_TIMESTAMP)
 - Output format: Markdown only (HTML/JSON in v0.2)
 
@@ -424,6 +424,6 @@ See internal roadmap for complete feature list.
 
 ---
 
-**Quick Start**: `./delve "your question"` → `./delve latest`
+**Quick Start**: `./cconductor "your question"` → `./cconductor latest`
 
 That's it! 🔍

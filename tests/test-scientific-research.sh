@@ -14,7 +14,7 @@ QUESTION="What is the current state of research on quantum error correction in t
 echo "Question: $QUESTION"
 
 # Run research (mode detection is automatic based on question)
-"$PROJECT_ROOT/delve" "$QUESTION"
+"$PROJECT_ROOT/cconductor" "$QUESTION"
 
 # Validation
 # Get session directory using path resolver

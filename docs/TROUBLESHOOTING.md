@@ -1,4 +1,4 @@
-# Delve Troubleshooting Guide
+# CConductor Troubleshooting Guide
 
 **Solve common issues and get research back on track**
 
@@ -27,24 +27,24 @@
 **Before diving into specific issues**, run these basic checks:
 
 ```bash
-# 1. Check Delve is installed correctly
-./delve --version
+# 1. Check CConductor is installed correctly
+./cconductor --version
 
 # 2. Check for running research
-ps aux | grep delve
+ps aux | grep cconductor
 
 # 3. Check disk space
 df -h
 
 # 4. Check recent sessions
-./delve sessions
+./cconductor sessions
 
 # 5. Check latest session status
-./delve latest
+./cconductor latest
 
 # 6. Check for errors in logs (use your OS-appropriate log path)
-# macOS: tail -50 ~/Library/Logs/Delve/research.log
-# Linux: tail -50 ~/.local/state/delve/research.log
+# macOS: tail -50 ~/Library/Logs/CConductor/research.log
+# Linux: tail -50 ~/.local/state/cconductor/research.log
 
 # 7. Check for lock files in your sessions directory
 SESSION_DIR=$(./src/utils/path-resolver.sh resolve session_dir)
@@ -57,18 +57,18 @@ find "$SESSION_DIR" -name "*.lock"
 
 ## Installation & Setup Issues
 
-### Delve Command Not Found
+### CConductor Command Not Found
 
 **Symptoms**:
 
 ```bash
-$ ./delve "question"
--bash: ./delve: No such file or directory
+$ ./cconductor "question"
+-bash: ./cconductor: No such file or directory
 ```
 
 **Causes**:
 
-- Not in the Delve directory
+- Not in the CConductor directory
 - File was deleted or moved
 - Wrong working directory
 
@@ -78,17 +78,17 @@ $ ./delve "question"
 
 ```bash
 pwd
-# Should show: /path/to/delve or /path/to/research-engine
+# Should show: /path/to/cconductor or /path/to/research-engine
 
-ls -la delve
+ls -la cconductor
 # Should show executable file
 ```
 
 **2. If not in directory, navigate to it**:
 
 ```bash
-cd /path/to/delve
-./delve --version
+cd /path/to/cconductor
+./cconductor --version
 ```
 
 **3. If file doesn't exist, check installation**:
@@ -97,24 +97,24 @@ cd /path/to/delve
 # Check if git repository
 git status
 
-# If it's a git repo, check if delve exists
-ls -la | grep delve
+# If it's a git repo, check if cconductor exists
+ls -la | grep cconductor
 
 # If missing, restore from git
-git checkout delve
-chmod +x delve
+git checkout cconductor
+chmod +x cconductor
 ```
 
 **4. Set up path (optional)**:
 
 ```bash
 # Add to ~/.bashrc or ~/.zshrc:
-export PATH="/path/to/delve:$PATH"
-alias delve="/path/to/delve/delve"
+export PATH="/path/to/cconductor:$PATH"
+alias cconductor="/path/to/cconductor/cconductor"
 
 # Then:
 source ~/.bashrc  # or ~/.zshrc
-delve --version   # Should work from anywhere
+cconductor --version   # Should work from anywhere
 ```
 
 ---
@@ -124,8 +124,8 @@ delve --version   # Should work from anywhere
 **Symptoms**:
 
 ```bash
-$ ./delve "question"
--bash: ./delve: Permission denied
+$ ./cconductor "question"
+-bash: ./cconductor: Permission denied
 ```
 
 **Cause**: File is not executable.
@@ -133,10 +133,10 @@ $ ./delve "question"
 **Solution**:
 
 ```bash
-chmod +x delve
+chmod +x cconductor
 chmod +x src/*.sh
 chmod +x src/utils/*.sh
-./delve --version  # Should work now
+./cconductor --version  # Should work now
 ```
 
 ---
@@ -249,10 +249,10 @@ echo $HTTPS_PROXY
 
 ```bash
 # Question too short or empty
-./delve ""  # ❌ Will fail
+./cconductor ""  # ❌ Will fail
 
 # Solution: Provide meaningful question
-./delve "What is CRISPR and how does it work?"  # ✅
+./cconductor "What is CRISPR and how does it work?"  # ✅
 ```
 
 ---
@@ -270,11 +270,11 @@ echo $HTTPS_PROXY
 **1. Check if process is actually running**:
 
 ```bash
-ps aux | grep delve
+ps aux | grep cconductor
 # Should show running process
 
 # Check CPU usage
-top -p $(pgrep -f delve)
+top -p $(pgrep -f cconductor)
 # Should show some activity
 ```
 
@@ -295,7 +295,7 @@ tail -f logs/research.log
 
 ```bash
 # Find PID
-ps aux | grep delve
+ps aux | grep cconductor
 
 # Interrupt gracefully
 kill -INT <PID>
@@ -304,8 +304,8 @@ kill -INT <PID>
 kill -9 <PID>
 
 # Resume research
-./delve sessions
-./delve resume session_name
+./cconductor sessions
+./cconductor resume session_name
 ```
 
 **If waiting on slow API**:
@@ -346,7 +346,7 @@ Waited: 30 seconds
 **Step 1: Check for active research**:
 
 ```bash
-ps aux | grep delve-wrapper
+ps aux | grep cconductor-wrapper
 ps aux | grep adaptive-research
 
 # If found, check if it's legitimately running
@@ -380,14 +380,14 @@ rm -rf research-sessions/session_*/task-queue.json.lock
 **Step 4: Resume research**:
 
 ```bash
-./delve resume session_name
+./cconductor resume session_name
 ```
 
 **Prevention**:
 
 - Don't Ctrl+C during research
 - Let research complete naturally
-- Use `./delve status` before starting new research
+- Use `./cconductor status` before starting new research
 
 ---
 
@@ -396,7 +396,7 @@ rm -rf research-sessions/session_*/task-queue.json.lock
 **Symptoms**:
 
 ```bash
-$ ./delve resume my-session
+$ ./cconductor resume my-session
 Error: Session not found
 ```
 
@@ -405,7 +405,7 @@ Error: Session not found
 **1. List available sessions**:
 
 ```bash
-./delve sessions
+./cconductor sessions
 # Copy exact session name from output
 ```
 
@@ -433,7 +433,7 @@ ls research-sessions/my-session/
 
 ```bash
 # You may need to start fresh with similar question
-./delve "original question again"
+./cconductor "original question again"
 ```
 
 ---
@@ -455,7 +455,7 @@ ls research-sessions/my-session/
 **1. Resume research** (most effective):
 
 ```bash
-./delve resume session_name
+./cconductor resume session_name
 # Adds 10-15 points typically
 ```
 
@@ -463,10 +463,10 @@ ls research-sessions/my-session/
 
 ```bash
 # Instead of:
-./delve "AI trends"  # Too vague
+./cconductor "AI trends"  # Too vague
 
 # Try:
-./delve "peer-reviewed research on large language model safety techniques 2023-2024"
+./cconductor "peer-reviewed research on large language model safety techniques 2023-2024"
 ```
 
 **3. Provide PDF sources**:
@@ -474,7 +474,7 @@ ls research-sessions/my-session/
 ```bash
 mkdir -p pdfs/
 cp your-papers/*.pdf pdfs/
-./delve "question related to papers"
+./cconductor "question related to papers"
 ```
 
 **4. Let research complete fully**:
@@ -501,20 +501,20 @@ cp your-papers/*.pdf pdfs/
 **1. Resume research**:
 
 ```bash
-./delve resume session_name
+./cconductor resume session_name
 # Citations improve significantly
 ```
 
 **2. Use academic keywords**:
 
 ```bash
-./delve "peer-reviewed studies on [topic]"
-./delve "published research on [topic]"
-./delve "academic literature on [topic]"
+./cconductor "peer-reviewed studies on [topic]"
+./cconductor "published research on [topic]"
+./cconductor "academic literature on [topic]"
 ```
 
 **3. Configure for academic mode**:
-Edit `config/delve-config.json`:
+Edit `config/cconductor-config.json`:
 
 ```json
 {
@@ -530,7 +530,7 @@ Edit `config/delve-config.json`:
 ```bash
 mkdir -p pdfs/
 # Add PDFs of papers
-./delve "question about these papers"
+./cconductor "question about these papers"
 ```
 
 ---
@@ -558,23 +558,23 @@ Look at bibliography - when were sources published?
 
 ```bash
 # Instead of:
-./delve "market size for CRM software"
+./cconductor "market size for CRM software"
 
 # Try:
-./delve "market size for CRM software in 2024 based on recent reports"
+./cconductor "market size for CRM software in 2024 based on recent reports"
 ```
 
 **3. Resume research for more sources**:
 
 ```bash
-./delve resume session_name
+./cconductor resume session_name
 # Gets additional verification
 ```
 
 **4. Check quality score**:
 
 ```bash
-./delve latest
+./cconductor latest
 # Scroll to quality assessment
 # If below 75, consider restarting with better question
 ```
@@ -610,10 +610,10 @@ Add known good sources to `knowledge-base-custom/`:
 
 ```bash
 # Be more specific about what you want
-./delve "What are the therapeutic mechanisms of action for CAR-T cell therapy in treating B-cell lymphomas?"
+./cconductor "What are the therapeutic mechanisms of action for CAR-T cell therapy in treating B-cell lymphomas?"
 
 # Not:
-./delve "CAR-T therapy"
+./cconductor "CAR-T therapy"
 ```
 
 **2. Check what mode was used**:
@@ -627,13 +627,13 @@ jq '.mode' research-sessions/[session]/raw/research-plan.json
 
 ```bash
 # For academic:
-./delve "peer-reviewed research on [topic]"
+./cconductor "peer-reviewed research on [topic]"
 
 # For market:
-./delve "market size and competitive landscape for [product]"
+./cconductor "market size and competitive landscape for [product]"
 
 # For technical:
-./delve "technical architecture and implementation of [technology]"
+./cconductor "technical architecture and implementation of [technology]"
 ```
 
 ---
@@ -677,7 +677,7 @@ time curl -s -o /dev/null -w "%{time_total}\n" https://api.anthropic.com
 **If too slow**:
 
 **1. Check parallel execution**:
-Edit `config/delve-config.json`:
+Edit `config/cconductor-config.json`:
 
 ```json
 {
@@ -741,7 +741,7 @@ iostat
 **Reduce costs**:
 
 **1. Limit searches**:
-Edit `config/delve-config.json`:
+Edit `config/cconductor-config.json`:
 
 ```json
 {
@@ -948,7 +948,7 @@ Error: Unexpected token in config
 **1. Validate JSON syntax**:
 
 ```bash
-jq empty config/delve-config.json
+jq empty config/cconductor-config.json
 # No output = valid
 # Error message = fix syntax
 ```
@@ -980,7 +980,7 @@ jq empty config/delve-config.json
 **3. Reset to default**:
 
 ```bash
-cp config/delve-config.default.json config/delve-config.json
+cp config/cconductor-config.default.json config/cconductor-config.json
 # Start fresh with defaults
 ```
 
@@ -1009,13 +1009,13 @@ cp config/delve-config.default.json config/delve-config.json
 ls -la config/*.json
 
 # Check your edits are there
-jq . config/delve-config.json | grep "your-setting"
+jq . config/cconductor-config.json | grep "your-setting"
 ```
 
 **2. Check for syntax errors**:
 
 ```bash
-jq empty config/delve-config.json
+jq empty config/cconductor-config.json
 ```
 
 **3. Restart any running research**:
@@ -1028,7 +1028,7 @@ jq empty config/delve-config.json
 **4. Check file permissions**:
 
 ```bash
-ls -la config/delve-config.json
+ls -la config/cconductor-config.json
 # Should be readable (-rw-r--r--)
 ```
 
@@ -1036,12 +1036,12 @@ ls -la config/delve-config.json
 
 ```bash
 # These override config files
-echo $DELVE_SECURITY_PROFILE
+echo $CCONDUCTOR_SECURITY_PROFILE
 echo $RESEARCH_MODE
 echo $LOG_LEVEL
 
 # Unset if needed
-unset DELVE_SECURITY_PROFILE
+unset CCONDUCTOR_SECURITY_PROFILE
 ```
 
 ---
@@ -1081,14 +1081,14 @@ unset DELVE_SECURITY_PROFILE
 **1. Find latest session**:
 
 ```bash
-./delve latest
+./cconductor latest
 # Shows info about most recent research
 ```
 
 **2. List all sessions**:
 
 ```bash
-./delve sessions
+./cconductor sessions
 # Shows all research sessions
 ```
 
@@ -1155,7 +1155,7 @@ find research-sessions -name "session_*" -type d -mtime +30 -exec rm -rf {} +
 
 ```bash
 # List sessions to identify test ones
-./delve sessions
+./cconductor sessions
 
 # Remove specific session
 rm -rf research-sessions/test-session-name
@@ -1247,7 +1247,7 @@ ls -lh research-sessions/session_*/*.json
 
 ```bash
 # 1. Version
-./delve --version
+./cconductor --version
 
 # 2. System info
 uname -a
@@ -1258,10 +1258,10 @@ jq --version
 tail -100 logs/research.log > problem-logs.txt
 
 # 4. Session info (if relevant)
-./delve sessions > sessions-info.txt
+./cconductor sessions > sessions-info.txt
 
 # 5. Config (remove sensitive data!)
-jq 'del(.advanced.mcp_servers)' config/delve-config.json > config-sanitized.json
+jq 'del(.advanced.mcp_servers)' config/cconductor-config.json > config-sanitized.json
 
 # 6. Error message (exact text)
 ```
@@ -1290,7 +1290,7 @@ tail -100 logs/research.log
 # System errors
 dmesg | tail
 
-# Delve-specific errors
+# CConductor-specific errors
 grep ERROR logs/*.log
 ```
 
@@ -1308,34 +1308,34 @@ grep ERROR logs/*.log
 
 ```bash
 # Start research
-./delve "research question"
+./cconductor "research question"
 
 # Check status
-./delve status
+./cconductor status
 
 # List sessions
-./delve sessions
+./cconductor sessions
 
 # Get latest session
-./delve latest
+./cconductor latest
 
 # Resume research
-./delve resume session_name
+./cconductor resume session_name
 
 # Check version
-./delve --version
+./cconductor --version
 
 # Get help
-./delve --help
+./cconductor --help
 ```
 
 ### Essential File Locations
 
 ```bash
 # Configuration
-config/delve-config.json
+config/cconductor-config.json
 config/security-config.json
-config/delve-modes.json
+config/cconductor-modes.json
 
 # Session data
 research-sessions/[session-name]/research-report.md
@@ -1357,7 +1357,7 @@ pdfs/
 echo $ANTHROPIC_API_KEY
 
 # Config valid?
-jq empty config/delve-config.json
+jq empty config/cconductor-config.json
 
 # Disk space?
 df -h
@@ -1366,7 +1366,7 @@ df -h
 find research-sessions -name "*.lock"
 
 # Research running?
-ps aux | grep delve
+ps aux | grep cconductor
 
 # Recent errors?
 grep ERROR logs/research.log | tail -10
@@ -1381,4 +1381,4 @@ grep ERROR logs/research.log | tail -10
 
 ---
 
-**Delve Troubleshooting** - Get back on track 🔧
+**CConductor Troubleshooting** - Get back on track 🔧

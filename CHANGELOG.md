@@ -1,6 +1,6 @@
 # Changelog
 
-All notable changes to Delve will be documented in this file.
+All notable changes to CConductor will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
@@ -21,7 +21,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Auto-dependency installation (jq, curl)
 - One-line installer with PATH management
 - Update detection and notification system
-- Self-update capability (`delve --update`)
+- Self-update capability (`cconductor --update`)
 - GitHub Releases with checksum verification
 - CI/CD automation with GitHub Actions
 - Configurable security profiles (strict/permissive/max_automation)
@@ -40,4 +40,4 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Offline-capable operation
 - Configurable domain permissions
 
-[0.1.0]: https://github.com/yaniv-golan/delve/releases/tag/v0.1.0
+[0.1.0]: https://github.com/yaniv-golan/cconductor/releases/tag/v0.1.0

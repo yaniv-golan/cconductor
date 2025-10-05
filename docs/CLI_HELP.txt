@@ -1,62 +1,62 @@
-Delve - Deep Research, Done Right
+CConductor - Deep Research, Done Right
 
 USAGE:
-  delve <question>                 Start new research
-  delve latest                     Show latest research session
-  delve resume <session>           Continue previous research
-  delve sessions                   List all research sessions
-  delve status                     Check running research
-  delve configure                  Show configuration files
-  delve --update                   Update to latest version
-  delve --check-update             Check for updates now
-  delve --no-update-check          Disable update check for this run
-  delve --init                     Run/re-run initialization
-  delve --help                     Show this help
-  delve --version                  Show version
+  cconductor <question>                 Start new research
+  cconductor latest                     Show latest research session
+  cconductor resume <session>           Continue previous research
+  cconductor sessions                   List all research sessions
+  cconductor status                     Check running research
+  cconductor configure                  Show configuration files
+  cconductor --update                   Update to latest version
+  cconductor --check-update             Check for updates now
+  cconductor --no-update-check          Disable update check for this run
+  cconductor --init                     Run/re-run initialization
+  cconductor --help                     Show this help
+  cconductor --version                  Show version
 
 EXAMPLES:
   # Start research
-  delve "What are the latest advances in CRISPR?"
-  delve "SaaS market size 2024"
+  cconductor "What are the latest advances in CRISPR?"
+  cconductor "SaaS market size 2024"
   
   # View latest results
-  delve latest
+  cconductor latest
   
   # Resume previous session
-  delve resume session_1759356338
+  cconductor resume session_1759356338
   
   # List all sessions
-  delve sessions
+  cconductor sessions
   
   # Check what's running
-  delve status
+  cconductor status
   
   # Run initialization non-interactively
-  delve --init --yes
+  cconductor --init --yes
 
 RESULTS:
   Reports are saved to OS-appropriate data directories:
-    • macOS:   ~/Library/Application Support/Delve/research-sessions/
-    • Linux:   ~/.local/share/delve/research-sessions/
-    • Windows: %LOCALAPPDATA%\Delve\research-sessions\
+    • macOS:   ~/Library/Application Support/CConductor/research-sessions/
+    • Linux:   ~/.local/share/cconductor/research-sessions/
+    • Windows: %LOCALAPPDATA%\CConductor\research-sessions\
   
   Use: ./src/utils/path-resolver.sh resolve session_dir (to find exact path)
 
 CONFIGURATION:
   Config files are stored in OS-appropriate locations:
-    • macOS:   ~/.config/delve/
-    • Linux:   ~/.config/delve/
-    • Windows: %APPDATA%\Delve\
+    • macOS:   ~/.config/cconductor/
+    • Linux:   ~/.config/cconductor/
+    • Windows: %APPDATA%\CConductor\
 
   Create custom configs:
-    • ./src/utils/config-loader.sh init delve-config
+    • ./src/utils/config-loader.sh init cconductor-config
     • ./src/utils/config-loader.sh init security-config
     • ./src/utils/config-loader.sh list    (see all configs)
 
   Add custom knowledge:
-    • macOS:   ~/Library/Application Support/Delve/knowledge-base-custom/
-    • Linux:   ~/.local/share/delve/knowledge-base-custom/
-    • Windows: %LOCALAPPDATA%\Delve\knowledge-base-custom\
+    • macOS:   ~/Library/Application Support/CConductor/knowledge-base-custom/
+    • Linux:   ~/.local/share/cconductor/knowledge-base-custom/
+    • Windows: %LOCALAPPDATA%\CConductor\knowledge-base-custom\
 
 DOCUMENTATION:
   Quick start:  docs/QUICK_REFERENCE.md

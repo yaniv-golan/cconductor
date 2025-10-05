@@ -2,11 +2,11 @@
 
 ## Overview
 
-Delve has comprehensive PDF support for academic research, enabling full-text analysis of scientific papers with automatic caching and source tracking.
+CConductor has comprehensive PDF support for academic research, enabling full-text analysis of scientific papers with automatic caching and source tracking.
 
 **Two Ways to Use PDFs**:
 
-1. **Downloaded PDFs** - Delve automatically downloads and caches PDFs from web/academic sources during research
+1. **Downloaded PDFs** - CConductor automatically downloads and caches PDFs from web/academic sources during research
 2. **Local PDFs** - Provide your own PDF files using `--input-dir` flag (v0.1.0+)
 
 ## Local PDF Files (User-Provided)
@@ -15,14 +15,14 @@ Delve has comprehensive PDF support for academic research, enabling full-text an
 
 ```bash
 # Analyze your own PDFs alongside web research
-./delve "Research question" --input-dir /path/to/your/files/
+./cconductor "Research question" --input-dir /path/to/your/files/
 ```
 
 ### How It Works
 
 When you provide local files with `--input-dir`:
 
-1. **File Discovery**: Delve scans the directory for supported files
+1. **File Discovery**: CConductor scans the directory for supported files
    - PDFs (`.pdf`) - Analyzed with Read tool
    - Markdown (`.md`) - Loaded into session context
    - Text (`.txt`) - Loaded into session context
@@ -41,7 +41,7 @@ When you provide local files with `--input-dir`:
        {
          "original_name": "pitch-deck.pdf",
          "sha256": "abc123...",
-         "cached_path": "~/Library/Caches/Delve/pdfs/abc123.pdf",
+         "cached_path": "~/Library/Caches/CConductor/pdfs/abc123.pdf",
          "source_type": "user_provided"
        }
      ],
@@ -57,21 +57,21 @@ When you provide local files with `--input-dir`:
 **VC Due Diligence**:
 
 ```bash
-./delve "Evaluate this startup" --input-dir ./deals/acme/
+./cconductor "Evaluate this startup" --input-dir ./deals/acme/
 # Include: pitch deck, financials, market research
 ```
 
 **Academic Research with Your PDFs**:
 
 ```bash
-./delve "Compare methodologies in these papers" --input-dir ./literature/
+./cconductor "Compare methodologies in these papers" --input-dir ./literature/
 # Your collection of papers analyzed together
 ```
 
 **Market Research with Reports**:
 
 ```bash
-./delve "Market size analysis" --input-dir ./market-reports/
+./cconductor "Market size analysis" --input-dir ./market-reports/
 # Analyze proprietary reports + public research
 ```
 
@@ -108,8 +108,8 @@ your-files/
 
 **Locations** (OS-appropriate):
 
-- **macOS**: `~/Library/Caches/Delve/pdfs/`
-- **Linux**: `~/.cache/delve/pdfs/`
+- **macOS**: `~/Library/Caches/CConductor/pdfs/`
+- **Linux**: `~/.cache/cconductor/pdfs/`
 
 **Features**:
 
@@ -124,7 +124,7 @@ your-files/
 **Cache Structure**:
 
 ```
-~/Library/Caches/Delve/pdfs/       # or ~/.cache/delve/pdfs/ on Linux
+~/Library/Caches/CConductor/pdfs/       # or ~/.cache/cconductor/pdfs/ on Linux
 ├── cache-index.json              # Master index
 ├── metadata/                     # Individual metadata files
 │   ├── {hash}.json
@@ -142,7 +142,7 @@ your-files/
   "cache_key": "abc123...",
   "cached_at": "2024-01-15T10:30:00Z",
   "file_size": 2457600,
-  "file_path": "/Users/you/Library/Caches/Delve/pdfs/abc123....pdf",
+  "file_path": "/Users/you/Library/Caches/CConductor/pdfs/abc123....pdf",
   "sha256": "def456..."
 }
 ```
@@ -243,7 +243,7 @@ curl 'https://api.crossref.org/works/10.1038/nature12345'
 
 ```bash
 # Standard scientific research (uses PDFs automatically)
-./delve "Recent advances in quantum computing"
+./cconductor "Recent advances in quantum computing"
 ```
 
 **What happens**:
@@ -260,7 +260,7 @@ curl 'https://api.crossref.org/works/10.1038/nature12345'
 
 ```bash
 # Full literature review with systematic analysis
-./delve "Transformer architectures in NLP"
+./cconductor "Transformer architectures in NLP"
 ```
 
 **What happens**:
@@ -330,7 +330,7 @@ bash src/utils/pdf-cache.sh clear yes
 
 **Best for**: Individual research questions, exploring specific topics
 
-**Configuration** (`config/delve-modes.json`):
+**Configuration** (`config/cconductor-modes.json`):
 
 ```json
 {
@@ -441,7 +441,7 @@ Compares across papers:
 Include timeframe for rapidly-evolving fields:
 
 ```bash
-./delve "Recent advances (2023-2024) in large language model efficiency"
+./cconductor "Recent advances (2023-2024) in large language model efficiency"
 ```
 
 ### 3. Scope Definition
@@ -479,9 +479,9 @@ export PDF_DEEP_ANALYSIS=true
 
 ### Configuration Files
 
-**delve-modes.json**: Customize paper counts, quality thresholds
+**cconductor-modes.json**: Customize paper counts, quality thresholds
 
-**delve-config.json**: Main research settings
+**cconductor-config.json**: Main research settings
 
 **mcp-servers.json**: Add API keys for rate limit increases
 
@@ -518,7 +518,7 @@ export PDF_DEEP_ANALYSIS=true
 curl -I "https://arxiv.org/pdf/1706.03762.pdf"
 
 # Check disk space
-df -h ~/Library/Caches/Delve/pdfs/
+df -h ~/Library/Caches/CConductor/pdfs/
 
 # Try with verbose output
 bash -x src/utils/pdf-cache.sh fetch "URL" "Title" "Source"
@@ -538,9 +538,9 @@ bash -x src/utils/pdf-cache.sh fetch "URL" "Title" "Source"
 
 ```bash
 # Check for stale locks
-ls ~/Library/Caches/Delve/pdfs/.cache-index.lock
+ls ~/Library/Caches/CConductor/pdfs/.cache-index.lock
 # If exists and no process running, remove it:
-rm -rf ~/Library/Caches/Delve/pdfs/.cache-index.lock
+rm -rf ~/Library/Caches/CConductor/pdfs/.cache-index.lock
 
 # Verify cache integrity
 bash src/utils/pdf-cache.sh verify
@@ -574,10 +574,10 @@ bash src/utils/pdf-cache.sh verify
 
 ```bash
 # Check for orphaned locks
-ls ~/Library/Caches/Delve/pdfs/.cache-index.lock
+ls ~/Library/Caches/CConductor/pdfs/.cache-index.lock
 
 # Remove stale lock (only if no sessions running)
-rm -rf ~/Library/Caches/Delve/pdfs/.cache-index.lock
+rm -rf ~/Library/Caches/CConductor/pdfs/.cache-index.lock
 
 # Repair cache
 bash src/utils/pdf-cache.sh repair
@@ -601,11 +601,11 @@ bash src/utils/pdf-cache.sh repair
 bash src/utils/pdf-cache.sh verify
 
 # Check if PDF is valid
-file ~/Library/Caches/Delve/pdfs/{hash}.pdf
+file ~/Library/Caches/CConductor/pdfs/{hash}.pdf
 
 # Re-download if corrupted
 bash src/utils/pdf-cache.sh check "URL"  # Get cache key
-rm ~/Library/Caches/Delve/pdfs/{hash}.pdf
+rm ~/Library/Caches/CConductor/pdfs/{hash}.pdf
 bash src/utils/pdf-cache.sh fetch "URL" "Title" "Source"
 ```
 
@@ -630,7 +630,7 @@ bash src/utils/pdf-cache.sh fetch "URL" "Title" "Source"
 bash src/utils/pdf-cache.sh stats
 
 # Or check disk usage directly
-du -sh ~/Library/Caches/Delve/pdfs/
+du -sh ~/Library/Caches/CConductor/pdfs/
 ```
 
 **Solutions**:
@@ -640,7 +640,7 @@ du -sh ~/Library/Caches/Delve/pdfs/
 bash src/utils/pdf-cache.sh clear yes
 
 # Option 2: Manually remove old PDFs
-cd ~/Library/Caches/Delve/pdfs/
+cd ~/Library/Caches/CConductor/pdfs/
 # Find PDFs older than 90 days
 find . -name "*.pdf" -mtime +90 -delete
 # Then rebuild index
@@ -650,8 +650,8 @@ bash src/utils/pdf-cache.sh rebuild
 # Find cache key first
 bash src/utils/pdf-cache.sh check "URL"
 # Then remove files
-rm ~/Library/Caches/Delve/pdfs/{hash}.pdf
-rm ~/Library/Caches/Delve/pdfs/metadata/{hash}.json
+rm ~/Library/Caches/CConductor/pdfs/{hash}.pdf
+rm ~/Library/Caches/CConductor/pdfs/metadata/{hash}.json
 # Rebuild index
 bash src/utils/pdf-cache.sh rebuild
 ```
@@ -670,7 +670,7 @@ time curl -o /dev/null https://arxiv.org/pdf/1706.03762.pdf
 time bash src/utils/pdf-cache.sh stats
 
 # Check for lock contention (multiple sessions)
-ps aux | grep delve
+ps aux | grep cconductor
 ```
 
 **Solutions**:
@@ -690,20 +690,20 @@ Cache metadata includes DOIs and URLs for easy import:
 # Extract citations from cache
 # macOS:
 jq '.pdfs[] | {title: .title, url: .url, cached_at: .cached_at}' \
-  ~/Library/Caches/Delve/pdfs/cache-index.json
+  ~/Library/Caches/CConductor/pdfs/cache-index.json
 # Linux:
 # jq '.pdfs[] | {title: .title, url: .url, cached_at: .cached_at}' \
-#   ~/.cache/delve/pdfs/cache-index.json
+#   ~/.cache/cconductor/pdfs/cache-index.json
 ```
 
 ### Use with Zotero/Mendeley
 
 1. Run research with literature_review mode
-2. Use `./delve latest` to find and view your report
+2. Use `./cconductor latest` to find and view your report
 3. References section includes full citations
 4. Import PDFs from cache:
-   - **macOS**: `~/Library/Caches/Delve/pdfs/*.pdf`
-   - **Linux**: `~/.cache/delve/pdfs/*.pdf`
+   - **macOS**: `~/Library/Caches/CConductor/pdfs/*.pdf`
+   - **Linux**: `~/.cache/cconductor/pdfs/*.pdf`
 
 ### Custom Workflows
 
@@ -717,11 +717,11 @@ done
 
 # Read all cached PDFs (use your OS-specific path)
 # macOS:
-for pdf in ~/Library/Caches/Delve/pdfs/*.pdf; do
+for pdf in ~/Library/Caches/CConductor/pdfs/*.pdf; do
   echo "Analyzing: $pdf"
   # Use Claude Code Read tool
 done
-# Linux: for pdf in ~/.cache/delve/pdfs/*.pdf; do ...
+# Linux: for pdf in ~/.cache/cconductor/pdfs/*.pdf; do ...
 ```
 
 ## Performance
@@ -754,7 +754,7 @@ done
 ### Example 1: Quick Scientific Research
 
 ```bash
-./delve "How do mRNA vaccines work?"
+./cconductor "How do mRNA vaccines work?"
 ```
 
 **Output**: 10-15 peer-reviewed papers, full text analysis, methodology comparison, ~15 pages
@@ -762,7 +762,7 @@ done
 ### Example 2: Comprehensive Literature Review
 
 ```bash
-./delve "CRISPR gene editing in human therapeutics"
+./cconductor "CRISPR gene editing in human therapeutics"
 ```
 
 **Output**: 20+ papers, citation network, temporal trends, research gaps, systematic review format, ~40 pages
@@ -770,7 +770,7 @@ done
 ### Example 3: Technical + Academic Hybrid
 
 ```bash
-./delve "PostgreSQL MVCC implementation and academic research on multi-version concurrency control"
+./cconductor "PostgreSQL MVCC implementation and academic research on multi-version concurrency control"
 ```
 
 **System auto-detects**: Uses both technical research (docs, code) and academic research (papers)
@@ -790,7 +790,7 @@ done
 
 ## Support
 
-**Issues**: <https://github.com/yaniv-golan/delve/issues>
+**Issues**: <https://github.com/yaniv-golan/cconductor/issues>
 
 **Documentation**: See `docs/` directory
 

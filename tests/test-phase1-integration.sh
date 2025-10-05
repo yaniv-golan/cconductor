@@ -5,8 +5,8 @@
 
 set -euo pipefail
 
-DELVE_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-cd "$DELVE_ROOT"
+CCONDUCTOR_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+cd "$CCONDUCTOR_ROOT"
 
 # Colors
 GREEN='\033[0;32m'
@@ -22,7 +22,7 @@ echo "━━━━━━━━━━━━━━━━━━━━━━━━�
 echo ""
 
 # Create test session
-TEST_SESSION="$DELVE_ROOT/test-session-phase1-integration"
+TEST_SESSION="$CCONDUCTOR_ROOT/test-session-phase1-integration"
 rm -rf "$TEST_SESSION"
 mkdir -p "$TEST_SESSION/intermediate"
 mkdir -p "$TEST_SESSION/.claude/agents"
@@ -53,8 +53,8 @@ source src/utils/config-loader.sh
 
 # Load config
 ADAPTIVE_CONFIG=$(load_config "adaptive-config")
-# shellcheck disable=SC2034  # DELVE_SCRIPT_DIR may be used by sourced scripts
-DELVE_SCRIPT_DIR="$DELVE_ROOT/src"
+# shellcheck disable=SC2034  # CCONDUCTOR_SCRIPT_DIR may be used by sourced scripts
+CCONDUCTOR_SCRIPT_DIR="$CCONDUCTOR_ROOT/src"
 
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo "Iteration 1: Start Coordinator Session"

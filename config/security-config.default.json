@@ -102,6 +102,6 @@
     "log_all_fetches": true,
     "log_blocked_attempts": true,
     "alert_on_suspicious_content": true,
-    "log_directory": "~/.claude/delve"
+    "log_directory": "~/.claude/cconductor"
   }
 }

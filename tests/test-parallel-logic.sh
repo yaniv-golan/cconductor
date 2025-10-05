@@ -14,8 +14,8 @@ echo ""
 
 # Test 1: Verify parallel execution config
 echo "Test 1: Checking parallel execution configuration..."
-PARALLEL_ENABLED=$(cat "$PROJECT_ROOT/config/delve-config.json" | jq -r '.agents.parallel_execution')
-MAX_PARALLEL=$(cat "$PROJECT_ROOT/config/delve-config.json" | jq -r '.agents.max_parallel_agents')
+PARALLEL_ENABLED=$(cat "$PROJECT_ROOT/config/cconductor-config.json" | jq -r '.agents.parallel_execution')
+MAX_PARALLEL=$(cat "$PROJECT_ROOT/config/cconductor-config.json" | jq -r '.agents.max_parallel_agents')
 
 if [ "$PARALLEL_ENABLED" = "true" ]; then
     echo "✅ Pass: Parallel execution is enabled"

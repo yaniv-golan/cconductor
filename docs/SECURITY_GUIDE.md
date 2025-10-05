@@ -1,4 +1,4 @@
-# Delve Security Configuration Guide
+# CConductor Security Configuration Guide
 
 **Configure security to protect against malicious sites and unsafe content**
 
@@ -23,7 +23,7 @@
 
 ## Introduction
 
-Delve includes configurable security to protect against:
+CConductor includes configurable security to protect against:
 
 - Malicious websites and content
 - Data exfiltration attempts  
@@ -36,14 +36,14 @@ This guide helps you choose the right security level for your use case.
 
 - Corporate users handling sensitive data
 - Security-conscious researchers
-- IT administrators deploying Delve
+- IT administrators deploying CConductor
 - Users researching sensitive topics
 
 ---
 
 ## Security Profiles Overview
 
-Delve provides three security profiles with different trade-offs between safety and convenience.
+CConductor provides three security profiles with different trade-offs between safety and convenience.
 
 ### Strict Mode (Default) 🔒
 
@@ -178,7 +178,7 @@ Choose: _
 
 **When to use**:
 
-- Running Delve in Docker container
+- Running CConductor in Docker container
 - Testing in isolated VM
 - Development environment only
 - Never for production research with sensitive data
@@ -269,7 +269,7 @@ cat config/security-config.json | grep security_profile
 
 ## Understanding Domain Categories
 
-Delve categorizes all domains into groups with different handling rules.
+CConductor categorizes all domains into groups with different handling rules.
 
 ### Auto-Allowed Domains (All Modes)
 
@@ -438,7 +438,7 @@ Choose: _
 **2. Uses HTTPS (secure)?**
 
 - ✅ Good: `https://` - encrypted connection
-- ❌ Bad: `http://` - not secure (though Delve warns about this)
+- ❌ Bad: `http://` - not secure (though CConductor warns about this)
 
 **3. Matches research context?**
 
@@ -563,8 +563,8 @@ Each security profile has detailed settings you can customize.
 **3. Test in sandbox environment**:
 
 ```bash
-# Run Delve in container or VM first
-docker run -v ./delve:/app delve-image ./delve "test query"
+# Run CConductor in container or VM first
+docker run -v ./cconductor:/app cconductor-image ./cconductor "test query"
 ```
 
 **4. Deploy configuration**:
@@ -589,13 +589,13 @@ docker run -v ./delve:/app delve-image ./delve "test query"
 
 **Proxy settings**:
 
-- Delve respects system proxy settings
+- CConductor respects system proxy settings
 - Set `HTTP_PROXY` and `HTTPS_PROXY` environment variables if needed
 - Test proxy compatibility before deployment
 
 **VPN compatibility**:
 
-- Delve works through most VPNs
+- CConductor works through most VPNs
 - Some VPNs may block certain research domains
 - Test thoroughly in your VPN environment
 
@@ -632,25 +632,25 @@ logs/
 
 ### Sandboxed Deployment
 
-For maximum security, run Delve in isolated environment:
+For maximum security, run CConductor in isolated environment:
 
 **Docker**:
 
 ```bash
 # Build container
-docker build -t delve-secure .
+docker build -t cconductor-secure .
 
 # Run with max_automation (safe in container)
 docker run --rm \
   -v ./config:/app/config \
   -v ./research-sessions:/app/research-sessions \
-  delve-secure ./delve "research question"
+  cconductor-secure ./cconductor "research question"
 ```
 
 **VM**:
 
 ```bash
-# Run Delve in dedicated VM
+# Run CConductor in dedicated VM
 # Use max_automation profile for speed
 # VM isolation provides security
 ```
@@ -777,8 +777,8 @@ docker run --rm \
    - Verify: `cat config/security-config.json | grep security_profile`
 
 3. **Cached old config**:
-   - Restart Delve
-   - Try: `./delve configure` to see active config
+   - Restart CConductor
+   - Try: `./cconductor configure` to see active config
 
 ---
 
@@ -836,4 +836,4 @@ docker run --rm \
 
 ---
 
-**Delve Security** - Configurable protection for safe research 🔒
+**CConductor Security** - Configurable protection for safe research 🔒

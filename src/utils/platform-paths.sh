@@ -35,22 +35,22 @@ get_data_dir() {
     
     case "$os" in
         macos)
-            echo "$HOME/Library/Application Support/Delve"
+            echo "$HOME/Library/Application Support/CConductor"
             ;;
         linux)
-            echo "${XDG_DATA_HOME:-$HOME/.local/share}/delve"
+            echo "${XDG_DATA_HOME:-$HOME/.local/share}/cconductor"
             ;;
         windows)
             # Windows paths in WSL/Git Bash
             if [ -n "${APPDATA:-}" ]; then
-                echo "$APPDATA/Delve"
+                echo "$APPDATA/CConductor"
             else
-                echo "$HOME/.local/share/delve"
+                echo "$HOME/.local/share/cconductor"
             fi
             ;;
         *)
             # Fallback for unknown systems
-            echo "$HOME/.local/share/delve"
+            echo "$HOME/.local/share/cconductor"
             ;;
     esac
 }
@@ -63,20 +63,20 @@ get_cache_dir() {
     
     case "$os" in
         macos)
-            echo "$HOME/Library/Caches/Delve"
+            echo "$HOME/Library/Caches/CConductor"
             ;;
         linux)
-            echo "${XDG_CACHE_HOME:-$HOME/.cache}/delve"
+            echo "${XDG_CACHE_HOME:-$HOME/.cache}/cconductor"
             ;;
         windows)
             if [ -n "${LOCALAPPDATA:-}" ]; then
-                echo "$LOCALAPPDATA/Delve/Cache"
+                echo "$LOCALAPPDATA/CConductor/Cache"
             else
-                echo "$HOME/.cache/delve"
+                echo "$HOME/.cache/cconductor"
             fi
             ;;
         *)
-            echo "$HOME/.cache/delve"
+            echo "$HOME/.cache/cconductor"
             ;;
     esac
 }
@@ -89,26 +89,26 @@ get_log_dir() {
     
     case "$os" in
         macos)
-            echo "$HOME/Library/Logs/Delve"
+            echo "$HOME/Library/Logs/CConductor"
             ;;
         linux)
-            echo "${XDG_STATE_HOME:-$HOME/.local/state}/delve"
+            echo "${XDG_STATE_HOME:-$HOME/.local/state}/cconductor"
             ;;
         windows)
             if [ -n "${LOCALAPPDATA:-}" ]; then
-                echo "$LOCALAPPDATA/Delve/Logs"
+                echo "$LOCALAPPDATA/CConductor/Logs"
             else
-                echo "$HOME/.local/state/delve"
+                echo "$HOME/.local/state/cconductor"
             fi
             ;;
         *)
-            echo "$HOME/.local/state/delve"
+            echo "$HOME/.local/state/cconductor"
             ;;
     esac
 }
 
 # Get config directory (for user configuration files)
-# Note: Delve stores configs in PROJECT_ROOT/config by default
+# Note: CConductor stores configs in PROJECT_ROOT/config by default
 # This is for future user-level config support
 get_config_dir() {
     local os
@@ -118,20 +118,20 @@ get_config_dir() {
         macos)
             # macOS can use either ~/Library/Preferences or ~/.config
             # Using ~/.config for consistency with Linux
-            echo "$HOME/.config/delve"
+            echo "$HOME/.config/cconductor"
             ;;
         linux)
-            echo "${XDG_CONFIG_HOME:-$HOME/.config}/delve"
+            echo "${XDG_CONFIG_HOME:-$HOME/.config}/cconductor"
             ;;
         windows)
             if [ -n "${APPDATA:-}" ]; then
-                echo "$APPDATA/Delve"
+                echo "$APPDATA/CConductor"
             else
-                echo "$HOME/.config/delve"
+                echo "$HOME/.config/cconductor"
             fi
             ;;
         *)
-            echo "$HOME/.config/delve"
+            echo "$HOME/.config/cconductor"
             ;;
     esac
 }

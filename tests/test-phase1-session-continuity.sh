@@ -3,8 +3,8 @@
 
 set -euo pipefail
 
-DELVE_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-cd "$DELVE_ROOT"
+CCONDUCTOR_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+cd "$CCONDUCTOR_ROOT"
 
 # Colors
 GREEN='\033[0;32m'
@@ -17,7 +17,7 @@ echo "━━━━━━━━━━━━━━━━━━━━━━━━�
 echo ""
 
 # Create test session
-TEST_SESSION="$DELVE_ROOT/test-session-phase1"
+TEST_SESSION="$CCONDUCTOR_ROOT/test-session-phase1"
 rm -rf "$TEST_SESSION"
 mkdir -p "$TEST_SESSION/intermediate"
 mkdir -p "$TEST_SESSION/.claude/agents"

@@ -1,12 +1,12 @@
-# Delve 🔍
+# CConductor 🔍
 
-**Deep Research, Done Right**
+**AI Research, Orchestrated**
 
-Delve is a multi-agent AI research system that conducts comprehensive, adaptive research on any topic. Powered by Claude and specialized AI agents, it finds, analyzes, and synthesizes information from academic papers, web sources, PDFs, and code repositories—delivering well-cited, validated research reports.
+CConductor is a multi-agent AI research system that conducts comprehensive, adaptive research on any topic. Powered by Claude and specialized AI agents, it finds, analyzes, and synthesizes information from academic papers, web sources, PDFs, and code repositories—delivering well-cited, validated research reports.
 
 ---
 
-## Why Delve?
+## Why CConductor?
 
 - 🧠 **Multi-Agent Intelligence** - Specialized agents for planning, research, synthesis, and validation work together
 - 📚 **Multi-Source Research** - Handles academic papers, web content, PDFs, code, and market data
@@ -23,17 +23,17 @@ Delve is a multi-agent AI research system that conducts comprehensive, adaptive 
 Get up and running in 1 command:
 
 ```bash
-./delve "What is quantum computing?"
+./cconductor "What is quantum computing?"
 ```
 
-On first run, Delve will automatically set up directories and configuration (takes ~5 seconds).
+On first run, CConductor will automatically set up directories and configuration (takes ~5 seconds).
 
 Your research report will be in `research-sessions/` with full citations and quality assessment.
 
 **View your results**:
 
 ```bash
-./delve latest
+./cconductor latest
 ```
 
 ---
@@ -45,7 +45,7 @@ Your research report will be in `research-sessions/` with full citations and qua
 Comprehensive research with full citations and bibliography.
 
 ```bash
-./delve "Latest advances in CRISPR gene editing 2023-2024"
+./cconductor "Latest advances in CRISPR gene editing 2023-2024"
 ```
 
 ### Research with Local Files
@@ -54,10 +54,10 @@ Analyze your own PDFs, documents, and notes alongside web research.
 
 ```bash
 # Analyze pitch decks
-./delve "Evaluate this pitch deck" --input-dir ./pitch-materials/
+./cconductor "Evaluate this pitch deck" --input-dir ./pitch-materials/
 
 # Research with context documents
-./delve "Summarize findings" --input-dir ~/Documents/research-reports/
+./cconductor "Summarize findings" --input-dir ~/Documents/research-reports/
 ```
 
 **Supported formats:**
@@ -71,7 +71,7 @@ Analyze your own PDFs, documents, and notes alongside web research.
 Business intelligence with market data and competitive insights.
 
 ```bash
-./delve "SaaS CRM market size and growth 2024"
+./cconductor "SaaS CRM market size and growth 2024"
 ```
 
 ### Technical Deep-Dives
@@ -79,7 +79,7 @@ Business intelligence with market data and competitive insights.
 Detailed technical research with architecture and examples.
 
 ```bash
-./delve "How does Docker containerization work?"
+./cconductor "How does Docker containerization work?"
 ```
 
 ### General Research
@@ -87,7 +87,7 @@ Detailed technical research with architecture and examples.
 Balanced research on any topic.
 
 ```bash
-./delve "What causes climate change?"
+./cconductor "What causes climate change?"
 ```
 
 ---
@@ -121,8 +121,8 @@ Balanced research on any topic.
 
 ## Requirements
 
-- **Claude Code** (required - Delve is a Claude Code extension)
-  - Delve uses Claude Code's Task tool to invoke specialized AI agents
+- **Claude Code** (required - CConductor is a Claude Code extension)
+  - CConductor uses Claude Code's Task tool to invoke specialized AI agents
   - Cannot run standalone with just an API key
   - Available through Claude Pro/Max subscriptions or API/pay-as-you-go
   - See [Understanding Claude Code Access](#understanding-claude-code-access) below for details
@@ -162,21 +162,21 @@ sudo apt-get install jq curl bash python3
 One command to install and set up everything:
 
 ```bash
-curl -fsSL https://github.com/yaniv-golan/delve/releases/latest/download/install.sh | bash
+curl -fsSL https://github.com/yaniv-golan/cconductor/releases/latest/download/install.sh | bash
 ```
 
 This will:
 
 - Download the latest stable release
 - Verify checksums automatically  
-- Install to `~/.delve`
+- Install to `~/.cconductor`
 - Run first-time setup automatically
 - Optionally add to your PATH
 
 Then use from anywhere:
 
 ```bash
-delve "your research question"
+cconductor "your research question"
 ```
 
 ### Verified Install (High Security)
@@ -185,8 +185,8 @@ For production or security-sensitive environments:
 
 ```bash
 # Download installer and checksum
-curl -LO https://github.com/yaniv-golan/delve/releases/latest/download/install.sh
-curl -LO https://github.com/yaniv-golan/delve/releases/latest/download/install.sh.sha256
+curl -LO https://github.com/yaniv-golan/cconductor/releases/latest/download/install.sh
+curl -LO https://github.com/yaniv-golan/cconductor/releases/latest/download/install.sh.sha256
 
 # Verify integrity
 sha256sum -c install.sh.sha256
@@ -198,49 +198,49 @@ bash install.sh
 ### Specific Version
 
 ```bash
-export DELVE_VERSION=v0.1.0
-curl -fsSL https://github.com/yaniv-golan/delve/releases/download/v0.1.0/install.sh | bash
+export CCONDUCTOR_VERSION=v0.1.0
+curl -fsSL https://github.com/yaniv-golan/cconductor/releases/download/v0.1.0/install.sh | bash
 ```
 
 ### Manual Install (Development)
 
 ```bash
 # Clone the repository
-git clone https://github.com/yaniv-golan/delve.git
-cd delve
+git clone https://github.com/yaniv-golan/cconductor.git
+cd cconductor
 
 # Start researching!
-chmod +x delve
-./delve "your research question"
+chmod +x cconductor
+./cconductor "your research question"
 ```
 
-**Note:** If you get "Permission denied", run: `chmod +x delve`
+**Note:** If you get "Permission denied", run: `chmod +x cconductor`
 
 Setup happens automatically on first run.
 
 ## Updates
 
-Delve automatically checks for updates once per day.
+CConductor automatically checks for updates once per day.
 
 **Update manually:**
 
 ```bash
-delve --update
+cconductor --update
 ```
 
 **Check for updates:**
 
 ```bash
-delve --check-update
+cconductor --check-update
 ```
 
 **Disable update checks:**
 
 ```bash
 # Temporarily
-delve --no-update-check "your question"
+cconductor --no-update-check "your question"
 
-# Permanently - edit ~/.config/delve/delve-config.json:
+# Permanently - edit ~/.config/cconductor/cconductor-config.json:
 {
   "update_settings": {
     "check_for_updates": false
@@ -252,11 +252,11 @@ delve --no-update-check "your question"
 
 ## Understanding Claude Code Access
 
-Delve requires Claude Code to function and cannot run with just an Anthropic API key.
+CConductor requires Claude Code to function and cannot run with just an Anthropic API key.
 
 ### What is Claude Code?
 
-Claude Code allows Claude to run integrated developer workflows from your terminal/IDE. Delve uses Claude Code's Task tool to orchestrate its multi-agent research system.
+Claude Code allows Claude to run integrated developer workflows from your terminal/IDE. CConductor uses Claude Code's Task tool to orchestrate its multi-agent research system.
 
 ### Getting Access
 
@@ -293,14 +293,14 @@ Claude Code is available through:
 **Custom install location:**
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/yaniv-golan/delve/main/install.sh | bash -s /custom/path
+curl -fsSL https://raw.githubusercontent.com/yaniv-golan/cconductor/main/install.sh | bash -s /custom/path
 ```
 
 **Manual initialization:**
 
 ```bash
-./delve --init              # Interactive mode
-./delve --init --yes        # Non-interactive (for scripts)
+./cconductor --init              # Interactive mode
+./cconductor --init --yes        # Non-interactive (for scripts)
 ```
 
 ---
@@ -311,59 +311,59 @@ curl -fsSL https://raw.githubusercontent.com/yaniv-golan/delve/main/install.sh |
 
 ```bash
 # Start new research
-./delve "your research question"
+./cconductor "your research question"
 
 # View latest results
-./delve latest
+./cconductor latest
 
 # List all sessions
-./delve sessions
+./cconductor sessions
 
 # Continue previous research
-./delve resume session_1759420487
+./cconductor resume session_1759420487
 
 # Check if research is running
-./delve status
+./cconductor status
 
 # View configuration
-./delve configure
+./cconductor configure
 
 # Run/re-run initialization
-./delve --init
+./cconductor --init
 
 # Show help
-./delve --help
+./cconductor --help
 
 # Show version
-./delve --version
+./cconductor --version
 ```
 
 ### Examples
 
 ```bash
 # Research any topic
-./delve "What is quantum computing?"
+./cconductor "What is quantum computing?"
 
 # Academic question
-./delve "Latest research on mRNA vaccines"
+./cconductor "Latest research on mRNA vaccines"
 
 # Business question
-./delve "AI coding assistant market landscape"
+./cconductor "AI coding assistant market landscape"
 
 # Technical question
-./delve "Kubernetes architecture and components"
+./cconductor "Kubernetes architecture and components"
 
 # Resume to improve quality
-./delve resume session_1759420487
+./cconductor resume session_1759420487
 ```
 
 ---
 
 ## Research Modes
 
-Delve automatically selects the best approach based on your question, or you can configure the default mode in `~/.config/delve/delve-config.json`.
+CConductor automatically selects the best approach based on your question, or you can configure the default mode in `~/.config/cconductor/cconductor-config.json`.
 
-**Available modes** (defaults in `config/delve-modes.default.json`, customize in `~/.config/delve/delve-modes.json`):
+**Available modes** (defaults in `config/cconductor-modes.default.json`, customize in `~/.config/cconductor/cconductor-modes.json`):
 
 - **default** - Balanced research for general topics
 - **scientific** - Academic research with peer-reviewed sources
@@ -379,12 +379,12 @@ Delve automatically selects the best approach based on your question, or you can
 
 ## Example Output
 
-After running research, Delve generates comprehensive reports:
+After running research, CConductor generates comprehensive reports:
 
 ```markdown
 # Research Report
 
-Generated by: Delve v0.1.0 - Deep Research, Done Right
+Generated by: CConductor v0.1.0 - Deep Research, Done Right
 Date: October 2, 2025
 Session: session_1759420487
 
@@ -418,13 +418,13 @@ states simultaneously [2]...
 
 ## Configuration
 
-Delve is highly configurable without code changes.
+CConductor is highly configurable without code changes.
 
 ### Security Profiles
 
-Control which domains Delve can access:
+Control which domains CConductor can access:
 
-**Location**: `~/.config/delve/security-config.json` (create with `./src/utils/config-loader.sh init security-config`)
+**Location**: `~/.config/cconductor/security-config.json` (create with `./src/utils/config-loader.sh init security-config`)
 
 ```json
 {
@@ -446,12 +446,12 @@ See [Security Guide](docs/SECURITY_GUIDE.md) for details.
 
 ### Custom Knowledge
 
-Teach Delve about your domain:
+Teach CConductor about your domain:
 
 **Location**:
 
-- macOS: `~/Library/Application Support/Delve/knowledge-base-custom/my-domain.md`
-- Linux: `~/.local/share/delve/knowledge-base-custom/my-domain.md`
+- macOS: `~/Library/Application Support/CConductor/knowledge-base-custom/my-domain.md`
+- Linux: `~/.local/share/cconductor/knowledge-base-custom/my-domain.md`
 
 ```markdown
 ## Overview
@@ -465,7 +465,7 @@ What this knowledge covers.
 - Fact about your domain
 ```
 
-Delve automatically discovers and uses all `.md` files in your custom knowledge directory!
+CConductor automatically discovers and uses all `.md` files in your custom knowledge directory!
 
 **Tip**: Use `./src/utils/path-resolver.sh resolve knowledge_base_custom` to find your exact path.
 
@@ -473,7 +473,7 @@ See [Custom Knowledge Guide](docs/CUSTOM_KNOWLEDGE.md) for details.
 
 ### Research Preferences
 
-**Location**: `~/.config/delve/delve-config.json` (create with `./src/utils/config-loader.sh init delve-config`)
+**Location**: `~/.config/cconductor/cconductor-config.json` (create with `./src/utils/config-loader.sh init cconductor-config`)
 
 Configure default behavior, agent settings, output preferences, and quality standards.
 
@@ -505,7 +505,7 @@ See [Configuration Reference](docs/CONFIGURATION_REFERENCE.md) for all options.
 
 ## Architecture
 
-Delve uses a multi-agent architecture with specialized agents:
+CConductor uses a multi-agent architecture with specialized agents:
 
 - **Research Planner** - Understands questions and creates research plans
 - **Web Researcher** - Searches and analyzes web sources
@@ -525,10 +525,10 @@ Research uses an **Adaptive System** that dynamically iterates with gap detectio
 ### Project Directory (Application Code)
 
 ```
-delve/
-├── delve                      # Main CLI entry point
+cconductor/
+├── cconductor                      # Main CLI entry point
 ├── src/
-│   ├── delve-adaptive.sh     # Adaptive research engine
+│   ├── cconductor-adaptive.sh     # Adaptive research engine
 │   ├── knowledge-graph.sh    # Knowledge tracking
 │   ├── task-queue.sh         # Dynamic task management
 │   ├── shared-state.sh       # Concurrent access control
@@ -547,38 +547,38 @@ delve/
 **macOS**:
 
 ```
-~/.config/delve/                           # Your configurations
-├── delve-config.json
+~/.config/cconductor/                           # Your configurations
+├── cconductor-config.json
 ├── security-config.json
-├── delve-modes.json
+├── cconductor-modes.json
 └── paths.json
 
-~/Library/Application Support/Delve/      # Your data
+~/Library/Application Support/CConductor/      # Your data
 ├── research-sessions/                     # Your research output
 ├── knowledge-base-custom/                 # Your custom knowledge
 └── citations.json
 
-~/Library/Caches/Delve/                    # Cache
+~/Library/Caches/CConductor/                    # Cache
 └── pdfs/
 
-~/Library/Logs/Delve/                      # Logs
+~/Library/Logs/CConductor/                      # Logs
 └── audit.log
 ```
 
 **Linux**:
 
 ```
-~/.config/delve/                           # Your configurations
-~/.local/share/delve/                      # Your data
-~/.cache/delve/                            # Cache
-~/.local/state/delve/                      # Logs
+~/.config/cconductor/                           # Your configurations
+~/.local/share/cconductor/                      # Your data
+~/.cache/cconductor/                            # Cache
+~/.local/state/cconductor/                      # Logs
 ```
 
 **Windows**:
 
 ```
-%APPDATA%\Delve\                           # Your configurations
-%LOCALAPPDATA%\Delve\                      # Your data
+%APPDATA%\CConductor\                           # Your configurations
+%LOCALAPPDATA%\CConductor\                      # Your data
 ```
 
 **Benefits**: Configs and data survive project deletion/reinstallation, proper multi-user support, follows OS conventions.
@@ -635,8 +635,8 @@ For technical documentation:
 ## Support
 
 - **Documentation**: [docs/](docs/)
-- **Issues**: [GitHub Issues](https://github.com/yaniv-golan/delve/issues)
-- **Discussions**: [GitHub Discussions](https://github.com/yaniv-golan/delve/discussions)
+- **Issues**: [GitHub Issues](https://github.com/yaniv-golan/cconductor/issues)
+- **Discussions**: [GitHub Discussions](https://github.com/yaniv-golan/cconductor/discussions)
 
 ---
 
@@ -650,4 +650,4 @@ Built with:
 
 ---
 
-**Delve** - Deep Research, Done Right 🔍
+**CConductor** - AI Research, Orchestrated 🔍

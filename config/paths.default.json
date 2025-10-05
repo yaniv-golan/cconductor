@@ -1,5 +1,5 @@
 {
-  "_comment": "Paths use platform-aware defaults. Override in ~/.config/delve/paths.json if needed.",
+  "_comment": "Paths use platform-aware defaults. Override in ~/.config/cconductor/paths.json if needed.",
   "cache_dir": "${PLATFORM_CACHE}",
   "log_dir": "${PLATFORM_LOGS}",
   "audit_log": "${PLATFORM_LOGS}/audit.log",

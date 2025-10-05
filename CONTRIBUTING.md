@@ -1,6 +1,6 @@
-# Contributing to Delve
+# Contributing to CConductor
 
-Thank you for your interest in contributing to Delve! This document provides guidelines and information for contributors.
+Thank you for your interest in contributing to CConductor! This document provides guidelines and information for contributors.
 
 ---
 
@@ -108,11 +108,11 @@ sudo apt-get install shellcheck
 
 ```bash
 # Clone the repository
-git clone https://github.com/yaniv-golan/delve.git
-cd delve
+git clone https://github.com/yaniv-golan/cconductor.git
+cd cconductor
 
 # Run setup (automatic on first use)
-./delve --version
+./cconductor --version
 
 # Run tests
 ./tests/run-all-tests.sh
@@ -383,4 +383,4 @@ Contributors will be:
 - Credited in release notes
 - Acknowledged in the project
 
-Thank you for helping make Delve better! 🔍
+Thank you for helping make CConductor better! 🔍

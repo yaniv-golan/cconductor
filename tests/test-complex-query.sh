@@ -14,7 +14,7 @@ QUESTION="How does Rust's borrow checker work, and how does it compare to C++'s 
 echo "Question: $QUESTION"
 
 # Run research
-"$PROJECT_ROOT/delve" "$QUESTION"
+"$PROJECT_ROOT/cconductor" "$QUESTION"
 
 # Validation
 # Get session directory using path resolver

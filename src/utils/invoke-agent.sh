@@ -86,23 +86,23 @@ invoke_agent_v2() {
     # Check Claude CLI
     check_claude_cli || return 1
 
-    # Discover DELVE_ROOT by walking up from session_dir
-    local delve_root
-    if [ -n "${DELVE_ROOT:-}" ]; then
-        delve_root="$DELVE_ROOT"
+    # Discover CCONDUCTOR_ROOT by walking up from session_dir
+    local cconductor_root
+    if [ -n "${CCONDUCTOR_ROOT:-}" ]; then
+        cconductor_root="$CCONDUCTOR_ROOT"
     else
         # Walk up from session_dir to find root
         local search_dir="$session_dir"
         while [ "$search_dir" != "/" ]; do
             if [ -f "$search_dir/VERSION" ] && [ -d "$search_dir/src" ]; then
-                delve_root="$search_dir"
+                cconductor_root="$search_dir"
                 break
             fi
             search_dir="$(dirname "$search_dir")"
         done
 
-        if [ -z "${delve_root:-}" ]; then
-            echo "Error: Could not find DELVE_ROOT from session_dir: $session_dir" >&2
+        if [ -z "${cconductor_root:-}" ]; then
+            echo "Error: Could not find CCONDUCTOR_ROOT from session_dir: $session_dir" >&2
             return 1
         fi
     fi
@@ -129,7 +129,7 @@ invoke_agent_v2() {
     # Format: {"agent-name": {"allowed": ["Tool1", "Tool2"], "disallowed": ["Tool3"]}}
     local allowed_tools=""
     local disallowed_tools=""
-    local agent_tools_file="$delve_root/src/utils/agent-tools.json"
+    local agent_tools_file="$cconductor_root/src/utils/agent-tools.json"
 
     if [ -f "$agent_tools_file" ]; then
         allowed_tools=$(jq -r \
@@ -175,8 +175,8 @@ invoke_agent_v2() {
     mkdir -p "$(dirname "$output_file")"
 
     # Export session directory and agent name for hooks to use
-    export DELVE_SESSION_DIR="$session_dir"
-    export DELVE_AGENT_NAME="$agent_name"
+    export CCONDUCTOR_SESSION_DIR="$session_dir"
+    export CCONDUCTOR_AGENT_NAME="$agent_name"
 
     # Change to session directory for context
     local original_dir

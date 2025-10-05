@@ -15,7 +15,7 @@ TESTS_RUN=0
 TESTS_FAILED=0
 
 # Create temporary test directory
-TEST_DIR=$(mktemp -d /tmp/delve-test-XXXXXX)
+TEST_DIR=$(mktemp -d /tmp/cconductor-test-XXXXXX)
 trap 'rm -rf "$TEST_DIR"' EXIT
 
 echo "Using test directory: $TEST_DIR"

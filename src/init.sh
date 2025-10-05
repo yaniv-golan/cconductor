@@ -1,5 +1,5 @@
 #!/bin/bash
-# Delve First-Run Initialization
+# CConductor First-Run Initialization
 # Sets up directories, configs, and verifies dependencies
 
 set -euo pipefail
@@ -8,7 +8,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 echo "========================================"
-echo "Delve Setup"
+echo "CConductor Setup"
 echo "========================================"
 echo ""
 
@@ -175,7 +175,7 @@ if [ -f "$SCRIPT_DIR/utils/platform-paths.sh" ]; then
     source "$SCRIPT_DIR/utils/platform-paths.sh"
     USER_CONFIG_DIR=$(get_config_dir)
 else
-    USER_CONFIG_DIR="$HOME/.config/delve"
+    USER_CONFIG_DIR="$HOME/.config/cconductor"
 fi
 
 # Create user config directory

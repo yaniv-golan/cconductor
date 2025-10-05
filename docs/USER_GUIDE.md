@@ -1,6 +1,6 @@
-# Delve User Guide
+# CConductor User Guide
 
-**Complete guide to using Delve for research**
+**Complete guide to using CConductor for research**
 
 **Version**: 0.1.0  
 **Last Updated**: October 2025  
@@ -53,7 +53,7 @@
 
 ### System Requirements
 
-Before installing Delve, verify you have:
+Before installing CConductor, verify you have:
 
 #### Required Software
 
@@ -114,7 +114,7 @@ sudo apt-get install jq curl bash python3
 
 #### Claude Code Requirement
 
-**Important**: Delve requires Claude Code to function. It cannot run with just an Anthropic API key.
+**Important**: CConductor requires Claude Code to function. It cannot run with just an Anthropic API key.
 
 **Check if you have access**:
 
@@ -124,7 +124,7 @@ sudo apt-get install jq curl bash python3
 
 ### Understanding Claude Code
 
-Before installing Delve, it's important to understand how Claude Code access works.
+Before installing CConductor, it's important to understand how Claude Code access works.
 
 #### What is Claude Code?
 
@@ -134,7 +134,7 @@ Claude Code is Anthropic's developer-focused interface that allows Claude to:
 - Invoke specialized tools and agents
 - Orchestrate complex multi-step tasks
 
-Delve uses Claude Code's Task tool to coordinate its multi-agent research system. Each research session involves multiple Claude interactions:
+CConductor uses Claude Code's Task tool to coordinate its multi-agent research system. Each research session involves multiple Claude interactions:
 
 1. Research planning
 2. Parallel research execution (multiple agents)
@@ -237,27 +237,27 @@ This can be confusing, so here's the key point:
 
 ---
 
-### Installing Delve
+### Installing CConductor
 
 #### Quick Install (Recommended)
 
-The easiest way to install Delve:
+The easiest way to install CConductor:
 
 ```bash
-curl -fsSL https://github.com/yaniv-golan/delve/releases/latest/download/install.sh | bash
+curl -fsSL https://github.com/yaniv-golan/cconductor/releases/latest/download/install.sh | bash
 ```
 
 This installer will:
 
-- Install Delve to `~/.delve` (or custom location)
+- Install CConductor to `~/.cconductor` (or custom location)
 - Auto-install missing dependencies (jq, curl)
 - Run first-time setup automatically
-- Optionally add `delve` to your PATH
+- Optionally add `cconductor` to your PATH
 
 After installation, use from anywhere:
 
 ```bash
-delve "your research question"
+cconductor "your research question"
 ```
 
 #### Manual Install
@@ -268,21 +268,21 @@ If you prefer manual installation:
 
 ```bash
 cd ~/Documents/code  # Or your preferred location
-git clone https://github.com/yaniv-golan/delve.git
-cd delve
+git clone https://github.com/yaniv-golan/cconductor.git
+cd cconductor
 ```
 
 2. **Start using it immediately**:
 
 ```bash
-./delve "your research question"
+./cconductor "your research question"
 ```
 
-**Note:** If you get "Permission denied", run: `chmod +x delve`
+**Note:** If you get "Permission denied", run: `chmod +x cconductor`
 
 **What happens on first run**:
 
-On your first run, Delve automatically performs setup (~5 seconds):
+On your first run, CConductor automatically performs setup (~5 seconds):
 
 - Checks dependencies (jq, curl, bash)
 - Offers to auto-install missing dependencies
@@ -296,7 +296,7 @@ You'll see a prompt like:
 
 ```
 ┌─────────────────────────────────────────────────────┐
-│ Welcome to Delve! First-time setup required.        │
+│ Welcome to CConductor! First-time setup required.        │
 └─────────────────────────────────────────────────────┘
 
 I will now:
@@ -315,10 +315,10 @@ Press Enter to proceed, then research begins!
 3. **Verify installation**:
 
 ```bash
-./delve --version
-# Output: Delve v0.1.0
+./cconductor --version
+# Output: CConductor v0.1.0
 
-./delve --help
+./cconductor --help
 # Output: Full help text
 ```
 
@@ -330,10 +330,10 @@ If both commands work, you're ready!
 
 ### Basic Syntax
 
-The simplest way to use Delve:
+The simplest way to use CConductor:
 
 ```bash
-./delve "your research question here"
+./cconductor "your research question here"
 ```
 
 **Important**:
@@ -345,7 +345,7 @@ The simplest way to use Delve:
 ### Example: Simple Research
 
 ```bash
-./delve "What causes climate change?"
+./cconductor "What causes climate change?"
 ```
 
 ### Example: Research with Local Files
@@ -353,7 +353,7 @@ The simplest way to use Delve:
 If you have PDFs, documents, or notes to analyze alongside web research:
 
 ```bash
-./delve "Analyze this pitch deck" --input-dir ./pitch-materials/
+./cconductor "Analyze this pitch deck" --input-dir ./pitch-materials/
 ```
 
 **What files are supported**:
@@ -364,7 +364,7 @@ If you have PDFs, documents, or notes to analyze alongside web research:
 
 **What happens**:
 
-- Delve discovers files in the directory
+- CConductor discovers files in the directory
 - PDFs are cached (content-based deduplication)
 - Text files are copied to session knowledge
 - Research coordinator analyzes your materials FIRST
@@ -385,7 +385,7 @@ If you have PDFs, documents, or notes to analyze alongside web research:
 Latest session marker: session_1759420487
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
- Deep Delve
+ Deep CConductor
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 Research Question: What causes climate change?
@@ -434,7 +434,7 @@ research-sessions/
 **Quick access**:
 
 ```bash
-./delve latest
+./cconductor latest
 ```
 
 ### Understanding Output
@@ -446,7 +446,7 @@ Your `research-report.md` contains:
 ```markdown
 # Research Report
 
-Generated by: Delve v0.1.0
+Generated by: CConductor v0.1.0
 Date: October 2, 2025
 
 🔍 Research Question: What causes climate change?
@@ -490,7 +490,7 @@ Complete list of sources with URLs/references.
 
 ### What is a Session?
 
-A **session** is one research execution. Each time you run `./delve "question"`, you create a new session.
+A **session** is one research execution. Each time you run `./cconductor "question"`, you create a new session.
 
 **Think of it as**:
 
@@ -513,17 +513,17 @@ session_1759420487  ← Timestamp-based ID
 
 ### Finding Your Research
 
-#### Method 1: Use `./delve latest`
+#### Method 1: Use `./cconductor latest`
 
 ```bash
-./delve latest
+./cconductor latest
 ```
 
 **Output**:
 
 ```
 Latest session: session_1759420487
-Location: /Users/you/delve/research-sessions/session_1759420487
+Location: /Users/you/cconductor/research-sessions/session_1759420487
 
 ✓ Report available: .../research-report.md
 
@@ -535,7 +535,7 @@ View with:
 #### Method 2: List all sessions
 
 ```bash
-./delve sessions
+./cconductor sessions
 ```
 
 **Output**: Shows all sessions, newest first
@@ -551,7 +551,7 @@ cat research-report.md
 
 ### The `.latest` Marker
 
-Delve tracks your most recent session:
+CConductor tracks your most recent session:
 
 ```bash
 cat research-sessions/.latest
@@ -568,7 +568,7 @@ cd research-sessions/$(cat research-sessions/.latest)/
 cat research-sessions/$(cat research-sessions/.latest)/research-report.md
 
 # Or just use
-./delve latest  # Simpler!
+./cconductor latest  # Simpler!
 ```
 
 ---
@@ -577,7 +577,7 @@ cat research-sessions/$(cat research-sessions/.latest)/research-report.md
 
 ## Research System
 
-Delve uses multiple specialized AI agents working together:
+CConductor uses multiple specialized AI agents working together:
 
 ### How It Works
 
@@ -598,7 +598,7 @@ Question → Understanding → Decomposition → Research → Synthesis → Repo
 
 ### Research Modes
 
-Delve supports different approaches (configured in `config/delve-modes.json`):
+CConductor supports different approaches (configured in `config/cconductor-modes.json`):
 
 #### Available Modes
 
@@ -643,7 +643,7 @@ Delve supports different approaches (configured in `config/delve-modes.json`):
 #### Quick Method
 
 ```bash
-./delve latest
+./cconductor latest
 ```
 
 #### Manual Method
@@ -711,7 +711,7 @@ cp research-sessions/$(cat research-sessions/.latest)/research-report.md ~/Docum
 ### Listing Sessions
 
 ```bash
-./delve sessions
+./cconductor sessions
 ```
 
 Shows all your research, newest first.
@@ -721,8 +721,8 @@ Shows all your research, newest first.
 **By recency**:
 
 ```bash
-./delve latest              # Most recent
-./delve sessions | head -5  # 5 most recent
+./cconductor latest              # Most recent
+./cconductor sessions | head -5  # 5 most recent
 ```
 
 **By date**:
@@ -743,7 +743,7 @@ grep -r "keyword" research-sessions/*/research-report.md
 Continue previous research to improve quality:
 
 ```bash
-./delve resume session_1759420487
+./cconductor resume session_1759420487
 ```
 
 **When to resume**:
@@ -760,13 +760,13 @@ Continue previous research to improve quality:
 See if research is running:
 
 ```bash
-./delve status
+./cconductor status
 ```
 
 **Possible outputs**:
 
 - "No active sessions" - Nothing running
-- "Active: delve-adaptive.sh..." - Research in progress
+- "Active: cconductor-adaptive.sh..." - Research in progress
 
 ### Organizing Sessions
 
@@ -783,7 +783,7 @@ mv research-sessions/session_old* archive/2024-q3/
 
 ## Understanding Configuration
 
-Delve uses JSON configuration files stored in OS-appropriate locations.
+CConductor uses JSON configuration files stored in OS-appropriate locations.
 
 ### Configuration Philosophy
 
@@ -799,23 +799,23 @@ Delve uses JSON configuration files stored in OS-appropriate locations.
 PROJECT_ROOT/config/*.default.json
 
 # User configs (home directory - edit these!)
-~/.config/delve/*.json                  (macOS/Linux)
-%APPDATA%\Delve\*.json                  (Windows)
+~/.config/cconductor/*.json                  (macOS/Linux)
+%APPDATA%\CConductor\*.json                  (Windows)
 ```
 
 **How it works**:
 
-- Delve loads defaults from the project
-- Your customizations from `~/.config/delve/` override defaults
+- CConductor loads defaults from the project
+- Your customizations from `~/.config/cconductor/` override defaults
 - Your configs survive project deletion/reinstallation!
 
 ### Main Configuration Files
 
 | File | Purpose |
 |------|---------|
-| `delve-config.json` | Main research settings |
+| `cconductor-config.json` | Main research settings |
 | `security-config.json` | Security profiles |
-| `delve-modes.json` | Research mode definitions |
+| `cconductor-modes.json` | Research mode definitions |
 | `knowledge-config.json` | Knowledge sources |
 | `paths.json` | Directory locations |
 
@@ -828,11 +828,11 @@ Use the config tool to create customizable configs:
 ./src/utils/config-loader.sh list
 
 # Create a custom config
-./src/utils/config-loader.sh init delve-config
+./src/utils/config-loader.sh init cconductor-config
 
-# This creates ~/.config/delve/delve-config.json
+# This creates ~/.config/cconductor/cconductor-config.json
 # Now edit it
-vim ~/.config/delve/delve-config.json
+vim ~/.config/cconductor/cconductor-config.json
 ```
 
 ### Editing Configuration
@@ -842,26 +842,26 @@ vim ~/.config/delve/delve-config.json
 1. **Create user config** (if not exists):
 
    ```bash
-   ./src/utils/config-loader.sh init delve-config
+   ./src/utils/config-loader.sh init cconductor-config
    ```
 
 2. **Edit**:
 
    ```bash
-   nano ~/.config/delve/delve-config.json
+   nano ~/.config/cconductor/cconductor-config.json
    ```
 
 3. **Validate**:
 
    ```bash
-   jq empty ~/.config/delve/delve-config.json
+   jq empty ~/.config/cconductor/cconductor-config.json
    # No output = valid JSON
    ```
 
 4. **View your changes**:
 
    ```bash
-   ./src/utils/config-loader.sh diff delve-config
+   ./src/utils/config-loader.sh diff cconductor-config
    ```
 
 ### Resetting Configuration
@@ -870,10 +870,10 @@ If you break something:
 
 ```bash
 # Delete your custom config (reverts to defaults)
-rm ~/.config/delve/delve-config.json
+rm ~/.config/cconductor/cconductor-config.json
 
 # Or reset to defaults
-./src/utils/config-loader.sh init delve-config
+./src/utils/config-loader.sh init cconductor-config
 # This will warn if file exists - delete it first
 ```
 
@@ -881,7 +881,7 @@ rm ~/.config/delve/delve-config.json
 
 ```bash
 # Show where a config is located
-./src/utils/config-loader.sh where delve-config
+./src/utils/config-loader.sh where cconductor-config
 
 # List all configs and their status
 ./src/utils/config-loader.sh list
@@ -891,11 +891,11 @@ rm ~/.config/delve/delve-config.json
 
 ## Security Settings
 
-Control which domains Delve can access.
+Control which domains CConductor can access.
 
 ### Security Profiles
 
-**Edit**: `~/.config/delve/security-config.json` (create with `./src/utils/config-loader.sh init security-config`)
+**Edit**: `~/.config/cconductor/security-config.json` (create with `./src/utils/config-loader.sh init security-config`)
 
 #### Strict Mode (Default) 🔒
 
@@ -998,7 +998,7 @@ Context: Fetching research data
 
 ## Adding Custom Knowledge
 
-Teach Delve about your domain.
+Teach CConductor about your domain.
 
 ### Quick Start
 
@@ -1025,10 +1025,10 @@ Teach Delve about your domain.
 3. **Save and use**:
 
    ```bash
-   ./delve "question about your domain"
+   ./cconductor "question about your domain"
    ```
 
-Delve automatically discovers and uses it!
+CConductor automatically discovers and uses it!
 
 ### Complete Example
 
@@ -1057,7 +1057,7 @@ ACME Corp product line and market positioning.
 - Series C: $50M, 2023
 ```
 
-Now when you research ACME, Delve knows your products!
+Now when you research ACME, CConductor knows your products!
 
 ### Where to Put Files
 
@@ -1068,7 +1068,7 @@ knowledge-base-custom/
   regional-info.md
 ```
 
-Delve finds all `.md` files automatically.
+CConductor finds all `.md` files automatically.
 
 ### Best Practices
 
@@ -1136,7 +1136,7 @@ Breakdown:
 **Most effective method**:
 
 ```bash
-./delve resume session_123
+./cconductor resume session_123
 ```
 
 **What happens**:
@@ -1158,13 +1158,13 @@ Build comprehensive understanding through multiple sessions:
 
 ```bash
 # 1. Overview
-./delve "Quantum computing overview"
+./cconductor "Quantum computing overview"
 
 # 2. Deep dive
-./delve "Quantum error correction methods"
+./cconductor "Quantum error correction methods"
 
 # 3. Applications
-./delve "Quantum computing applications"
+./cconductor "Quantum computing applications"
 ```
 
 **Result**: Three focused reports providing comprehensive coverage.
@@ -1175,10 +1175,10 @@ Research same topic from different angles:
 
 ```bash
 # Academic perspective
-./delve "AI impact on employment - academic research"
+./cconductor "AI impact on employment - academic research"
 
 # Business perspective  
-./delve "AI impact on employment - market analysis"
+./cconductor "AI impact on employment - market analysis"
 ```
 
 ---
@@ -1262,8 +1262,8 @@ mv research-sessions/2024-04-* archive/2024/q2/
 
 **What to backup**:
 
-- `~/.config/delve/` - Your configs
-- `~/Library/Application Support/Delve/` (macOS) or `~/.local/share/delve/` (Linux) - Your data
+- `~/.config/cconductor/` - Your configs
+- `~/Library/Application Support/CConductor/` (macOS) or `~/.local/share/cconductor/` (Linux) - Your data
   - Research sessions
   - Custom knowledge
   - Citations database
@@ -1272,24 +1272,24 @@ mv research-sessions/2024-04-* archive/2024/q2/
 
 ```bash
 # macOS
-tar -czf delve-backup-$(date +%Y%m%d).tar.gz \
-  ~/.config/delve/ \
-  ~/Library/Application\ Support/Delve/
+tar -czf cconductor-backup-$(date +%Y%m%d).tar.gz \
+  ~/.config/cconductor/ \
+  ~/Library/Application\ Support/CConductor/
 
 # Linux
-tar -czf delve-backup-$(date +%Y%m%d).tar.gz \
-  ~/.config/delve/ \
-  ~/.local/share/delve/
+tar -czf cconductor-backup-$(date +%Y%m%d).tar.gz \
+  ~/.config/cconductor/ \
+  ~/.local/share/cconductor/
 ```
 
 **Or backup specific items**:
 
 ```bash
 # Just your configs
-tar -czf delve-configs-$(date +%Y%m%d).tar.gz ~/.config/delve/
+tar -czf cconductor-configs-$(date +%Y%m%d).tar.gz ~/.config/cconductor/
 
 # Just research sessions (if you know the location)
-tar -czf sessions-backup.tar.gz ~/Library/Application\ Support/Delve/research-sessions/
+tar -czf sessions-backup.tar.gz ~/Library/Application\ Support/CConductor/research-sessions/
 ```
 
 ---
@@ -1300,27 +1300,27 @@ tar -czf sessions-backup.tar.gz ~/Library/Application\ Support/Delve/research-se
 
 | Command | Purpose |
 |---------|---------|
-| `./delve "question"` | Start new research |
-| `./delve latest` | Show most recent session |
-| `./delve sessions` | List all sessions |
-| `./delve resume SESSION` | Continue research |
-| `./delve status` | Check if research running |
-| `./delve configure` | View configuration |
-| `./delve --init` | Run/re-run initialization |
-| `./delve --help` | Show help |
-| `./delve --version` | Show version |
+| `./cconductor "question"` | Start new research |
+| `./cconductor latest` | Show most recent session |
+| `./cconductor sessions` | List all sessions |
+| `./cconductor resume SESSION` | Continue research |
+| `./cconductor status` | Check if research running |
+| `./cconductor configure` | View configuration |
+| `./cconductor --init` | Run/re-run initialization |
+| `./cconductor --help` | Show help |
+| `./cconductor --version` | Show version |
 
 ---
 
 ## Configuration Files Overview
 
-**Location**: `~/.config/delve/` (macOS/Linux) or `%APPDATA%\Delve\` (Windows)
+**Location**: `~/.config/cconductor/` (macOS/Linux) or `%APPDATA%\CConductor\` (Windows)
 
 | File | Purpose | Edit? | Create With |
 |------|---------|-------|-------------|
-| `delve-config.json` | Main settings | Rarely | `./src/utils/config-loader.sh init delve-config` |
+| `cconductor-config.json` | Main settings | Rarely | `./src/utils/config-loader.sh init cconductor-config` |
 | `security-config.json` | Security profiles | Often | `./src/utils/config-loader.sh init security-config` |
-| `delve-modes.json` | Mode definitions | Rarely | `./src/utils/config-loader.sh init delve-modes` |
+| `cconductor-modes.json` | Mode definitions | Rarely | `./src/utils/config-loader.sh init cconductor-modes` |
 | `knowledge-config.json` | Knowledge sources | Sometimes | `./src/utils/config-loader.sh init knowledge-config` |
 | `paths.json` | Directory paths | Rarely | `./src/utils/config-loader.sh init paths` |
 
@@ -1328,7 +1328,7 @@ tar -czf sessions-backup.tar.gz ~/Library/Application\ Support/Delve/research-se
 
 **How configs work**:
 
-1. Delve loads defaults from project
+1. CConductor loads defaults from project
 2. Your user config overrides defaults
 3. Your configs survive project updates
 
@@ -1366,19 +1366,19 @@ The following features are **planned but not yet available in v0.1**:
 
 ```bash
 # These will work in v0.2, but DO NOT work in v0.1:
-./delve "question" --mode scientific    # Explicit mode selection
-./delve "question" --speed fast         # Control research depth
-./delve "question" --output html        # HTML/JSON output formats
-./delve "question" --name my-research   # Custom session names
-./delve "question" --iterations 5       # Control iteration count
-./delve "question" --interactive        # Guided research mode
-./delve "question" --quiet              # Minimal output
+./cconductor "question" --mode scientific    # Explicit mode selection
+./cconductor "question" --speed fast         # Control research depth
+./cconductor "question" --output html        # HTML/JSON output formats
+./cconductor "question" --name my-research   # Custom session names
+./cconductor "question" --iterations 5       # Control iteration count
+./cconductor "question" --interactive        # Guided research mode
+./cconductor "question" --quiet              # Minimal output
 ```
 
 **Current v0.1 workarounds**:
 
 - Mode selection: Automatic based on keywords in your question
-- Speed control: Edit `config/delve-config.json` settings
+- Speed control: Edit `config/cconductor-config.json` settings
 - Session naming: Use timestamp-based names (session_TIMESTAMP)
 
 🚧 **Enhanced Output**:
@@ -1413,7 +1413,7 @@ See internal roadmap for complete feature list.
 **Start Researching**:
 
 ```bash
-./delve "your question"
+./cconductor "your question"
 ```
 
 **Get Help**:
@@ -1423,4 +1423,4 @@ See internal roadmap for complete feature list.
 
 ---
 
-**Happy researching with Delve!** 🔍
+**Happy researching with CConductor!** 🔍

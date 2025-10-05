@@ -8,7 +8,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 
 # Configuration
-REPO="yaniv-golan/delve"
+REPO="yaniv-golan/cconductor"
 CACHE_TTL_SECONDS=86400  # 24 hours
 
 # Source dependencies
@@ -18,7 +18,7 @@ if [ -f "$PROJECT_ROOT/src/utils/platform-paths.sh" ]; then
     CACHE_FILE="$(get_data_dir)/version-check.cache"
 else
     # Fallback
-    CACHE_FILE="$HOME/.local/share/delve/version-check.cache"
+    CACHE_FILE="$HOME/.local/share/cconductor/version-check.cache"
 fi
 
 # Source config loader for overlay pattern
@@ -85,9 +85,9 @@ compare_versions() {
 should_check_for_updates() {
     # Check if disabled in config (using overlay pattern)
     if command -v load_config &>/dev/null; then
-        if DELVE_CONFIG=$(load_config "delve-config" 2>/dev/null); then
+        if CCONDUCTOR_CONFIG=$(load_config "cconductor-config" 2>/dev/null); then
             local enabled
-            enabled=$(echo "$DELVE_CONFIG" | jq -r '.update_settings.check_for_updates // true')
+            enabled=$(echo "$CCONDUCTOR_CONFIG" | jq -r '.update_settings.check_for_updates // true')
             [ "$enabled" != "true" ] && return 1
         fi
     fi
@@ -135,7 +135,7 @@ show_update_notification() {
     if [ "$style" = "minimal" ]; then
         echo ""
         echo "ℹ️  New version available: v${latest} (current: v${current})"
-        echo "   Run 'delve --update' to upgrade"
+        echo "   Run 'cconductor --update' to upgrade"
         echo ""
         return
     fi
@@ -146,12 +146,12 @@ show_update_notification() {
     printf "│ 🆕 Update Available: v%-8s → v%-8s       │\n" "$current" "$latest"
     echo "│                                                    │"
     echo "│ Update now:                                        │"
-    echo "│   delve --update                                   │"
+    echo "│   cconductor --update                                   │"
     echo "│                                                    │"
     echo "│ Release notes:                                     │"
     echo "│   https://github.com/${REPO}/releases/latest      │"
     echo "│                                                    │"
-    echo "│ To disable: Edit ~/.config/delve/delve-config.json│"
+    echo "│ To disable: Edit ~/.config/cconductor/cconductor-config.json│"
     echo "╰────────────────────────────────────────────────────╯"
     echo ""
 }
@@ -219,8 +219,8 @@ show_cached_notification() {
         
         # Get notification style from config (using overlay pattern)
         if command -v load_config &>/dev/null; then
-            if DELVE_CONFIG=$(load_config "delve-config" 2>/dev/null); then
-                style=$(echo "$DELVE_CONFIG" | jq -r '.update_settings.update_notification_style // "full"')
+            if CCONDUCTOR_CONFIG=$(load_config "cconductor-config" 2>/dev/null); then
+                style=$(echo "$CCONDUCTOR_CONFIG" | jq -r '.update_settings.update_notification_style // "full"')
             fi
         fi
         

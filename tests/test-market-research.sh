@@ -14,7 +14,7 @@ QUESTION="What is the TAM for AI-powered customer service tools, and who are the
 echo "Question: $QUESTION"
 
 # Run research (mode detection is automatic based on question)
-"$PROJECT_ROOT/delve" "$QUESTION"
+"$PROJECT_ROOT/cconductor" "$QUESTION"
 
 # Validation
 # Get session directory using path resolver

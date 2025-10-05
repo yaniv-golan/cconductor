@@ -17,8 +17,8 @@ echo ""
 # Files to checksum
 files=(
     "install.sh"
-    "delve"
-    "delve-v${VERSION}.tar.gz"
+    "cconductor"
+    "cconductor-v${VERSION}.tar.gz"
 )
 
 # Generate individual checksums
@@ -34,7 +34,7 @@ done
 
 # Generate combined checksums file
 {
-    echo "# Delve v${VERSION} - SHA256 Checksums"
+    echo "# CConductor v${VERSION} - SHA256 Checksums"
     echo "# Generated: $(date -u +"%Y-%m-%d %H:%M:%S UTC")"
     echo "# Verify: sha256sum -c CHECKSUMS.txt"
     echo ""
