@@ -65,11 +65,11 @@ jobs:
           bash -n src/utils/version-checker.sh
           echo "✓ Version checker syntax valid"
       
-      - name: Test delve script syntax
+      - name: Test cconductor script syntax
         run: |
-          chmod +x delve
-          bash -n delve
-          echo "✓ Delve script syntax valid"
+          chmod +x cconductor
+          bash -n cconductor
+          echo "✓ CConductor script syntax valid"
       
       - name: Test install script syntax
         run: |
@@ -90,7 +90,7 @@ jobs:
           echo "Checking executable permissions..."
           
           files_to_check=(
-            "delve"
+            "cconductor"
             "install.sh"
             "src/init.sh"
             "src/utils/platform-paths.sh"

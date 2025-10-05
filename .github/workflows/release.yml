@@ -66,7 +66,7 @@ jobs:
       
       - name: Set executable permissions
         run: |
-          chmod +x delve
+          chmod +x cconductor
           chmod +x install.sh
           chmod +x src/*.sh 2>/dev/null || true
           chmod +x src/utils/*.sh 2>/dev/null || true
@@ -76,14 +76,14 @@ jobs:
       - name: Create tarball
         run: |
           VERSION="${{ needs.validate.outputs.version }}"
-          tar -czf "delve-v${VERSION}.tar.gz" \
+          tar -czf "cconductor-v${VERSION}.tar.gz" \
             --exclude='.git' \
             --exclude='.github' \
             --exclude='research-sessions' \
             --exclude='logs' \
             --exclude='*.log' \
             --exclude='config/*.json' \
-            delve \
+            cconductor \
             install.sh \
             VERSION \
             CHANGELOG.md \
@@ -96,7 +96,7 @@ jobs:
             docs/ \
             scripts/
           
-          echo "✓ Created delve-v${VERSION}.tar.gz"
+          echo "✓ Created cconductor-v${VERSION}.tar.gz"
       
       - name: Generate checksums
         run: |
@@ -104,18 +104,18 @@ jobs:
           
           # Individual checksums
           sha256sum install.sh > install.sh.sha256
-          sha256sum delve > delve.sha256
-          sha256sum "delve-v${VERSION}.tar.gz" > "delve-v${VERSION}.tar.gz.sha256"
+          sha256sum cconductor > cconductor.sha256
+          sha256sum "cconductor-v${VERSION}.tar.gz" > "cconductor-v${VERSION}.tar.gz.sha256"
           
           # Combined checksums file
           cat > CHECKSUMS.txt << EOF
-          # Delve v${VERSION} - SHA256 Checksums
+          # CConductor v${VERSION} - SHA256 Checksums
           # Generated: $(date -u +"%Y-%m-%d %H:%M:%S UTC")
           # Verify with: sha256sum -c CHECKSUMS.txt
           
           $(sha256sum install.sh)
-          $(sha256sum delve)
-          $(sha256sum delve-v${VERSION}.tar.gz)
+          $(sha256sum cconductor)
+          $(sha256sum cconductor-v${VERSION}.tar.gz)
           EOF
           
           echo "✓ Generated all checksums"
@@ -138,12 +138,12 @@ jobs:
         with:
           body_path: release_notes.txt
           files: |
-            delve-v${{ needs.validate.outputs.version }}.tar.gz
-            delve-v${{ needs.validate.outputs.version }}.tar.gz.sha256
+            cconductor-v${{ needs.validate.outputs.version }}.tar.gz
+            cconductor-v${{ needs.validate.outputs.version }}.tar.gz.sha256
             install.sh
             install.sh.sha256
-            delve
-            delve.sha256
+            cconductor
+            cconductor.sha256
             CHECKSUMS.txt
           draft: false
           prerelease: false
