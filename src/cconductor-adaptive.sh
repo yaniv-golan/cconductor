@@ -725,8 +725,8 @@ run_coordinator() {
                     }
                 ')
                 
-                # Remove any trailing markdown fences or whitespace
-                parsed_json=$(echo "$parsed_json" | sed '/^```$/d' | sed -e :a -e '/^\s*$/d;N;ba')
+                # Remove any trailing markdown fences
+                parsed_json=$(echo "$parsed_json" | sed '/^```$/d')
                 
                 # Validate it's valid JSON
                 if echo "$parsed_json" | jq '.' >/dev/null 2>&1; then
