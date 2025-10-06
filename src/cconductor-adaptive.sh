@@ -206,8 +206,10 @@ initialize_session() {
         exit 1
     fi
     
-    # Phase 2.5: Set up tool observability hooks
-    setup_tool_hooks "$session_dir" || echo "Warning: Failed to setup tool hooks" >&2
+    # Phase 2.5: Tool observability hooks
+    # NOTE: Hooks are configured at user level (~/.claude/settings.json)
+    # because --print mode doesn't respect per-session hooks.
+    # Our hooks use CCONDUCTOR_SESSION_DIR env var to log to the correct session.
 
     # Source version checker
     # shellcheck disable=SC1091
@@ -1012,9 +1014,22 @@ final_synthesis() {
                     # Strip markdown fences
                     result_text=$(echo "$result_text" | sed -e 's/^```json$//' -e 's/^```$//')
                     
-                    # Extract JSON using awk
+                    # Extract JSON using awk with proper brace balancing
                     local parsed
-                    parsed=$(echo "$result_text" | awk '/{/{found=1} found{if(!printed){sub(/^[^{]*/, ""); printed=1} print}')
+                    parsed=$(echo "$result_text" | awk '
+                        BEGIN { depth=0; started=0 }
+                        /{/ && !started { 
+                            sub(/^[^{]*/, "")
+                            started=1
+                        }
+                        started {
+                            open_count = gsub(/{/, "{")
+                            close_count = gsub(/}/, "}")
+                            print
+                            depth += (open_count - close_count)
+                            if (depth == 0) exit
+                        }
+                    ' | sed '/^```$/d')
                     
                     # Validate and add to array
                     if echo "$parsed" | jq '.' >/dev/null 2>&1; then
@@ -1144,9 +1159,26 @@ run_single_iteration() {
         # Strip markdown code fences
         raw_result=$(echo "$raw_result" | sed -e 's/^```json$//' -e 's/^```$//')
         
-        # Extract JSON object using awk (more reliable for removing text before {)
-        # Finds first line with {, removes any text before { on that line, prints rest
-        echo "$raw_result" | awk '/{/{found=1} found{if(!printed){sub(/^[^{]*/, ""); printed=1} print}' > "$coordinator_cleaned"
+        # Extract JSON object using awk with proper brace balancing
+        echo "$raw_result" | awk '
+            BEGIN { depth=0; started=0 }
+            /{/ && !started { 
+                sub(/^[^{]*/, "")
+                started=1
+            }
+            started {
+                # Count braces on this line
+                open_count = gsub(/{/, "{")
+                close_count = gsub(/}/, "}")
+                
+                print
+                
+                depth += (open_count - close_count)
+                
+                # Exit when we close the root object
+                if (depth == 0) exit
+            }
+        ' | sed '/^```$/d' > "$coordinator_cleaned"
         
         # Validate cleaned JSON
         if ! jq '.' "$coordinator_cleaned" >/dev/null 2>&1; then
@@ -1661,9 +1693,22 @@ main_resume() {
                 local raw_result
                 raw_result=$(jq -r '.result // empty' "$coordinator_file")
                 
-                # Strip markdown fences and extract JSON from first {
-                raw_result=$(echo "$raw_result" | sed -e 's/^```json$//' -e 's/^```$//' | sed '/^$/d')
-                echo "$raw_result" | sed -n '/{/,$ p' > "$coordinator_cleaned"
+                # Strip markdown fences and extract JSON with proper brace balancing
+                raw_result=$(echo "$raw_result" | sed -e 's/^```json$//' -e 's/^```$//')
+                echo "$raw_result" | awk '
+                    BEGIN { depth=0; started=0 }
+                    /{/ && !started { 
+                        sub(/^[^{]*/, "")
+                        started=1
+                    }
+                    started {
+                        open_count = gsub(/{/, "{")
+                        close_count = gsub(/}/, "}")
+                        print
+                        depth += (open_count - close_count)
+                        if (depth == 0) exit
+                    }
+                ' | sed '/^```$/d' > "$coordinator_cleaned"
                 
                 if jq '.' "$coordinator_cleaned" >/dev/null 2>&1; then
                     add_coordinator_tasks "$session_dir" "$coordinator_cleaned"
