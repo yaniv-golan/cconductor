@@ -2,6 +2,10 @@
 # Event Logger - Structured event stream for observability
 set -euo pipefail
 
+# Global monotonic sequence counter for timestamp uniqueness
+# Persisted per session to ensure uniqueness across rapid events
+declare -g EVENT_SEQUENCE_COUNTER=0
+
 # Log an event to session's event stream
 log_event() {
     local session_dir="$1"
@@ -13,7 +17,7 @@ log_event() {
     local timestamp
     
     # Use microseconds for precision (avoids ID collisions)
-    # Try %N (nanoseconds) if supported (GNU date), otherwise use random suffix
+    # Try %N (nanoseconds) if supported (GNU date), otherwise use monotonic counter
     if date +%N &>/dev/null 2>&1 && [[ "$(date +%N 2>/dev/null)" =~ ^[0-9]+$ ]]; then
         # GNU date (Linux) - has nanosecond precision
         local nanos
@@ -21,11 +25,12 @@ log_event() {
         local micros=$(( nanos / 1000 ))
         timestamp=$(date -u +"%Y-%m-%dT%H:%M:%S").${micros}Z
     else
-        # BSD date (macOS) - use RANDOM for uniqueness within same second
-        # RANDOM gives 0-32767, pad to 6 digits
-        local rand_suffix
-        rand_suffix=$(printf "%06d" $((RANDOM * 1000 + RANDOM)))
-        timestamp=$(date -u +"%Y-%m-%dT%H:%M:%S").${rand_suffix}Z
+        # BSD date (macOS) - use monotonic counter for guaranteed uniqueness
+        # Increment counter for each event to prevent collisions
+        EVENT_SEQUENCE_COUNTER=$((EVENT_SEQUENCE_COUNTER + 1))
+        local sequence
+        sequence=$(printf "%06d" "$EVENT_SEQUENCE_COUNTER")
+        timestamp=$(date -u +"%Y-%m-%dT%H:%M:%S").${sequence}Z
     fi
     
     # Use atomic mkdir for locking (portable, works on all platforms)

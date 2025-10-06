@@ -16,8 +16,10 @@ check_initialization() {
     # Check if user config directory exists (created by init.sh)
     # Platform-aware check
     if [ -f "$CCONDUCTOR_ROOT/src/utils/platform-paths.sh" ]; then
+        # shellcheck disable=SC1091
         source "$CCONDUCTOR_ROOT/src/utils/platform-paths.sh"
-        local config_dir=$(get_config_dir)
+        local config_dir
+        config_dir=$(get_config_dir)
         
         # Check if config directory exists
         # We don't require configs to exist, just the directory
@@ -73,11 +75,13 @@ run_initialization() {
 
 # Version management
 show_version() {
-    local version=$(cat "$CCONDUCTOR_ROOT/VERSION" 2>/dev/null || echo "$VERSION")
+    local version
+    version=$(cat "$CCONDUCTOR_ROOT/VERSION" 2>/dev/null || echo "$VERSION")
     echo "CConductor v$version"
     
     # Trigger async update check
     if [ -f "$CCONDUCTOR_ROOT/src/utils/version-checker.sh" ]; then
+        # shellcheck disable=SC1091
         source "$CCONDUCTOR_ROOT/src/utils/version-checker.sh"
         check_for_updates_async
     fi
@@ -100,7 +104,8 @@ perform_update() {
         echo "→ Running initialization..."
         "$CCONDUCTOR_ROOT/src/init.sh"
         
-        local new_version=$(cat "$CCONDUCTOR_ROOT/VERSION" 2>/dev/null || echo "unknown")
+        local new_version
+        new_version=$(cat "$CCONDUCTOR_ROOT/VERSION" 2>/dev/null || echo "unknown")
         echo ""
         echo "✅ Updated to v$new_version"
     else
@@ -377,10 +382,14 @@ main() {
                     
                     # Show knowledge graph summary if available
                     if [ -f "$LATEST_PATH/knowledge-graph.json" ]; then
-                        local entities=$(jq -r '.stats.total_entities // 0' "$LATEST_PATH/knowledge-graph.json" 2>/dev/null)
-                        local claims=$(jq -r '.stats.total_claims // 0' "$LATEST_PATH/knowledge-graph.json" 2>/dev/null)
-                        local confidence=$(jq -r '.confidence_scores.overall // 0' "$LATEST_PATH/knowledge-graph.json" 2>/dev/null)
-                        local gaps=$(jq -r '.stats.unresolved_gaps // 0' "$LATEST_PATH/knowledge-graph.json" 2>/dev/null)
+                        local entities
+                        local claims
+                        local confidence
+                        local gaps
+                        entities=$(jq -r '.stats.total_entities // 0' "$LATEST_PATH/knowledge-graph.json" 2>/dev/null)
+                        claims=$(jq -r '.stats.total_claims // 0' "$LATEST_PATH/knowledge-graph.json" 2>/dev/null)
+                        confidence=$(jq -r '.confidence_scores.overall // 0' "$LATEST_PATH/knowledge-graph.json" 2>/dev/null)
+                        gaps=$(jq -r '.stats.unresolved_gaps // 0' "$LATEST_PATH/knowledge-graph.json" 2>/dev/null)
                         
                         echo "Progress:"
                         echo "  • Entities: $entities"
@@ -520,13 +529,15 @@ main() {
             
             # Get user config directory
             if [ -f "$CCONDUCTOR_ROOT/src/utils/config-loader.sh" ]; then
+                # shellcheck disable=SC1091
                 source "$CCONDUCTOR_ROOT/src/utils/config-loader.sh"
                 
                 echo "═══════════════════════════════════════════════════════"
                 echo ""
                 
                 # Show user config location
-                local user_config_dir=$(get_user_config_dir)
+                local user_config_dir
+                user_config_dir=$(get_user_config_dir)
                 echo "User Config Directory: $user_config_dir"
                 echo ""
                 

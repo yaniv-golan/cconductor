@@ -82,6 +82,10 @@ generate_dashboard_metrics() {
         jq -s 'map(select(.type == "system_observation")) | .[-20:] | reverse' 2>/dev/null || echo '[]')
     
     # Build metrics JSON
+    # Use atomic write pattern: write to temp file, then atomic rename
+    # This prevents corruption during concurrent access or interruptions
+    local temp_metrics_file="${metrics_file}.tmp.$$"
+    
     jq -n \
         --arg updated "$(date -u +"%Y-%m-%dT%H:%M:%SZ")" \
         --argjson iter "$iteration" \
@@ -131,7 +135,10 @@ generate_dashboard_metrics() {
             system_health: {
                 observations: $observations
             }
-        }' > "$metrics_file"
+        }' > "$temp_metrics_file"
+    
+    # Atomic rename (POSIX guarantees atomicity)
+    mv "$temp_metrics_file" "$metrics_file"
 }
 
 # Calculate total cost from events
