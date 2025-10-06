@@ -83,8 +83,8 @@ curl --version
 # Development tools (required for contributing)
 shellcheck --version  # For linting shell scripts
 
-# Optional but recommended
-python3 --version
+# Required for calculations
+bc --version
 ```
 
 ### Installing Development Tools

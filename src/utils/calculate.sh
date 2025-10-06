@@ -15,22 +15,16 @@ safe_calculate() {
         return 1
     fi
 
-    # Use Python with restricted builtins for safety
-    python3 -c "
-import math
-import json
-import sys
+    # Evaluate using bc -l (no external interpreters)
+    # Use scale for precision but return as a JSON number
+    local calc_out
+    if ! calc_out=$(echo "scale=12; ($expression)" | bc -l 2>/dev/null); then
+        jq -n --arg err "Invalid expression or calculation error" '{result: null, error: $err}' >&2
+        return 1
+    fi
 
-safe_builtins = {'abs': abs, 'round': round, 'min': min, 'max': max, 'pow': pow, 'int': int, 'float': float}
-safe_math = {'sqrt': math.sqrt, 'log': math.log, 'exp': math.exp, 'pi': math.pi, 'e': math.e}
-
-try:
-    result = eval('$expression', {'__builtins__': safe_builtins, 'math': type('math', (), safe_math)})
-    print(json.dumps({'result': result, 'error': None}))
-except Exception as e:
-    print(json.dumps({'result': None, 'error': str(e)}), file=sys.stderr)
-    sys.exit(1)
-"
+    # Normalize + convert to number via jq (handles scientific/decimal)
+    jq -n --arg r "$calc_out" '{result: ($r|tonumber), error: null}'
 }
 
 # Calculate percentage
@@ -44,20 +38,13 @@ calculate_percentage() {
         return 1
     fi
 
-    python3 -c "
-import json
-import sys
-try:
-    part, whole = float('$part'), float('$whole')
-    if whole == 0:
-        print(json.dumps({'percentage': None, 'error': 'Division by zero'}), file=sys.stderr)
-        sys.exit(1)
-    percentage = round((part / whole) * 100, 2)
-    print(json.dumps({'percentage': percentage, 'error': None}))
-except Exception as e:
-    print(json.dumps({'percentage': None, 'error': str(e)}), file=sys.stderr)
-    sys.exit(1)
-"
+    # Compute with awk (handles floating point and rounding)
+    local out
+    if ! out=$(awk -v p="$part" -v w="$whole" 'BEGIN{ if (w==0) exit 2; printf "%.2f", (p/w)*100 }'); then
+        jq -n --arg err "Division by zero" '{percentage: null, error: $err}' >&2
+        return 1
+    fi
+    jq -n --arg v "$out" '{percentage: ($v|tonumber), error: null}'
 }
 
 # Calculate growth rate
@@ -71,21 +58,12 @@ calculate_growth_rate() {
         return 1
     fi
 
-    python3 -c "
-import json
-import sys
-try:
-    old, new = float('$old_value'), float('$new_value')
-    if old == 0:
-        print(json.dumps({'growth_rate': None, 'multiplier': None, 'error': 'Old value is zero'}), file=sys.stderr)
-        sys.exit(1)
-    growth_rate = round(((new - old) / old) * 100, 2)
-    multiplier = round(new / old, 2)
-    print(json.dumps({'growth_rate': growth_rate, 'multiplier': multiplier, 'error': None}))
-except Exception as e:
-    print(json.dumps({'growth_rate': None, 'multiplier': None, 'error': str(e)}), file=sys.stderr)
-    sys.exit(1)
-"
+    local gr mult
+    if ! read -r gr mult < <(awk -v o="$old_value" -v n="$new_value" 'BEGIN{ if (o==0) exit 2; printf "%.2f %.2f", ((n-o)/o)*100, (n/o) }'); then
+        jq -n --arg err "Old value is zero" '{growth_rate: null, multiplier: null, error: $err}' >&2
+        return 1
+    fi
+    jq -n --arg gr "$gr" --arg m "$mult" '{growth_rate: ($gr|tonumber), multiplier: ($m|tonumber), error: null}'
 }
 
 # Calculate CAGR (Compound Annual Growth Rate)
@@ -100,23 +78,20 @@ calculate_cagr() {
         return 1
     fi
 
-    python3 -c "
-import json
-import sys
-try:
-    start, end, years = float('$start'), float('$end'), float('$years')
-    if start <= 0 or end <= 0:
-        print(json.dumps({'cagr': None, 'error': 'Start and end values must be positive'}), file=sys.stderr)
-        sys.exit(1)
-    if years <= 0:
-        print(json.dumps({'cagr': None, 'error': 'Years must be positive'}), file=sys.stderr)
-        sys.exit(1)
-    cagr = (((end / start) ** (1 / years)) - 1) * 100
-    print(json.dumps({'cagr': round(cagr, 2), 'error': None}))
-except Exception as e:
-    print(json.dumps({'cagr': None, 'error': str(e)}), file=sys.stderr)
-    sys.exit(1)
-"
+    # Validate domain and compute with awk: pow(x, y) = exp(log(x)*y)
+    if awk -v s="$start" -v e="$end" -v y="$years" 'BEGIN{ exit ! (s>0 && e>0 && y>0) }'; then
+        :
+    else
+        jq -n --arg err "Start/end/years must be positive" '{cagr: null, error: $err}' >&2
+        return 1
+    fi
+
+    local cagr
+    if ! cagr=$(awk -v s="$start" -v e="$end" -v y="$years" 'BEGIN{ c = (exp(log(e/s)/y)-1)*100; printf "%.2f", c }'); then
+        jq -n --arg err "Calculation error" '{cagr: null, error: $err}' >&2
+        return 1
+    fi
+    jq -n --arg v "$cagr" '{cagr: ($v|tonumber), error: null}'
 }
 
 # Export functions
@@ -174,7 +149,7 @@ Examples:
 
 Safety Features:
   • Input validation (only numbers and operators)
-  • Restricted Python environment (no file I/O or system calls)
+  • Pure Bash + bc/awk math (no external interpreters)
   • JSON output (structured and parsable)
   • Error handling (graceful failures)
 EOF

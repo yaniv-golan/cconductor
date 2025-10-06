@@ -78,11 +78,11 @@ curl --version
 # Should show: curl 7.x or higher
 ```
 
-**Check if you have Python** (optional but recommended):
+**Check if you have bc** (required for calculations):
 
 ```bash
-python3 --version
-# Should show: Python 3.6 or higher
+bc --version
+# Should show: bc version
 ```
 
 #### Installing Missing Dependencies
@@ -96,14 +96,14 @@ python3 --version
 # Install dependencies
 brew install jq curl
 
-# bash and python3 are pre-installed on macOS
+# bash and bc are pre-installed on macOS
 ```
 
 **Linux** (Ubuntu/Debian):
 
 ```bash
 sudo apt-get update
-sudo apt-get install jq curl bash python3
+sudo apt-get install jq curl bash bc
 ```
 
 **Windows**:

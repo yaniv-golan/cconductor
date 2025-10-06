@@ -527,14 +527,14 @@ main() {
             
             if [ -z "$port" ]; then
                 echo "Error: No available ports in range 8890-8899" >&2
-                echo "Try: pkill -f 'python.*http.server'" >&2
+                echo "Try: pkill -f 'http-server.*$port'" >&2
                 exit 1
             fi
             
-            # Start HTTP server in background
+            # Start HTTP server in background using npx (comes with Node.js)
             echo "Starting HTTP server on port $port..."
             cd "$session_dir"
-            python3 -m http.server "$port" > /dev/null 2>&1 &
+            npx --yes http-server -p "$port" --silent > /dev/null 2>&1 &
             local server_pid=$!
             
             # Save PID for potential cleanup
@@ -551,7 +551,7 @@ main() {
             echo ""
             echo "To stop the server later:"
             echo "  kill $server_pid"
-            echo "  or: pkill -f 'python.*http.server.*$port'"
+            echo "  or: pkill -f 'http-server.*$port'"
             echo ""
             
             if [[ "$OSTYPE" == "darwin"* ]]; then

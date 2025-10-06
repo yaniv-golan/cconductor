@@ -23,7 +23,7 @@ echo ""
 
 # Step 1: Check dependencies
 echo "1. Checking dependencies..."
-echo "   (claude, jq, curl, bash, python3)"
+echo "   (claude, jq, curl, bash, bc)"
 echo ""
 
 missing_deps=()
@@ -80,6 +80,10 @@ fi
 
 if ! command -v bash &> /dev/null; then
     missing_deps+=("bash")
+fi
+
+if ! command -v bc &> /dev/null; then
+    missing_deps+=("bc")
 fi
 
 # Function to auto-install dependencies
@@ -176,18 +180,12 @@ if [ ${#missing_deps[@]} -gt 0 ]; then
 fi
 
 # Verify all dependencies are now available
-if command -v jq &> /dev/null && command -v curl &> /dev/null && command -v bash &> /dev/null; then
+if command -v jq &> /dev/null && command -v curl &> /dev/null && command -v bash &> /dev/null && command -v bc &> /dev/null; then
     echo "   ✓ claude (Claude Code CLI) - REQUIRED"
     echo "   ✓ jq (JSON processor)"
     echo "   ✓ curl (HTTP client)"
     echo "   ✓ bash (shell)"
-    
-    # Check optional but recommended dependencies
-    if command -v python3 &> /dev/null; then
-        echo "   ✓ python3 (recommended for calculations)"
-    else
-        echo "   ⚠️  python3 (optional, recommended for accurate calculations)"
-    fi
+    echo "   ✓ bc (calculator for math operations)"
 else
     echo "   ✗ Dependencies still missing after installation attempt"
     exit 1

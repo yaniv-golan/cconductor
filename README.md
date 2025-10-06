@@ -115,7 +115,7 @@ Balanced research on any topic.
 - 📖 **Extensible Knowledge** - Add your own domain expertise without modifying code
 - 🔍 **Progress Tracking** - See what's happening during research
 - 💬 **Better Error Messages** - Clear explanations and recovery steps
-- 🧮 **Safe Calculations** - Accurate math using Python, not LLM estimation
+- 🧮 **Safe Calculations** - Accurate math using bc (arbitrary precision calculator), not LLM estimation
 
 ---
 
@@ -133,7 +133,7 @@ Balanced research on any topic.
 - **Bash shell** (4.0+)
 - **jq** (JSON processor)
 - **curl** (for web requests)
-- **Python 3** (for calculations, optional but recommended)
+- **bc** (for calculations, pre-installed on most systems)
 
 ### Installing Dependencies
 
@@ -154,7 +154,7 @@ brew install node
 npm install -g @anthropic-ai/claude-code
 
 # 3. Install other dependencies
-brew install bash jq curl python3
+brew install bash jq curl bc
 # Note: macOS ships with Bash 3.2, but CConductor requires Bash 4.0+
 # The brew-installed bash (5.x) will be at /opt/homebrew/bin/bash
 
@@ -175,7 +175,7 @@ sudo apt-get install -y nodejs
 npm install -g @anthropic-ai/claude-code
 
 # 3. Install other dependencies
-sudo apt-get install jq curl bash python3
+sudo apt-get install jq curl bash bc
 ```
 
 **Windows** (WSL):
@@ -189,7 +189,7 @@ sudo apt-get install -y nodejs
 npm install -g @anthropic-ai/claude-code
 
 # 3. Install other dependencies
-sudo apt-get install jq curl bash python3
+sudo apt-get install jq curl bash bc
 ```
 
 ---

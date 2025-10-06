@@ -694,26 +694,7 @@ run_coordinator() {
                     new_findings=$(echo "$new_findings" | jq --argjson f "$parsed_json" '. += [$f]')
                 else
                     echo "⚠️  Warning: Could not parse JSON from findings file: $findings_file" >&2
-                    # Fallback: try Python regex extraction
-                    # shellcheck disable=SC2015  # && { pattern is intentional for success handling
-                    parsed_json=$(python3 -c "
-import sys, re, json
-text = '''$result_text'''
-match = re.search(r'\{.*\}', text, re.DOTALL)
-if match:
-    try:
-        obj = json.loads(match.group(0))
-        print(json.dumps(obj))
-        sys.exit(0)
-    except:
-        pass
-sys.exit(1)
-" 2>/dev/null) && {
-                        new_findings=$(echo "$new_findings" | jq --argjson f "$parsed_json" '. += [$f]')
-                        echo "  ✓ Extracted JSON using fallback method" >&2
-                    } || {
-                        echo "  ✗ Skipping invalid finding" >&2
-                    }
+                    echo "  ✗ Skipping invalid finding" >&2
                 fi
             else
                 echo "⚠️  Warning: No .result field in findings file: $findings_file" >&2
@@ -1107,16 +1088,12 @@ run_single_iteration() {
     local raw_result
     raw_result=$(jq -r '.result // empty' "$coordinator_file" 2>/dev/null)
     
-    # Track parsing method used
-    local parse_method="primary"
-    
     # Check if we got anything
     if [ -z "$raw_result" ] || [ "$raw_result" = "null" ]; then
         echo "⚠️  Warning: No .result field in coordinator output" >&2
         # Try reading the file directly (might be already JSON)
         if jq '.' "$coordinator_file" >/dev/null 2>&1; then
             cp "$coordinator_file" "$coordinator_cleaned"
-            parse_method="direct_file"
         else
             echo "  ✗ Coordinator output is not valid JSON" >&2
             echo "Coordinator file contents:" >&2
@@ -1134,40 +1111,11 @@ run_single_iteration() {
         # Validate cleaned JSON
         if ! jq '.' "$coordinator_cleaned" >/dev/null 2>&1; then
             echo "⚠️  Warning: Initial JSON extraction failed" >&2
-            echo "Attempting aggressive extraction..." >&2
-            parse_method="awk_fallback"
-            
-            # Fallback: Extract from first { to last } using Python (most reliable)
-            python3 -c "
-import sys, re
-text = sys.stdin.read()
-match = re.search(r'\{.*\}', text, re.DOTALL)
-if match:
-    print(match.group(0))
-else:
-    sys.exit(1)
-" <<< "$raw_result" > "$coordinator_cleaned" 2>/dev/null || {
-                echo "  ✗ Could not extract JSON object" >&2
-                echo "Raw result (first 30 lines):" >&2
-                echo "$raw_result" | head -30 >&2
-                return 1
-            }
-            
-            parse_method="python_fallback"
-            
-            # Re-validate
-            if ! jq '.' "$coordinator_cleaned" >/dev/null 2>&1; then
-                echo "  ✗ Extracted text is not valid JSON" >&2
-                return 1
-            fi
-            echo "  ✓ Successfully extracted JSON using fallback" >&2
+            echo "  ✗ Could not extract valid JSON object" >&2
+            echo "Raw result (first 30 lines):" >&2
+            echo "$raw_result" | head -30 >&2
+            return 1
         fi
-    fi
-    
-    # Log if fallback method was used
-    if [[ "$parse_method" != "primary" ]]; then
-        log_event "$session_dir" "parse_fallback" \
-            "{\"agent\": \"research-coordinator\", \"method\": \"$parse_method\", \"iteration\": $iteration}"
     fi
     
     # Phase 2: Update metrics after coordinator
