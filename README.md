@@ -136,8 +136,9 @@ Balanced research on any topic.
 **macOS**:
 
 ```bash
-brew install jq curl
-# bash and python3 pre-installed
+brew install bash jq curl python3
+# Note: macOS ships with Bash 3.2, but CConductor requires Bash 4.0+
+# The brew-installed bash (5.x) will be at /opt/homebrew/bin/bash
 ```
 
 **Linux** (Ubuntu/Debian):

@@ -119,6 +119,67 @@ cconductor --version   # Should work from anywhere
 
 ---
 
+### Bash Version Error (macOS)
+
+**Symptoms**:
+
+```bash
+$ ./cconductor "question"
+Error: Bash 4.0 or higher is required for CLI parser
+Current version: 3.2.57(1)-release
+
+On macOS, install with: brew install bash
+Then run with: /usr/local/bin/bash or /opt/homebrew/bin/bash
+```
+
+**Cause**: macOS ships with Bash 3.2 (from 2007) for licensing reasons, but CConductor requires Bash 4.0+ for associative arrays used in the CLI parser.
+
+**Solutions**:
+
+**1. Install Bash 4+ via Homebrew** (recommended):
+
+```bash
+brew install bash
+```
+
+**2. Run CConductor with the newer Bash**:
+
+```bash
+# Apple Silicon Mac
+/opt/homebrew/bin/bash ./cconductor "what is quantum tunneling?"
+
+# Intel Mac
+/usr/local/bin/bash ./cconductor "what is quantum tunneling?"
+```
+
+**3. Create a permanent alias** (add to `~/.zshrc`):
+
+```bash
+alias cconductor='/opt/homebrew/bin/bash /path/to/cconductor/cconductor'
+```
+
+**4. Or update the shebang** in the `cconductor` script:
+
+```bash
+# Change first line from:
+#!/usr/bin/env bash
+
+# To (Apple Silicon):
+#!/opt/homebrew/bin/bash
+
+# Or (Intel):
+#!/usr/local/bin/bash
+```
+
+**Verify installation**:
+
+```bash
+/opt/homebrew/bin/bash --version
+# Should show: GNU bash, version 5.x or higher
+```
+
+---
+
 ### Permission Denied
 
 **Symptoms**:
