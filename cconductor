@@ -138,6 +138,7 @@ show_help() {
 
 USAGE:
   cconductor <question>                 Start new research
+  cconductor --question-file FILE       Start research from markdown file
   cconductor <question> --input-dir DIR Analyze local files with your research
   cconductor <question> --non-interactive  Skip plan confirmation (for automation)
   cconductor latest                     Show latest research session
@@ -153,6 +154,9 @@ USAGE:
   cconductor --version                  Show version
 
 OPTIONS:
+  --question-file FILE             Load research question from markdown or text file
+                                   Entire file content is used as the research question
+                                   Useful for complex, multi-part research queries
   --input-dir DIR                  Directory with local files to analyze
                                    Supported: PDFs (.pdf), Markdown (.md), Text (.txt)
                                    PDFs are cached; text files are loaded into session
@@ -164,6 +168,10 @@ EXAMPLES:
   # Basic research
   cconductor "What are the latest advances in CRISPR?"
   cconductor "SaaS market size 2024"
+  
+  # Research from markdown file (complex queries)
+  cconductor --question-file research-query.md
+  cconductor --question-file ./queries/research-query.md --non-interactive
   
   # Non-interactive research (no confirmation prompts)
   cconductor "What are neural networks?" --non-interactive
@@ -343,6 +351,34 @@ main() {
         return 0
     fi
     
+    # Handle --question-file flag (load research question from file)
+    if has_flag "question-file"; then
+        local question_file
+        question_file=$(get_flag "question-file")
+        
+        # Validate file exists
+        if [ ! -f "$question_file" ]; then
+            echo "Error: Question file not found: $question_file" >&2
+            exit 1
+        fi
+        
+        # Read file content as research question
+        local question
+        question=$(cat "$question_file")
+        
+        if [ -z "$question" ]; then
+            echo "Error: Question file is empty: $question_file" >&2
+            exit 1
+        fi
+        
+        echo "📄 Loading research question from: $question_file"
+        echo ""
+        
+        # Handle research with file-based question
+        handle_research "$question"
+        return 0
+    fi
+    
     # Get first positional argument (command or research question)
     local command
     command=$(get_arg 0)
@@ -383,7 +419,45 @@ main() {
             ;;
         status)
             echo "Checking for running research sessions..."
-            pgrep -fl "cconductor-adaptive" || echo "No active sessions"
+            
+            # Find cconductor-adaptive.sh processes, get just PIDs
+            local pids
+            pids=$(pgrep -f "cconductor-adaptive.sh" || true)
+            
+            if [ -z "$pids" ]; then
+                echo "No active sessions"
+            else
+                echo ""
+                # Count unique parent processes (those without cconductor-adaptive as parent)
+                local count=0
+                for pid in $pids; do
+                    local ppid=$(ps -o ppid= -p "$pid" 2>/dev/null | tr -d ' ')
+                    local parent_cmd=$(ps -o command= -p "$ppid" 2>/dev/null || true)
+                    
+                    # Skip if parent is also cconductor-adaptive (it's a child process)
+                    if ! echo "$parent_cmd" | grep -q "cconductor-adaptive.sh"; then
+                        count=$((count + 1))
+                        local start_time=$(ps -o lstart= -p "$pid" 2>/dev/null)
+                        
+                        echo "Active Session #$count:"
+                        echo "  PID: $pid (Parent PID: $ppid)"
+                        echo "  Started: $start_time"
+                        
+                        # Check for child agent processes
+                        local child_count=$(pgrep -P "$pid" 2>/dev/null | wc -l | tr -d ' ')
+                        if [ "$child_count" -gt 0 ]; then
+                            echo "  Status: Running ($child_count child process(es))"
+                        else
+                            echo "  Status: Idle"
+                        fi
+                        echo ""
+                    fi
+                done
+                
+                if [ $count -eq 0 ]; then
+                    echo "No active sessions (only child processes found)"
+                fi
+            fi
             ;;
         latest)
             # Get session directory from path resolver (with fallback)

@@ -56,6 +56,16 @@ cd cconductor
 ./cconductor "What is Docker containerization?"
 ```
 
+**Complex queries from files**:
+
+For multi-part research with structured context:
+
+```bash
+./cconductor --question-file research-query.md
+```
+
+See [Complex Research](#complex-research-from-files) section for details.
+
 ### Viewing Results
 
 ```bash
@@ -403,6 +413,74 @@ See [Custom Knowledge Guide](docs/CUSTOM_KNOWLEDGE.md) for detailed guide.
 ---
 
 ## Advanced Usage
+
+### Complex Research from Files
+
+For multi-part research queries with structured context, use markdown files instead of command-line text:
+
+```bash
+./cconductor --question-file research-query.md
+```
+
+**Why use question files:**
+
+- **Complex queries**: Multiple sub-questions with structured background
+- **Reusable templates**: Save and version-control research protocols
+- **Rich formatting**: Use markdown headers, lists, and emphasis
+- **No escaping**: Avoid command-line quoting issues
+- **Embedded context**: Include keywords, expected outputs, and search strategies
+
+**Example question file** (`research-query.md`):
+
+```markdown
+# Research Query: Metabolic Psychiatry Evidence
+
+## Research Objective
+Validate or invalidate the hypothesis that metabolic interventions show 
+broad efficacy across psychiatric disorders.
+
+## Core Questions
+
+### 1. Treatment Response Prediction
+Does pre-treatment metabolic capacity predict treatment response better 
+than genetic risk scores?
+
+**Search for:**
+- Studies comparing metabolic markers to polygenic risk scores
+- Meta-analyses of treatment response predictors
+- Precision psychiatry studies
+
+### 2. Transdiagnostic Efficacy
+Do metabolic interventions show broad, cross-diagnostic efficacy?
+
+**Search for:**
+- Exercise intervention trials across disorders
+- Ketogenic diet studies in mental health
+- Meta-analyses of lifestyle interventions
+
+## Keywords
+- Metabolic psychiatry
+- Treatment response prediction
+- Transdiagnostic interventions
+- Exercise psychiatry meta-analysis
+
+## Expected Outputs
+- Evidence organized by prediction
+- Quality assessment of supporting/contradicting evidence
+- Identification of key research gaps
+```
+
+**Combine with other features:**
+
+```bash
+# Question file + non-interactive mode
+./cconductor --question-file research-query.md --non-interactive
+
+# Question file + local materials
+./cconductor --question-file research-query.md --input-dir ./papers/
+```
+
+**Real example**: See `research-sessions/IHPH_research_query.md` for a comprehensive research protocol.
 
 ### Resuming Research
 

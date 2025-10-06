@@ -48,6 +48,36 @@ Comprehensive research with full citations and bibliography.
 ./cconductor "Latest advances in CRISPR gene editing 2023-2024"
 ```
 
+### Complex Research from Files
+
+For multi-part research queries with structured context, use a markdown file:
+
+```bash
+./cconductor --question-file research-query.md
+```
+
+**Benefits:**
+- Structured queries with background, sub-questions, and keywords
+- Reusable research templates
+- Version control for your research questions
+- No command-line escaping issues
+
+**Example file:**
+```markdown
+# Research Query: AI Safety Mechanisms
+
+## Background
+Need to understand current state of AI alignment research...
+
+## Core Questions
+1. What are the main approaches to AI alignment?
+2. Which approaches show most promise?
+3. What are the open challenges?
+
+## Keywords
+- AI alignment, RLHF, Constitutional AI...
+```
+
 ### Research with Local Files
 
 Analyze your own PDFs, documents, and notes alongside web research.

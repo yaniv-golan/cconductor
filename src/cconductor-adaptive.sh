@@ -251,8 +251,10 @@ initialize_session() {
 
     # Phase 2: Initialize event logging
     init_events "$session_dir"
-    log_event "$session_dir" "session_created" \
-        "{\"question\": $(echo "$research_question" | jq -R .)}"
+    # Properly construct JSON for event data (handles multi-line questions)
+    local event_data
+    event_data=$(jq -n --arg q "$research_question" '{question: $q}')
+    log_event "$session_dir" "session_created" "$event_data"
     
     # Phase 2: Generate dashboard
     bash "$CCONDUCTOR_SCRIPT_DIR/utils/dashboard-generator.sh" "$session_dir" >/dev/null 2>&1 || true
@@ -701,9 +703,30 @@ run_coordinator() {
                 # Strip markdown fences and extract JSON object
                 result_text=$(echo "$result_text" | sed -e 's/^```json$//' -e 's/^```$//')
                 
-                # Extract JSON using awk (find first {, print rest)
+                # Extract JSON using awk with proper brace balancing
                 local parsed_json
-                parsed_json=$(echo "$result_text" | awk '/{/{found=1} found{if(!printed){sub(/^[^{]*/, ""); printed=1} print}')
+                parsed_json=$(echo "$result_text" | awk '
+                    BEGIN { depth=0; started=0 }
+                    /{/ && !started { 
+                        sub(/^[^{]*/, "")
+                        started=1
+                    }
+                    started {
+                        # Count braces on this line
+                        open_count = gsub(/{/, "{")
+                        close_count = gsub(/}/, "}")
+                        
+                        print
+                        
+                        depth += (open_count - close_count)
+                        
+                        # Exit when we close the root object
+                        if (depth == 0) exit
+                    }
+                ')
+                
+                # Remove any trailing markdown fences or whitespace
+                parsed_json=$(echo "$parsed_json" | sed '/^```$/d' | sed -e :a -e '/^\s*$/d;N;ba')
                 
                 # Validate it's valid JSON
                 if echo "$parsed_json" | jq '.' >/dev/null 2>&1; then
@@ -1339,8 +1362,9 @@ list_sessions() {
     printf "%-25s %-50s %-20s\n" "SESSION ID" "QUESTION" "STATUS"
     printf "%-25s %-50s %-20s\n" "----------" "--------" "------"
     
-    # shellcheck disable=SC2045
-    for session_path in $(ls -1dt "$sessions_dir"/session_* 2>/dev/null); do
+    # Use find + sort to handle spaces in paths (common in macOS iCloud Drive)
+    # Sort by modification time (newest first)
+    while IFS= read -r session_path; do
         if [ -f "$session_path/session.json" ]; then
             local session_id
             session_id=$(basename "$session_path")
@@ -1362,7 +1386,7 @@ list_sessions() {
                 break
             fi
         fi
-    done
+    done < <(find "$sessions_dir" -maxdepth 1 -type d -name "session_*" -print0 2>/dev/null | xargs -0 ls -1dt 2>/dev/null)
     
     if [ $found_sessions -eq 0 ]; then
         echo "No sessions found"

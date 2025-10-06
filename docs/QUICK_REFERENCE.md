@@ -10,6 +10,9 @@
 # Start research
 ./cconductor "your question"
 
+# Complex research from markdown file
+./cconductor --question-file research-query.md
+
 # Research with local files (PDFs, markdown, text)
 ./cconductor "your question" --input-dir /path/to/files/
 

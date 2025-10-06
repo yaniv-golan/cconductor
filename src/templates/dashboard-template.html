@@ -40,6 +40,43 @@
         .header .question {
             font-size: 16px;
             opacity: 0.9;
+            line-height: 1.5;
+            position: relative;
+        }
+
+        .question-text {
+            display: -webkit-box;
+            -webkit-line-clamp: 3;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+            transition: all 0.3s ease;
+        }
+
+        .question-text.expanded {
+            -webkit-line-clamp: unset;
+            display: block;
+        }
+
+        .question-toggle {
+            display: inline-block;
+            margin-top: 10px;
+            padding: 6px 14px;
+            background: rgba(255, 255, 255, 0.15);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            border-radius: 6px;
+            font-size: 13px;
+            font-weight: 500;
+            color: #fff;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            user-select: none;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+        }
+
+        .question-toggle:hover {
+            background: rgba(255, 255, 255, 0.25);
+            border-color: rgba(255, 255, 255, 0.4);
+            transform: translateY(-1px);
         }
 
         .grid {
@@ -425,7 +462,10 @@
                 <span class="status-indicator"></span>
                 <span id="session-title">CConductor Research Dashboard</span>
             </h1>
-            <div class="question" id="research-question">Loading...</div>
+            <div class="question">
+                <div class="question-text" id="research-question">Loading...</div>
+                <span class="question-toggle" id="question-toggle" style="display: none;">▼ Show more</span>
+            </div>
         </div>
 
         <!-- Completion Banner -->

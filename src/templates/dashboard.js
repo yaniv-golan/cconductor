@@ -112,7 +112,11 @@ class Dashboard {
 
         // Display research question
         const questionElement = document.getElementById('research-question');
-        questionElement.textContent = session.research_question || 'Loading...';
+        const questionText = session.research_question || 'Loading...';
+        questionElement.textContent = questionText;
+
+        // Setup expand/collapse for long questions
+        this.setupQuestionToggle(questionText);
 
         // Display session ID from URL parameter if available
         const urlParams = new URLSearchParams(window.location.search);
@@ -138,6 +142,50 @@ class Dashboard {
         if (session.created_at && !this.sessionStartTime) {
             this.sessionStartTime = session.created_at;
             this.startLiveRuntime(session.created_at);
+        }
+    }
+
+    setupQuestionToggle(questionText) {
+        const questionElement = document.getElementById('research-question');
+        const toggleButton = document.getElementById('question-toggle');
+        
+        if (!questionElement || !toggleButton) return;
+        
+        // Check if question is long enough to warrant truncation
+        // Look for both actual newlines and escaped \n sequences
+        const actualNewlines = (questionText.match(/\n/g) || []).length;
+        const escapedNewlines = (questionText.match(/\\n/g) || []).length;
+        const totalNewlines = actualNewlines + escapedNewlines;
+        
+        // Show toggle if: long text (>200 chars), many newlines (>3), or contains markdown headers
+        const isLong = questionText.length > 200;
+        const hasManyLines = totalNewlines > 3;
+        const hasMarkdown = questionText.includes('#') || questionText.includes('##');
+        
+        console.log('Question length:', questionText.length, 'Newlines:', totalNewlines, 'Should show toggle:', isLong || hasManyLines || hasMarkdown);
+        
+        if (isLong || hasManyLines || hasMarkdown) {
+            toggleButton.style.display = 'inline-block';
+            
+            // Remove old listener if exists
+            const newToggle = toggleButton.cloneNode(true);
+            toggleButton.parentNode.replaceChild(newToggle, toggleButton);
+            
+            // Add click handler
+            newToggle.addEventListener('click', () => {
+                const isExpanded = questionElement.classList.contains('expanded');
+                
+                if (isExpanded) {
+                    questionElement.classList.remove('expanded');
+                    newToggle.textContent = '▼ Show more';
+                } else {
+                    questionElement.classList.add('expanded');
+                    newToggle.textContent = '▲ Show less';
+                }
+            });
+        } else {
+            toggleButton.style.display = 'none';
+            questionElement.classList.remove('expanded');
         }
     }
 

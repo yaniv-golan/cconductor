@@ -356,6 +356,59 @@ The simplest way to use CConductor:
 ./cconductor "What causes climate change?"
 ```
 
+### Example: Research from File (Complex Queries)
+
+For complex, multi-part research queries, use a markdown file instead of command-line text:
+
+```bash
+./cconductor --question-file research-query.md
+```
+
+**Why use a question file**:
+
+- **Complex queries**: Multiple sub-questions, structured context, and background information
+- **Reusable templates**: Save and reuse research protocols
+- **Version control**: Track changes to your research questions over time
+- **Better formatting**: Use markdown for headers, lists, and emphasis
+- **No escaping**: Avoid command-line quoting and escaping issues
+
+**Example question file** (`research-query.md`):
+
+```markdown
+# Research Query: Market Analysis for AI Chatbots
+
+## Research Objective
+Comprehensive market analysis of the AI chatbot industry focusing on enterprise 
+adoption, key players, and growth trends 2023-2025.
+
+## Core Questions
+1. What is the current market size and projected growth?
+2. Who are the top 5 players and their market share?
+3. What are the main use cases in enterprise?
+4. What are the key technological differentiators?
+
+## Keywords
+- AI chatbot market size
+- Enterprise chatbot adoption
+- Conversational AI trends
+- ChatGPT competitors
+
+## Expected Outputs
+- Market size with sources
+- Competitive landscape analysis
+- Technology trend analysis
+```
+
+**Combine with other flags**:
+
+```bash
+# Non-interactive research from file
+./cconductor --question-file research-query.md --non-interactive
+
+# Question file + local materials
+./cconductor --question-file research-query.md --input-dir ./materials/
+```
+
 ### Example: Research with Local Files
 
 If you have PDFs, documents, or notes to analyze alongside web research:
