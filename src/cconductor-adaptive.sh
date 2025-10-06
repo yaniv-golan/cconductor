@@ -429,7 +429,7 @@ execute_pending_tasks() {
                 local new_active=0
                 for i in "${!agent_pids[@]}"; do
                     if kill -0 "${agent_pids[$i]}" 2>/dev/null; then
-                        ((new_active++))
+                        new_active=$((new_active + 1))
                     fi
                 done
                 active_jobs=$new_active
@@ -444,7 +444,7 @@ execute_pending_tasks() {
             local pid=$!
             agent_pids+=("$pid")
             agent_names+=("$agent")
-            ((active_jobs++))
+            active_jobs=$((active_jobs + 1))
             echo "    Started $agent (PID $pid)"
         else
             # Execute sequentially
@@ -1354,7 +1354,7 @@ list_sessions() {
             fi
             
             printf "%-25s %-50s %-20s\n" "$session_id" "$question" "$status"
-            ((found_sessions++))
+            found_sessions=$((found_sessions + 1))
             
             # Limit output
             if [ $found_sessions -ge 10 ]; then
@@ -1534,7 +1534,7 @@ main() {
     # Main adaptive loop
     local iteration=0
     while [ "$iteration" -lt "$MAX_ITERATIONS" ]; do
-        ((iteration++))
+        iteration=$((iteration + 1))
 
         # Run single iteration (returns 1 to stop, 0 to continue)
         if ! run_single_iteration "$session_dir" "$iteration"; then
@@ -1665,7 +1665,7 @@ main_resume() {
     # Continue iteration loop from last iteration
     local iteration=$current_iteration
     while [ "$iteration" -lt "$MAX_ITERATIONS" ]; do
-        ((iteration++))
+        iteration=$((iteration + 1))
         
         # Run single iteration (returns 1 to stop, 0 to continue)
         if ! run_single_iteration "$session_dir" "$iteration"; then
