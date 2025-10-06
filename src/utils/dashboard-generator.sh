@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # Dashboard Generator - Creates dashboard.html for each session
 set -euo pipefail
 

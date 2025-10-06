@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # Knowledge Loader - Convention-based discovery with priority override
 # WordPress-style extensibility: core + user + session override
 

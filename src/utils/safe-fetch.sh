@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # Safe Fetch Wrapper - Secure curl with size/time limits
 # Provides safe fetching with security controls based on configuration
 

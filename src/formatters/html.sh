@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # HTML Output Formatter
 # Converts research JSON to standalone HTML report
 

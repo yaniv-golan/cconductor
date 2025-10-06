@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # User-Friendly Error Message Wrappers
 # Translates technical errors into actionable user guidance
 

@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # Research Logger Hook
 # Logs all research activities for audit trail and reproducibility
 

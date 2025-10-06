@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # Adaptive Research Orchestrator
 # Main control loop for adaptive research system
 
@@ -8,10 +8,21 @@ set -euo pipefail
 CCONDUCTOR_SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(dirname "$CCONDUCTOR_SCRIPT_DIR")"
 
+# Load debug utility first
+# shellcheck disable=SC1091
+source "$CCONDUCTOR_SCRIPT_DIR/utils/debug.sh"
+setup_error_trap
+
+debug "Starting cconductor-adaptive.sh"
+debug "CCONDUCTOR_SCRIPT_DIR=$CCONDUCTOR_SCRIPT_DIR"
+debug "PROJECT_ROOT=$PROJECT_ROOT"
+
 # Use CCONDUCTOR_SCRIPT_DIR for sourcing to avoid conflicts
 # (sourced files may redefine SCRIPT_DIR for their own use)
+debug "Sourcing knowledge-graph.sh"
 # shellcheck disable=SC1091
 source "$CCONDUCTOR_SCRIPT_DIR/knowledge-graph.sh"
+debug "knowledge-graph.sh sourced successfully"
 # shellcheck disable=SC1091
 source "$CCONDUCTOR_SCRIPT_DIR/task-queue.sh"
 # shellcheck disable=SC1091
@@ -37,6 +48,7 @@ source "$CCONDUCTOR_SCRIPT_DIR/utils/setup-hooks.sh"
 
 # Load configuration using overlay pattern
 # This automatically merges user config over defaults
+debug "Loading adaptive-config"
 if ! ADAPTIVE_CONFIG=$(load_config "adaptive-config"); then
     echo "❌ Error: Failed to load adaptive configuration" >&2
     echo "" >&2
@@ -120,7 +132,11 @@ if [ "$MAX_ITERATIONS" -lt 1 ] || [ "$MAX_ITERATIONS" -gt 100 ]; then
     exit 1
 fi
 
-if awk -v thresh="$CONFIDENCE_THRESHOLD" 'BEGIN { exit !(thresh < 0 || thresh > 1) }'; then
+# awk: exit 0 (success) if valid, exit 1 (failure) if invalid
+# Check if threshold is OUT of range (< 0 or > 1)
+if awk -v thresh="$CONFIDENCE_THRESHOLD" 'BEGIN { if (thresh < 0 || thresh > 1) exit 1; exit 0 }'; then
+    : # Valid - do nothing
+else
     echo "❌ Error: confidence_threshold must be between 0 and 1 (got: $CONFIDENCE_THRESHOLD)" >&2
     exit 1
 fi

@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # Test Agent Invocation System
 # Verifies that agents can be invoked and return proper JSON
 

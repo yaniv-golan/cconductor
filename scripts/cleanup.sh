@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # CConductor Cleanup Script
 # Cleans up old sessions, processes, and temporary files
 

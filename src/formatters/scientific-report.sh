@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # Scientific Research Report Formatter
 # Specialized format for academic/scientific research
 

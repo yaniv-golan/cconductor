@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # End-to-End Test: Simple Research Query
 # Tests the full research workflow using the cconductor entry point
 

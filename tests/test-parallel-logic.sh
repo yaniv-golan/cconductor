@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # Test Parallel Execution Logic (Fast Unit Test)
 # Tests the parallel execution mechanism without actually invoking Claude
 

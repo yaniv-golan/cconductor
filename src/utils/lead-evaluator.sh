@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # Lead Evaluator
 # Identifies and scores promising research leads
 

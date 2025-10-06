@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # Path Resolver - Expands configured paths with variable substitution
 # Removes hardcoded paths, enables multiple installations
 

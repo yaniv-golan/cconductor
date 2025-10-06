@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # Safe Calculation Wrapper
 # Provides accurate math calculations for LLM agents
 # LLMs are unreliable at arithmetic - use this instead!

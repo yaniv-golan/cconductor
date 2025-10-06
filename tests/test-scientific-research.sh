@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # Test: Scientific research query with academic sources
 
 set -euo pipefail

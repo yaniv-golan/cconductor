@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # Test: Agent Failure Task Status Updates
 # Verifies that tasks are marked as failed when agents fail
 

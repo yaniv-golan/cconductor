@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # PDF Cache Manager
 # Caches fetched PDFs locally with metadata to avoid redundant downloads
 #

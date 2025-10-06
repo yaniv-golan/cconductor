@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # VC/Market Research Memo Formatter
 # Specialized format for VC and market research
 

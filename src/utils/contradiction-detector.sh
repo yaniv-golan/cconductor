@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # Contradiction Detector
 # Identifies conflicting information in research findings
 

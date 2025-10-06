@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # Shared State Protocol
 # Handles file locking and concurrent access to shared resources
 

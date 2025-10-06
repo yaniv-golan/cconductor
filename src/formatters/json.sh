@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # JSON Output Formatter
 # Ensures clean, validated JSON output
 

@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # Summarization Utilities
 # Creates progressive summaries to manage context
 

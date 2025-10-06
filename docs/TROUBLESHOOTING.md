@@ -11,14 +11,15 @@
 ## Table of Contents
 
 1. [Quick Diagnostics](#quick-diagnostics)
-2. [Installation & Setup Issues](#installation--setup-issues)
-3. [Research Execution Problems](#research-execution-problems)
-4. [Quality & Results Issues](#quality--results-issues)
-5. [Performance Problems](#performance-problems)
-6. [Security & Permissions](#security--permissions)
-7. [Configuration Problems](#configuration-problems)
-8. [Session & File Issues](#session--file-issues)
-9. [Getting Help](#getting-help)
+2. [Authentication Issues](#authentication-issues) ⭐ **Start Here**
+3. [Installation & Setup Issues](#installation--setup-issues)
+4. [Research Execution Problems](#research-execution-problems)
+5. [Quality & Results Issues](#quality--results-issues)
+6. [Performance Problems](#performance-problems)
+7. [Security & Permissions](#security--permissions)
+8. [Configuration Problems](#configuration-problems)
+9. [Session & File Issues](#session--file-issues)
+10. [Getting Help](#getting-help)
 
 ---
 
@@ -27,7 +28,12 @@
 **Before diving into specific issues**, run these basic checks:
 
 ```bash
-# 1. Check CConductor is installed correctly
+# 1. Check Claude Code authentication (MOST COMMON ISSUE)
+claude whoami
+# Should show your authenticated account
+# If not: claude login
+
+# 2. Check CConductor is installed correctly
 ./cconductor --version
 
 # 2. Check for running research
@@ -52,6 +58,69 @@ find "$SESSION_DIR" -name "*.lock"
 ```
 
 **If any of these fail**, proceed to relevant section below.
+
+---
+
+## Authentication Issues
+
+### Invalid API Key / Not Authenticated
+
+⭐ **This is the #1 most common issue for new users**
+
+**Symptoms**:
+- Research fails immediately with: `"Invalid API key · Please run /login"`
+- Error: `Agent research-planner failed with code 1`
+- Claude commands don't work
+
+**Cause**: Claude Code CLI is not authenticated with your Claude.ai account.
+
+**Solution**:
+
+```bash
+# Login to Claude Code (opens browser)
+claude login
+
+# Verify authentication
+claude whoami
+# Should show: "Logged in as: your@email.com"
+```
+
+**Requirements**:
+- **Claude.ai account** with one of:
+  - Claude Pro subscription ($20/month)
+  - Claude Max subscription (enterprise)
+  - Anthropic API key with credits
+
+**Troubleshooting**:
+
+1. **Browser doesn't open during login**:
+   ```bash
+   # Copy the URL manually and open in browser
+   claude login --no-browser
+   ```
+
+2. **Already logged in but still getting errors**:
+   ```bash
+   # Logout and login again
+   claude logout
+   claude login
+   ```
+
+3. **Using API key instead of subscription**:
+   ```bash
+   # Set API key environment variable
+   export ANTHROPIC_API_KEY="your-api-key"
+   
+   # Or add to your shell profile (~/.zshrc or ~/.bashrc)
+   echo 'export ANTHROPIC_API_KEY="your-api-key"' >> ~/.zshrc
+   ```
+
+4. **Check your subscription status**:
+   - Visit https://claude.ai/settings
+   - Verify you have an active Pro/Max subscription
+   - Or check API credits at https://console.anthropic.com/
+
+**Note**: Free Claude.ai accounts do NOT have access to Claude Code CLI. You need a paid subscription or API credits.
 
 ---
 

@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # Citation Manager
 # JSON-based citation management for research reports
 # Manages citations in knowledge graph without requiring SQLite

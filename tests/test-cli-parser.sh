@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # Test CLI Argument Parser
 
 set -euo pipefail

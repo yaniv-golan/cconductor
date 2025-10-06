@@ -64,6 +64,14 @@ bash --version
 # Should show: GNU bash, version 4.0 or higher
 ```
 
+**Check if Claude Code is authenticated**:
+
+```bash
+claude whoami
+# Should show your authenticated account
+# If not authenticated, run: claude login
+```
+
 **Check if you have jq**:
 
 ```bash

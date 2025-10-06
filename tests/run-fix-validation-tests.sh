@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # Master Test Runner for Bug Fix Validation
 # Runs all tests to validate the recent bug fixes
 

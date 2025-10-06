@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # Integration Test: --input-dir Feature
 # Tests the complete workflow from CLI to session creation
 

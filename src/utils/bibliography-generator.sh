@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # Bibliography Generator
 # Formats citations in multiple academic styles (APA, Chicago, Vancouver)
 

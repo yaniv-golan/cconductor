@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # Test: ID Uniqueness After Deletions
 # Verifies that entity/task IDs remain unique even after deletions
 

@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # PDF Cache Phase 1 Test Suite
 # Tests: Locking, Deduplication, Error Handling
 

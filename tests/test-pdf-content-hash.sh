@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # Test PDF Content-Addressed Caching
 
 set -euo pipefail

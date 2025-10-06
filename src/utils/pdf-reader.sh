@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # PDF Reader Utility
 #
 # Purpose: Prepares PDFs for reading with Claude's native Read tool

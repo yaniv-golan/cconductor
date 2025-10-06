@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # Markdown Output Formatter
 # Converts research JSON to well-formatted Markdown report
 

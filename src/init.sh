@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # CConductor First-Run Initialization
 # Sets up directories, configs, and verifies dependencies
 
@@ -63,6 +63,9 @@ if ! command -v claude &> /dev/null; then
     echo "   Requirements:"
     echo "     • Node.js 18 or newer (provides npm)"
     echo "     • Claude.ai or Console account (Pro/Max subscription or API credits)"
+    echo ""
+    echo "   After installation, you must login:"
+    echo "     claude login"
     echo ""
     echo "   See: https://docs.anthropic.com/en/docs/claude-code/overview"
     echo ""

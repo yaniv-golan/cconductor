@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # Platform-Aware Path Resolver
 # Follows OS conventions for data, cache, and log directories
 #

@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # Agent Invocation Helper (Phase 0 - Validated Implementation)
 # Invokes Claude CLI agents with systemPrompt injection and tool restrictions
 #
@@ -208,7 +208,9 @@ invoke_agent_v2() {
 
     # Invoke Claude with validated patterns
     # Output goes to $output_file in JSON format
-    if echo "$task" | timeout "$timeout" "${claude_cmd[@]}" > "$output_file" 2>&1; then
+    # Note: timeout command not available on macOS by default, so we run without it
+    # The claude CLI has its own timeout mechanisms
+    if echo "$task" | "${claude_cmd[@]}" > "$output_file" 2>&1; then
         # Return to original directory
         cd "$original_dir" || true
 

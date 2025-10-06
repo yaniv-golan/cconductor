@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # Integration Test: Phase 1 Session Continuity in Real Research
 # 
 # This test verifies that session continuity works in actual research scenarios

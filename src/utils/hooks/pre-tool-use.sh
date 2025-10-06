@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # Hook: PreToolUse - Logs and displays tool usage before execution
 # Called by Claude Code before each tool use
 # Receives JSON data via stdin

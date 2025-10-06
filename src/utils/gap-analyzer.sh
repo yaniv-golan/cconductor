@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # Gap Analyzer
 # Identifies knowledge gaps in the research
 

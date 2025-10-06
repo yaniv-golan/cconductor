@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # Hook: PostToolUse - Logs and displays tool completion
 # Called by Claude Code after each tool completes
 # Receives JSON data via stdin

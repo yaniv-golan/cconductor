@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # Session Manager for Agent Continuity (Phase 1)
 # Manages multi-turn conversations with agents using Claude Code's --resume feature
 #

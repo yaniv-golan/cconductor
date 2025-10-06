@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # Setup Claude Code hooks for tool-level observability
 # Configures PreToolUse and PostToolUse hooks in session's .claude/settings.json
 

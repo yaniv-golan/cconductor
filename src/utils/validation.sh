@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # Input Validation Utilities
 # Reusable validation functions for defensive programming
 

@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # Knowledge Graph Manager
 # Manages the shared knowledge graph for adaptive research
 
@@ -6,13 +6,25 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
+# Load debug utility if not already loaded
+if ! declare -F debug >/dev/null 2>&1; then
+    # shellcheck disable=SC1091
+    source "$SCRIPT_DIR/utils/debug.sh" 2>/dev/null || true
+fi
+
+debug "knowledge-graph.sh: Starting to source dependencies"
+
 # Source shared-state for atomic operations
+debug "knowledge-graph.sh: Sourcing shared-state.sh"
 # shellcheck disable=SC1091
 source "$SCRIPT_DIR/shared-state.sh"
+debug "knowledge-graph.sh: Sourcing validation.sh"
 # shellcheck disable=SC1091
 source "$SCRIPT_DIR/utils/validation.sh"
+debug "knowledge-graph.sh: Sourcing event-logger.sh"
 # shellcheck disable=SC1091
-source "$SCRIPT_DIR/utils/event-logger.sh" 2>/dev/null || true
+source "$SCRIPT_DIR/utils/event-logger.sh" || true
+debug "knowledge-graph.sh: All dependencies sourced"
 
 # Initialize a new knowledge graph
 kg_init() {

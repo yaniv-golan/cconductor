@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # Context Management Utilities
 # Prevents context overflow through intelligent pruning and summarization
 

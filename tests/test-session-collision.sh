@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # Test: Session ID Collision Prevention
 # Verifies that starting multiple sessions simultaneously creates unique IDs
 

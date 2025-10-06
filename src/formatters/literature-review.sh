@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # Literature Review Formatter
 # Formats research output as a comprehensive academic literature review
 

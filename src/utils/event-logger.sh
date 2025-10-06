@@ -1,10 +1,21 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # Event Logger - Structured event stream for observability
-set -euo pipefail
+# Note: Don't set -euo pipefail here - this is sourced by other scripts
+# that already have it set, and re-setting can cause issues
+
+# Load debug utility if available
+if declare -F debug >/dev/null 2>&1; then
+    debug "event-logger.sh: Starting to load"
+fi
 
 # Global monotonic sequence counter for timestamp uniqueness
 # Persisted per session to ensure uniqueness across rapid events
-declare -g EVENT_SEQUENCE_COUNTER=0
+# Note: Don't use -g flag (Bash 4.2+ only), top-level declares are global anyway
+EVENT_SEQUENCE_COUNTER=0
+
+if declare -F debug >/dev/null 2>&1; then
+    debug "event-logger.sh: EVENT_SEQUENCE_COUNTER declared"
+fi
 
 # Log an event to session's event stream
 log_event() {
@@ -22,7 +33,9 @@ log_event() {
         # GNU date (Linux) - has nanosecond precision
         local nanos
         nanos=$(date +%N)
-        local micros=$(( nanos / 1000 ))
+        # Remove leading zeros to avoid octal interpretation
+        nanos=${nanos#"${nanos%%[!0]*}"}
+        local micros=$(( ${nanos:-0} / 1000 ))
         timestamp=$(date -u +"%Y-%m-%dT%H:%M:%S").${micros}Z
     else
         # BSD date (macOS) - use monotonic counter for guaranteed uniqueness

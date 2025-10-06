@@ -153,14 +153,20 @@ brew install node
 # 2. Install Claude Code CLI
 npm install -g @anthropic-ai/claude-code
 
-# 3. Install other dependencies
+# 3. Login to Claude Code (REQUIRED)
+claude login
+# This opens a browser to authenticate with Claude.ai
+# You need a Claude Pro/Max subscription or API credits
+
+# 4. Install other dependencies
 brew install bash jq curl bc
 # Note: macOS ships with Bash 3.2, but CConductor requires Bash 4.0+
 # The brew-installed bash (5.x) will be at /opt/homebrew/bin/bash
 
-# 4. Verify installations
+# 5. Verify installations
 node --version    # Should be v18 or higher
 claude --version  # Should show claude-code version
+claude whoami     # Should show your authenticated account
 /opt/homebrew/bin/bash --version  # Should be 5.x or higher
 ```
 

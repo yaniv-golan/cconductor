@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # Build agent JSON files from source (metadata.json + system-prompt.md)
 # Usage: build-agents.sh <output_dir>
 #

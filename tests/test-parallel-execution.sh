@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # Test: Verify parallel agent execution improves performance
 
 set -euo pipefail

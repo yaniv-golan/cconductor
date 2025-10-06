@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # Input Files Manager
 # Discovers and processes user-provided files from --input-dir
 #

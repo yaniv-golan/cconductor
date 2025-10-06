@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # Test: Complex multi-faceted research query
 
 set -euo pipefail

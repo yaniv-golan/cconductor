@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # Test Phase 1: Session Continuity Integration
 
 set -euo pipefail

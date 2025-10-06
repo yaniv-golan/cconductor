@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # Task Queue System
 # Manages dynamic priority-based task queue for adaptive research
 

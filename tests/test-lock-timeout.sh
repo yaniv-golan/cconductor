@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # Test: Lock Timeout Accuracy
 # Verifies that lock timeout is 10 seconds, not 100 seconds
 

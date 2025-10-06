@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # Test Parallel Agent Execution
 # Verifies that multiple agents can be invoked concurrently
 
@@ -58,7 +58,7 @@ echo ""
 
 # Create a simple test of the execute_single_agent function
 cat > "$TEST_SESSION/test-parallel.sh" <<'EOF'
-#!/bin/bash
+#!/usr/bin/env bash
 set -euo pipefail
 
 PROJECT_ROOT="$1"

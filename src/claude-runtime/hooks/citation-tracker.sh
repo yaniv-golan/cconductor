@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # Citation Tracker Hook
 # Maintains a database of all sources accessed during research
 

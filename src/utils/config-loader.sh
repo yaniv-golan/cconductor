@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # Config Loader - Overlay system for upgrade-safe configuration
 # Implements .default pattern: user configs overlay defaults without merge conflicts
 # User configs stored in OS-appropriate locations

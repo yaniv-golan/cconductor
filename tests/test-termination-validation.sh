@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # Test: Termination Validation with Missing Field
 # Verifies that missing termination_recommendation field defaults to false
 

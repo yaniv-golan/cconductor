@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # Dashboard Metrics - Pre-computed metrics for dashboard
 set -euo pipefail
 

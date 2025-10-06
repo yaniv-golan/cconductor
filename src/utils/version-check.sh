@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # Version Check - Semantic version parsing and compatibility validation
 # Ensures session compatibility with current research engine version
 

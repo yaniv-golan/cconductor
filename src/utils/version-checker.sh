@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # Version Checker - Auto-update detection and notification
 # Checks GitHub for new releases and notifies user
 

@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # Confidence Scorer
 # Calculates confidence scores for claims and overall research
 

@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # Verify VERSION file matches git tag
 
 set -euo pipefail
