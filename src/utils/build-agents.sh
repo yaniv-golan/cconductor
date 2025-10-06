@@ -1,16 +1,19 @@
 #!/usr/bin/env bash
 # Build agent JSON files from source (metadata.json + system-prompt.md)
-# Usage: build-agents.sh <output_dir>
+# Usage: build-agents.sh <output_dir> [session_dir]
 #
 # Combines metadata.json and system-prompt.md from src/claude-runtime/agents/
 # into single JSON files for Claude Code
+#
+# If session_dir is provided, injects session-specific knowledge context
 
 set -euo pipefail
 
 output_dir="${1:-}"
+session_dir="${2:-}"
 
 if [ -z "$output_dir" ]; then
-    echo "Usage: build-agents.sh <output_dir>" >&2
+    echo "Usage: build-agents.sh <output_dir> [session_dir]" >&2
     exit 1
 fi
 
@@ -19,6 +22,10 @@ mkdir -p "$output_dir"
 # Get script directory to find source agents
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 AGENTS_SOURCE_DIR="$SCRIPT_DIR/../claude-runtime/agents"
+
+# Source knowledge loader for knowledge injection
+# shellcheck disable=SC1091
+source "$SCRIPT_DIR/knowledge-loader.sh"
 
 # Build each agent
 for agent_dir in "$AGENTS_SOURCE_DIR"/*/; do
@@ -37,12 +44,15 @@ for agent_dir in "$AGENTS_SOURCE_DIR"/*/; do
         continue
     fi
     
-    # Read metadata and system prompt
-    system_prompt=$(cat "$prompt_file")
+    # Read base system prompt
+    base_prompt=$(cat "$prompt_file")
     
-    # Combine into agent JSON
+    # Inject knowledge context (respects priority: session > custom > core)
+    enhanced_prompt=$(inject_knowledge_context "$agent_name" "$base_prompt" "$session_dir")
+    
+    # Combine into agent JSON with enhanced prompt
     output_file="$output_dir/${agent_name}.json"
-    jq --arg prompt "$system_prompt" \
+    jq --arg prompt "$enhanced_prompt" \
         '. + {systemPrompt: $prompt}' \
         "$metadata_file" > "$output_file"
     

@@ -89,6 +89,12 @@ Custom knowledge is **automatically discovered** and loaded by agents!
 ./cconductor "Research question about my domain"
 ```
 
+**How it works:**
+- When agents are built, the system scans `knowledge-base-custom/`
+- Knowledge is injected into agent prompts at build time
+- Agents receive knowledge prepended to their system prompts
+- Priority: Session > Custom > Core
+
 ### 3. Verify Loading
 
 ```bash

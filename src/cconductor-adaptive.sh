@@ -181,8 +181,9 @@ initialize_session() {
         cp -r "$PROJECT_ROOT/src/claude-runtime" "$session_dir/.claude"
         
         # Build agent JSON files from source (metadata.json + system-prompt.md)
+        # Pass session_dir for knowledge injection (session > custom > core priority)
         echo "→ Building agents from source..." >&2
-        bash "$PROJECT_ROOT/src/utils/build-agents.sh" "$session_dir/.claude/agents" >&2 || {
+        bash "$PROJECT_ROOT/src/utils/build-agents.sh" "$session_dir/.claude/agents" "$session_dir" >&2 || {
             echo "Error: Failed to build agents" >&2
             exit 1
         }

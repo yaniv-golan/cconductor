@@ -238,7 +238,7 @@ inject_knowledge_context() {
             knowledge_context+="## ${knowledge_name}\n\n<knowledge_base name=\"${knowledge_name}\">\n${knowledge_content}\n</knowledge_base>\n\n"
         fi
 
-        ((idx++))
+        idx=$((idx + 1))
     done
 
     # Inject knowledge BEFORE the task-specific prompt
