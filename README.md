@@ -121,7 +121,11 @@ Balanced research on any topic.
 
 ## Requirements
 
-- **Claude Code** (required - CConductor is a Claude Code extension)
+- **Node.js** (18+) - Required to install Claude Code CLI
+  - npm comes bundled with Node.js
+  - Install: `brew install node` (macOS) or see [nodejs.org](https://nodejs.org/)
+- **Claude Code CLI** (required - CConductor is a Claude Code extension)
+  - Install: `npm install -g @anthropic-ai/claude-code`
   - CConductor uses Claude Code's Task tool to invoke specialized AI agents
   - Cannot run standalone with just an API key
   - Available through Claude Pro/Max subscriptions or API/pay-as-you-go
@@ -136,22 +140,56 @@ Balanced research on any topic.
 **macOS**:
 
 ```bash
+# 0. Install Homebrew (if not already installed)
+# Check if you have Homebrew:
+brew --version
+
+# If not installed, install Homebrew:
+/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+
+# 1. Install Node.js (includes npm)
+brew install node
+
+# 2. Install Claude Code CLI
+npm install -g @anthropic-ai/claude-code
+
+# 3. Install other dependencies
 brew install bash jq curl python3
 # Note: macOS ships with Bash 3.2, but CConductor requires Bash 4.0+
 # The brew-installed bash (5.x) will be at /opt/homebrew/bin/bash
+
+# 4. Verify installations
+node --version    # Should be v18 or higher
+claude --version  # Should show claude-code version
+/opt/homebrew/bin/bash --version  # Should be 5.x or higher
 ```
 
 **Linux** (Ubuntu/Debian):
 
 ```bash
+# 1. Install Node.js (includes npm)
+curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
+sudo apt-get install -y nodejs
+
+# 2. Install Claude Code CLI
+npm install -g @anthropic-ai/claude-code
+
+# 3. Install other dependencies
 sudo apt-get install jq curl bash python3
 ```
 
-**Windows**:
+**Windows** (WSL):
 
 ```bash
-# Use WSL (Windows Subsystem for Linux) or Git Bash
-# In WSL: sudo apt-get install jq curl bash python3
+# 1. Install Node.js
+curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
+sudo apt-get install -y nodejs
+
+# 2. Install Claude Code CLI
+npm install -g @anthropic-ai/claude-code
+
+# 3. Install other dependencies
+sudo apt-get install jq curl bash python3
 ```
 
 ---

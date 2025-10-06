@@ -23,11 +23,53 @@ echo ""
 
 # Step 1: Check dependencies
 echo "1. Checking dependencies..."
+echo "   (claude, jq, curl, bash, python3)"
 echo ""
 
 missing_deps=()
 
-# Check for required commands
+# Check for CRITICAL dependency: Claude Code CLI
+if ! command -v claude &> /dev/null; then
+    echo "   ✗ CRITICAL: Claude Code CLI not found"
+    echo ""
+    echo "   CConductor requires Claude Code CLI to function."
+    echo "   This is the AI agent runtime that powers the multi-agent system."
+    echo ""
+    
+    # Check if npm is available
+    if ! command -v npm &> /dev/null; then
+        echo "   First, install Node.js (includes npm):"
+        echo ""
+        echo "     macOS:"
+        if ! command -v brew &> /dev/null; then
+            echo "       1. Install Homebrew:"
+            echo "          /bin/bash -c \"\$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)\""
+            echo "       2. Install Node.js:"
+            echo "          brew install node"
+        else
+            echo "       brew install node"
+        fi
+        echo ""
+        echo "     Ubuntu:"
+        echo "       curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -"
+        echo "       sudo apt-get install -y nodejs"
+        echo ""
+        echo "   Then install Claude Code CLI:"
+    else
+        echo "   Install with:"
+    fi
+    echo "     npm install -g @anthropic-ai/claude-code"
+    echo ""
+    echo "   Requirements:"
+    echo "     • Node.js 18 or newer (provides npm)"
+    echo "     • Claude.ai or Console account (Pro/Max subscription or API credits)"
+    echo ""
+    echo "   See: https://docs.anthropic.com/en/docs/claude-code/overview"
+    echo ""
+    exit 1
+fi
+
+# Check for required utility commands
 if ! command -v jq &> /dev/null; then
     missing_deps+=("jq")
 fi
@@ -135,9 +177,17 @@ fi
 
 # Verify all dependencies are now available
 if command -v jq &> /dev/null && command -v curl &> /dev/null && command -v bash &> /dev/null; then
+    echo "   ✓ claude (Claude Code CLI) - REQUIRED"
     echo "   ✓ jq (JSON processor)"
     echo "   ✓ curl (HTTP client)"
     echo "   ✓ bash (shell)"
+    
+    # Check optional but recommended dependencies
+    if command -v python3 &> /dev/null; then
+        echo "   ✓ python3 (recommended for calculations)"
+    else
+        echo "   ⚠️  python3 (optional, recommended for accurate calculations)"
+    fi
 else
     echo "   ✗ Dependencies still missing after installation attempt"
     exit 1

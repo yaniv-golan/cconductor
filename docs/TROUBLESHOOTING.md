@@ -119,6 +119,81 @@ cconductor --version   # Should work from anywhere
 
 ---
 
+### Claude Code CLI Not Found
+
+**Symptoms**:
+
+```bash
+$ ./cconductor "question"
+❌ Error: Claude Code CLI not found
+
+CConductor requires Claude Code CLI to function.
+```
+
+**Cause**: Claude Code CLI is not installed, or Node.js/npm is missing.
+
+**Solution**:
+
+**1. Install Node.js first** (if not installed):
+
+```bash
+# Check if Node.js is installed
+node --version
+
+# If not installed:
+
+# macOS
+# First check if Homebrew is installed:
+brew --version
+
+# If Homebrew is not installed, install it first:
+/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+
+# Then install Node.js:
+brew install node
+
+# Ubuntu/Debian
+curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
+sudo apt-get install -y nodejs
+
+# Verify
+node --version  # Should be v18 or higher
+npm --version   # npm comes with Node.js
+```
+
+**2. Install Claude Code CLI**:
+
+```bash
+npm install -g @anthropic-ai/claude-code
+```
+
+**3. Verify installation**:
+
+```bash
+claude --version
+# Should show: claude-code/x.x.x
+```
+
+**4. If installation fails with permissions error**:
+
+```bash
+# Option 1: Use sudo (not recommended)
+sudo npm install -g @anthropic-ai/claude-code
+
+# Option 2: Fix npm permissions (better)
+mkdir ~/.npm-global
+npm config set prefix '~/.npm-global'
+echo 'export PATH=~/.npm-global/bin:$PATH' >> ~/.zshrc
+source ~/.zshrc
+npm install -g @anthropic-ai/claude-code
+```
+
+**Requirements**:
+- Node.js 18 or newer
+- Claude.ai or Console account (Pro/Max subscription or API credits)
+
+---
+
 ### Bash Version Error (macOS)
 
 **Symptoms**:
@@ -215,7 +290,11 @@ chmod +x src/utils/*.sh
 **Install jq**:
 
 ```bash
-# Mac
+# macOS
+# First check if Homebrew is installed:
+brew --version
+# If not: /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+
 brew install jq
 
 # Linux (Ubuntu/Debian)
@@ -228,13 +307,16 @@ sudo dnf install jq
 jq --version
 ```
 
-**Install curl** (usually pre-installed):
+**Install curl** (usually pre-installed on macOS and most Linux):
 
 ```bash
-# Mac
+# Check if already installed
+curl --version
+
+# macOS (if needed)
 brew install curl
 
-# Linux
+# Linux (if needed)
 sudo apt-get install curl
 
 # Verify
