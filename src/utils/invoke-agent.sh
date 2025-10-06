@@ -143,6 +143,13 @@ invoke_agent_v2() {
             "$agent_tools_file" 2>/dev/null)
     fi
 
+    # Validate tool restrictions are defined (security warning)
+    if [ -z "$allowed_tools" ] && [ -z "$disallowed_tools" ]; then
+        echo "⚠️  Warning: No tool restrictions found for agent $agent_name" >&2
+        echo "    Agent will run with ALL tools enabled (potential security risk)" >&2
+        echo "    Consider adding tool restrictions in agent-tools.json" >&2
+    fi
+
     # Build Claude command with validated flags
     # VALIDATED:
     # - --output-format json: test-01

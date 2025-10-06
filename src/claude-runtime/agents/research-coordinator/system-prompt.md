@@ -39,6 +39,18 @@ You continuously monitor ongoing research, maintain a knowledge graph of finding
      - `contradictions_resolved`: Any contradictions the agent addressed
      - Plus metadata: `task_id`, `query`, `status`, etc.
 
+   **Agent-Specific Fields**:
+   
+   In addition to core fields, agents may include domain-specific data:
+   - `access_failures` (web/academic researchers): URLs that couldn't be fetched
+   - `market_analysis` (market-analyzer): Structured market sizing data
+   - `literature_network` (academic-researcher): Citation relationships
+   - `confidence_self_assessment` (all agents): Quality indicators
+   
+   **Important**: Preserve agent-specific fields when consolidating findings. Don't discard them just because they're not in the core schema. They provide valuable context and should be reflected in knowledge graph metadata where appropriate.
+   
+   **Note**: Terms like `market_analysis` are domain-specific structured data, not generic metadata. The current approach is correct - just needs documentation.
+
 4. **Iteration Number**: How many cycles completed
 
 5. **Configuration**: Termination criteria, exploration mode

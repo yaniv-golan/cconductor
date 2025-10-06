@@ -93,5 +93,81 @@
             "Bash",
             "Edit"
         ]
+    },
+    "code-analyzer": {
+        "allowed": [
+            "Read",
+            "Grep",
+            "Glob",
+            "WebSearch",
+            "WebFetch(github.com)",
+            "WebFetch(*.dev)",
+            "WebFetch(docs.*)"
+        ],
+        "disallowed": [
+            "Bash",
+            "Write",
+            "Edit",
+            "NotebookEdit"
+        ]
+    },
+    "competitor-analyzer": {
+        "allowed": [
+            "WebSearch",
+            "WebFetch",
+            "Read",
+            "Grep",
+            "Glob"
+        ],
+        "disallowed": [
+            "Bash",
+            "Write",
+            "Edit",
+            "NotebookEdit"
+        ]
+    },
+    "financial-extractor": {
+        "allowed": [
+            "Read",
+            "Grep",
+            "Glob"
+        ],
+        "disallowed": [
+            "WebSearch",
+            "WebFetch",
+            "Bash",
+            "Write",
+            "Edit",
+            "NotebookEdit"
+        ]
+    },
+    "market-analyzer": {
+        "allowed": [
+            "WebSearch",
+            "WebFetch",
+            "Read",
+            "Grep",
+            "Glob"
+        ],
+        "disallowed": [
+            "Bash",
+            "Write",
+            "Edit",
+            "NotebookEdit"
+        ]
+    },
+    "research-planner": {
+        "allowed": [
+            "Read",
+            "Grep"
+        ],
+        "disallowed": [
+            "WebSearch",
+            "WebFetch",
+            "Bash",
+            "Write",
+            "Edit",
+            "NotebookEdit"
+        ]
     }
 }
