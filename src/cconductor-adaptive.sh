@@ -636,6 +636,157 @@ The user's materials should drive the research direction.
     echo "$context"
 }
 
+# Validate that JSON contains actual research findings, not just metadata
+is_valid_finding() {
+    local json="$1"
+    
+    # A valid finding MUST have at least ONE of these content arrays with data
+    local has_entities
+    has_entities=$(echo "$json" | jq -e '.entities_discovered | length > 0' >/dev/null 2>&1; echo $?)
+    local has_claims
+    has_claims=$(echo "$json" | jq -e '.claims | length > 0' >/dev/null 2>&1; echo $?)
+    local has_relationships
+    has_relationships=$(echo "$json" | jq -e '.relationships_discovered | length > 0' >/dev/null 2>&1; echo $?)
+    
+    # Check if this looks like a manifest (has findings_files but no content)
+    local has_files_field
+    has_files_field=$(echo "$json" | jq -e '.findings_files' >/dev/null 2>&1; echo $?)
+    
+    if [ "$has_files_field" -eq 0 ]; then
+        # Has findings_files field - check if it has no content
+        if [ "$has_entities" -ne 0 ] && [ "$has_claims" -ne 0 ] && [ "$has_relationships" -ne 0 ]; then
+            echo "  ⚠️  Rejected: Manifest metadata detected (has findings_files but no entities/claims/relationships)" >&2
+            return 1
+        fi
+    fi
+    
+    # Valid if has at least one content type
+    if [ "$has_entities" -eq 0 ] || [ "$has_claims" -eq 0 ] || [ "$has_relationships" -eq 0 ]; then
+        return 0
+    fi
+    
+    echo "  ⚠️  Rejected: No entities, claims, or relationships found" >&2
+    return 1
+}
+
+# Parse JSON from markdown-wrapped text
+parse_json_from_markdown() {
+    local text="$1"
+    
+    # Strip markdown fences
+    text=$(echo "$text" | sed -e 's/^```json$//' -e 's/^```$//')
+    
+    # Extract JSON using awk with proper brace balancing
+    local parsed_json
+    parsed_json=$(echo "$text" | awk '
+        BEGIN { depth=0; started=0 }
+        /{/ && !started { 
+            sub(/^[^{]*/, "")
+            started=1
+        }
+        started {
+            open_count = gsub(/{/, "{")
+            close_count = gsub(/}/, "}")
+            print
+            depth += (open_count - close_count)
+            if (depth == 0) exit
+        }
+    ' | sed '/^```$/d')
+    
+    echo "$parsed_json"
+}
+
+# Extract findings from file-based output
+extract_findings_from_files() {
+    local manifest="$1"
+    local session_dir="$2"
+    local findings='[]'
+    
+    local files_list
+    files_list=$(echo "$manifest" | jq -r '.findings_files[]' 2>/dev/null)
+    
+    if [ -z "$files_list" ]; then
+        echo "  ⚠️  No findings_files array in manifest" >&2
+        return 1
+    fi
+    
+    local count=0
+    local rejected=0
+    
+    for file_path in $files_list; do
+        local full_path="$session_dir/$file_path"
+        
+        if [ ! -f "$full_path" ]; then
+            echo "  ⚠️  Finding file not found: $file_path" >&2
+            rejected=$((rejected + 1))
+            continue
+        fi
+        
+        local finding
+        finding=$(cat "$full_path")
+        
+        # Validate JSON syntax
+        if ! echo "$finding" | jq empty >/dev/null 2>&1; then
+            echo "  ⚠️  Invalid JSON in $file_path" >&2
+            rejected=$((rejected + 1))
+            continue
+        fi
+        
+        # Validate it's a real finding, not another manifest
+        if is_valid_finding "$finding"; then
+            findings=$(echo "$findings" | jq --argjson f "$finding" '. += [$f]')
+            count=$((count + 1))
+        else
+            rejected=$((rejected + 1))
+        fi
+    done
+    
+    echo "  → Extracted $count findings from files ($rejected rejected)" >&2
+    echo "$findings"
+}
+
+# Extract findings from inline output
+extract_findings_from_inline() {
+    local parsed_json="$1"
+    local findings='[]'
+    
+    # Check if it's an array of findings or single finding
+    if echo "$parsed_json" | jq -e 'type == "array"' >/dev/null 2>&1; then
+        # Array of findings - validate each
+        local count
+        count=$(echo "$parsed_json" | jq 'length')
+        for i in $(seq 0 $((count - 1))); do
+            local finding
+            finding=$(echo "$parsed_json" | jq ".[$i]")
+            if is_valid_finding "$finding"; then
+                findings=$(echo "$findings" | jq --argjson f "$finding" '. += [$f]')
+            fi
+        done
+    else
+        # Single finding - validate and wrap
+        if is_valid_finding "$parsed_json"; then
+            findings=$(echo '[]' | jq --argjson f "$parsed_json" '. += [$f]')
+        fi
+    fi
+    
+    echo "$findings"
+}
+
+# Validate that an agent type exists
+validate_agent_type() {
+    local agent="$1"
+    local cconductor_root="${CCONDUCTOR_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
+    local agents_dir="$cconductor_root/src/claude-runtime/agents"
+    
+    if [ ! -d "$agents_dir/$agent" ]; then
+        echo "  ⚠️  Invalid agent type '$agent' - agent does not exist" >&2
+        echo "    Valid agents: $(find "$agents_dir" -mindepth 1 -maxdepth 1 -type d -exec basename {} \; 2>/dev/null | tr '\n' ' ')" >&2
+        return 1
+    fi
+    
+    return 0
+}
+
 # Run coordinator analysis
 run_coordinator() {
     local session_dir="$1"
@@ -693,98 +844,60 @@ run_coordinator() {
         seen_files+=("$findings_file")
         
         if [ -n "$findings_file" ] && [ -f "$findings_file" ]; then
-            # Read raw agent output (contains .result as string with embedded JSON)
-            local raw_finding
-            raw_finding=$(cat "$findings_file")
+            # UNIFIED EXTRACTION ARCHITECTURE
+            # Read raw agent output
+            local raw_output
+            raw_output=$(cat "$findings_file")
             
-            # Check if agent used file-based output (new approach)
-            if echo "$raw_finding" | jq -e '.result.findings_files' >/dev/null 2>&1; then
+            # Extract and parse .result field to JSON
+            local result_text
+            result_text=$(echo "$raw_output" | jq -r '.result // empty')
+            
+            if [ -z "$result_text" ]; then
+                echo "  ⚠️  No .result field in findings file: $findings_file" >&2
+                continue
+            fi
+            
+            # Parse JSON from markdown-wrapped text
+            local parsed_json
+            parsed_json=$(parse_json_from_markdown "$result_text")
+            
+            if [ -z "$parsed_json" ] || ! echo "$parsed_json" | jq empty >/dev/null 2>&1; then
+                echo "  ⚠️  Could not parse JSON from findings file: $findings_file" >&2
+                continue
+            fi
+            
+            # Determine extraction strategy based on content
+            local extracted_findings
+            if echo "$parsed_json" | jq -e '.findings_files' >/dev/null 2>&1; then
+                # File-based output: Read findings from files
                 echo "  → Extracting findings from files..." >&2
-                
-                # Get list of finding files
-                local findings_files_list
-                findings_files_list=$(echo "$raw_finding" | jq -r '.result.findings_files[]')
-                
-                # Read each finding file
-                local count=0
-                for finding_file_path in $findings_files_list; do
-                    local full_finding_path="$session_dir/$finding_file_path"
-                    
-                    if [ -f "$full_finding_path" ]; then
-                        local finding_content
-                        finding_content=$(cat "$full_finding_path")
-                        
-                        # Validate and add to array
-                        if echo "$finding_content" | jq empty >/dev/null 2>&1; then
-                            new_findings=$(echo "$new_findings" | jq --argjson f "$finding_content" '. += [$f]')
-                            count=$((count + 1))
-                        else
-                            echo "  ⚠️  Invalid JSON in $finding_file_path" >&2
-                        fi
-                    else
-                        echo "  ⚠️  Finding file not found: $full_finding_path" >&2
-                    fi
-                done
-                
-                echo "  → Extracted $count findings from files" >&2
-                
+                extracted_findings=$(extract_findings_from_files "$parsed_json" "$session_dir")
             else
-                # Legacy inline output (fallback for agents not yet updated)
+                # Inline output: Use parsed JSON directly
                 echo "  → Extracting findings from inline response..." >&2
-                
-                # Extract and parse the JSON from .result field
-                local result_text
-                result_text=$(echo "$raw_finding" | jq -r '.result // empty')
-                
-                if [ -n "$result_text" ]; then
-                    # Strip markdown fences and extract JSON object
-                    result_text=$(echo "$result_text" | sed -e 's/^```json$//' -e 's/^```$//')
-                    
-                    # Extract JSON using awk with proper brace balancing
-                    local parsed_json
-                    parsed_json=$(echo "$result_text" | awk '
-                        BEGIN { depth=0; started=0 }
-                        /{/ && !started { 
-                            sub(/^[^{]*/, "")
-                            started=1
-                        }
-                        started {
-                            # Count braces on this line
-                            open_count = gsub(/{/, "{")
-                            close_count = gsub(/}/, "}")
-                            
-                            print
-                            
-                            depth += (open_count - close_count)
-                            
-                            # Exit when we close the root object
-                            if (depth == 0) exit
-                        }
-                    ')
-                    
-                    # Remove any trailing markdown fences
-                    parsed_json=$(echo "$parsed_json" | sed '/^```$/d')
-                    
-                    # Validate it's valid JSON
-                    if echo "$parsed_json" | jq '.' >/dev/null 2>&1; then
-                        # Check if parsed_json is an array (agent returned multiple findings) or single object
-                        if echo "$parsed_json" | jq -e 'type == "array"' >/dev/null 2>&1; then
-                            # It's an array of findings - concatenate all findings
-                            new_findings=$(echo "$new_findings" | jq --argjson arr "$parsed_json" '. + $arr')
-                        else
-                            # It's a single finding object - wrap in array and add
-                            new_findings=$(echo "$new_findings" | jq --argjson f "$parsed_json" '. += [$f]')
-                        fi
-                    else
-                        echo "⚠️  Warning: Could not parse JSON from findings file: $findings_file" >&2
-                        echo "  ✗ Skipping invalid finding" >&2
-                    fi
-                else
-                    echo "⚠️  Warning: No .result field in findings file: $findings_file" >&2
-                fi
+                extracted_findings=$(extract_findings_from_inline "$parsed_json")
+            fi
+            
+            # Merge extracted findings into new_findings array
+            if [ -n "$extracted_findings" ]; then
+                new_findings=$(echo "$new_findings" | jq --argjson arr "$extracted_findings" '. + $arr')
             fi
         fi
     done <<< "$(echo "$new_completed_tasks" | jq -c '.[]')"
+    
+    # Validate extraction results
+    local findings_count
+    findings_count=$(echo "$new_findings" | jq 'length')
+    local expected_count
+    expected_count=$(echo "$new_completed_tasks" | jq 'length')
+    
+    if [ "$findings_count" -ne "$expected_count" ]; then
+        echo "  ⚠️  WARNING: Extracted $findings_count findings but expected $expected_count" >&2
+        echo "    Some findings may have failed content validation (manifests rejected, etc.)" >&2
+    else
+        echo "  ✓ Extracted $findings_count findings (all validated)" >&2
+    fi
 
     # Build input files context if present
     local input_context
@@ -1011,8 +1124,42 @@ add_coordinator_tasks() {
     fi
 
     if [ "$task_count" -gt 0 ]; then
-        echo "Adding $task_count new tasks to queue..."
-        tq_add_tasks "$session_dir" "$new_tasks" >/dev/null
+        # Validate agent types before adding tasks
+        local valid_tasks='[]'
+        local rejected_count=0
+        
+        for i in $(seq 0 $((task_count - 1))); do
+            local task
+            task=$(echo "$new_tasks" | jq ".[$i]")
+            local agent
+            agent=$(echo "$task" | jq -r '.agent // "unknown"')
+            
+            if validate_agent_type "$agent"; then
+                valid_tasks=$(echo "$valid_tasks" | jq --argjson t "$task" '. += [$t]')
+            else
+                # Log rejected agent
+                local error_data
+                error_data=$(jq -n \
+                    --arg agent "$agent" \
+                    --argjson task "$task" \
+                    '{rejected_agent: $agent, task: $task, reason: "Agent type does not exist"}')
+                log_event "$session_dir" "invalid_agent_rejected" "$error_data"
+                rejected_count=$((rejected_count + 1))
+            fi
+        done
+        
+        local valid_count
+        valid_count=$(echo "$valid_tasks" | jq 'length')
+        
+        if [ "$valid_count" -gt 0 ]; then
+            echo "Adding $valid_count new tasks to queue..."
+            if [ "$rejected_count" -gt 0 ]; then
+                echo "  ⚠️  Rejected $rejected_count tasks with invalid agent types"
+            fi
+            tq_add_tasks "$session_dir" "$valid_tasks" >/dev/null
+        else
+            echo "No valid tasks generated ($rejected_count rejected)"
+        fi
     else
         echo "No new tasks generated"
     fi

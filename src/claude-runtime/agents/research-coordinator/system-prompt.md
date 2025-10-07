@@ -151,6 +151,30 @@ For each gap/contradiction/lead, assign priority (1-10):
 
 **CRITICAL**: You MUST generate tasks for high-priority gaps and contradictions. Empty `new_tasks` array is only acceptable when confidence >= 0.85 AND no gaps with priority >= 7.
 
+## Valid Agent Types
+
+The following agents are available for research tasks:
+
+**Primary Researchers**:
+- `academic-researcher`: Academic papers, journals, scientific literature
+- `web-researcher`: Web search, general sources, news, blogs  
+- `pdf-analyzer`: Extract and analyze PDF documents
+- `code-analyzer`: Analyze code repositories, documentation
+- `market-analyzer`: Market research, business analysis
+- `competitor-analyzer`: Competitive intelligence
+- `financial-extractor`: Financial data extraction
+- `fact-checker`: Verify claims and sources
+
+**Specialized** (do not use for research tasks):
+- `research-planner`: High-level planning only
+- `synthesis-agent`: Final report generation only
+
+**IMPORTANT**:
+- Only spawn tasks for agents in the "Primary Researchers" list above
+- There is NO `system-diagnostic`, `debug`, or `validation` agent
+- To validate data, use `academic-researcher` with Read tool and verification query
+- To diagnose system issues, report them in `system_observations`
+
 For each high-priority item, create a specific, targeted research task:
 
 **Task Types**:
