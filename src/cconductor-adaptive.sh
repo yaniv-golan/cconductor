@@ -1288,9 +1288,29 @@ run_single_iteration() {
 
     # Check if no pending tasks remain
     if ! tq_has_pending "$session_dir"; then
+        # Check if research quality is acceptable before stopping
+        local current_confidence
+        current_confidence=$(jq -r '.confidence_scores.overall // 0' "$session_dir/knowledge-graph.json")
+        local unresolved_gaps
+        unresolved_gaps=$(jq -r '.stats.unresolved_gaps // 0' "$session_dir/knowledge-graph.json")
+        local high_priority_gaps
+        high_priority_gaps=$(jq '[.gaps[] | select(.status != "resolved" and .priority >= 7)] | length' "$session_dir/knowledge-graph.json")
+        
+        # Research is NOT complete if confidence is low or critical gaps remain
+        if (( $(echo "$current_confidence < 0.85" | bc -l) )) || [ "$high_priority_gaps" -gt 0 ]; then
+            echo ""
+            echo "⚠️  No pending tasks but research quality insufficient:"
+            echo "    • Confidence: $current_confidence (target: 0.85)"
+            echo "    • Unresolved gaps: $unresolved_gaps (high-priority: $high_priority_gaps)"
+            echo ""
+            echo "✗ Coordinator should have generated new tasks but didn't"
+            echo "✗ This indicates a coordinator failure - research may be incomplete"
+            return 1  # Signal termination with warning
+        fi
+        
         echo ""
         echo "✓ No pending tasks remaining"
-        echo "✓ Research appears complete"
+        echo "✓ Research quality acceptable (confidence: $current_confidence, no high-priority gaps)"
         return 1  # Signal termination
     fi
 

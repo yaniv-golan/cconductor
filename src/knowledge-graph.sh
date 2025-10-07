@@ -706,19 +706,41 @@ kg_bulk_update() {
            })
        ) |
 
+       # Extract citations from sources in entities and claims
+       (
+           # Collect all unique sources from entities
+           [($new_data.knowledge_graph_updates.entities_discovered // [])[] | 
+            .sources[]? | 
+            if type == "string" then {url: .} 
+            elif type == "object" then . 
+            else empty end
+           ] +
+           # Collect all unique sources from claims
+           [($new_data.knowledge_graph_updates.claims // [])[] | 
+            .sources[]? | 
+            if type == "string" then {url: .}
+            elif type == "object" and .url then .
+            else empty end
+           ] +
+           # Also include explicit citations if provided
+           ($new_data.citations // [])
+       ) as $all_sources |
+       
        # Add new citations (deduplicate by DOI or URL)
        (.citations | map(.doi // .url)) as $existing_identifiers |
        # Get max existing citation ID (extract number from cite_N format)
        ([.citations[] | .id | ltrimstr("cite_") | tonumber] | max // -1) as $max_cite_id |
        
        .citations += (
-           ($new_data.citations // []) |
+           $all_sources |
            map(select((.doi // .url) as $id | $existing_identifiers | contains([$id]) | not)) |
+           unique_by(.doi // .url) |
            to_entries |
            map(.value + {
                id: ("cite_" + (($max_cite_id + 1 + .key) | tostring)),
                added_at: $date,
-               cited_by_claims: []
+               cited_by_claims: [],
+               type: (if .doi then "doi" elif .url then "url" else "unknown" end)
            })
        ) |
 

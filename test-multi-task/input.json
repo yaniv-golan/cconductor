@@ -1,0 +1,23 @@
+[
+  {
+    "id": "test1",
+    "agent": "academic-researcher",
+    "query": "What is quantum entanglement?",
+    "priority": 10,
+    "type": "gap_filling"
+  },
+  {
+    "id": "test2",
+    "agent": "academic-researcher",
+    "query": "What is the Higgs boson?",
+    "priority": 9,
+    "type": "gap_filling"
+  },
+  {
+    "id": "test3",
+    "agent": "academic-researcher",
+    "query": "What is dark matter?",
+    "priority": 8,
+    "type": "gap_filling"
+  }
+]

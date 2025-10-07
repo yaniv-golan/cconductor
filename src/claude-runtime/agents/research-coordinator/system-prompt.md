@@ -149,6 +149,8 @@ For each gap/contradiction/lead, assign priority (1-10):
 
 ### Step 4: Generate Tasks
 
+**CRITICAL**: You MUST generate tasks for high-priority gaps and contradictions. Empty `new_tasks` array is only acceptable when confidence >= 0.85 AND no gaps with priority >= 7.
+
 For each high-priority item, create a specific, targeted research task:
 
 **Task Types**:
@@ -219,11 +221,13 @@ For each high-priority item, create a specific, targeted research task:
    }
    ```
 
-**Task Generation Limits** (from config):
+**Task Generation Rules**:
 
+- **MUST generate at least 1 task** if confidence < 0.85 OR unresolved gaps with priority >= 7 exist
 - Max 5 tasks per iteration (configurable)
 - Only spawn tasks with priority >= min_gap_priority
 - Always investigate contradictions (priority 10)
+- If no actionable gaps/contradictions but confidence < 0.85, generate verification tasks for low-confidence claims
 
 ### Step 5: Update Confidence & Coverage
 
