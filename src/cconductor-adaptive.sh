@@ -206,10 +206,10 @@ initialize_session() {
         exit 1
     fi
     
-    # Phase 2.5: Tool observability hooks
-    # NOTE: Hooks are configured at user level (~/.claude/settings.json)
-    # because --print mode doesn't respect per-session hooks.
-    # Our hooks use CCONDUCTOR_SESSION_DIR env var to log to the correct session.
+    # Phase 2.5: Set up tool observability hooks  
+    # Project-level hooks work in print mode (contrary to initial testing)
+    # Each session gets its own .claude/settings.json with hooks configured
+    setup_tool_hooks "$session_dir" || echo "Warning: Failed to setup tool hooks" >&2
 
     # Source version checker
     # shellcheck disable=SC1091
