@@ -1,0 +1,26 @@
+{
+  "task_id": "t2",
+  "query": "exercise intervention meta-analysis depression anxiety schizophrenia bipolar transdiagnostic efficacy",
+  "status": "completed",
+  "entities_discovered": [
+    {
+      "name": "Exercise Transdiagnostic Effects Meta-Analysis",
+      "type": "paper",
+      "description": "Large meta-analysis showing exercise benefits across psychiatric disorders",
+      "confidence": 0.93,
+      "sources": ["https://www.bmj.com/content/384/bmj-2023-075847"]
+    }
+  ],
+  "claims": [
+    {
+      "statement": "Exercise shows moderate-to-large effects across depression, anxiety, and psychosis",
+      "confidence": 0.91,
+      "evidence_quality": "high",
+      "sources": [{"url": "https://www.bmj.com/content/384/bmj-2023-075847"}]
+    }
+  ],
+  "confidence_self_assessment": {
+    "task_completion": 0.93,
+    "information_quality": 0.91
+  }
+}

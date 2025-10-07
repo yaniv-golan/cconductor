@@ -1,0 +1,31 @@
+{
+  "type": "result",
+  "subtype": "success",
+  "is_error": false,
+  "result": {
+    "status": "completed",
+    "tasks_completed": 15,
+    "findings_files": [
+      "raw/findings-t0.json",
+      "raw/findings-t1.json",
+      "raw/findings-t2.json",
+      "raw/findings-t3.json",
+      "raw/findings-t4.json",
+      "raw/findings-t5.json",
+      "raw/findings-t6.json",
+      "raw/findings-t7.json",
+      "raw/findings-t8.json",
+      "raw/findings-t9.json",
+      "raw/findings-t10.json",
+      "raw/findings-t11.json",
+      "raw/findings-t12.json",
+      "raw/findings-t13.json",
+      "raw/findings-t14.json"
+    ],
+    "notes": "All findings written to individual files to avoid token limits. Each file contains complete findings for one task."
+  },
+  "session_id": "test-session-123",
+  "usage": {
+    "output_tokens": 450
+  }
+}

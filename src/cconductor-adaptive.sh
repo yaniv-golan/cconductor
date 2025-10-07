@@ -697,55 +697,91 @@ run_coordinator() {
             local raw_finding
             raw_finding=$(cat "$findings_file")
             
-            # Extract and parse the JSON from .result field
-            local result_text
-            result_text=$(echo "$raw_finding" | jq -r '.result // empty')
-            
-            if [ -n "$result_text" ]; then
-                # Strip markdown fences and extract JSON object
-                result_text=$(echo "$result_text" | sed -e 's/^```json$//' -e 's/^```$//')
+            # Check if agent used file-based output (new approach)
+            if echo "$raw_finding" | jq -e '.result.findings_files' >/dev/null 2>&1; then
+                echo "  → Extracting findings from files..." >&2
                 
-                # Extract JSON using awk with proper brace balancing
-                local parsed_json
-                parsed_json=$(echo "$result_text" | awk '
-                    BEGIN { depth=0; started=0 }
-                    /{/ && !started { 
-                        sub(/^[^{]*/, "")
-                        started=1
-                    }
-                    started {
-                        # Count braces on this line
-                        open_count = gsub(/{/, "{")
-                        close_count = gsub(/}/, "}")
-                        
-                        print
-                        
-                        depth += (open_count - close_count)
-                        
-                        # Exit when we close the root object
-                        if (depth == 0) exit
-                    }
-                ')
+                # Get list of finding files
+                local findings_files_list
+                findings_files_list=$(echo "$raw_finding" | jq -r '.result.findings_files[]')
                 
-                # Remove any trailing markdown fences
-                parsed_json=$(echo "$parsed_json" | sed '/^```$/d')
-                
-                # Validate it's valid JSON
-                if echo "$parsed_json" | jq '.' >/dev/null 2>&1; then
-                    # Check if parsed_json is an array (agent returned multiple findings) or single object
-                    if echo "$parsed_json" | jq -e 'type == "array"' >/dev/null 2>&1; then
-                        # It's an array of findings - concatenate all findings
-                        new_findings=$(echo "$new_findings" | jq --argjson arr "$parsed_json" '. + $arr')
+                # Read each finding file
+                local count=0
+                for finding_file_path in $findings_files_list; do
+                    local full_finding_path="$session_dir/$finding_file_path"
+                    
+                    if [ -f "$full_finding_path" ]; then
+                        local finding_content
+                        finding_content=$(cat "$full_finding_path")
+                        
+                        # Validate and add to array
+                        if echo "$finding_content" | jq empty >/dev/null 2>&1; then
+                            new_findings=$(echo "$new_findings" | jq --argjson f "$finding_content" '. += [$f]')
+                            count=$((count + 1))
+                        else
+                            echo "  ⚠️  Invalid JSON in $finding_file_path" >&2
+                        fi
                     else
-                        # It's a single finding object - wrap in array and add
-                        new_findings=$(echo "$new_findings" | jq --argjson f "$parsed_json" '. += [$f]')
+                        echo "  ⚠️  Finding file not found: $full_finding_path" >&2
+                    fi
+                done
+                
+                echo "  → Extracted $count findings from files" >&2
+                
+            else
+                # Legacy inline output (fallback for agents not yet updated)
+                echo "  → Extracting findings from inline response..." >&2
+                
+                # Extract and parse the JSON from .result field
+                local result_text
+                result_text=$(echo "$raw_finding" | jq -r '.result // empty')
+                
+                if [ -n "$result_text" ]; then
+                    # Strip markdown fences and extract JSON object
+                    result_text=$(echo "$result_text" | sed -e 's/^```json$//' -e 's/^```$//')
+                    
+                    # Extract JSON using awk with proper brace balancing
+                    local parsed_json
+                    parsed_json=$(echo "$result_text" | awk '
+                        BEGIN { depth=0; started=0 }
+                        /{/ && !started { 
+                            sub(/^[^{]*/, "")
+                            started=1
+                        }
+                        started {
+                            # Count braces on this line
+                            open_count = gsub(/{/, "{")
+                            close_count = gsub(/}/, "}")
+                            
+                            print
+                            
+                            depth += (open_count - close_count)
+                            
+                            # Exit when we close the root object
+                            if (depth == 0) exit
+                        }
+                    ')
+                    
+                    # Remove any trailing markdown fences
+                    parsed_json=$(echo "$parsed_json" | sed '/^```$/d')
+                    
+                    # Validate it's valid JSON
+                    if echo "$parsed_json" | jq '.' >/dev/null 2>&1; then
+                        # Check if parsed_json is an array (agent returned multiple findings) or single object
+                        if echo "$parsed_json" | jq -e 'type == "array"' >/dev/null 2>&1; then
+                            # It's an array of findings - concatenate all findings
+                            new_findings=$(echo "$new_findings" | jq --argjson arr "$parsed_json" '. + $arr')
+                        else
+                            # It's a single finding object - wrap in array and add
+                            new_findings=$(echo "$new_findings" | jq --argjson f "$parsed_json" '. += [$f]')
+                        fi
+                    else
+                        echo "⚠️  Warning: Could not parse JSON from findings file: $findings_file" >&2
+                        echo "  ✗ Skipping invalid finding" >&2
                     fi
                 else
-                    echo "⚠️  Warning: Could not parse JSON from findings file: $findings_file" >&2
-                    echo "  ✗ Skipping invalid finding" >&2
+                    echo "⚠️  Warning: No .result field in findings file: $findings_file" >&2
                 fi
-            else
-                echo "⚠️  Warning: No .result field in findings file: $findings_file" >&2
             fi
         fi
     done <<< "$(echo "$new_completed_tasks" | jq -c '.[]')"

@@ -244,7 +244,9 @@ continue_agent_session() {
 
     # Invoke Claude with session continuity
     # VALIDATED: Context is preserved from previous turns (test-13)
-    if echo "$task" | timeout "$timeout" "${claude_cmd[@]}" > "$output_file" 2>&1; then
+    # Note: timeout command not available on macOS by default, so we run without it
+    # The claude CLI has its own timeout mechanisms
+    if echo "$task" | "${claude_cmd[@]}" > "$output_file" 2>&1; then
         cd "$original_dir" || true
 
         # Validate JSON output

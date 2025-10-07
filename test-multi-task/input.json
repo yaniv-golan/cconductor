@@ -1,0 +1,20 @@
+[
+  {
+    "id": "t0",
+    "query": "caffeine effects on cognitive performance",
+    "agent": "academic-researcher",
+    "priority": 8
+  },
+  {
+    "id": "t1",
+    "query": "green tea antioxidant properties",
+    "agent": "academic-researcher",
+    "priority": 7
+  },
+  {
+    "id": "t2",
+    "query": "sleep deprivation memory consolidation",
+    "agent": "academic-researcher",
+    "priority": 6
+  }
+]
