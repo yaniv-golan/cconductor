@@ -732,8 +732,14 @@ run_coordinator() {
                 
                 # Validate it's valid JSON
                 if echo "$parsed_json" | jq '.' >/dev/null 2>&1; then
-                    # Use the parsed JSON as the finding (not the raw API response)
-                    new_findings=$(echo "$new_findings" | jq --argjson f "$parsed_json" '. += [$f]')
+                    # Check if parsed_json is an array (agent returned multiple findings) or single object
+                    if echo "$parsed_json" | jq -e 'type == "array"' >/dev/null 2>&1; then
+                        # It's an array of findings - concatenate all findings
+                        new_findings=$(echo "$new_findings" | jq --argjson arr "$parsed_json" '. + $arr')
+                    else
+                        # It's a single finding object - wrap in array and add
+                        new_findings=$(echo "$new_findings" | jq --argjson f "$parsed_json" '. += [$f]')
+                    fi
                 else
                     echo "⚠️  Warning: Could not parse JSON from findings file: $findings_file" >&2
                     echo "  ✗ Skipping invalid finding" >&2
