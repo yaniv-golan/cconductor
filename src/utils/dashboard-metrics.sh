@@ -85,9 +85,26 @@ generate_dashboard_metrics() {
     active_agents=$(echo "$tq" | jq -c '[.tasks[]? | select(.status == "in_progress") | .agent] | unique')
     
     # Get system observations (last 20, most recent first)
+    # Exclude resolved observations by checking for matching observation_resolved events
     local observations
     observations=$(cat "$session_dir/events.jsonl" 2>/dev/null | \
-        jq -s 'map(select(.type == "system_observation")) | .[-20:] | reverse' 2>/dev/null || echo '[]')
+        jq -s '
+            # Get all observations
+            (map(select(.type == "system_observation"))) as $all_obs |
+            # Get all resolved observation components+text to filter out
+            (map(select(.type == "observation_resolved") | 
+                .data.original_observation | 
+                {component: .component, observation: .observation})) as $resolved |
+            # Filter: keep only observations NOT in resolved list
+            $all_obs | map(
+                . as $obs |
+                select(
+                    ($resolved | map(
+                        (.component == $obs.data.component and .observation == $obs.data.observation)
+                    ) | any) | not
+                )
+            ) | .[-20:] | reverse
+        ' 2>/dev/null || echo '[]')
     
     # Build metrics JSON
     # Use atomic write pattern: write to temp file, then atomic rename

@@ -682,6 +682,13 @@ class Dashboard {
                     observation.substring(0, 80) + '...' :
                     observation;
                 return `${severityIcon} [${component}] ${truncObs}`;
+            case 'observation_resolved':
+                const resolvedComponent = event.data?.original_observation?.component || 'system';
+                const resolution = event.data?.resolution || 'Issue resolved';
+                const truncRes = resolution.length > 80 ?
+                    resolution.substring(0, 80) + '...' :
+                    resolution;
+                return `✓ [${resolvedComponent}] ${truncRes}`;
             default:
                 return `• ${event.type}`;
         }

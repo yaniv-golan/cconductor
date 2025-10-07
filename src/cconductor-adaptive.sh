@@ -900,6 +900,101 @@ update_knowledge_graph() {
     fi
 }
 
+# Validate observations after updates and mark resolved issues
+validate_and_resolve_observations() {
+    local session_dir="$1"
+    local observations="$2"
+    
+    local resolved_count=0
+    
+    # Process each observation
+    echo "$observations" | jq -c '.[]' | while read -r obs; do
+        local component
+        component=$(echo "$obs" | jq -r '.component // "unknown"')
+        local observation_text
+        observation_text=$(echo "$obs" | jq -r '.observation // ""')
+        local iteration
+        iteration=$(echo "$obs" | jq -r '.iteration_detected // 0')
+        
+        local is_resolved=false
+        local resolution_msg=""
+        
+        # Validate based on component type
+        case "$component" in
+            knowledge_graph)
+                # Check if "empty" observation is now resolved
+                if echo "$observation_text" | grep -qi "empty"; then
+                    local kg_file="$session_dir/knowledge-graph.json"
+                    if [ -f "$kg_file" ]; then
+                        local entities
+                        entities=$(jq '.stats.total_entities // 0' "$kg_file")
+                        local claims
+                        claims=$(jq '.stats.total_claims // 0' "$kg_file")
+                        
+                        if [ "$entities" -gt 0 ] || [ "$claims" -gt 0 ]; then
+                            is_resolved=true
+                            resolution_msg="Knowledge graph populated with $entities entities and $claims claims"
+                        fi
+                    fi
+                fi
+                ;;
+            
+            task_queue)
+                # Check if task queue issues resolved
+                if echo "$observation_text" | grep -qi "stuck\|not updating"; then
+                    local tq_file="$session_dir/task-queue.json"
+                    if [ -f "$tq_file" ]; then
+                        local in_progress
+                        in_progress=$(jq '[.tasks[] | select(.status == "in_progress")] | length' "$tq_file")
+                        local completed
+                        completed=$(jq '[.tasks[] | select(.status == "completed")] | length' "$tq_file")
+                        
+                        # If tasks are completing, issue is resolved
+                        if [ "$completed" -gt 0 ]; then
+                            is_resolved=true
+                            resolution_msg="Task queue functioning: $completed completed, $in_progress in progress"
+                        fi
+                    fi
+                fi
+                ;;
+        esac
+        
+        # Log resolution if issue is resolved
+        if [ "$is_resolved" = true ]; then
+            local resolution_data
+            resolution_data=$(jq -n \
+                --argjson obs "$obs" \
+                --arg resolution "$resolution_msg" \
+                --arg resolved_at "$(date -u +"%Y-%m-%dT%H:%M:%SZ")" \
+                '{
+                    original_observation: $obs,
+                    resolution: $resolution,
+                    resolved_at: $resolved_at
+                }')
+            
+            log_event "$session_dir" "observation_resolved" "$resolution_data" || true
+            
+            resolved_count=$((resolved_count + 1))
+            
+            local severity
+            severity=$(echo "$obs" | jq -r '.severity // "info"')
+            
+            case "$severity" in
+                critical)
+                    echo "  ✓ RESOLVED [$component]: $resolution_msg" >&2
+                    ;;
+                warning)
+                    echo "  ✓ Resolved [$component]: $resolution_msg" >&2
+                    ;;
+            esac
+        fi
+    done
+    
+    if [ "$resolved_count" -gt 0 ]; then
+        echo "  → $resolved_count observation(s) auto-resolved" >&2
+    fi
+}
+
 # Add new tasks from coordinator
 add_coordinator_tasks() {
     local session_dir="$1"
@@ -1279,6 +1374,11 @@ run_single_iteration() {
     # Update knowledge graph with coordinator findings
     echo "→ Updating knowledge graph..."
     update_knowledge_graph "$session_dir" "$coordinator_cleaned"
+    
+    # Validate observations after updates - mark resolved issues
+    if [ "$observations" != "[]" ] && [ "$observations" != "null" ]; then
+        validate_and_resolve_observations "$session_dir" "$observations"
+    fi
 
     # Show knowledge graph statistics
     local kg_file="$session_dir/knowledge-graph.json"
