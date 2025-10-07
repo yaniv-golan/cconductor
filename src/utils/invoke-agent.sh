@@ -164,6 +164,13 @@ invoke_agent_v2() {
         --append-system-prompt "$system_prompt"  # VALIDATED: test-append-system-prompt.sh
     )
 
+    # Add session-specific settings (hooks, etc.) if present
+    # This ensures Claude uses the session's .claude/settings.json
+    # rather than walking up to find the git root's settings
+    if [ -f "$session_dir/.claude/settings.json" ]; then
+        claude_cmd+=(--settings "$session_dir/.claude/settings.json")
+    fi
+
     # Add MCP config if present
     if [ -f "$session_dir/.mcp.json" ]; then
         claude_cmd+=(--mcp-config "$session_dir/.mcp.json")
