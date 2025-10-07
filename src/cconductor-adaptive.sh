@@ -641,8 +641,8 @@ run_coordinator() {
     local session_dir="$1"
     local iteration="$2"
 
-    echo ""
-    echo "=== Iteration $iteration: Coordinator Analysis ==="
+    echo "" >&2
+    echo "=== Iteration $iteration: Coordinator Analysis ===" >&2
 
     # Increment knowledge graph iteration
     kg_increment_iteration "$session_dir"
@@ -771,7 +771,7 @@ run_coordinator() {
 
     # Use session continuity for iterations 2+ (Phase 1)
     if [ "$iteration" = "1" ]; then
-        echo "⚡ Starting coordinator session (iteration 1)..."
+        echo "⚡ Starting coordinator session (iteration 1)..." >&2
         # Start session with initial context
         local session_id
         session_id=$(start_agent_session \
@@ -789,7 +789,7 @@ run_coordinator() {
         cp "$session_dir/.agent-sessions/research-coordinator.start-output.json" \
            "$coordinator_output"
     else
-        echo "⚡ Continuing coordinator session (iteration $iteration)..."
+        echo "⚡ Continuing coordinator session (iteration $iteration)..." >&2
         # Continue existing session
         if ! continue_agent_session \
             "research-coordinator" \
