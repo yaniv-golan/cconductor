@@ -1141,7 +1141,8 @@ run_single_iteration() {
     # Extract and clean coordinator result (strip markdown fences and text before JSON)
     local coordinator_cleaned="$session_dir/intermediate/coordinator-cleaned-${iteration}.json"
     local raw_result
-    raw_result=$(jq -r '.result // empty' "$coordinator_file" 2>/dev/null)
+    # First extract just the JSON line (skip debug headers)
+    raw_result=$(grep '^{' "$coordinator_file" | jq -r '.result // empty' 2>/dev/null)
     
     # Check if we got anything
     if [ -z "$raw_result" ] || [ "$raw_result" = "null" ]; then
@@ -1691,7 +1692,8 @@ main_resume() {
                 # Extract and clean coordinator result
                 local coordinator_cleaned="$session_dir/intermediate/coordinator-cleaned-${next_iteration}.json"
                 local raw_result
-                raw_result=$(jq -r '.result // empty' "$coordinator_file")
+                # First extract just the JSON line (skip debug headers)
+                raw_result=$(grep '^{' "$coordinator_file" | jq -r '.result // empty' 2>/dev/null)
                 
                 # Strip markdown fences and extract JSON with proper brace balancing
                 raw_result=$(echo "$raw_result" | sed -e 's/^```json$//' -e 's/^```$//')
