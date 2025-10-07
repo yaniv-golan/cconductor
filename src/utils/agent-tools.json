@@ -8,12 +8,12 @@
             "WebFetch(scholar.google.com)",
             "WebFetch(semanticscholar.org)",
             "Read",
+            "Write",
             "Grep",
             "Glob"
         ],
         "disallowed": [
             "Bash",
-            "Write",
             "Edit",
             "NotebookEdit"
         ]
@@ -27,12 +27,12 @@
             "WebFetch(stackoverflow.com)",
             "WebFetch(wikipedia.org)",
             "Read",
+            "Write",
             "Grep",
             "Glob"
         ],
         "disallowed": [
             "Bash",
-            "Write",
             "Edit",
             "NotebookEdit"
         ]
@@ -56,12 +56,12 @@
             "WebSearch",
             "WebFetch",
             "Read",
+            "Write",
             "Grep",
             "Glob"
         ],
         "disallowed": [
             "Bash",
-            "Write",
             "Edit",
             "NotebookEdit"
         ]
@@ -69,6 +69,7 @@
     "pdf-analyzer": {
         "allowed": [
             "Read",
+            "Write",
             "Grep",
             "Glob"
         ],
@@ -76,7 +77,6 @@
             "WebSearch",
             "WebFetch",
             "Bash",
-            "Write",
             "Edit"
         ]
     },
@@ -97,6 +97,7 @@
     "code-analyzer": {
         "allowed": [
             "Read",
+            "Write",
             "Grep",
             "Glob",
             "WebSearch",
@@ -106,7 +107,6 @@
         ],
         "disallowed": [
             "Bash",
-            "Write",
             "Edit",
             "NotebookEdit"
         ]
@@ -116,12 +116,12 @@
             "WebSearch",
             "WebFetch",
             "Read",
+            "Write",
             "Grep",
             "Glob"
         ],
         "disallowed": [
             "Bash",
-            "Write",
             "Edit",
             "NotebookEdit"
         ]
@@ -129,6 +129,7 @@
     "financial-extractor": {
         "allowed": [
             "Read",
+            "Write",
             "Grep",
             "Glob"
         ],
@@ -136,7 +137,6 @@
             "WebSearch",
             "WebFetch",
             "Bash",
-            "Write",
             "Edit",
             "NotebookEdit"
         ]
@@ -146,12 +146,12 @@
             "WebSearch",
             "WebFetch",
             "Read",
+            "Write",
             "Grep",
             "Glob"
         ],
         "disallowed": [
             "Bash",
-            "Write",
             "Edit",
             "NotebookEdit"
         ]
