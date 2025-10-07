@@ -1919,6 +1919,7 @@ main_resume() {
     finalize_research "$session_dir" "$research_question"
     
     # Print summary
+    local kg_summary
     kg_summary=$(kg_get_summary "$session_dir")
     echo ""
     echo "╔════════════════════════════════════════════════════════════╗"
