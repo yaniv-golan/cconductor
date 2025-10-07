@@ -12,52 +12,57 @@ setup_tool_hooks() {
         return 1
     fi
     
-    # Get script directory (where hooks are located)
+    # Get script directory (where source hooks are located)
     local script_dir
     script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-    local hooks_dir="$script_dir/hooks"
+    local source_hooks_dir="$script_dir/hooks"
     
-    # Ensure .claude directory exists
-    local claude_dir="$session_dir/.claude"
-    mkdir -p "$claude_dir"
+    # Ensure session hooks directory exists
+    local session_hooks_dir="$session_dir/.claude/hooks"
+    mkdir -p "$session_hooks_dir"
+    
+    # Copy hooks to session directory
+    # This avoids issues with spaces in paths and makes sessions portable
+    cp "$source_hooks_dir/pre-tool-use.sh" "$session_hooks_dir/"
+    cp "$source_hooks_dir/post-tool-use.sh" "$session_hooks_dir/"
+    chmod +x "$session_hooks_dir/pre-tool-use.sh"
+    chmod +x "$session_hooks_dir/post-tool-use.sh"
     
     # Path to settings file
-    local settings_file="$claude_dir/settings.json"
+    local settings_file="$session_dir/.claude/settings.json"
     
     # Initialize settings if it doesn't exist
     if [ ! -f "$settings_file" ]; then
         echo '{}' > "$settings_file"
     fi
     
-    # Create hooks configuration
+    # Create hooks configuration using RELATIVE paths
+    # This ensures hooks work regardless of spaces in repo path
     local hooks_config
-    hooks_config=$(jq -n \
-        --arg pre_hook "$hooks_dir/pre-tool-use.sh" \
-        --arg post_hook "$hooks_dir/post-tool-use.sh" \
-        '{
-            hooks: {
-                PreToolUse: [{
-                    matcher: "*",
-                    hooks: [{
-                        type: "command",
-                        command: $pre_hook
-                    }]
-                }],
-                PostToolUse: [{
-                    matcher: "*",
-                    hooks: [{
-                        type: "command",
-                        command: $post_hook
-                    }]
+    hooks_config=$(jq -n '{
+        hooks: {
+            PreToolUse: [{
+                matcher: "*",
+                hooks: [{
+                    type: "command",
+                    command: ".claude/hooks/pre-tool-use.sh"
                 }]
-            }
-        }')
+            }],
+            PostToolUse: [{
+                matcher: "*",
+                hooks: [{
+                    type: "command",
+                    command: ".claude/hooks/post-tool-use.sh"
+                }]
+            }]
+        }
+    }')
     
     # Merge with existing settings
     jq --argjson hooks "$hooks_config" '. + $hooks' "$settings_file" > "${settings_file}.tmp"
     mv "${settings_file}.tmp" "$settings_file"
     
-    echo "✓ Tool observability hooks configured" >&2
+    echo "✓ Tool observability hooks configured (copied to session)" >&2
     return 0
 }
 

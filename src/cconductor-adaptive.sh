@@ -1425,11 +1425,14 @@ run_single_iteration() {
     # Extract and clean coordinator result (strip markdown fences and text before JSON)
     local coordinator_cleaned="$session_dir/intermediate/coordinator-cleaned-${iteration}.json"
     local raw_result
+    local result_json
+    
     # First extract just the JSON line (skip debug headers)
-    raw_result=$(grep '^{' "$coordinator_file" | jq -r '.result // empty' 2>/dev/null)
+    # IMPORTANT: Don't use -r flag here to preserve JSON escaping
+    result_json=$(grep '^{' "$coordinator_file" | jq '.result // empty' 2>/dev/null)
     
     # Check if we got anything
-    if [ -z "$raw_result" ] || [ "$raw_result" = "null" ]; then
+    if [ -z "$result_json" ] || [ "$result_json" = "null" ]; then
         echo "⚠️  Warning: No .result field in coordinator output" >&2
         # Try reading the file directly (might be already JSON)
         if jq '.' "$coordinator_file" >/dev/null 2>&1; then
@@ -1441,6 +1444,15 @@ run_single_iteration() {
             return 1
         fi
     else
+        # Check if result_json is a JSON string (starts with quote) or already JSON
+        if [[ "$result_json" == \"*\" ]]; then
+            # It's a JSON string - extract with -r to get the content (now safely escaped)
+            raw_result=$(echo "$result_json" | jq -r '.')
+        else
+            # It's already JSON object/array - use as-is
+            raw_result="$result_json"
+        fi
+        
         # Strip markdown code fences
         raw_result=$(echo "$raw_result" | sed -e 's/^```json$//' -e 's/^```$//')
         
@@ -1467,11 +1479,17 @@ run_single_iteration() {
         
         # Validate cleaned JSON
         if ! jq '.' "$coordinator_cleaned" >/dev/null 2>&1; then
-            echo "⚠️  Warning: Initial JSON extraction failed" >&2
-            echo "  ✗ Could not extract valid JSON object" >&2
-            echo "Raw result (first 30 lines):" >&2
-            echo "$raw_result" | head -30 >&2
-            return 1
+            echo "⚠️  Warning: Initial JSON extraction failed, attempting recovery..." >&2
+            # Try to use the original coordinator output directly
+            if jq '.' "$coordinator_file" >/dev/null 2>&1; then
+                cp "$coordinator_file" "$coordinator_cleaned"
+                echo "  ✓ Recovered using original coordinator output" >&2
+            else
+                echo "  ✗ Could not extract valid JSON object" >&2
+                echo "Raw result (first 30 lines):" >&2
+                echo "$raw_result" | head -30 >&2
+                return 1
+            fi
         fi
     fi
     

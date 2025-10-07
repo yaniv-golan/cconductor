@@ -19,7 +19,8 @@
 7. [Security & Permissions](#security--permissions)
 8. [Configuration Problems](#configuration-problems)
 9. [Session & File Issues](#session--file-issues)
-10. [Getting Help](#getting-help)
+10. [Dashboard & Observability Issues](#dashboard--observability-issues)
+11. [Getting Help](#getting-help)
 
 ---
 
@@ -1448,6 +1449,196 @@ ls -lh research-sessions/session_*/*.json
 - Ensure adequate disk space
 - Don't edit session files manually
 - Let research complete naturally
+
+---
+
+## Dashboard & Observability Issues
+
+### Dashboard Shows No Tool Activity
+
+**Symptoms**:
+
+- Dashboard loads but "Tool Activity" panel is empty
+- No tool events in timeline
+- events.jsonl file is empty or missing
+
+**Root Cause (Fixed in October 2025)**:
+
+This was caused by Claude Code's inability to handle **spaces in file paths** for hooks. If your repository is in a path like `/Users/name/Library/Mobile Documents/...` (iCloud Drive), older versions had non-functional hooks.
+
+**Solution**:
+
+The fix has been implemented in `src/utils/setup-hooks.sh`. Hooks are now copied to each session directory and use relative paths.
+
+**For New Sessions** (automatic):
+
+```bash
+# Just run research normally
+./cconductor "your query"
+
+# Hooks will work automatically
+```
+
+**For Existing Sessions** (manual fix):
+
+```bash
+# Option 1: Delete old sessions (clean slate)
+rm -rf research-sessions/session_*
+
+# Option 2: Fix specific session
+bash src/utils/setup-hooks.sh research-sessions/session_XXXXX/
+```
+
+**Verify Hooks Are Working**:
+
+```bash
+# 1. Check session has hooks copied
+ls -la research-sessions/session_XXXXX/.claude/hooks/
+# Should show: pre-tool-use.sh, post-tool-use.sh
+
+# 2. Check settings.json uses relative paths
+cat research-sessions/session_XXXXX/.claude/settings.json | jq .hooks
+# Should show: ".claude/hooks/pre-tool-use.sh" (relative path)
+
+# 3. Run quick test
+./cconductor "test query"
+# You should see: 🔧 WebSearch: ...
+#                  ✓ WebSearch (1.2s)
+
+# 4. Check events logged
+cat research-sessions/session_*/events.jsonl | head -5
+# Should show tool_use_start and tool_use_complete events
+```
+
+---
+
+### Events Not Logging to events.jsonl
+
+**Symptoms**:
+
+- Research runs but events.jsonl is empty
+- Hooks don't appear to fire
+- No real-time tool visibility
+
+**Check 1: Hook Scripts Exist**:
+
+```bash
+# Session should have its own hooks
+ls -la research-sessions/session_XXXXX/.claude/hooks/
+
+# If missing, session was created before fix
+bash src/utils/setup-hooks.sh research-sessions/session_XXXXX/
+```
+
+**Check 2: Permissions**:
+
+```bash
+# Hooks must be executable
+ls -la research-sessions/session_XXXXX/.claude/hooks/*.sh
+
+# If not executable (should show: -rwxr-xr-x):
+chmod +x research-sessions/session_XXXXX/.claude/hooks/*.sh
+```
+
+**Check 3: Settings Configuration**:
+
+```bash
+# Check hooks configuration
+cat research-sessions/session_XXXXX/.claude/settings.json
+
+# Should contain:
+# {
+#   "hooks": {
+#     "PreToolUse": [...],
+#     "PostToolUse": [...]
+#   }
+# }
+```
+
+**Check 4: Test Hooks Directly**:
+
+```bash
+cd research-sessions/session_XXXXX/
+export CCONDUCTOR_SESSION_DIR=$(pwd)
+
+# Test pre-hook
+echo '{"tool_name":"TestTool"}' | .claude/hooks/pre-tool-use.sh
+
+# Should output: 🔧 PRE-HOOK: TestTool
+# And create entry in events.jsonl
+```
+
+---
+
+### Dashboard Not Auto-Refreshing
+
+**Symptoms**:
+
+- Dashboard loads but doesn't update
+- Shows stale data
+- "Last updated" timestamp doesn't change
+
+**Cause**:
+
+JavaScript auto-refresh may be disabled or browser may be blocking it.
+
+**Solution**:
+
+```bash
+# 1. Hard refresh browser
+# Press: Cmd+Shift+R (Mac) or Ctrl+Shift+R (Windows/Linux)
+
+# 2. Check browser console for errors
+# Open DevTools (F12), check Console tab
+
+# 3. Regenerate dashboard
+./cconductor view-dashboard --regenerate
+
+# 4. Verify metrics file exists
+ls -lh research-sessions/session_*/dashboard-metrics.json
+```
+
+---
+
+### Real-Time Tool Visibility Not Working
+
+**Symptoms**:
+
+- No 🔧 or ✓ symbols during research
+- Tools execute silently
+- No feedback during agent execution
+
+**This is expected behavior if**:
+
+- Using `--quiet` flag
+- Output redirected to file
+- Running in background
+
+**To get real-time visibility**:
+
+```bash
+# Run in foreground without --quiet
+./cconductor "your query"
+
+# You should see:
+#   🔧 WebSearch: quantum computing
+#     ✓ WebSearch (1.2s)
+#   🔧 Read: paper.pdf
+#     ✓ Read (0.3s)
+```
+
+**If still not working**:
+
+```bash
+# Check hooks are configured (see above sections)
+# Verify stderr is not redirected
+# Run from terminal, not IDE
+
+# Test hooks work:
+cd research-sessions/session_XXXXX/
+export CCONDUCTOR_SESSION_DIR=$(pwd)
+claude --print --settings .claude/settings.json "list files" 2>&1 | grep "HOOK"
+```
 
 ---
 
