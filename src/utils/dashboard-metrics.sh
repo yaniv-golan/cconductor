@@ -72,6 +72,14 @@ generate_dashboard_metrics() {
     local elapsed_seconds
     elapsed_seconds=$(calculate_elapsed_seconds "$created_at")
     
+    # Extract session info
+    local session_status
+    session_status=$(echo "$session" | jq -r '.status // "unknown"')
+    local completed_at
+    completed_at=$(echo "$session" | jq -r '.completed_at // ""')
+    local research_question
+    research_question=$(echo "$session" | jq -r '.research_question // ""')
+    
     # Get active agents (from task queue)
     local active_agents
     active_agents=$(echo "$tq" | jq -c '[.tasks[]? | select(.status == "in_progress") | .agent] | unique')
@@ -104,10 +112,20 @@ generate_dashboard_metrics() {
         --argjson elapsed "$elapsed_seconds" \
         --argjson agents "$active_agents" \
         --argjson observations "$observations" \
+        --arg session_status "$session_status" \
+        --arg session_created "$created_at" \
+        --arg session_completed "$completed_at" \
+        --arg research_question "$research_question" \
         '{
             last_updated: $updated,
             iteration: $iter,
             confidence: $confidence,
+            session: {
+                status: $session_status,
+                created_at: $session_created,
+                completed_at: $session_completed,
+                research_question: $research_question
+            },
             tasks: {
                 total: $total,
                 completed: $completed,
