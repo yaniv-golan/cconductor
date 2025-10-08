@@ -1933,26 +1933,21 @@ main() {
     echo "  ✓ Session created: $(basename "$session_dir")"
     echo ""
     
+    # Cleanup stale dashboard servers from previous sessions
+    if [ -f "$CCONDUCTOR_SCRIPT_DIR/utils/cleanup-dashboard-servers.sh" ]; then
+        # shellcheck disable=SC1091
+        source "$CCONDUCTOR_SCRIPT_DIR/utils/cleanup-dashboard-servers.sh" 2>/dev/null && \
+            cleanup_stale_dashboard_servers "$PROJECT_ROOT/research-sessions" 2>/dev/null || true
+    fi
+    
     # Launch Research Journal Viewer at START (unless --no-viewer)
     if [ "${LAUNCH_VIEWER:-true}" = "true" ]; then
         echo "→ Launching Research Journal Viewer..."
-        
-        # Generate dashboard
-        if [ -f "$CCONDUCTOR_SCRIPT_DIR/utils/dashboard-generator.sh" ]; then
-            bash "$CCONDUCTOR_SCRIPT_DIR/utils/dashboard-generator.sh" "$session_dir" >/dev/null 2>&1 || true
-        fi
-        
-        # Open dashboard in browser
-        local dashboard_path="$session_dir/dashboard.html"
-        if [ -f "$dashboard_path" ]; then
-            echo "  ✓ Research Journal Viewer: file://$dashboard_path"
-            
-            # Auto-open in browser (platform-aware)
-            if [[ "$OSTYPE" == "darwin"* ]]; then
-                open "$dashboard_path" 2>/dev/null || true
-            elif command -v xdg-open &> /dev/null; then
-                xdg-open "$dashboard_path" 2>/dev/null || true
-            fi
+        # shellcheck disable=SC1091
+        if source "$CCONDUCTOR_SCRIPT_DIR/utils/dashboard-viewer.sh" 2>/dev/null; then
+            launch_dashboard_viewer "$session_dir" "true" || echo "  ⚠ Warning: Failed to launch dashboard viewer"
+        else
+            echo "  ⚠ Warning: Dashboard viewer utility not found"
         fi
         echo ""
     fi
@@ -2350,7 +2345,9 @@ finalize_research() {
     echo "Resume this session:"
     echo "   ./cconductor resume $(basename "$session_dir")"
     echo ""
-    echo "📊 Research Journal Viewer: file://$session_dir/dashboard.html"
+    echo "📊 Research Journal Viewer is still running and will show completion status"
+    echo "   View at: ./cconductor viewer $(basename "$session_dir")"
+    echo "   (Server will keep running - stop with: pkill -f 'http-server')"
     echo ""
 }
 

@@ -22,9 +22,15 @@ generate_dashboard() {
         return 1
     fi
     
-    # Copy template and JS to session directory
-    cp "$template" "$session_dir/dashboard.html"
+    # Copy JS to session directory
     cp "$js_template" "$session_dir/dashboard.js"
+    
+    # Generate HTML with cache-busting timestamp for JS file
+    # This forces browser to reload JS on each dashboard generation (critical for file:// protocol)
+    local js_version
+    js_version="v=$(date +%s)"
+    sed "s|<script src=\"./dashboard.js\"></script>|<script src=\"./dashboard.js?${js_version}\"></script>|" \
+        "$template" > "$session_dir/dashboard.html"
     
     echo "$session_dir/dashboard.html"
 }

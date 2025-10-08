@@ -26,7 +26,7 @@ kill_processes() {
     
     # Find HTTP server processes (from dashboard)
     # shellcheck disable=SC2155,SC2009
-    local http_pids=$(ps aux | grep "[p]ython.*http.server" | awk '{print $2}' || true)
+    local http_pids=$(ps aux | grep -E "[p]ython.*http.server|[h]ttp-server" | awk '{print $2}' || true)
     
     local killed=0
     
@@ -162,7 +162,7 @@ show_summary() {
     # Check remaining processes
     local remaining_procs=0
     # shellcheck disable=SC2009,SC2126  # ps+grep is portable, grep -c doesn't work here
-    remaining_procs=$(ps aux | grep -E "[d]elve|[c]laude|[p]ython.*http.server" | wc -l | tr -d ' ')
+    remaining_procs=$(ps aux | grep -E "[d]elve|[c]laude|[p]ython.*http.server|[h]ttp-server" | wc -l | tr -d ' ')
     
     echo "  Sessions remaining: $remaining_sessions"
     echo "  Processes running: $remaining_procs"

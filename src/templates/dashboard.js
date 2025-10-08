@@ -40,20 +40,41 @@ class Dashboard {
 
     async fetchJSON(file) {
         try {
-            // Add cache-busting timestamp to force browser to fetch fresh data
-            const response = await fetch(`${file}?t=${Date.now()}`);
-            return response.ok ? response.json() : null;
+            // Use multiple cache-busting techniques for file:// protocol
+            const cacheBuster = `t=${Date.now()}&r=${Math.random()}`;
+            const response = await fetch(`${file}?${cacheBuster}`, {
+                cache: 'no-store',
+                headers: {
+                    'Cache-Control': 'no-cache, no-store, must-revalidate',
+                    'Pragma': 'no-cache'
+                }
+            });
+            if (!response.ok) {
+                console.warn(`[Dashboard] Failed to fetch ${file}: ${response.status}`);
+                return null;
+            }
+            return response.json();
         } catch (error) {
-            console.error(`Error fetching ${file}:`, error);
+            console.error(`[Dashboard] Error fetching ${file}:`, error);
             return null;
         }
     }
 
     async fetchJSONL(file) {
         try {
-            // Add cache-busting timestamp to force browser to fetch fresh data
-            const response = await fetch(`${file}?t=${Date.now()}`);
-            if (!response.ok) return [];
+            // Use multiple cache-busting techniques for file:// protocol
+            const cacheBuster = `t=${Date.now()}&r=${Math.random()}`;
+            const response = await fetch(`${file}?${cacheBuster}`, {
+                cache: 'no-store',
+                headers: {
+                    'Cache-Control': 'no-cache, no-store, must-revalidate',
+                    'Pragma': 'no-cache'
+                }
+            });
+            if (!response.ok) {
+                console.warn(`[Dashboard] Failed to fetch ${file}: ${response.status}`);
+                return [];
+            }
             const text = await response.text();
             
             const lines = text.trim().split('\n').filter(line => line.trim());
@@ -1444,3 +1465,19 @@ function toggleTools(element) {
     }
 }
 
+
+// Force refresh when tab becomes visible (helps with file:// protocol caching)
+document.addEventListener('visibilitychange', () => {
+    if (!document.hidden && dashboard) {
+        console.log('[Dashboard] Tab became visible - forcing refresh');
+        dashboard.loadAndRender();
+    }
+});
+
+// Manual refresh function
+function manualRefresh() {
+    console.log('[Dashboard] Manual refresh triggered');
+    if (dashboard) {
+        dashboard.loadAndRender();
+    }
+}

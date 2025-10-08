@@ -144,6 +144,7 @@ USAGE:
   cconductor latest                     Show latest research session
   cconductor resume <session>           Continue previous research
   cconductor sessions                   List all research sessions
+  cconductor viewer [session]           View research journal (auto-launched by default)
   cconductor status                     Check running research
   cconductor configure                  Show configuration files
   cconductor --update                   Update to latest version
@@ -540,7 +541,7 @@ main() {
                 echo "  ./cconductor \"your research question\""
             fi
             ;;
-        view-dashboard)
+        viewer|view-dashboard)
             # Get session directory (optional parameter)
             local session_arg
             session_arg=$(get_arg 1)
@@ -575,68 +576,31 @@ main() {
                 exit 1
             fi
             
-            # Check if dashboard exists, generate if needed
-            local dashboard_file="$session_dir/dashboard.html"
-            if [ ! -f "$dashboard_file" ]; then
-                echo "Generating dashboard..."
-                if ! bash "$CCONDUCTOR_ROOT/src/utils/dashboard-generator.sh" "$session_dir"; then
-                    echo "Error: Failed to generate dashboard" >&2
-                    exit 1
-                fi
-            fi
-            
             # Generate dashboard metrics if missing
             if [ ! -f "$session_dir/dashboard-metrics.json" ]; then
                 bash -c "source '$CCONDUCTOR_ROOT/src/utils/dashboard-metrics.sh' && generate_dashboard_metrics '$session_dir'" 2>/dev/null || true
             fi
             
-            # Find an available port (8890-8899)
-            local port=""
-            for p in {8890..8899}; do
-                if ! lsof -i ":$p" >/dev/null 2>&1; then
-                    port=$p
-                    break
+            # Launch dashboard using shared utility
+            echo "Starting Research Journal Viewer..."
+            # shellcheck disable=SC1091
+            if source "$CCONDUCTOR_ROOT/src/utils/dashboard-viewer.sh" 2>/dev/null; then
+                if launch_dashboard_viewer "$session_dir" "true"; then
+                    echo ""
+                    echo "To stop the server later:"
+                    if [ -f "$session_dir/.dashboard-server.pid" ]; then
+                        local server_pid
+                        server_pid=$(cat "$session_dir/.dashboard-server.pid")
+                        echo "  kill $server_pid"
+                    fi
+                    echo "  or: pkill -f 'http-server'"
+                else
+                    echo "Error: Failed to launch dashboard viewer" >&2
+                    exit 1
                 fi
-            done
-            
-            if [ -z "$port" ]; then
-                echo "Error: No available ports in range 8890-8899" >&2
-                echo "Try: pkill -f 'http-server.*$port'" >&2
-                exit 1
-            fi
-            
-            # Start HTTP server in background using npx (comes with Node.js)
-            echo "Starting HTTP server on port $port..."
-            cd "$session_dir"
-            npx --yes http-server -p "$port" --silent > /dev/null 2>&1 &
-            local server_pid=$!
-            
-            # Save PID for potential cleanup
-            echo "$server_pid" > "$session_dir/.dashboard-server.pid"
-            
-            sleep 2
-            
-            # Open in browser with session ID parameter (prevents caching issues)
-            local session_id
-            session_id=$(basename "$session_dir")
-            local dashboard_url="http://localhost:$port/dashboard.html?session=$session_id"
-            echo "✅ Dashboard server started (PID: $server_pid)"
-            echo "📊 Opening: $dashboard_url"
-            echo ""
-            echo "To stop the server later:"
-            echo "  kill $server_pid"
-            echo "  or: pkill -f 'http-server.*$port'"
-            echo ""
-            
-            if [[ "$OSTYPE" == "darwin"* ]]; then
-                open "$dashboard_url"
-            elif command -v xdg-open &> /dev/null; then
-                xdg-open "$dashboard_url" &
-            elif command -v explorer.exe &> /dev/null; then
-                # WSL
-                explorer.exe "$dashboard_url" 2>/dev/null
             else
-                echo "Dashboard available at: $dashboard_url"
+                echo "Error: Dashboard viewer utility not found" >&2
+                exit 1
             fi
             ;;
         configure|config)
