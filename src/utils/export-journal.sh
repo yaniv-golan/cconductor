@@ -51,8 +51,8 @@ export_journal() {
             local formatted_time
             # Format: "October 8, 2025 at 7:35 AM"
             # Strip microseconds if present (2025-10-08T07:35:57.159051Z -> 2025-10-08T07:35:57Z)
-            # shellcheck disable=SC2001
             local clean_timestamp
+            # shellcheck disable=SC2001
             clean_timestamp=$(echo "$timestamp" | sed 's/\.[0-9]*Z$/Z/')
             formatted_time=$(date -j -f "%Y-%m-%dT%H:%M:%SZ" "$clean_timestamp" "+%B %d, %Y at %l:%M %p" 2>/dev/null | sed 's/  / /g' || echo "$timestamp")
             
