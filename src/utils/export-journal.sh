@@ -23,6 +23,9 @@ export_journal() {
         return 1
     fi
     
+    # Flag to track when we need a task section header after iteration
+    local NEED_TASK_SECTION_HEADER=false
+    
     # Get session metadata
     local session_file="$session_dir/session.json"
     local question="Unknown"
@@ -179,43 +182,49 @@ export_journal() {
                             ;;
                             
                         research-coordinator)
-                            # Look for coordinator output with gap analysis
+                            # Look for coordinator output with gap analysis in intermediate directory
                             local coordinator_file
-                            coordinator_file=$(find "$session_dir/raw" -name "*coordinator*output*.json" 2>/dev/null | tail -1)
+                            coordinator_file=$(find "$session_dir/intermediate" "$session_dir/raw" -name "*coordinator*output*.json" 2>/dev/null | tail -1)
                             
                             if [ -n "$coordinator_file" ] && [ -f "$coordinator_file" ]; then
-                                # Extract and show reasoning first
-                                if jq -e '.reasoning' "$coordinator_file" >/dev/null 2>&1; then
-                                    echo "#### 🧠 Coordination Reasoning"
-                                    echo ""
+                                # Extract the actual result JSON from the wrapper
+                                local result_json
+                                # shellcheck disable=SC2016
+                                result_json=$(jq -r '.result // empty' "$coordinator_file" 2>/dev/null | sed 's/^```json\s*//;s/\s*```$//')
+                                
+                                # Extract and show reasoning first from the parsed result
+                                if [ -n "$result_json" ] && echo "$result_json" | jq -e '.reasoning' >/dev/null 2>&1; then
+                                    echo "> [!NOTE]"
+                                    echo "> **🧠 Coordination Reasoning**"
+                                    echo ">"
                                     
                                     local synthesis_approach
-                                    synthesis_approach=$(jq -r '.reasoning.synthesis_approach // empty' "$coordinator_file" 2>/dev/null)
+                                    synthesis_approach=$(echo "$result_json" | jq -r '.reasoning.synthesis_approach // empty' 2>/dev/null)
                                     if [ -n "$synthesis_approach" ]; then
-                                        echo "*Synthesis Approach:* $synthesis_approach"
-                                        echo ""
+                                        echo "> *Synthesis Approach:* $synthesis_approach"
+                                        echo ">"
                                     fi
                                     
                                     local gap_prioritization
-                                    gap_prioritization=$(jq -r '.reasoning.gap_prioritization // empty' "$coordinator_file" 2>/dev/null)
+                                    gap_prioritization=$(echo "$result_json" | jq -r '.reasoning.gap_prioritization // empty' 2>/dev/null)
                                     if [ -n "$gap_prioritization" ]; then
-                                        echo "*Gap Prioritization:* $gap_prioritization"
-                                        echo ""
+                                        echo "> *Gap Prioritization:* $gap_prioritization"
+                                        echo ">"
                                     fi
                                     
                                     local key_insights_count
-                                    key_insights_count=$(jq '.reasoning.key_insights // [] | length' "$coordinator_file" 2>/dev/null)
+                                    key_insights_count=$(echo "$result_json" | jq '.reasoning.key_insights // [] | length' 2>/dev/null)
                                     if [ "$key_insights_count" -gt 0 ]; then
-                                        echo "*Key Insights:*"
-                                        jq -r '.reasoning.key_insights // [] | .[] | "- \(.)"' "$coordinator_file" 2>/dev/null
-                                        echo ""
+                                        echo "> *Key Insights:*"
+                                        echo "$result_json" | jq -r '.reasoning.key_insights // [] | .[] | "> - \(.)"' 2>/dev/null
+                                        echo ">"
                                     fi
                                     
                                     local strategic_decisions_count
-                                    strategic_decisions_count=$(jq '.reasoning.strategic_decisions // [] | length' "$coordinator_file" 2>/dev/null)
+                                    strategic_decisions_count=$(echo "$result_json" | jq '.reasoning.strategic_decisions // [] | length' 2>/dev/null)
                                     if [ "$strategic_decisions_count" -gt 0 ]; then
-                                        echo "*Strategic Decisions:*"
-                                        jq -r '.reasoning.strategic_decisions // [] | .[] | "- \(.)"' "$coordinator_file" 2>/dev/null
+                                        echo "> *Strategic Decisions:*"
+                                        echo "$result_json" | jq -r '.reasoning.strategic_decisions // [] | .[] | "> - \(.)"' 2>/dev/null
                                         echo ""
                                     fi
                                 fi
@@ -223,23 +232,23 @@ export_journal() {
                                 echo "#### 🔍 Gap Analysis"
                                 echo ""
                                 
-                                # Extract gaps
+                                # Extract gaps from the parsed result
                                 local gaps_count
-                                gaps_count=$(jq '[.knowledge_graph_updates.gaps_detected // [], .next_steps // []] | length' "$coordinator_file" 2>/dev/null || echo "0")
+                                gaps_count=$(echo "$result_json" | jq '[.knowledge_graph_updates.gaps_detected // [], .next_steps // []] | length' 2>/dev/null || echo "0")
                                 if [ "$gaps_count" -gt 0 ]; then
                                     echo "**Research Gaps Identified:**"
                                     echo ""
-                                    jq -r '([.knowledge_graph_updates.gaps_detected // [], .next_steps // []] | .[] | "- **Priority \(.priority // "medium")**: \(.gap_description // .description // .query)\n  - Rationale: \(.rationale // "No rationale provided")")' "$coordinator_file" 2>/dev/null
+                                    echo "$result_json" | jq -r '([.knowledge_graph_updates.gaps_detected // [], .next_steps // []] | .[] | "- **Priority \(.priority // "medium")**: \(.gap_description // .description // .query)\n  - Rationale: \(.rationale // "No rationale provided")")' 2>/dev/null
                                     echo ""
                                 fi
                                 
-                                # Extract contradictions
+                                # Extract contradictions from the parsed result
                                 local contradictions_count
-                                contradictions_count=$(jq '[.knowledge_graph_updates.contradictions_detected // []] | length' "$coordinator_file" 2>/dev/null || echo "0")
+                                contradictions_count=$(echo "$result_json" | jq '[.knowledge_graph_updates.contradictions_detected // []] | length' 2>/dev/null || echo "0")
                                 if [ "$contradictions_count" -gt 0 ]; then
                                     echo "**Contradictions Detected:**"
                                     echo ""
-                                    jq -r '(.knowledge_graph_updates.contradictions_detected // []) | .[] | "- \(.description)\n  - Claims in conflict: \(.conflicting_claims | length)"' "$coordinator_file" 2>/dev/null
+                                    echo "$result_json" | jq -r '(.knowledge_graph_updates.contradictions_detected // []) | .[] | "- \(.description)\n  - Claims in conflict: \(.conflicting_claims | length)"' 2>/dev/null
                                     echo ""
                                 fi
                             fi
@@ -254,41 +263,49 @@ export_journal() {
                                 echo "#### 📋 Research Plan"
                                 echo ""
                                 
-                                # Extract and show reasoning
-                                if jq -e '.reasoning' "$planner_file" >/dev/null 2>&1; then
-                                    echo "**🧠 Planning Reasoning:**"
-                                    echo ""
+                                # Extract the actual result JSON from the wrapper
+                                local result_json
+                                # shellcheck disable=SC2016
+                                result_json=$(jq -r '.result // empty' "$planner_file" 2>/dev/null | sed 's/^```json\s*//;s/\s*```$//')
+                                
+                                # Extract and show reasoning from the parsed result
+                                if [ -n "$result_json" ] && echo "$result_json" | jq -e '.reasoning' >/dev/null 2>&1; then
+                                    echo "> [!NOTE]"
+                                    echo "> **🧠 Planning Reasoning:**"
+                                    echo ">"
                                     local strategy
-                                    strategy=$(jq -r '.reasoning.strategy // empty' "$planner_file" 2>/dev/null)
+                                    strategy=$(echo "$result_json" | jq -r '.reasoning.strategy // empty' 2>/dev/null)
                                     if [ -n "$strategy" ]; then
-                                        echo "*Strategy:* $strategy"
-                                        echo ""
+                                        echo "> *Strategy:* $strategy"
+                                        echo ">"
                                     fi
                                     
                                     local key_decisions
-                                    key_decisions=$(jq -r '.reasoning.key_decisions // [] | length' "$planner_file" 2>/dev/null)
+                                    key_decisions=$(echo "$result_json" | jq -r '.reasoning.key_decisions // [] | length' 2>/dev/null)
                                     if [ "$key_decisions" -gt 0 ]; then
-                                        echo "*Key Decisions:*"
-                                        jq -r '.reasoning.key_decisions // [] | .[] | "- \(.)"' "$planner_file" 2>/dev/null
-                                        echo ""
+                                        echo "> *Key Decisions:*"
+                                        echo "$result_json" | jq -r '.reasoning.key_decisions // [] | .[] | "> - \(.)"' 2>/dev/null
+                                        echo ">"
                                     fi
                                     
                                     local rationale
-                                    rationale=$(jq -r '.reasoning.task_ordering_rationale // empty' "$planner_file" 2>/dev/null)
+                                    rationale=$(echo "$result_json" | jq -r '.reasoning.task_ordering_rationale // empty' 2>/dev/null)
                                     if [ -n "$rationale" ]; then
-                                        echo "*Task Ordering:* $rationale"
+                                        echo "> *Task Ordering:* $rationale"
                                         echo ""
                                     fi
                                 fi
                                 
-                                # Extract tasks
-                                local tasks
-                                tasks=$(jq -c '.initial_tasks // .tasks // []' "$planner_file" 2>/dev/null)
-                                if [ "$tasks" != "[]" ] && [ -n "$tasks" ]; then
-                                    echo "**Tasks Generated:**"
-                                    echo ""
-                                    echo "$tasks" | jq -r '.[] | "- **Task \(.id // "?")** (\(.agent)): \(.query)\n  - Priority: \(.priority // "medium"), Type: \(.research_type // "unknown")"'
-                                    echo ""
+                                # Extract tasks from the parsed result
+                                if [ -n "$result_json" ]; then
+                                    local tasks
+                                    tasks=$(echo "$result_json" | jq -c '.initial_tasks // .tasks // []' 2>/dev/null)
+                                    if [ "$tasks" != "[]" ] && [ -n "$tasks" ]; then
+                                        echo "**Tasks Generated:**"
+                                        echo ""
+                                        echo "$tasks" | jq -r '.[] | "- **Task \(.id // "?")** (\(.agent)): \(.query)\n  - Priority: \(.priority // "medium"), Type: \(.task_type // .research_type // "unknown")"' 2>/dev/null
+                                        echo ""
+                                    fi
                                 fi
                             fi
                             ;;
@@ -330,6 +347,13 @@ export_journal() {
                     ;;
                     
                 task_started)
+                    # Add H3 header if we just completed an iteration
+                    if [ "$NEED_TASK_SECTION_HEADER" = "true" ]; then
+                        echo "### New Research Tasks"
+                        echo ""
+                        NEED_TASK_SECTION_HEADER=false
+                    fi
+                    
                     local task_id
                     task_id=$(echo "$line" | jq -r '.data.task_id // "unknown"')
                     local agent
@@ -449,6 +473,9 @@ export_journal() {
                     echo ""
                     echo "---"
                     echo ""
+                    
+                    # Set flag to add H3 header before next task_started
+                    NEED_TASK_SECTION_HEADER=true
                     ;;
                     
                 research_complete)
