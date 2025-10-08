@@ -4,7 +4,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>CConductor Research Dashboard</title>
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
+    <title>Research Journal Viewer - CConductor</title>
     <style>
         * {
             margin: 0;
@@ -112,6 +115,20 @@
             padding: 20px;
             box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
         }
+        
+        .card-wide {
+            grid-column: span 2;
+        }
+        
+        .card.clickable {
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        
+        .card.clickable:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 16px rgba(102, 126, 234, 0.3);
+        }
 
         .card-title {
             font-size: 14px;
@@ -193,21 +210,34 @@
             background: rgba(255, 255, 255, 0.03);
             border-radius: 6px;
             font-size: 12px;
-            border-left: 3px solid transparent;
+            display: flex;
+            align-items: flex-start;
+            gap: 10px;
             transition: all 0.3s;
         }
 
-        .tool-item.pending {
-            border-left-color: #fbbf24;
-            animation: pulse-border 1.5s infinite;
+        .tool-item.success {
+            /* No border needed - using icons instead */
         }
 
-        .tool-item.success {
-            border-left-color: #10b981;
+        .tool-item.pending {
+            /* No border needed - using icons instead */
         }
 
         .tool-item.failed {
-            border-left-color: #ef4444;
+            /* No border needed - using icons instead */
+        }
+
+        .tool-icon {
+            font-size: 18px;
+            line-height: 1;
+            margin-top: 2px;
+            flex-shrink: 0;
+        }
+
+        .tool-content {
+            flex: 1;
+            min-width: 0;
         }
 
         @keyframes pulse-border {
@@ -372,6 +402,90 @@
             border-left-color: #3b82f6;
             background: rgba(59, 130, 246, 0.1);
         }
+        
+        .health-summary {
+            font-size: 14px;
+            opacity: 0.8;
+            margin-top: 8px;
+        }
+        
+        /* Modal Overlay */
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.8);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .modal-overlay.active {
+            display: flex;
+        }
+        
+        .modal-content {
+            background: #1a1f3a;
+            border-radius: 12px;
+            padding: 30px;
+            max-width: 800px;
+            max-height: 80vh;
+            overflow-y: auto;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+            position: relative;
+        }
+        
+        .modal-close {
+            position: absolute;
+            top: 15px;
+            right: 15px;
+            background: transparent;
+            border: none;
+            color: white;
+            font-size: 24px;
+            cursor: pointer;
+            opacity: 0.6;
+            transition: opacity 0.2s;
+        }
+        
+        .modal-close:hover {
+            opacity: 1;
+        }
+        
+        .modal-title {
+            font-size: 24px;
+            font-weight: 700;
+            color: #667eea;
+            margin-bottom: 20px;
+        }
+        
+        .modal-list {
+            list-style: none;
+            padding: 0;
+        }
+        
+        .modal-list-item {
+            padding: 12px;
+            margin-bottom: 8px;
+            background: rgba(255, 255, 255, 0.03);
+            border-radius: 6px;
+            border-left: 3px solid #667eea;
+        }
+        
+        .modal-list-item-title {
+            font-weight: 600;
+            color: #667eea;
+            margin-bottom: 4px;
+        }
+        
+        .modal-list-item-description {
+            font-size: 13px;
+            opacity: 0.8;
+            line-height: 1.5;
+        }
 
         .observation-header {
             display: flex;
@@ -452,6 +566,305 @@
         .completion-banner .report-link:hover {
             background: rgba(255, 255, 255, 0.3);
         }
+
+
+        /* Journal View Styles */
+        .journal-entry {
+            padding: 16px 0;
+            border-left: 3px solid transparent;
+            padding-left: 16px;
+            margin-bottom: 12px;
+            transition: all 0.2s;
+        }
+
+        .journal-entry:hover {
+            background: rgba(102, 126, 234, 0.05);
+            border-radius: 8px;
+            margin-left: -12px;
+            padding-left: 28px;
+        }
+
+        .journal-entry.milestone {
+            border-left-color: #667eea;
+        }
+
+        .journal-entry.research {
+            border-left-color: #10b981;
+        }
+
+        .journal-entry.analysis {
+            border-left-color: #f59e0b;
+        }
+
+        .journal-entry.finding {
+            border-left-color: #8b5cf6;
+        }
+
+        .journal-time {
+            font-size: 11px;
+            color: #667eea;
+            font-weight: 600;
+            margin-bottom: 6px;
+            display: block;
+        }
+
+        .journal-title {
+            font-size: 15px;
+            font-weight: 600;
+            margin-bottom: 6px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .journal-title .icon {
+            font-size: 18px;
+        }
+
+        .journal-content {
+            font-size: 14px;
+            line-height: 1.6;
+            opacity: 0.85;
+            margin-bottom: 8px;
+        }
+
+        .journal-metadata {
+            font-size: 11px;
+            opacity: 0.5;
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+
+        .journal-metadata span {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .journal-expand {
+            color: #667eea;
+            cursor: pointer;
+            font-size: 12px;
+            font-weight: 600;
+            margin-top: 8px;
+            display: inline-block;
+            padding: 4px 8px;
+            background: rgba(102, 126, 234, 0.1);
+            border-radius: 4px;
+            transition: all 0.2s;
+        }
+
+        .journal-expand:hover {
+            background: rgba(102, 126, 234, 0.2);
+        }
+
+        .journal-details {
+            display: none;
+            margin-top: 12px;
+            padding: 12px;
+            background: #0a0e27;
+            border-radius: 6px;
+            font-size: 12px;
+            line-height: 1.5;
+        }
+
+        .journal-details.expanded {
+            display: block;
+        }
+
+        .journal-details ul {
+            list-style: none;
+            padding-left: 0;
+        }
+
+        .journal-details li {
+            padding: 6px 0;
+            padding-left: 20px;
+            position: relative;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .journal-details li:before {
+            content: "";
+            position: absolute;
+            left: 4px;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #667eea;
+        }
+
+        /* Task Status Badges */
+        .task-status-badge {
+            font-size: 10px;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.3px;
+            white-space: nowrap;
+            margin-left: auto;
+        }
+
+        .task-status-badge.pending {
+            background: rgba(251, 191, 36, 0.2);
+            color: #fbbf24;
+            border: 1px solid rgba(251, 191, 36, 0.4);
+        }
+
+        .task-status-badge.in-progress {
+            background: rgba(59, 130, 246, 0.2);
+            color: #3b82f6;
+            border: 1px solid rgba(59, 130, 246, 0.4);
+            animation: pulse-badge 2s infinite;
+        }
+
+        .task-status-badge.completed {
+            background: rgba(16, 185, 129, 0.2);
+            color: #10b981;
+            border: 1px solid rgba(16, 185, 129, 0.4);
+        }
+
+        .task-status-badge.failed-critical {
+            background: rgba(239, 68, 68, 0.2);
+            color: #ef4444;
+            border: 1px solid rgba(239, 68, 68, 0.4);
+        }
+
+        .task-status-badge.failed-recoverable {
+            background: rgba(245, 158, 11, 0.2);
+            color: #f59e0b;
+            border: 1px solid rgba(245, 158, 11, 0.4);
+        }
+
+        @keyframes pulse-badge {
+            0%, 100% {
+                opacity: 1;
+            }
+            50% {
+                opacity: 0.6;
+            }
+        }
+
+        .task-status-badge.pending:before {
+            content: "⏳ ";
+        }
+
+        .task-status-badge.in-progress:before {
+            content: "🔄 ";
+        }
+
+        .task-status-badge.completed:before {
+            content: "✓ ";
+        }
+
+        .task-status-badge.failed-critical:before {
+            content: "✗ ";
+        }
+
+        .task-status-badge.failed-recoverable:before {
+            content: "⚠ ";
+        }
+
+        /* Task Progress Summary */
+        .task-progress {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 11px;
+            padding: 3px 8px;
+            background: rgba(102, 126, 234, 0.1);
+            border-radius: 4px;
+            border: 1px solid rgba(102, 126, 234, 0.2);
+        }
+
+        .task-progress-item {
+            display: inline-flex;
+            align-items: center;
+            gap: 3px;
+        }
+
+        .task-progress-item .count {
+            font-weight: 700;
+            color: #667eea;
+        }
+
+        /* Tools Used Section */
+        .tools-used {
+            display: none;
+            margin-top: 12px;
+            padding: 12px;
+            background: #0a0e27;
+            border-radius: 6px;
+        }
+
+        .tools-used.expanded {
+            display: block;
+        }
+
+        .tools-used-title {
+            font-size: 11px;
+            font-weight: 600;
+            opacity: 0.7;
+            margin-bottom: 8px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .tool-used-item {
+            padding: 8px;
+            margin-bottom: 4px;
+            background: rgba(255, 255, 255, 0.02);
+            border-radius: 4px;
+            font-size: 11px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            border-left: 2px solid transparent;
+        }
+
+        .tool-used-item.success {
+            border-left-color: #10b981;
+        }
+
+        .tool-used-item.failed {
+            border-left-color: #ef4444;
+        }
+
+        .tool-used-icon {
+            font-size: 14px;
+        }
+
+        .tool-used-name {
+            font-weight: 600;
+            color: #667eea;
+            min-width: 80px;
+        }
+
+        .tool-used-details {
+            flex: 1;
+            opacity: 0.7;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .tool-used-result {
+            font-size: 10px;
+            opacity: 0.5;
+            white-space: nowrap;
+        }
+
+        .tool-used-result.success {
+            color: #10b981;
+        }
+
+        .tool-used-result.failed {
+            color: #ef4444;
+        }
     </style>
 </head>
 
@@ -460,7 +873,7 @@
         <div class="header">
             <h1>
                 <span class="status-indicator"></span>
-                <span id="session-title">CConductor Research Dashboard</span>
+                <span id="session-title">📖 Research Journal Viewer</span>
             </h1>
             <div class="question">
                 <div class="question-text" id="research-question">Loading...</div>
@@ -487,15 +900,15 @@
                 <div class="card-value" id="stat-confidence">0%</div>
                 <div class="card-subtitle">Research quality</div>
             </div>
-            <div class="card">
+            <div class="card clickable" onclick="dashboard.showEntities()">
                 <div class="card-title">Entities</div>
                 <div class="card-value" id="stat-entities">0</div>
-                <div class="card-subtitle">Key concepts</div>
+                <div class="card-subtitle">Key concepts (click to view)</div>
             </div>
-            <div class="card">
+            <div class="card clickable" onclick="dashboard.showClaims()">
                 <div class="card-title">Claims</div>
                 <div class="card-value" id="stat-claims">0</div>
-                <div class="card-subtitle">Verified facts</div>
+                <div class="card-subtitle">Verified facts (click to view)</div>
             </div>
             <div class="card">
                 <div class="card-title">Total Cost</div>
@@ -509,34 +922,39 @@
                 <div class="card-value" id="stat-runtime">0m</div>
                 <div class="card-subtitle">Elapsed time</div>
             </div>
+            <div class="card card-wide">
+                <div class="card-title">System Health</div>
+                <div id="health-container-inline">
+                    <div class="health-summary">✅ No issues detected</div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Modal for Entities/Claims -->
+        <div class="modal-overlay" id="modal-overlay" onclick="dashboard.closeModal(event)">
+            <div class="modal-content" onclick="event.stopPropagation()">
+                <button class="modal-close" onclick="dashboard.closeModal()">&times;</button>
+                <div class="modal-title" id="modal-title"></div>
+                <ul class="modal-list" id="modal-list"></ul>
+            </div>
         </div>
 
         <div class="main-layout">
             <div class="main-content">
-                <div class="panel">
-                    <div class="panel-title">Task Queue</div>
-                    <div id="tasks-container">
-                        <div class="empty-state">No tasks</div>
+                <!-- Research Journal -->
+                <div class="panel" id="journal-view">
+                    <div class="panel-title">
+                        <span>📖</span>
+                        <span>Research Journal</span>
                     </div>
-                </div>
-
-                <div class="panel">
-                    <div class="panel-title">Recent Activity</div>
-                    <div id="events-container">
-                        <div class="empty-state">No events</div>
+                    <div id="journal-container">
+                        <div class="empty-state">No activity yet</div>
                     </div>
-                    <div class="last-updated" id="last-updated">Updating...</div>
+                    <div class="last-updated" id="last-updated-journal">Updating...</div>
                 </div>
             </div>
 
             <div class="sidebar">
-                <div class="panel">
-                    <div class="panel-title">🩺 System Health</div>
-                    <div id="health-container">
-                        <div class="empty-state">No issues detected</div>
-                    </div>
-                </div>
-
                 <div class="panel">
                     <div class="panel-title">🔧 Live Tools</div>
                     <div id="tools-container">

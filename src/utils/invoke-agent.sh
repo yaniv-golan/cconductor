@@ -46,93 +46,156 @@ extract_agent_metadata() {
             jq -c '.' 2>/dev/null || echo ""
     }
     
+    # OPTION 2: Self-Describing Agents
+    # First, try to extract standardized .metadata field from agent output
+    local result_json
+    result_json=$(extract_json_from_result "$output_file")
+    
+    if [ -n "$result_json" ]; then
+        local agent_metadata
+        agent_metadata=$(echo "$result_json" | jq -c '.metadata // empty' 2>/dev/null)
+        
+        if [ -n "$agent_metadata" ] && [ "$agent_metadata" != "null" ]; then
+            # Agent provided self-describing metadata - use it directly
+            echo "$agent_metadata"
+            return 0
+        fi
+    fi
+    
+    # FALLBACK: Legacy extraction for agents not yet updated to self-describing format
     case "$agent_name" in
         research-planner)
-            # Count tasks generated
-            local tasks_count
-            local result_json
-            result_json=$(extract_json_from_result "$output_file")
+            # Count tasks generated from planner output
+            local tasks_count=0
+            # result_json already extracted above
             if [ -n "$result_json" ]; then
+                # Try to count from .initial_tasks array
                 tasks_count=$(echo "$result_json" | jq '.initial_tasks // [] | length' 2>/dev/null || echo "0")
-            else
-                tasks_count=0
+                # Fallback: if initial_tasks doesn't exist, try direct array length
+                if [ "$tasks_count" -eq 0 ]; then
+                    tasks_count=$(echo "$result_json" | jq 'if type == "array" then length else 0 end' 2>/dev/null || echo "0")
+                fi
             fi
             metadata=$(jq -n --argjson count "$tasks_count" '{tasks_generated: $count}')
             ;;
             
         academic-researcher)
-            # Count papers found and searches performed
-            local papers=0
+            # Count entities and claims from findings files
+            # Count searches from events.jsonl
+            local entities=0
+            local claims=0
             local searches=0
             
-            # Extract from findings files if they exist
+            # Extract findings files from agent output (result_json already extracted above)
             local findings_files
-            findings_files=$(jq -r '.result // ""' "$output_file" 2>/dev/null | \
-                           jq -r '.findings_files[]? // empty' 2>/dev/null || echo "")
+            findings_files=$(echo "$result_json" | jq -r '.findings_files[]? // empty' 2>/dev/null || echo "")
             
             if [ -n "$findings_files" ]; then
                 while IFS= read -r findings_file; do
                     if [ -f "$session_dir/$findings_file" ]; then
-                        # Count citations as papers
-                        local file_papers
-                        file_papers=$(jq '[.citations[]? // empty] | length' "$session_dir/$findings_file" 2>/dev/null || echo "0")
-                        papers=$((papers + file_papers))
+                        # Count entities_discovered
+                        local file_entities
+                        file_entities=$(jq '[.entities_discovered[]? // empty] | length' "$session_dir/$findings_file" 2>/dev/null || echo "0")
+                        entities=$((entities + file_entities))
                         
-                        # Count tool uses with WebSearch
-                        local file_searches
-                        file_searches=$(jq '[.tool_uses[]? // empty | select(.tool_name == "WebSearch")] | length' "$session_dir/$findings_file" 2>/dev/null || echo "0")
-                        searches=$((searches + file_searches))
+                        # Count claims
+                        local file_claims
+                        file_claims=$(jq '[.claims[]? // empty] | length' "$session_dir/$findings_file" 2>/dev/null || echo "0")
+                        claims=$((claims + file_claims))
                     fi
                 done <<< "$findings_files"
             fi
             
-            metadata=$(jq -n --argjson papers "$papers" --argjson searches "$searches" \
-                       '{papers_found: $papers, searches_performed: $searches}')
+            # Count WebSearch tool uses from events.jsonl
+            if [ -f "$session_dir/events.jsonl" ]; then
+                searches=$(grep '"academic-researcher"' "$session_dir/events.jsonl" | \
+                          grep '"type":"tool_use_start"' | \
+                          grep -c '"tool":"WebSearch"' 2>/dev/null || echo "0")
+            fi
+            
+            metadata=$(jq -n --argjson entities "$entities" --argjson claims "$claims" --argjson searches "$searches" \
+                       '{papers_found: $entities, claims_found: $claims, searches_performed: $searches}')
             ;;
             
         web-researcher)
-            # Count sources found and searches performed
-            local sources=0
+            # Count entities and claims from findings files
+            # Count searches from events.jsonl
+            local entities=0
+            local claims=0
             local searches=0
             
-            # Extract from findings files
+            # Extract findings files from agent output (result_json already extracted above)
             local findings_files
-            findings_files=$(jq -r '.result // ""' "$output_file" 2>/dev/null | \
-                           jq -r '.findings_files[]? // empty' 2>/dev/null || echo "")
+            findings_files=$(echo "$result_json" | jq -r '.findings_files[]? // empty' 2>/dev/null || echo "")
             
             if [ -n "$findings_files" ]; then
                 while IFS= read -r findings_file; do
                     if [ -f "$session_dir/$findings_file" ]; then
-                        # Count citations as sources
-                        local file_sources
-                        file_sources=$(jq '[.citations[]? // empty] | length' "$session_dir/$findings_file" 2>/dev/null || echo "0")
-                        sources=$((sources + file_sources))
+                        # Count entities_discovered
+                        local file_entities
+                        file_entities=$(jq '[.entities_discovered[]? // empty] | length' "$session_dir/$findings_file" 2>/dev/null || echo "0")
+                        entities=$((entities + file_entities))
                         
-                        # Count WebSearch tool uses
-                        local file_searches
-                        file_searches=$(jq '[.tool_uses[]? // empty | select(.tool_name == "WebSearch")] | length' "$session_dir/$findings_file" 2>/dev/null || echo "0")
-                        searches=$((searches + file_searches))
+                        # Count claims
+                        local file_claims
+                        file_claims=$(jq '[.claims[]? // empty] | length' "$session_dir/$findings_file" 2>/dev/null || echo "0")
+                        claims=$((claims + file_claims))
                     fi
                 done <<< "$findings_files"
             fi
             
-            metadata=$(jq -n --argjson sources "$sources" --argjson searches "$searches" \
-                       '{sources_found: $sources, searches_performed: $searches}')
+            # Count WebSearch tool uses from events.jsonl
+            if [ -f "$session_dir/events.jsonl" ]; then
+                searches=$(grep '"web-researcher"' "$session_dir/events.jsonl" | \
+                          grep '"type":"tool_use_start"' | \
+                          grep -c '"tool":"WebSearch"' 2>/dev/null || echo "0")
+            fi
+            
+            metadata=$(jq -n --argjson entities "$entities" --argjson claims "$claims" --argjson searches "$searches" \
+                       '{sources_found: $entities, claims_found: $claims, searches_performed: $searches}')
+            ;;
+            
+        synthesis-agent)
+            # Extract synthesis statistics from agent's output
+            local claims=0
+            local gaps=0
+            
+            # Extract from synthesis agent's output (result_json already extracted above)
+            if [ -n "$result_json" ]; then
+                # Try to count claims synthesized
+                claims=$(echo "$result_json" | jq '[.claims_synthesized[]? // empty] | length' 2>/dev/null || echo "0")
+                # If that doesn't work, try counting from synthesis object
+                if [ "$claims" = "0" ]; then
+                    claims=$(echo "$result_json" | jq '[.synthesis.claims[]? // empty] | length' 2>/dev/null || echo "0")
+                fi
+                
+                # Count gaps found
+                gaps=$(echo "$result_json" | jq '[.gaps_identified[]? // empty] | length' 2>/dev/null || echo "0")
+                if [ "$gaps" = "0" ]; then
+                    gaps=$(echo "$result_json" | jq '[.knowledge_gaps[]? // empty] | length' 2>/dev/null || echo "0")
+                fi
+            fi
+            
+            metadata=$(jq -n \
+                       --argjson claims "$claims" \
+                       --argjson gaps "$gaps" \
+                       '{claims_synthesized: $claims, gaps_found: $gaps}')
             ;;
             
         research-coordinator)
-            # Extract knowledge graph statistics
+            # Extract knowledge graph statistics from coordinator's output
             local entities=0
             local claims=0
             local gaps=0
             local contradictions=0
             
-            # Read from knowledge graph if available
-            if [ -f "$session_dir/knowledge-graph.json" ]; then
-                entities=$(jq '.stats.total_entities // 0' "$session_dir/knowledge-graph.json" 2>/dev/null || echo "0")
-                claims=$(jq '.stats.total_claims // 0' "$session_dir/knowledge-graph.json" 2>/dev/null || echo "0")
-                gaps=$(jq '.stats.unresolved_gaps // 0' "$session_dir/knowledge-graph.json" 2>/dev/null || echo "0")
-                contradictions=$(jq '[.claims[]? // empty | select(.confidence_score < 0.5)] | length' "$session_dir/knowledge-graph.json" 2>/dev/null || echo "0")
+            # Extract from coordinator's output JSON (result_json already extracted above)
+            if [ -n "$result_json" ]; then
+                # Extract from knowledge_graph_updates (use correct field names)
+                entities=$(echo "$result_json" | jq '.knowledge_graph_updates.entities_discovered // [] | length' 2>/dev/null || echo "0")
+                claims=$(echo "$result_json" | jq '.knowledge_graph_updates.claims // [] | length' 2>/dev/null || echo "0")
+                gaps=$(echo "$result_json" | jq '.knowledge_graph_updates.gaps_detected // [] | length' 2>/dev/null || echo "0")
+                contradictions=$(echo "$result_json" | jq '.knowledge_graph_updates.contradictions_detected // [] | length' 2>/dev/null || echo "0")
             fi
             
             metadata=$(jq -n \
@@ -144,7 +207,13 @@ extract_agent_metadata() {
             ;;
     esac
     
-    echo "$metadata"
+    # Validate metadata is valid JSON before returning
+    if echo "$metadata" | jq empty 2>/dev/null; then
+        echo "$metadata"
+    else
+        # Return empty object if metadata is invalid
+        echo "{}"
+    fi
 }
 
 # Invoke agent with v2 implementation (uses validated patterns)
@@ -376,6 +445,8 @@ invoke_agent_v2() {
         # Extract agent-specific metadata for research journal view
         local metadata
         metadata=$(extract_agent_metadata "$agent_name" "$output_file" "$session_dir" 2>/dev/null || echo "{}")
+        # Compact JSON to single line to avoid quoting issues
+        metadata=$(echo "$metadata" | jq -c '.' 2>/dev/null || echo "{}")
         
         # Log agent result with metrics and metadata
         if [ -n "${session_dir:-}" ] && command -v log_agent_result &>/dev/null; then

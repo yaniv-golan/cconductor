@@ -845,26 +845,42 @@ run_coordinator() {
         
         if [ -n "$findings_file" ] && [ -f "$findings_file" ]; then
             # UNIFIED EXTRACTION ARCHITECTURE
-            # Read raw agent output
+            # Read raw content
             local raw_output
             raw_output=$(cat "$findings_file")
             
-            # Extract and parse .result field to JSON
-            local result_text
-            result_text=$(echo "$raw_output" | jq -r '.result // empty')
-            
-            if [ -z "$result_text" ]; then
-                echo "  ⚠️  No .result field in findings file: $findings_file" >&2
-                continue
-            fi
-            
-            # Parse JSON from markdown-wrapped text
+            # Findings files come in two formats:
+            # 1. Direct findings JSON (raw/findings-*.json written by agents)
+            # 2. Agent output with .result wrapper (agent output files)
             local parsed_json
-            parsed_json=$(parse_json_from_markdown "$result_text")
             
-            if [ -z "$parsed_json" ] || ! echo "$parsed_json" | jq empty >/dev/null 2>&1; then
-                echo "  ⚠️  Could not parse JSON from findings file: $findings_file" >&2
-                continue
+            # Check if this is a direct findings file (pattern: findings-*.json)
+            if [[ "$findings_file" =~ findings-[^/]+\.json$ ]]; then
+                # Direct findings file - no .result wrapper
+                # Validate it's valid JSON
+                if echo "$raw_output" | jq empty 2>/dev/null; then
+                    parsed_json="$raw_output"
+                else
+                    echo "  ⚠️  Invalid JSON in findings file: $findings_file" >&2
+                    continue
+                fi
+            else
+                # Agent output file - has .result wrapper
+                local result_text
+                result_text=$(echo "$raw_output" | jq -r '.result // empty')
+                
+                if [ -z "$result_text" ]; then
+                    echo "  ⚠️  No .result field in agent output: $findings_file" >&2
+                    continue
+                fi
+                
+                # Parse JSON from markdown-wrapped text
+                parsed_json=$(parse_json_from_markdown "$result_text")
+                
+                if [ -z "$parsed_json" ] || ! echo "$parsed_json" | jq empty >/dev/null 2>&1; then
+                    echo "  ⚠️  Could not parse JSON from agent output: $findings_file" >&2
+                    continue
+                fi
             fi
             
             # Determine extraction strategy based on content
@@ -1344,6 +1360,12 @@ final_synthesis() {
 
     echo "→ Generating final report..."
     
+    # Capture KG stats before synthesis for metadata
+    local kg_claims_before
+    kg_claims_before=$(echo "$kg" | jq '.stats.total_claims // 0')
+    local kg_entities_before
+    kg_entities_before=$(echo "$kg" | jq '.stats.total_entities // 0')
+    
     # Invoke synthesis agent
     if bash "$CCONDUCTOR_SCRIPT_DIR/utils/invoke-agent.sh" invoke-v2 \
         "synthesis-agent" \
@@ -1357,8 +1379,44 @@ final_synthesis() {
         # Extract report content and save as markdown
         if [ -f "$synthesis_output" ]; then
             jq -r '.result // empty' "$synthesis_output" > "$session_dir/research-report.md" 2>/dev/null
+            
+            # Count sections/headers in the generated report as a proxy for synthesis depth
+            local report_sections=0
+            if [ -f "$session_dir/research-report.md" ]; then
+                report_sections=$(grep -c '^##' "$session_dir/research-report.md" 2>/dev/null || echo "0")
+            fi
+            
             echo ""
             echo "✓ Research complete! Output at: $session_dir/research-report.md"
+            
+            # Export research journal as markdown
+            echo "→ Exporting research journal..."
+            if [ -f "$CCONDUCTOR_SCRIPT_DIR/utils/export-journal.sh" ]; then
+                bash "$CCONDUCTOR_SCRIPT_DIR/utils/export-journal.sh" "$session_dir" "$session_dir/research-journal.md" || true
+                if [ -f "$session_dir/research-journal.md" ]; then
+                    echo "  ✓ Research journal exported to: $session_dir/research-journal.md"
+                fi
+            else
+                echo "  ⚠️  Warning: export-journal.sh not found" >&2
+            fi
+            
+            # Log research completion event with link to report
+            if command -v log_event &>/dev/null; then
+                local completion_data
+                completion_data=$(jq -n \
+                    --argjson claims "$kg_claims_before" \
+                    --argjson entities "$kg_entities_before" \
+                    --argjson sections "$report_sections" \
+                    --arg report_path "research-report.md" \
+                    '{
+                        claims_synthesized: $claims,
+                        entities_integrated: $entities,
+                        report_sections: $sections,
+                        report_file: $report_path,
+                        report_available: true
+                    }')
+                log_event "$session_dir" "research_complete" "$completion_data" || true
+            fi
         else
             echo "⚠️  Warning: Synthesis output not found" >&2
         fi
@@ -1874,6 +1932,30 @@ main() {
     session_dir=$(initialize_session "$research_question")
     echo "  ✓ Session created: $(basename "$session_dir")"
     echo ""
+    
+    # Launch Research Journal Viewer at START (unless --no-viewer)
+    if [ "${LAUNCH_VIEWER:-true}" = "true" ]; then
+        echo "→ Launching Research Journal Viewer..."
+        
+        # Generate dashboard
+        if [ -f "$CCONDUCTOR_SCRIPT_DIR/utils/dashboard-generator.sh" ]; then
+            bash "$CCONDUCTOR_SCRIPT_DIR/utils/dashboard-generator.sh" "$session_dir" >/dev/null 2>&1 || true
+        fi
+        
+        # Open dashboard in browser
+        local dashboard_path="$session_dir/dashboard.html"
+        if [ -f "$dashboard_path" ]; then
+            echo "  ✓ Research Journal Viewer: file://$dashboard_path"
+            
+            # Auto-open in browser (platform-aware)
+            if [[ "$OSTYPE" == "darwin"* ]]; then
+                open "$dashboard_path" 2>/dev/null || true
+            elif command -v xdg-open &> /dev/null; then
+                xdg-open "$dashboard_path" 2>/dev/null || true
+            fi
+        fi
+        echo ""
+    fi
 
     # Process input files if --input-dir was provided
     if [ -n "${CCONDUCTOR_INPUT_DIR:-}" ]; then
@@ -2268,24 +2350,42 @@ finalize_research() {
     echo "Resume this session:"
     echo "   ./cconductor resume $(basename "$session_dir")"
     echo ""
+    echo "📊 Research Journal Viewer: file://$session_dir/dashboard.html"
+    echo ""
 }
 
 # CLI
 if [ $# -lt 1 ]; then
     echo "Usage:"
-    echo "  $0 \"<research question>\"           # Start new research"
-    echo "  $0 --resume <session_id>            # Resume existing session"
-    echo "  $0 --list                           # List available sessions"
+    echo "  $0 [--no-viewer] \"<research question>\"    # Start new research"
+    echo "  $0 --resume <session_id>                  # Resume existing session"
+    echo "  $0 --list                                 # List available sessions"
+    echo ""
+    echo "Options:"
+    echo "  --no-viewer    Skip auto-launching Research Journal Viewer"
     echo ""
     echo "Examples:"
     echo "  $0 \"How does PostgreSQL implement MVCC?\""
+    echo "  $0 --no-viewer \"What is quantum computing?\""
     echo "  $0 --resume session_1234567890"
     echo "  $0 --list"
     exit 1
 fi
 
+# Default: launch viewer
+export LAUNCH_VIEWER=true
+
 # Parse command-line arguments
 case "${1:-}" in
+    --no-viewer)
+        export LAUNCH_VIEWER=false
+        shift
+        if [ $# -lt 1 ]; then
+            echo "Error: Research question required after --no-viewer" >&2
+            exit 1
+        fi
+        main "$1"
+        ;;
     --resume)
         if [ $# -lt 2 ]; then
             echo "Error: --resume requires a session ID" >&2

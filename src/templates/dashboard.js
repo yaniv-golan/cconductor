@@ -2,7 +2,8 @@
 class Dashboard {
     constructor() {
         this.updateInterval = 3000; // 3 seconds
-        this.expandedEvents = new Set(); // Track expanded event indices
+        this.expandedJournalTasks = new Set(); // Track expanded journal task breakdowns
+        this.expandedJournalTools = new Set(); // Track expanded journal tools sections
         this.knownTaskIds = new Set(); // Track tasks we've seen before
         this.newTaskIds = new Set(); // Track newly added tasks
         this.runtimeInterval = null; // Track runtime interval to avoid duplicates
@@ -25,10 +26,13 @@ class Dashboard {
 
             this.renderHeader(session);
             this.renderStats(metrics);
-            this.renderTasks(tasks);
+            // Task Queue panel removed - tasks now shown inline in journal entries
+            // this.renderTasks(tasks);
             this.renderObservations(metrics?.system_health?.observations || []);
             this.renderToolCalls(events || []);
-            this.renderEvents(events ? events.slice(-15) : []);
+            
+            // Render journal view
+            this.renderJournal(events || []);
         } catch (error) {
             console.error('Error loading data:', error);
         }
@@ -36,7 +40,8 @@ class Dashboard {
 
     async fetchJSON(file) {
         try {
-            const response = await fetch(file);
+            // Add cache-busting timestamp to force browser to fetch fresh data
+            const response = await fetch(`${file}?t=${Date.now()}`);
             return response.ok ? response.json() : null;
         } catch (error) {
             console.error(`Error fetching ${file}:`, error);
@@ -46,7 +51,8 @@ class Dashboard {
 
     async fetchJSONL(file) {
         try {
-            const response = await fetch(file);
+            // Add cache-busting timestamp to force browser to fetch fresh data
+            const response = await fetch(`${file}?t=${Date.now()}`);
             if (!response.ok) return [];
             const text = await response.text();
             
@@ -414,10 +420,29 @@ class Dashboard {
     }
 
     renderObservations(observations) {
-        const container = document.getElementById('health-container');
+        // Store observations for modal
+        this.currentObservations = observations || [];
+        
+        // Update inline health card
+        const inlineContainer = document.getElementById('health-container-inline');
+        if (inlineContainer) {
+            if (!observations || observations.length === 0) {
+                inlineContainer.innerHTML = '<div class="health-summary">✅ No issues detected</div>';
+            } else {
+                const criticalCount = observations.filter(o => o.data?.severity === 'critical').length;
+                const warningCount = observations.filter(o => o.data?.severity === 'warning').length;
+                const infoCount = observations.filter(o => o.data?.severity === 'info').length;
+                
+                const parts = [];
+                if (criticalCount > 0) parts.push(`🔴 ${criticalCount} critical`);
+                if (warningCount > 0) parts.push(`⚠️ ${warningCount} warning`);
+                if (infoCount > 0) parts.push(`ℹ️ ${infoCount} info`);
+                
+                inlineContainer.innerHTML = `<div class="health-summary">${parts.join(' • ')}</div>`;
+            }
+        }
 
         if (!observations || observations.length === 0) {
-            container.innerHTML = '<div class="empty-state">✓ No issues detected</div>';
             return;
         }
 
@@ -430,6 +455,10 @@ class Dashboard {
         // Take top 10
         const displayObs = orderedObs.slice(0, 10);
 
+        // Note: health-container was removed from sidebar, this is now unused
+        const container = document.getElementById('health-container');
+        if (!container) return;
+        
         container.innerHTML = displayObs.map(obs => {
             const data = obs.data || {};
             const severity = data.severity || 'info';
@@ -558,19 +587,623 @@ class Dashboard {
 
             return `
                 <div class="tool-item ${statusClass}" title="${this.escapeHtml(call.summary)}">
-                    <div class="tool-header">
-                        <span class="tool-name">${call.tool}</span>
-                        <span class="tool-status ${statusIconClass}">${statusIcon}</span>
-                    </div>
-                    <div class="tool-details">${this.escapeHtml(truncSummary)}</div>
-                    <div class="tool-footer">
-                        <span>${call.agent}</span>
-                        <span>${durationText || time}</span>
+                    <span class="tool-icon">${this.getToolIcon(call.tool)}</span>
+                    <div class="tool-content">
+                        <div class="tool-header">
+                            <span class="tool-name">${call.tool}</span>
+                            <span class="tool-status ${statusIconClass}">${statusIcon}</span>
+                        </div>
+                        <div class="tool-details">${this.escapeHtml(truncSummary)}</div>
+                        <div class="tool-footer">
+                            <span>${call.agent}</span>
+                            <span>${durationText || time}</span>
+                        </div>
                     </div>
                 </div>
             `;
         }).join('');
     }
+
+    // ========================================
+    // JOURNAL VIEW METHODS
+    // ========================================
+
+    renderJournal(events) {
+        // Store events for toggle methods
+        this.lastEvents = events;
+        
+        const container = document.getElementById('journal-container');
+        const lastUpdated = document.getElementById('last-updated-journal');
+        
+        if (!events || events.length === 0) {
+            container.innerHTML = '<div class="empty-state">No activity yet</div>';
+            return;
+        }
+
+        const entries = this.groupEventsIntoJournalEntries(events);
+        
+        if (entries.length === 0) {
+            container.innerHTML = '<div class="empty-state">Starting research...</div>';
+            return;
+        }
+
+        const html = entries.map(entry => this.formatJournalEntry(entry)).join('');
+        container.innerHTML = html;
+        
+        // Update last updated time
+        if (lastUpdated) {
+            const now = new Date().toLocaleTimeString();
+            lastUpdated.textContent = `Last updated: ${now}`;
+        }
+    }
+
+    groupEventsIntoJournalEntries(events) {
+        const entries = [];
+        
+        // Entry 1: Session creation
+        const sessionCreated = events.find(e => e.type === 'session_created');
+        if (sessionCreated) {
+            entries.push({
+                type: 'milestone',
+                icon: '🎯',
+                title: 'Research Session Started',
+                startTime: sessionCreated.timestamp,
+                endTime: null,
+                content: 'I initialized a new research session and prepared to analyze your query.',
+                agent: 'system',
+                metadata: {},
+                events: [sessionCreated]
+            });
+        }
+        
+        // Entry 2-N: Agent invocations
+        const agentNames = ['research-planner', 'academic-researcher', 'web-researcher', 'synthesis-agent', 'research-coordinator'];
+        
+        agentNames.forEach(agentName => {
+            const invocations = events.filter(e => e.type === 'agent_invocation' && e.data.agent === agentName);
+            const results = events.filter(e => e.type === 'agent_result' && e.data.agent === agentName);
+            
+            // Match invocations with results
+            for (let i = 0; i < Math.min(invocations.length, results.length); i++) {
+                const invocation = invocations[i];
+                const result = results[i];
+                
+                entries.push({
+                    type: this.getEntryType(agentName),
+                    icon: this.getAgentIcon(agentName),
+                    title: this.getAgentTitle(agentName),
+                    startTime: invocation.timestamp,
+                    endTime: result.timestamp,
+                    content: this.formatAgentWork(agentName, result.data),
+                    agent: agentName,
+                    metadata: {
+                        duration: this.calculateDurationSeconds(invocation.timestamp, result.timestamp),
+                        cost: result.data.cost_usd || 0,
+                        ...result.data // Include all agent-specific metadata
+                    },
+                    events: [invocation, result],
+                    tasks: this.getTasksForAgent(agentName, events),
+                    tools: this.getToolsForAgent(agentName, events, invocation.timestamp, result.timestamp)
+                });
+            }
+        });
+        
+        // Entry N+1: Iteration completions
+        events.filter(e => e.type === 'iteration_complete').forEach(e => {
+            entries.push({
+                type: 'milestone',
+                icon: '✅',
+                title: `Iteration ${e.data.iteration} Complete`,
+                startTime: e.timestamp,
+                endTime: null,
+                content: this.formatIterationComplete(e.data),
+                agent: 'research-coordinator',
+                metadata: e.data.stats || {},
+                events: [e]
+            });
+        });
+        
+        // Entry N+2: Research completion
+        const researchComplete = events.find(e => e.type === 'research_complete');
+        if (researchComplete) {
+            entries.push({
+                type: 'milestone',
+                icon: '🎉',
+                title: 'Research Report Complete',
+                startTime: researchComplete.timestamp,
+                endTime: null,
+                content: this.formatResearchComplete(researchComplete.data),
+                agent: 'synthesis-agent',
+                metadata: {
+                    claims_synthesized: researchComplete.data.claims_synthesized || 0,
+                    entities_integrated: researchComplete.data.entities_integrated || 0,
+                    report_sections: researchComplete.data.report_sections || 0
+                },
+                events: [researchComplete]
+            });
+        }
+        
+        // Add "in progress" entries for unfinished work
+        // These will appear at the top (newest first) to show current activity
+        agentNames.forEach(agentName => {
+            const invocations = events.filter(e => e.type === 'agent_invocation' && e.data.agent === agentName);
+            const results = events.filter(e => e.type === 'agent_result' && e.data.agent === agentName);
+            
+            // If more invocations than results, last invocation is in progress
+            if (invocations.length > results.length) {
+                const inProgressInvocation = invocations[invocations.length - 1];
+                const elapsedSeconds = this.calculateDurationSeconds(inProgressInvocation.timestamp, new Date().toISOString());
+                
+                entries.push({
+                    type: 'in_progress',
+                    icon: '⏳',
+                    title: `${this.getAgentTitle(agentName)} (In Progress)`,
+                    startTime: inProgressInvocation.timestamp,
+                    endTime: null,
+                    content: `Currently working... (${Math.floor(elapsedSeconds)}s elapsed)`,
+                    agent: agentName,
+                    metadata: {
+                        elapsed: elapsedSeconds,
+                        status: 'running'
+                    },
+                    events: [inProgressInvocation],
+                    tasks: this.getTasksForAgent(agentName, events), // Show tasks assigned to this agent
+                    tools: [] // No completed tools yet
+                });
+            }
+        });
+        
+        // Also check for in-progress tasks
+        const taskStarts = events.filter(e => e.type === 'task_started');
+        const taskEnds = events.filter(e => e.type === 'task_completed' || e.type === 'task_failed');
+        const taskEndIds = new Set(taskEnds.map(e => e.data.task_id));
+        
+        taskStarts.forEach(taskStart => {
+            if (!taskEndIds.has(taskStart.data.task_id)) {
+                const elapsedSeconds = this.calculateDurationSeconds(taskStart.timestamp, new Date().toISOString());
+                entries.push({
+                    type: 'in_progress',
+                    icon: '📋',
+                    title: `Task ${taskStart.data.task_id} (In Progress)`,
+                    startTime: taskStart.timestamp,
+                    endTime: null,
+                    content: `Working on: "${taskStart.data.query}" (${Math.floor(elapsedSeconds)}s elapsed)`,
+                    agent: taskStart.data.agent,
+                    metadata: {
+                        elapsed: elapsedSeconds,
+                        status: 'running',
+                        task_id: taskStart.data.task_id
+                    },
+                    events: [taskStart],
+                    tasks: [],
+                    tools: []
+                });
+            }
+        });
+        
+        // Sort by time (newest first)
+        return entries.sort((a, b) => new Date(b.startTime) - new Date(a.startTime));
+    }
+
+    getEntryType(agentName) {
+        const types = {
+            'research-planner': 'analysis',
+            'academic-researcher': 'research',
+            'web-researcher': 'research',
+            'synthesis-agent': 'finding',
+            'research-coordinator': 'analysis'
+        };
+        return types[agentName] || 'research';
+    }
+
+    getAgentIcon(agentName) {
+        const icons = {
+            'research-planner': '🗂️',
+            'academic-researcher': '🔍',
+            'web-researcher': '🌐',
+            'synthesis-agent': '✨',
+            'research-coordinator': '🧭'
+        };
+        return icons[agentName] || '🤖';
+    }
+
+    getAgentTitle(agentName) {
+        const titles = {
+            'research-planner': 'Research Strategy Planned',
+            'academic-researcher': 'Searching Academic Literature',
+            'web-researcher': 'Searching Web Sources',
+            'synthesis-agent': 'Synthesizing Findings',
+            'research-coordinator': 'Coordinating Research'
+        };
+        return titles[agentName] || 'Working';
+    }
+
+    formatAgentWork(agentName, resultData) {
+        const templates = {
+            'research-planner': () => {
+                const tasks = resultData.tasks_generated || 0;
+                return `I analyzed the query and identified ${tasks} critical research area${tasks !== 1 ? 's' : ''} to explore.`;
+            },
+            'academic-researcher': () => {
+                const papers = resultData.papers_found || 0;
+                const searches = resultData.searches_performed || 0;
+                return `I conducted ${searches} systematic search${searches !== 1 ? 'es' : ''} across academic databases and found ${papers} relevant paper${papers !== 1 ? 's' : ''} with focus on peer-reviewed sources.`;
+            },
+            'web-researcher': () => {
+                const sources = resultData.sources_found || 0;
+                const searches = resultData.searches_performed || 0;
+                return `I performed ${searches} web search${searches !== 1 ? 'es' : ''} and analyzed ${sources} source${sources !== 1 ? 's' : ''} to gather current information on the research topic.`;
+            },
+            'synthesis-agent': () => {
+                const claims = resultData.claims_synthesized || 0;
+                const gaps = resultData.gaps_found || 0;
+                return `I synthesized ${claims} claim${claims !== 1 ? 's' : ''} from all gathered sources and identified ${gaps} knowledge gap${gaps !== 1 ? 's' : ''} requiring further investigation.`;
+            },
+            'research-coordinator': () => {
+                const entities = resultData.entities_discovered || 0;
+                const claims = resultData.claims_validated || 0;
+                const gaps = resultData.gaps_identified || 0;
+                return `I processed the research findings and discovered ${entities} key entit${entities !== 1 ? 'ies' : 'y'}, validated ${claims} claim${claims !== 1 ? 's' : ''}, and identified ${gaps} gap${gaps !== 1 ? 's' : ''} in the current knowledge.`;
+            }
+        };
+        
+        const formatter = templates[agentName];
+        return formatter ? formatter() : `I completed ${agentName} work.`;
+    }
+
+    formatIterationComplete(data) {
+        const iteration = data.iteration || '?';
+        const stats = data.stats || {};
+        const claims = stats.total_claims || 0;
+        const entities = stats.total_entities || 0;
+        
+        return `I completed iteration ${iteration} and analyzed all pending tasks. Knowledge graph now contains ${entities} entit${entities !== 1 ? 'ies' : 'y'} and ${claims} validated claim${claims !== 1 ? 's' : ''}.`;
+    }
+
+    formatResearchComplete(data) {
+        const claims = data.claims_synthesized || 0;
+        const entities = data.entities_integrated || 0;
+        const sections = data.report_sections || 0;
+        const reportFile = data.report_file || 'research-report.md';
+        
+        return `I synthesized all research findings into a comprehensive report with ${sections} section${sections !== 1 ? 's' : ''}, integrating ${claims} claim${claims !== 1 ? 's' : ''} and ${entities} entit${entities !== 1 ? 'ies' : 'y'}. 
+        
+📄 <strong><a href="${reportFile}" target="_blank">View Research Report</a></strong>
+
+📖 <strong><a href="research-journal.md" target="_blank">View Research Journal</a></strong> (Sequential timeline with full details)`;
+    }
+
+    getTasksForAgent(agentName, events) {
+        const tasks = {};
+        
+        // For research-planner, show ALL tasks it generated (first iteration tasks)
+        if (agentName === 'research-planner') {
+            events.forEach(e => {
+                if (e.type === 'task_started' || e.type === 'task_completed' || e.type === 'task_failed') {
+                    const taskId = e.data.task_id;
+                    if (!tasks[taskId]) {
+                        tasks[taskId] = {
+                            id: taskId,
+                            query: e.data.query || '',
+                            status: 'pending',
+                            agent: e.data.agent  // Show which agent will execute it
+                        };
+                    }
+                    
+                    if (e.type === 'task_started') {
+                        tasks[taskId].status = 'in-progress';
+                        tasks[taskId].startTime = e.timestamp;
+                    } else if (e.type === 'task_completed') {
+                        tasks[taskId].status = 'completed';
+                        tasks[taskId].endTime = e.timestamp;
+                    } else if (e.type === 'task_failed') {
+                        tasks[taskId].status = e.data.recoverable === 'true' || e.data.recoverable === true ? 
+                            'failed-recoverable' : 'failed-critical';
+                        tasks[taskId].error = e.data.error;
+                    }
+                }
+            });
+        } else {
+            // For other agents, show only tasks they executed
+            events.forEach(e => {
+                if ((e.type === 'task_started' || e.type === 'task_completed' || e.type === 'task_failed') 
+                    && e.data.agent === agentName) {
+                    
+                    const taskId = e.data.task_id;
+                    if (!tasks[taskId]) {
+                        tasks[taskId] = {
+                            id: taskId,
+                            query: e.data.query || '',
+                            status: 'pending',
+                            agent: agentName
+                        };
+                    }
+                    
+                    if (e.type === 'task_started') {
+                        tasks[taskId].status = 'in-progress';
+                        tasks[taskId].startTime = e.timestamp;
+                    } else if (e.type === 'task_completed') {
+                        tasks[taskId].status = 'completed';
+                        tasks[taskId].endTime = e.timestamp;
+                    } else if (e.type === 'task_failed') {
+                        tasks[taskId].status = e.data.recoverable === 'true' || e.data.recoverable === true ? 
+                            'failed-recoverable' : 'failed-critical';
+                        tasks[taskId].error = e.data.error;
+                    }
+                }
+            });
+        }
+        
+        return Object.values(tasks);
+    }
+
+    getToolsForAgent(agentName, events, startTime, endTime) {
+        const tools = [];
+        const startMs = new Date(startTime).getTime();
+        const endMs = new Date(endTime).getTime();
+        
+        // Find tool_use_start events for this agent in the time range
+        const toolStarts = events.filter(e => 
+            e.type === 'tool_use_start' &&
+            e.data.agent === agentName &&
+            new Date(e.timestamp).getTime() >= startMs &&
+            new Date(e.timestamp).getTime() <= endMs
+        );
+        
+        toolStarts.forEach(start => {
+            const tool = start.data.tool;
+            const startToolTime = new Date(start.timestamp).getTime();
+            
+            // Find corresponding complete event
+            const complete = events.find(e => 
+                e.type === 'tool_use_complete' &&
+                e.data.tool === tool &&
+                new Date(e.timestamp).getTime() > startToolTime &&
+                new Date(e.timestamp).getTime() <= endMs &&
+                new Date(e.timestamp).getTime() - startToolTime < 60000
+            );
+            
+            tools.push({
+                tool: tool,
+                icon: this.getToolIcon(tool),
+                details: start.data.input_summary || '',
+                status: complete ? (complete.data.status || 'success') : 'pending',
+                duration: complete ? complete.data.duration_ms : null,
+                result: complete ? this.formatToolResult(tool, complete.data) : null
+            });
+        });
+        
+        return tools;
+    }
+
+    getToolIcon(toolName) {
+        const icons = {
+            'WebSearch': '🔍',
+            'WebFetch': '🌐',
+            'Read': '📄',
+            'Write': '✏️',
+            'Grep': '🔎',
+            'Glob': '📁',
+            'Bash': '🔧',
+            'Task': '📋'
+        };
+        return icons[toolName] || '🔧';
+    }
+
+    formatToolResult(tool, data) {
+        if (data.status === 'failed' || data.status === 'error') {
+            return 'failed';
+        }
+        
+        const duration = data.duration_ms;
+        if (duration) {
+            return `${(duration / 1000).toFixed(1)}s`;
+        }
+        
+        return 'success';
+    }
+
+    formatJournalEntry(entry) {
+        const timeRange = entry.endTime ? 
+            `${this.formatTime(entry.startTime)} - ${this.formatTime(entry.endTime)}` :
+            this.formatTime(entry.startTime);
+        
+        // Generate unique ID for this entry (for tracking expansion state)
+        const entryId = `${entry.startTime}_${entry.agent}`;
+        
+        return `
+            <div class="journal-entry ${entry.type}" data-entry-id="${entryId}">
+                <span class="journal-time">${timeRange}</span>
+                
+                <div class="journal-title">
+                    <span class="icon">${entry.icon}</span>
+                    <span>${entry.title}</span>
+                </div>
+                
+                <div class="journal-content">
+                    ${entry.content}
+                </div>
+                
+                <div class="journal-metadata">
+                    <span>🤖 ${entry.agent}</span>
+                    ${this.formatMetadata(entry.metadata, entry)}
+                </div>
+                
+                ${entry.tasks && entry.tasks.length > 0 ? this.renderTasksExpander(entry, entryId) : ''}
+                ${entry.tools && entry.tools.length > 0 ? this.renderToolsExpander(entry, entryId) : ''}
+            </div>
+        `;
+    }
+
+    formatMetadata(metadata, entry) {
+        const parts = [];
+        
+        if (metadata.duration !== undefined) {
+            const minutes = Math.floor(metadata.duration / 60);
+            const seconds = metadata.duration % 60;
+            const timeStr = minutes > 0 ? `${minutes}m ${seconds}s` : `${seconds}s`;
+            parts.push(`<span>⏱️ ${timeStr}</span>`);
+        }
+        
+        if (metadata.cost !== undefined) {
+            parts.push(`<span>💰 $${metadata.cost.toFixed(3)}</span>`);
+        }
+        
+        if (metadata.tasks_generated) {
+            parts.push(`<span>${metadata.tasks_generated} tasks generated</span>`);
+        }
+        
+        if (metadata.papers_found) {
+            parts.push(`<span>📄 ${metadata.papers_found} papers found</span>`);
+        }
+        
+        if (metadata.sources_found) {
+            parts.push(`<span>🌐 ${metadata.sources_found} sources found</span>`);
+        }
+        
+        if (metadata.searches_performed) {
+            parts.push(`<span>🔍 ${metadata.searches_performed} searches</span>`);
+        }
+        
+        if (metadata.entities_discovered) {
+            parts.push(`<span>📊 ${metadata.entities_discovered} entities</span>`);
+        }
+        
+        if (metadata.claims_validated) {
+            parts.push(`<span>💡 ${metadata.claims_validated} claims</span>`);
+        }
+        
+        if (metadata.gaps_identified) {
+            parts.push(`<span>⚠️ ${metadata.gaps_identified} gaps</span>`);
+        }
+        
+        if (metadata.contradictions_detected) {
+            parts.push(`<span>🔴 ${metadata.contradictions_detected} contradictions</span>`);
+        }
+        
+        // Add task progress inline in metadata if there are tasks
+        if (entry && entry.tasks && entry.tasks.length > 0) {
+            const completed = entry.tasks.filter(t => t.status === 'completed').length;
+            const inProgress = entry.tasks.filter(t => t.status === 'in-progress').length;
+            const pending = entry.tasks.filter(t => t.status === 'pending').length;
+            
+            let progressHtml = `<span class="task-progress">
+                <span class="task-progress-item">
+                    <span class="count">${entry.tasks.length}</span> generated
+                </span>`;
+            
+            if (completed > 0) {
+                progressHtml += `<span style="opacity: 0.3;">•</span>
+                <span class="task-progress-item" style="color: #10b981;">
+                    <span class="count">${completed}</span> completed
+                </span>`;
+            }
+            
+            if (inProgress > 0) {
+                progressHtml += `<span style="opacity: 0.3;">•</span>
+                <span class="task-progress-item" style="color: #3b82f6;">
+                    <span class="count">${inProgress}</span> in progress
+                </span>`;
+            }
+            
+            if (pending > 0) {
+                progressHtml += `<span style="opacity: 0.3;">•</span>
+                <span class="task-progress-item" style="color: #fbbf24;">
+                    <span class="count">${pending}</span> pending
+                </span>`;
+            }
+            
+            progressHtml += `</span>`;
+            parts.push(progressHtml);
+        }
+        
+        return parts.join('\n                    ');
+    }
+
+    renderTasksExpander(entry, entryId) {
+        if (!entry.tasks || entry.tasks.length === 0) return '';
+        
+        const taskList = entry.tasks.map(task => `
+            <li>
+                <span>${this.escapeHtml(task.query || task.id)}</span>
+                <span class="task-status-badge ${task.status}">${this.formatTaskStatus(task.status)}</span>
+            </li>
+        `).join('');
+        
+        const isExpanded = this.expandedJournalTasks.has(entryId);
+        const expandedClass = isExpanded ? 'expanded' : '';
+        const expandText = isExpanded ? 'View task breakdown ▲' : 'View task breakdown ▼';
+        
+        return `
+            <span class="journal-expand" onclick="dashboard.toggleJournalTasks('${entryId}')">
+                ${expandText}
+            </span>
+            <div class="journal-details ${expandedClass}">
+                <ul style="list-style: none; padding: 0;">
+                    ${taskList}
+                </ul>
+            </div>
+        `;
+    }
+
+    formatTaskStatus(status) {
+        const statusMap = {
+            'pending': 'pending',
+            'in-progress': 'doing',
+            'completed': 'done',
+            'failed-critical': 'failed',
+            'failed-recoverable': 'retry'
+        };
+        return statusMap[status] || status;
+    }
+
+    renderToolsExpander(entry, entryId) {
+        if (!entry.tools || entry.tools.length === 0) return '';
+        
+        const toolsList = entry.tools.map(tool => `
+            <div class="tool-used-item ${tool.status}">
+                <span class="tool-used-icon">${tool.icon}</span>
+                <span class="tool-used-name">${tool.tool}</span>
+                <span class="tool-used-details">${this.escapeHtml(tool.details.substring(0, 60))}${tool.details.length > 60 ? '...' : ''}</span>
+                <span class="tool-used-result ${tool.status}">
+                    ${tool.result || '...'}
+                </span>
+            </div>
+        `).join('');
+        
+        const isExpanded = this.expandedJournalTools.has(entryId);
+        const expandedClass = isExpanded ? 'expanded' : '';
+        const expandText = isExpanded ? 'View tools used ▲' : 'View tools used ▼';
+        
+        return `
+            <span class="journal-expand" onclick="dashboard.toggleJournalTools('${entryId}')" style="margin-top: 8px;">
+                ${expandText}
+            </span>
+            <div class="tools-used ${expandedClass}">
+                <div class="tools-used-title">Tools used by ${entry.agent}</div>
+                ${toolsList}
+            </div>
+        `;
+    }
+
+    formatTime(timestamp) {
+        return new Date(timestamp).toLocaleTimeString('en-US', { 
+            hour: '2-digit', 
+            minute: '2-digit',
+            second: '2-digit',
+            hour12: false 
+        });
+    }
+
+    calculateDurationSeconds(startTime, endTime) {
+        const start = new Date(startTime).getTime();
+        const end = new Date(endTime).getTime();
+        return Math.round((end - start) / 1000);
+    }
+
+    // ========================================
+    // END JOURNAL VIEW METHODS
+    // ========================================
 
     renderEvents(events) {
         if (!events || events.length === 0) return;
@@ -630,6 +1263,28 @@ class Dashboard {
                 item.classList.toggle('event-expanded');
             }
         });
+    }
+
+    toggleJournalTasks(entryId) {
+        if (this.expandedJournalTasks.has(entryId)) {
+            this.expandedJournalTasks.delete(entryId);
+        } else {
+            this.expandedJournalTasks.add(entryId);
+        }
+        // Re-render journal to update UI
+        const events = this.lastEvents || [];
+        this.renderJournal(events);
+    }
+
+    toggleJournalTools(entryId) {
+        if (this.expandedJournalTools.has(entryId)) {
+            this.expandedJournalTools.delete(entryId);
+        } else {
+            this.expandedJournalTools.add(entryId);
+        }
+        // Re-render journal to update UI
+        const events = this.lastEvents || [];
+        this.renderJournal(events);
     }
 
     escapeHtml(text) {
@@ -693,8 +1348,99 @@ class Dashboard {
                 return `• ${event.type}`;
         }
     }
+    
+    async showEntities() {
+        // Fetch knowledge graph
+        const kg = await this.fetchJSON('knowledge-graph.json');
+        if (!kg || !kg.entities) {
+            alert('No entities data available');
+            return;
+        }
+        
+        const entities = kg.entities || [];
+        if (entities.length === 0) {
+            alert('No entities discovered yet');
+            return;
+        }
+        
+        // Show modal
+        document.getElementById('modal-title').textContent = `Entities (${entities.length})`;
+        const modalList = document.getElementById('modal-list');
+        
+        modalList.innerHTML = entities.map(entity => `
+            <li class="modal-list-item">
+                <div class="modal-list-item-title">${this.escapeHtml(entity.name || entity.id)}</div>
+                <div class="modal-list-item-description">${this.escapeHtml(entity.description || 'No description')}</div>
+            </li>
+        `).join('');
+        
+        document.getElementById('modal-overlay').classList.add('active');
+    }
+    
+    async showClaims() {
+        // Fetch knowledge graph
+        const kg = await this.fetchJSON('knowledge-graph.json');
+        if (!kg || !kg.claims) {
+            alert('No claims data available');
+            return;
+        }
+        
+        const claims = kg.claims || [];
+        if (claims.length === 0) {
+            alert('No claims validated yet');
+            return;
+        }
+        
+        // Show modal
+        document.getElementById('modal-title').textContent = `Claims (${claims.length})`;
+        const modalList = document.getElementById('modal-list');
+        
+        modalList.innerHTML = claims.map(claim => {
+            const confidence = claim.confidence_score !== undefined 
+                ? ` (${Math.round(claim.confidence_score * 100)}% confidence)` 
+                : '';
+            return `
+                <li class="modal-list-item">
+                    <div class="modal-list-item-title">${this.escapeHtml(claim.claim || claim.statement)}${confidence}</div>
+                    <div class="modal-list-item-description">
+                        ${claim.sources ? `📚 Sources: ${claim.sources.length}` : ''}
+                    </div>
+                </li>
+            `;
+        }).join('');
+        
+        document.getElementById('modal-overlay').classList.add('active');
+    }
+    
+    closeModal(event) {
+        // Only close if clicking overlay (not modal content)
+        if (!event || event.target.id === 'modal-overlay' || event.target.classList.contains('modal-close')) {
+            document.getElementById('modal-overlay').classList.remove('active');
+        }
+    }
 }
 
 const dashboard = new Dashboard();
-document.addEventListener('DOMContentLoaded', () => dashboard.init());
+document.addEventListener('DOMContentLoaded', () => {
+    dashboard.init();
+});
+
+// Global functions for toggling journal entry details
+function toggleDetails(element) {
+    const details = element.nextElementSibling;
+    if (details && details.classList.contains('journal-details')) {
+        details.classList.toggle('expanded');
+        element.textContent = details.classList.contains('expanded') ? 
+            'View task breakdown ▲' : 'View task breakdown ▼';
+    }
+}
+
+function toggleTools(element) {
+    const tools = element.nextElementSibling;
+    if (tools && tools.classList.contains('tools-used')) {
+        tools.classList.toggle('expanded');
+        element.textContent = tools.classList.contains('expanded') ? 
+            'View tools used ▲' : 'View tools used ▼';
+    }
+}
 

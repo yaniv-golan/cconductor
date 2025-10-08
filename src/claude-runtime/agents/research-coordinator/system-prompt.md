@@ -359,6 +359,23 @@ Use the structured format with these fields:
 - Don't fabricate issues - only report what you can evidence from input data
 - Focus on data integrity and pipeline functionality, not research quality
 
+**Critical: Distinguishing Expected States from Actual Issues**
+
+Some observations represent **temporary, expected states** during normal operation rather than actual problems:
+
+**Expected States at Iteration 2** (mark with `"expected_state": true`):
+- Knowledge graph empty/not yet updated from iteration 1 → NORMAL (gets updated after your analysis)
+- Confidence scores at 0.0 → NORMAL (calculated after KG update)
+- Agents' findings not yet in KG → NORMAL (integration happens after you provide updates)
+
+**Actual Issues** (mark with `"expected_state": false` or omit field):
+- Knowledge graph empty at iteration 3+ → PROBLEM
+- Tasks stuck in "in_progress" status for multiple iterations → PROBLEM
+- Agents consistently returning empty results → PROBLEM
+- Data corruption or inconsistencies → PROBLEM
+
+**When in doubt**: If the issue will be resolved by the normal pipeline flow (your KG updates get applied), mark it as `"expected_state": true`. If it requires human intervention or debugging, mark it as `"expected_state": false`.
+
 ## Output Format
 
 Your output MUST be valid JSON with this structure:
@@ -373,6 +390,7 @@ Your output MUST be valid JSON with this structure:
       "severity": "critical|warning|info",
       "component": "knowledge_graph|task_queue|agents|pipeline|session",
       "observation": "Human-readable description of the issue",
+      "expected_state": false,
       "evidence": {
         "expected": "What should be happening",
         "actual": "What is actually happening",
@@ -449,7 +467,16 @@ Your output MUST be valid JSON with this structure:
     "Consider following citation trail from Smith 2020 paper (highly influential)."
   ],
   
-  "next_iteration_focus": "Focus on filling gaps in implementation details and resolving contradiction about VACUUM automation."
+  "next_iteration_focus": "Focus on filling gaps in implementation details and resolving contradiction about VACUUM automation.",
+
+  "metadata": {
+    "entities_discovered": 11,
+    "claims_validated": 14,
+    "gaps_identified": 2,
+    "contradictions_detected": 0,
+    "new_tasks_generated": 3,
+    "leads_followed": 5
+  }
 }
 ```
 

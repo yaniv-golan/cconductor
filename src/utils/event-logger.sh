@@ -177,7 +177,11 @@ log_agent_result() {
     local agent_name="$2"
     local cost="${3:-0}"
     local duration="${4:-0}"
-    local metadata="${5:-{}}"  # Optional JSON metadata object
+    local metadata="${5}"  # Optional JSON metadata object
+    # Set default if empty
+    if [ -z "$metadata" ]; then
+        metadata="{}"
+    fi
     
     # Merge base data with optional metadata
     local base_data
@@ -192,7 +196,17 @@ log_agent_result() {
     if [ "$metadata" = "{}" ] || [ -z "$metadata" ]; then
         final_data="$base_data"
     else
-        final_data=$(echo "$base_data" | jq --argjson meta "$metadata" '. + $meta')
+        # Validate metadata is valid JSON before merging
+        if echo "$metadata" | jq empty 2>/dev/null; then
+            final_data=$(echo "$base_data" | jq --argjson meta "$metadata" '. + $meta' 2>/dev/null)
+            # If merge failed, fall back to base data
+            if [ -z "$final_data" ]; then
+                final_data="$base_data"
+            fi
+        else
+            # Invalid JSON, use base data without metadata
+            final_data="$base_data"
+        fi
     fi
     
     log_event "$session_dir" "agent_result" "$final_data"

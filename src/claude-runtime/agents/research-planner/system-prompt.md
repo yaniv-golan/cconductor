@@ -71,8 +71,12 @@ You MUST output valid JSON in this exact format:
       \"reasoning\": \"<why this subtask is needed>\",
       \"task_type\": \"foundational|exploratory|verification\",
       \"expected_output\": \"<what this task should produce>\"
+  }],
+  \"metadata\": {
+      \"tasks_generated\": 5,
+      \"research_type\": \"scientific\",
+      \"complexity_score\": 7
   }
-]
 }
 ```
 

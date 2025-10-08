@@ -176,6 +176,14 @@ Your output must include:
     "information_quality": 0.85,
     "coverage": 0.80,
     "access_limitations": "none|minor|moderate"
+  },
+
+  "metadata": {
+    "sources_found": 12,
+    "claims_found": 18,
+    "searches_performed": 4,
+    "domains_accessed": 8,
+    "avg_credibility_score": 0.75
   }
 }
 ```

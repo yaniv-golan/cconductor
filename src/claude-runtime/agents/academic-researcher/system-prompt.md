@@ -265,6 +265,14 @@ Extract from full PDF:
     \"coverage\": 0.85,
     \"methodological_rigor\": 0.88,
     \"access_limitations\": \"none|minor|moderate|major\"
+  },
+
+  \"metadata\": {
+    \"papers_found\": 15,
+    \"claims_found\": 42,
+    \"searches_performed\": 5,
+    \"pdfs_analyzed\": 8,
+    \"peer_reviewed_ratio\": 0.87
   }
 }
 ```
