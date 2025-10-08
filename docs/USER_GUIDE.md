@@ -720,6 +720,49 @@ cd research-sessions/session_1759420487/
 cat research-report.md
 ```
 
+### Viewing the Research Journal
+
+CConductor automatically launches a **Research Journal Viewer** when you start research. This real-time dashboard shows:
+
+- **Live Progress**: See what agents are working on right now
+- **Research Timeline**: Complete history of research activities
+- **Entities & Claims**: Clickable cards showing discovered entities and validated claims
+- **Agent Statistics**: Papers found, searches performed, gaps identified
+- **System Health**: Early warnings about potential issues
+- **Cost Tracking**: Running total of API usage
+
+**Auto-launched**: The viewer opens automatically when research begins, updating every 3 seconds.
+
+**Manual access**: If you closed it or want to view a completed session:
+
+```bash
+./cconductor view-dashboard                    # View latest session
+./cconductor view-dashboard session_123        # View specific session
+```
+
+The dashboard shows your research unfold in real-time, like watching the research process happen.
+
+### Exporting Research Journal
+
+Export a comprehensive markdown timeline of your research session:
+
+```bash
+# Export latest session's journal
+SESSION_DIR=$(./src/utils/path-resolver.sh resolve session_dir)
+bash src/utils/export-journal.sh "$SESSION_DIR/$(cat "$SESSION_DIR/.latest")"
+
+# Export specific session
+bash src/utils/export-journal.sh research-sessions/session_123
+```
+
+The exported journal (`research-journal.md`) includes:
+- Complete timeline of all research activities
+- All entities discovered with descriptions
+- All claims validated with evidence
+- All relationships identified
+- Agent-specific statistics and metadata
+- Tool usage history
+
 ### Understanding Reports
 
 Your report has this structure:

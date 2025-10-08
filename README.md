@@ -138,6 +138,8 @@ Balanced research on any topic.
 ### v0.1.0 Features
 
 - ✨ **Citations & Bibliography** - Automatic source tracking and reference generation
+- 📺 **Real-Time Dashboard** - Live research journal viewer showing progress, entities, claims, and agent activities (auto-launches)
+- 📝 **Journal Export** - Export comprehensive markdown timeline of your research with all findings and metadata
 - 📁 **Local File Analysis** - Analyze your own PDFs, markdown, and text files with `--input-dir`
 - 🔒 **Configurable Security** - Three profiles (strict/permissive/max_automation)
 - 📊 **Quality Validation** - Research quality gates prevent incomplete results
@@ -385,11 +387,19 @@ curl -fsSL https://raw.githubusercontent.com/yaniv-golan/cconductor/main/install
 ### Basic Commands
 
 ```bash
-# Start new research
+# Start new research (auto-launches real-time dashboard)
 ./cconductor "your research question"
 
 # View latest results
 ./cconductor latest
+
+# View research dashboard (auto-launched during research)
+./cconductor view-dashboard              # Latest session
+./cconductor view-dashboard session_123  # Specific session
+
+# Export research journal as markdown
+SESSION_DIR=$(./src/utils/path-resolver.sh resolve session_dir)
+bash src/utils/export-journal.sh "$SESSION_DIR/$(cat "$SESSION_DIR/.latest")"
 
 # List all sessions
 ./cconductor sessions

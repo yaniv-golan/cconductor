@@ -1,8 +1,11 @@
 CConductor - Deep Research, Done Right
 
 USAGE:
-  cconductor <question>                 Start new research
+  cconductor <question>                 Start new research (auto-launches dashboard)
+  cconductor --question-file FILE       Start research from markdown file
+  cconductor <question> --input-dir DIR Analyze local files with research
   cconductor latest                     Show latest research session
+  cconductor view-dashboard [SESSION]   View research dashboard (auto-launched)
   cconductor resume <session>           Continue previous research
   cconductor sessions                   List all research sessions
   cconductor status                     Check running research
@@ -15,12 +18,25 @@ USAGE:
   cconductor --version                  Show version
 
 EXAMPLES:
-  # Start research
+  # Start research (dashboard auto-launches)
   cconductor "What are the latest advances in CRISPR?"
   cconductor "SaaS market size 2024"
   
+  # Complex research from file
+  cconductor --question-file research-query.md
+  
+  # Research with local files
+  cconductor "Analyze pitch deck" --input-dir ./materials/
+  
   # View latest results
   cconductor latest
+  
+  # View research dashboard
+  cconductor view-dashboard              # Latest session
+  cconductor view-dashboard session_123  # Specific session
+  
+  # Export research journal
+  bash src/utils/export-journal.sh research-sessions/session_123
   
   # Resume previous session
   cconductor resume session_1759356338

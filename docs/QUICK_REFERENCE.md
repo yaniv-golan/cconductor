@@ -19,6 +19,14 @@
 # View latest results
 ./cconductor latest
 
+# View real-time research dashboard (auto-launches during research)
+./cconductor view-dashboard              # Latest session
+./cconductor view-dashboard session_123  # Specific session
+
+# Export research journal as markdown
+SESSION_DIR=$(./src/utils/path-resolver.sh resolve session_dir)
+bash src/utils/export-journal.sh "$SESSION_DIR/$(cat "$SESSION_DIR/.latest")"
+
 # List all sessions
 ./cconductor sessions
 
@@ -40,6 +48,51 @@
 # View configuration
 ./cconductor configure
 ```
+
+---
+
+## 📊 Research Dashboard & Journal
+
+### Real-Time Dashboard
+
+CConductor automatically launches a **Research Journal Viewer** when research starts.
+
+**Features**:
+- Live progress updates (refreshes every 3 seconds)
+- Current agent activities ("in progress" entries)
+- Clickable Entities/Claims cards with details
+- Agent statistics (papers found, searches, gaps)
+- System health monitoring
+- Cost tracking
+
+**Commands**:
+```bash
+# Auto-launched during research, or view manually:
+./cconductor view-dashboard              # Latest session
+./cconductor view-dashboard session_123  # Specific session
+```
+
+### Export Research Journal
+
+Export comprehensive markdown timeline:
+
+```bash
+# Latest session
+SESSION_DIR=$(./src/utils/path-resolver.sh resolve session_dir)
+bash src/utils/export-journal.sh "$SESSION_DIR/$(cat "$SESSION_DIR/.latest")"
+
+# Specific session
+bash src/utils/export-journal.sh research-sessions/session_123
+
+# Output: research-journal.md with complete timeline
+```
+
+**Includes**:
+- Complete event timeline
+- All entities with descriptions
+- All claims with evidence
+- Relationships discovered
+- Agent metadata & statistics
 
 ---
 
