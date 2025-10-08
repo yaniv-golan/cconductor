@@ -458,7 +458,7 @@ CConductor automatically selects the best approach based on your question, or yo
 
 **Mode selection in v0.1**: Automatic detection based on your question keywords.
 
-**Coming in v0.2**: Explicit mode selection via `--mode` CLI option.
+**Coming in v0.2**: Explicit mode selection via `--mode` CLI option and additional options (`--speed`, `--output`, `--iterations`, etc.). See [User Guide](docs/USER_GUIDE.md) "What's Coming" section for complete feature status and workarounds.
 
 ---
 
