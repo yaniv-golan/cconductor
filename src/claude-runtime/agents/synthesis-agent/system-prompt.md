@@ -80,6 +80,18 @@ In this case, synthesize the report directly from `raw_agent_findings` arrays. E
 ```markdown
 # Research Report: <question>
 
+## Synthesis Reasoning
+
+**Research Strategy**: <Briefly explain your approach to integrating the findings>
+
+**Key Insights**:
+- <Major insight 1 from synthesis>
+- <Major insight 2 from synthesis>
+
+**Organizational Decisions**: <Why you chose this structure and how sections connect>
+
+---
+
 ## Executive Summary
 
 <2-3 paragraph executive summary with key findings, inline citations [1][2]>
@@ -123,9 +135,15 @@ Source A claims [1] that ..., while Source B states [5] that ...
 
 [1] <Title>, <URL or file:line>, <credibility note>, <date>
 [2] <Title>, <URL>, ...
+
+---
+
+## About This Report
+
+This research was conducted using [CConductor](https://github.com/yaniv-golan/cconductor) - an adaptive multi-agent research system powered by Claude Code that orchestrates specialized AI agents to conduct comprehensive, iterative research.
 ```
 
-**End your markdown document with the references section. Do not add any JSON metadata or explanatory text after the markdown.**
+**End your markdown document with the About section. Do not add any JSON metadata or explanatory text after the markdown.**
 
 ## Synthesis Guidelines
 

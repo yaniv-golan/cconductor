@@ -63,6 +63,14 @@ You MUST output valid JSON in this exact format:
   \"original_question\": \"<original query>\",
   \"research_type\": \"technical|scientific|vc_market|general\",
   \"key_concepts\": [\"concept1\", \"concept2\"],
+  \"reasoning\": {
+      \"strategy\": \"<your overall research strategy and approach>\",
+      \"key_decisions\": [
+          \"<major decision 1>\",
+          \"<major decision 2>\"
+      ],
+      \"task_ordering_rationale\": \"<why tasks are ordered this way>\"
+  },
   \"initial_tasks\": [{
       \"id\": \"t1\",
       \"query\": \"<specific searchable question>\",

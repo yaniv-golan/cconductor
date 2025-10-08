@@ -6,6 +6,13 @@
 # from events.jsonl
 #
 
+# Helper function to format credibility (peer_reviewed -> Peer Reviewed, academic -> Academic)
+format_credibility() {
+    local cred="$1"
+    # Replace underscores with spaces and capitalize each word
+    echo "$cred" | sed 's/_/ /g' | awk '{for(i=1;i<=NF;i++) $i=toupper(substr($i,1,1)) tolower(substr($i,2));}1'
+}
+
 export_journal() {
     local session_dir="$1"
     local output_file="${2:-$session_dir/research-journal.md}"
@@ -42,7 +49,12 @@ export_journal() {
             local timestamp
             timestamp=$(echo "$line" | jq -r '.timestamp // "unknown"')
             local formatted_time
-            formatted_time=$(date -j -f "%Y-%m-%dT%H:%M:%SZ" "$timestamp" "+%H:%M:%S" 2>/dev/null || echo "$timestamp")
+            # Format: "October 8, 2025 at 7:35 AM"
+            # Strip microseconds if present (2025-10-08T07:35:57.159051Z -> 2025-10-08T07:35:57Z)
+            # shellcheck disable=SC2001
+            local clean_timestamp
+            clean_timestamp=$(echo "$timestamp" | sed 's/\.[0-9]*Z$/Z/')
+            formatted_time=$(date -j -f "%Y-%m-%dT%H:%M:%SZ" "$clean_timestamp" "+%B %d, %Y at %l:%M %p" 2>/dev/null | sed 's/  / /g' || echo "$timestamp")
             
             case "$event_type" in
                 session_created)
@@ -141,12 +153,17 @@ export_journal() {
                                     # Show top sources with details
                                     local top_sources
                                     top_sources=$(jq -r '(.claims // []) | .[0].sources // []' "$findings_file" 2>/dev/null)
-                                    if [ -n "$top_sources" ] && [ "$top_sources" != "[]" ]; then
-                                        echo "**Key Sources (sample):**"
-                                        echo ""
-                                        jq -r '([.claims // [] | .[].sources // [] | .[]] | unique_by(.url) | .[0:5] | .[] | "- [\(.title)](\(.url))\n  - Credibility: \(.credibility // "unknown")")' "$findings_file" 2>/dev/null
-                                        echo ""
-                                    fi
+                                if [ -n "$top_sources" ] && [ "$top_sources" != "[]" ]; then
+                                    echo "**Key Sources (sample):**"
+                                    echo ""
+                                    jq -r '
+                                        def format_credibility:
+                                            gsub("_"; " ") | split(" ") | map(.[0:1] as $first | .[1:] as $rest | ($first | ascii_upcase) + $rest) | join(" ");
+                                        ([.claims // [] | .[].sources // [] | .[]] | unique_by(.url) | .[0:5] | .[] | 
+                                        "- [\(.title)](\(.url))\n  - Credibility: \((.credibility // "unknown") | format_credibility)")
+                                    ' "$findings_file" 2>/dev/null
+                                    echo ""
+                                fi
                                     
                                     # Show gaps if any
                                     local gaps_count
@@ -167,6 +184,42 @@ export_journal() {
                             coordinator_file=$(find "$session_dir/raw" -name "*coordinator*output*.json" 2>/dev/null | tail -1)
                             
                             if [ -n "$coordinator_file" ] && [ -f "$coordinator_file" ]; then
+                                # Extract and show reasoning first
+                                if jq -e '.reasoning' "$coordinator_file" >/dev/null 2>&1; then
+                                    echo "#### 🧠 Coordination Reasoning"
+                                    echo ""
+                                    
+                                    local synthesis_approach
+                                    synthesis_approach=$(jq -r '.reasoning.synthesis_approach // empty' "$coordinator_file" 2>/dev/null)
+                                    if [ -n "$synthesis_approach" ]; then
+                                        echo "*Synthesis Approach:* $synthesis_approach"
+                                        echo ""
+                                    fi
+                                    
+                                    local gap_prioritization
+                                    gap_prioritization=$(jq -r '.reasoning.gap_prioritization // empty' "$coordinator_file" 2>/dev/null)
+                                    if [ -n "$gap_prioritization" ]; then
+                                        echo "*Gap Prioritization:* $gap_prioritization"
+                                        echo ""
+                                    fi
+                                    
+                                    local key_insights_count
+                                    key_insights_count=$(jq '.reasoning.key_insights // [] | length' "$coordinator_file" 2>/dev/null)
+                                    if [ "$key_insights_count" -gt 0 ]; then
+                                        echo "*Key Insights:*"
+                                        jq -r '.reasoning.key_insights // [] | .[] | "- \(.)"' "$coordinator_file" 2>/dev/null
+                                        echo ""
+                                    fi
+                                    
+                                    local strategic_decisions_count
+                                    strategic_decisions_count=$(jq '.reasoning.strategic_decisions // [] | length' "$coordinator_file" 2>/dev/null)
+                                    if [ "$strategic_decisions_count" -gt 0 ]; then
+                                        echo "*Strategic Decisions:*"
+                                        jq -r '.reasoning.strategic_decisions // [] | .[] | "- \(.)"' "$coordinator_file" 2>/dev/null
+                                        echo ""
+                                    fi
+                                fi
+                                
                                 echo "#### 🔍 Gap Analysis"
                                 echo ""
                                 
@@ -200,6 +253,33 @@ export_journal() {
                             if [ -n "$planner_file" ] && [ -f "$planner_file" ]; then
                                 echo "#### 📋 Research Plan"
                                 echo ""
+                                
+                                # Extract and show reasoning
+                                if jq -e '.reasoning' "$planner_file" >/dev/null 2>&1; then
+                                    echo "**🧠 Planning Reasoning:**"
+                                    echo ""
+                                    local strategy
+                                    strategy=$(jq -r '.reasoning.strategy // empty' "$planner_file" 2>/dev/null)
+                                    if [ -n "$strategy" ]; then
+                                        echo "*Strategy:* $strategy"
+                                        echo ""
+                                    fi
+                                    
+                                    local key_decisions
+                                    key_decisions=$(jq -r '.reasoning.key_decisions // [] | length' "$planner_file" 2>/dev/null)
+                                    if [ "$key_decisions" -gt 0 ]; then
+                                        echo "*Key Decisions:*"
+                                        jq -r '.reasoning.key_decisions // [] | .[] | "- \(.)"' "$planner_file" 2>/dev/null
+                                        echo ""
+                                    fi
+                                    
+                                    local rationale
+                                    rationale=$(jq -r '.reasoning.task_ordering_rationale // empty' "$planner_file" 2>/dev/null)
+                                    if [ -n "$rationale" ]; then
+                                        echo "*Task Ordering:* $rationale"
+                                        echo ""
+                                    fi
+                                fi
                                 
                                 # Extract tasks
                                 local tasks
@@ -311,7 +391,12 @@ export_journal() {
                             if jq -e '(.claims // []) | length > 0 and (.[0].sources // [] | length) > 0' "$findings_file" >/dev/null 2>&1; then
                                 echo "**Key Sources:**"
                                 echo ""
-                                jq -r '([.claims // [] | .[].sources // [] | .[]] | unique_by(.url) | .[0:8] | .[] | "- [\(.title)](\(.url))\n  - Credibility: \(.credibility // "unknown")")' "$findings_file" 2>/dev/null
+                                jq -r '
+                                    def format_credibility:
+                                        gsub("_"; " ") | split(" ") | map(.[0:1] as $first | .[1:] as $rest | ($first | ascii_upcase) + $rest) | join(" ");
+                                    ([.claims // [] | .[].sources // [] | .[]] | unique_by(.url) | .[0:8] | .[] | 
+                                    "- [\(.title)](\(.url))\n  - Credibility: \((.credibility // "unknown") | format_credibility)")
+                                ' "$findings_file" 2>/dev/null
                                 echo ""
                             fi
                             

@@ -385,6 +385,19 @@ Your output MUST be valid JSON with this structure:
   "iteration": 3,
   "analysis": "Brief summary of what was learned this iteration and current state",
   
+  "reasoning": {
+    "synthesis_approach": "How I integrated findings from this iteration",
+    "gap_prioritization": "Why I prioritized certain gaps over others",
+    "key_insights": [
+      "Major insight 1",
+      "Major insight 2"
+    ],
+    "strategic_decisions": [
+      "Decision 1 and rationale",
+      "Decision 2 and rationale"
+    ]
+  },
+  
   "system_observations": [
     {
       "severity": "critical|warning|info",
