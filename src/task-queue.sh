@@ -11,6 +11,8 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/shared-state.sh"
 # shellcheck disable=SC1091
 source "$SCRIPT_DIR/utils/validation.sh"
+# shellcheck disable=SC1091
+source "$SCRIPT_DIR/utils/event-logger.sh" 2>/dev/null || true
 
 # Initialize task queue
 tq_init() {
@@ -249,7 +251,26 @@ tq_start_task() {
     local session_dir="$1"
     local task_id="$2"
 
+    # Get task details for logging
+    local queue_file
+    queue_file=$(tq_get_path "$session_dir")
+    local task_info
+    task_info=$(jq -r --arg id "$task_id" \
+        '.tasks[] | select(.id == $id) | {agent: .agent, query: (.query // .description // .type)}' \
+        "$queue_file")
+    
+    local agent
+    agent=$(echo "$task_info" | jq -r '.agent // "unknown"')
+    local query
+    query=$(echo "$task_info" | jq -r '.query // ""')
+
+    # Update status
     tq_update_status "$session_dir" "$task_id" "in_progress"
+    
+    # Log task started event
+    if command -v log_task_started &>/dev/null; then
+        log_task_started "$session_dir" "$task_id" "$agent" "$query" || true
+    fi
 }
 
 # Mark task as completed
@@ -294,6 +315,29 @@ tq_complete_task() {
     esac
 
     # Single atomic jq operation
+    # Get task details for logging before update
+    local task_info
+    task_info=$(jq -r --arg id "$task_id" \
+        '.tasks[] | select(.id == $id) | {agent: .agent, created_at: .created_at}' \
+        "$queue_file")
+    
+    local agent
+    agent=$(echo "$task_info" | jq -r '.agent // "unknown"')
+    local created_at
+    created_at=$(echo "$task_info" | jq -r '.created_at // ""')
+    
+    # Calculate duration if possible
+    local duration=0
+    if [ -n "$created_at" ]; then
+        local start_epoch
+        start_epoch=$(date -u -jf "%Y-%m-%dT%H:%M:%SZ" "$created_at" +%s 2>/dev/null || date -d "$created_at" +%s 2>/dev/null || echo "0")
+        local end_epoch
+        end_epoch=$(date +%s)
+        if [ "$start_epoch" -ne 0 ]; then
+            duration=$((end_epoch - start_epoch))
+        fi
+    fi
+
     jq --arg id "$task_id" \
        --arg findings "$findings_file" \
        --arg date "$(date -u +"%Y-%m-%dT%H:%M:%SZ")" \
@@ -305,6 +349,11 @@ tq_complete_task() {
 
     mv "${queue_file}.tmp" "$queue_file"
     lock_release "$queue_file"
+    
+    # Log task completed event
+    if command -v log_task_completed &>/dev/null; then
+        log_task_completed "$session_dir" "$task_id" "$agent" "$duration" 0 || true
+    fi
 }
 
 # Mark task as failed
@@ -321,6 +370,12 @@ tq_fail_task() {
     local queue_file
     queue_file=$(tq_get_path "$session_dir")
 
+    # Get task agent before update
+    local agent
+    agent=$(jq -r --arg id "$task_id" \
+        '.tasks[] | select(.id == $id) | .agent // "unknown"' \
+        "$queue_file")
+    
     # Update status first (which handles locking)
     tq_update_status "$session_dir" "$task_id" "failed"
 
@@ -337,6 +392,11 @@ tq_fail_task() {
 
     mv "${queue_file}.tmp" "$queue_file"
     lock_release "$queue_file"
+    
+    # Log task failed event (assume recoverable by default)
+    if command -v log_task_failed &>/dev/null; then
+        log_task_failed "$session_dir" "$task_id" "$agent" "$error_message" "true" || true
+    fi
 }
 
 # Update task priority

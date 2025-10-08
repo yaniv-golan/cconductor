@@ -25,6 +25,128 @@ check_claude_cli() {
     return 0
 }
 
+# Extract agent-specific metadata for research journal view
+# Returns a JSON object with relevant metrics for each agent type
+extract_agent_metadata() {
+    local agent_name="$1"
+    local output_file="$2"
+    local session_dir="$3"
+    
+    # Default empty metadata
+    local metadata="{}"
+    
+    # Helper function to extract JSON from markdown code blocks
+    extract_json_from_result() {
+        local file="$1"
+        # shellcheck disable=SC2016
+        # SC2016: Single quotes intentional - we want literal regex patterns, not variable expansion
+        jq -r '.result // ""' "$file" 2>/dev/null | \
+            sed -n '/^```json$/,/^```$/p' | \
+            sed '1d;$d' | \
+            jq -c '.' 2>/dev/null || echo ""
+    }
+    
+    case "$agent_name" in
+        research-planner)
+            # Count tasks generated
+            local tasks_count
+            local result_json
+            result_json=$(extract_json_from_result "$output_file")
+            if [ -n "$result_json" ]; then
+                tasks_count=$(echo "$result_json" | jq '.initial_tasks // [] | length' 2>/dev/null || echo "0")
+            else
+                tasks_count=0
+            fi
+            metadata=$(jq -n --argjson count "$tasks_count" '{tasks_generated: $count}')
+            ;;
+            
+        academic-researcher)
+            # Count papers found and searches performed
+            local papers=0
+            local searches=0
+            
+            # Extract from findings files if they exist
+            local findings_files
+            findings_files=$(jq -r '.result // ""' "$output_file" 2>/dev/null | \
+                           jq -r '.findings_files[]? // empty' 2>/dev/null || echo "")
+            
+            if [ -n "$findings_files" ]; then
+                while IFS= read -r findings_file; do
+                    if [ -f "$session_dir/$findings_file" ]; then
+                        # Count citations as papers
+                        local file_papers
+                        file_papers=$(jq '[.citations[]? // empty] | length' "$session_dir/$findings_file" 2>/dev/null || echo "0")
+                        papers=$((papers + file_papers))
+                        
+                        # Count tool uses with WebSearch
+                        local file_searches
+                        file_searches=$(jq '[.tool_uses[]? // empty | select(.tool_name == "WebSearch")] | length' "$session_dir/$findings_file" 2>/dev/null || echo "0")
+                        searches=$((searches + file_searches))
+                    fi
+                done <<< "$findings_files"
+            fi
+            
+            metadata=$(jq -n --argjson papers "$papers" --argjson searches "$searches" \
+                       '{papers_found: $papers, searches_performed: $searches}')
+            ;;
+            
+        web-researcher)
+            # Count sources found and searches performed
+            local sources=0
+            local searches=0
+            
+            # Extract from findings files
+            local findings_files
+            findings_files=$(jq -r '.result // ""' "$output_file" 2>/dev/null | \
+                           jq -r '.findings_files[]? // empty' 2>/dev/null || echo "")
+            
+            if [ -n "$findings_files" ]; then
+                while IFS= read -r findings_file; do
+                    if [ -f "$session_dir/$findings_file" ]; then
+                        # Count citations as sources
+                        local file_sources
+                        file_sources=$(jq '[.citations[]? // empty] | length' "$session_dir/$findings_file" 2>/dev/null || echo "0")
+                        sources=$((sources + file_sources))
+                        
+                        # Count WebSearch tool uses
+                        local file_searches
+                        file_searches=$(jq '[.tool_uses[]? // empty | select(.tool_name == "WebSearch")] | length' "$session_dir/$findings_file" 2>/dev/null || echo "0")
+                        searches=$((searches + file_searches))
+                    fi
+                done <<< "$findings_files"
+            fi
+            
+            metadata=$(jq -n --argjson sources "$sources" --argjson searches "$searches" \
+                       '{sources_found: $sources, searches_performed: $searches}')
+            ;;
+            
+        research-coordinator)
+            # Extract knowledge graph statistics
+            local entities=0
+            local claims=0
+            local gaps=0
+            local contradictions=0
+            
+            # Read from knowledge graph if available
+            if [ -f "$session_dir/knowledge-graph.json" ]; then
+                entities=$(jq '.stats.total_entities // 0' "$session_dir/knowledge-graph.json" 2>/dev/null || echo "0")
+                claims=$(jq '.stats.total_claims // 0' "$session_dir/knowledge-graph.json" 2>/dev/null || echo "0")
+                gaps=$(jq '.stats.unresolved_gaps // 0' "$session_dir/knowledge-graph.json" 2>/dev/null || echo "0")
+                contradictions=$(jq '[.claims[]? // empty | select(.confidence_score < 0.5)] | length' "$session_dir/knowledge-graph.json" 2>/dev/null || echo "0")
+            fi
+            
+            metadata=$(jq -n \
+                       --argjson entities "$entities" \
+                       --argjson claims "$claims" \
+                       --argjson gaps "$gaps" \
+                       --argjson contradictions "$contradictions" \
+                       '{entities_discovered: $entities, claims_validated: $claims, gaps_identified: $gaps, contradictions_detected: $contradictions}')
+            ;;
+    esac
+    
+    echo "$metadata"
+}
+
 # Invoke agent with v2 implementation (uses validated patterns)
 # VALIDATED: All patterns tested in validation_tests/
 # 
@@ -251,9 +373,13 @@ invoke_agent_v2() {
         local cost
         cost=$(jq -r '.usage.total_cost_usd // .total_cost_usd // 0' "$output_file" 2>/dev/null || echo "0")
         
-        # Log agent result with metrics
+        # Extract agent-specific metadata for research journal view
+        local metadata
+        metadata=$(extract_agent_metadata "$agent_name" "$output_file" "$session_dir" 2>/dev/null || echo "{}")
+        
+        # Log agent result with metrics and metadata
         if [ -n "${session_dir:-}" ] && command -v log_agent_result &>/dev/null; then
-            log_agent_result "$session_dir" "$agent_name" "$cost" "$duration" || true
+            log_agent_result "$session_dir" "$agent_name" "$cost" "$duration" "$metadata" || true
         fi
 
         echo "✓ Agent $agent_name completed successfully" >&2
@@ -275,6 +401,7 @@ invoke_agent_v2() {
 
 # Export functions
 export -f check_claude_cli
+export -f extract_agent_metadata
 export -f invoke_agent_v2
 
 # CLI interface

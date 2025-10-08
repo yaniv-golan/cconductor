@@ -98,8 +98,14 @@ log_task_started() {
     local session_dir="$1"
     local task_id="$2"
     local agent="$3"
+    local query="${4:-}"
+    
+    # Escape and encode query for JSON
+    local query_json
+    query_json=$(jq -n --arg q "$query" '$q')
+    
     log_event "$session_dir" "task_started" \
-        "{\"task_id\": \"$task_id\", \"agent\": \"$agent\"}"
+        "{\"task_id\": \"$task_id\", \"agent\": \"$agent\", \"query\": $query_json}"
 }
 
 log_task_completed() {
@@ -110,6 +116,21 @@ log_task_completed() {
     local cost="${5:-0}"
     log_event "$session_dir" "task_completed" \
         "{\"task_id\": \"$task_id\", \"agent\": \"$agent\", \"duration\": $duration, \"cost_usd\": $cost}"
+}
+
+log_task_failed() {
+    local session_dir="$1"
+    local task_id="$2"
+    local agent="$3"
+    local error="${4:-Unknown error}"
+    local recoverable="${5:-false}"
+    
+    # Escape error message for JSON
+    local error_json
+    error_json=$(jq -n --arg e "$error" '$e')
+    
+    log_event "$session_dir" "task_failed" \
+        "{\"task_id\": \"$task_id\", \"agent\": \"$agent\", \"error\": $error_json, \"recoverable\": $recoverable}"
 }
 
 log_entity_added() {
@@ -156,8 +177,25 @@ log_agent_result() {
     local agent_name="$2"
     local cost="${3:-0}"
     local duration="${4:-0}"
-    log_event "$session_dir" "agent_result" \
-        "{\"agent\": \"$agent_name\", \"cost_usd\": $cost, \"duration_ms\": $duration}"
+    local metadata="${5:-{}}"  # Optional JSON metadata object
+    
+    # Merge base data with optional metadata
+    local base_data
+    base_data=$(jq -n \
+        --arg agent "$agent_name" \
+        --argjson cost "$cost" \
+        --argjson duration "$duration" \
+        '{agent: $agent, cost_usd: $cost, duration_ms: $duration}')
+    
+    # Merge with metadata if provided
+    local final_data
+    if [ "$metadata" = "{}" ] || [ -z "$metadata" ]; then
+        final_data="$base_data"
+    else
+        final_data=$(echo "$base_data" | jq --argjson meta "$metadata" '. + $meta')
+    fi
+    
+    log_event "$session_dir" "agent_result" "$final_data"
 }
 
 # Initialize events file for new session
@@ -183,6 +221,9 @@ get_recent_events() {
 export -f log_event
 export -f log_iteration_start
 export -f log_iteration_complete
+export -f log_task_started
+export -f log_task_completed
+export -f log_task_failed
 export -f log_agent_invocation
 export -f log_agent_result
 export -f init_events

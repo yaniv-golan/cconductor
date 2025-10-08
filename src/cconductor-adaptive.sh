@@ -524,7 +524,7 @@ execute_pending_tasks() {
         agent_tasks=$(echo "$pending" | jq -c --arg agent "$agent" '[.[] | select(.agent == $agent)]')
         
         echo "$agent_tasks" | jq -r '.[].id' | while read -r task_id; do
-            local findings_file="$session_dir/raw/${agent}-${task_id}-findings.json"
+            local findings_file="$session_dir/raw/findings-${task_id}.json"
             local agent_output="$session_dir/raw/${agent}-output.json"
             
             # Check if either findings file or agent output exists
@@ -1504,6 +1504,10 @@ run_single_iteration() {
         obs_count=$(echo "$observations" | jq 'length')
         echo "→ Processing $obs_count system observation(s)..."
         
+        # Track actual issues vs false positives
+        local actual_issues=0
+        local false_positives=0
+        
         # Log each observation
         echo "$observations" | jq -c '.[]' | while read -r obs; do
             local severity
@@ -1512,37 +1516,131 @@ run_single_iteration() {
             component=$(echo "$obs" | jq -r '.component // "unknown"')
             local observation_text
             observation_text=$(echo "$obs" | jq -r '.observation // "No description"')
+            # iteration_detected available in obs but not currently used
+            local expected_state
+            expected_state=$(echo "$obs" | jq -r '.expected_state // "false"')
             
-            # Log to events.jsonl
+            # Check if coordinator marked this as an expected state
+            # This is more reliable than pattern matching, as the LLM explicitly indicates
+            # when an observation is about a normal/temporary state vs an actual issue
+            local is_false_positive=false
+            local adjusted_severity="$severity"
+            
+            if [[ "$expected_state" == "true" ]]; then
+                is_false_positive=true
+                adjusted_severity="info"
+            fi
+            
+            # Log to events.jsonl (with adjusted severity for false positives)
             if command -v log_event &>/dev/null; then
-                log_event "$session_dir" "system_observation" "$obs" || true
+                if [ "$is_false_positive" = true ]; then
+                    local adjusted_obs
+                    adjusted_obs=$(echo "$obs" | jq --arg sev "$adjusted_severity" '.severity = $sev | .false_positive = true')
+                    log_event "$session_dir" "system_observation" "$adjusted_obs" || true
+                else
+                    log_event "$session_dir" "system_observation" "$obs" || true
+                fi
             fi
             
             # Display with appropriate symbol
-            case "$severity" in
-                critical)
-                    echo "  🔴 CRITICAL [$component]: $observation_text" >&2
-                    ;;
-                warning)
-                    echo "  ⚠️  WARNING [$component]: $observation_text" >&2
-                    ;;
-                info)
-                    echo "  ℹ️  INFO [$component]: $observation_text" >&2
-                    ;;
-                *)
-                    echo "  • [$component]: $observation_text" >&2
-                    ;;
-            esac
+            if [ "$is_false_positive" = true ]; then
+                echo "  ℹ️  INFO [$component]: $observation_text (expected state at iteration $iteration)" >&2
+                ((false_positives++))
+            else
+                case "$adjusted_severity" in
+                    critical)
+                        echo "  🔴 CRITICAL [$component]: $observation_text" >&2
+                        ((actual_issues++))
+                        ;;
+                    warning)
+                        echo "  ⚠️  WARNING [$component]: $observation_text" >&2
+                        ((actual_issues++))
+                        ;;
+                    info)
+                        echo "  ℹ️  INFO [$component]: $observation_text" >&2
+                        ;;
+                    *)
+                        echo "  • [$component]: $observation_text" >&2
+                        ;;
+                esac
+            fi
         done
+        
+        # Summary message
+        if [ $actual_issues -eq 0 ] && [ $false_positives -gt 0 ]; then
+            echo "  ✓ All observations are expected states (system operating normally)" >&2
+        fi
     fi
 
     # Update knowledge graph with coordinator findings
     echo "→ Updating knowledge graph..."
     update_knowledge_graph "$session_dir" "$coordinator_cleaned"
     
-    # Validate observations after updates - mark resolved issues
+    # Check if observations were resolved after KG update
     if [ "$observations" != "[]" ] && [ "$observations" != "null" ]; then
-        validate_and_resolve_observations "$session_dir" "$observations"
+        echo "→ Checking if observations were resolved..."
+        
+        # Get updated KG stats
+        local kg_file="$session_dir/knowledge-graph.json"
+        if [ -f "$kg_file" ]; then
+            local new_entities new_claims
+            new_entities=$(jq '.stats.total_entities' "$kg_file" 2>/dev/null || echo "0")
+            new_claims=$(jq '.stats.total_claims' "$kg_file" 2>/dev/null || echo "0")
+            # new_relationships not currently displayed but available in KG
+            
+            local resolutions_found=0
+            
+            # Check each observation for resolution
+            while IFS= read -r obs; do
+                local component severity observation_text expected_state
+                component=$(echo "$obs" | jq -r '.component // "unknown"')
+                severity=$(echo "$obs" | jq -r '.severity // "info"')
+                observation_text=$(echo "$obs" | jq -r '.observation // ""')
+                expected_state=$(echo "$obs" | jq -r '.expected_state // "false"')
+                
+                # Only check for resolution if it was marked as an expected state
+                # (meaning it was a temporary condition that should resolve)
+                if [[ "$expected_state" == "true" ]]; then
+                    # For KG-related observations, check if KG is now populated
+                    if [[ "$component" == "knowledge_graph" ]] && [[ "$new_entities" -gt 0 ]]; then
+                        echo "  ✓ RESOLVED [$component]: KG updated with $new_entities entities, $new_claims claims" >&2
+                        ((resolutions_found++))
+                        
+                        # Log resolution
+                        if command -v log_event &>/dev/null; then
+                            local resolution_data
+                            resolution_data=$(jq -n \
+                                --arg comp "$component" \
+                                --arg obs "$observation_text" \
+                                --argjson entities "$new_entities" \
+                                --argjson claims "$new_claims" \
+                                '{component: $comp, observation: $obs, resolution: "KG populated", entities: $entities, claims: $claims}')
+                            log_event "$session_dir" "observation_resolved" "$resolution_data" || true
+                        fi
+                    fi
+                    
+                    # For pipeline-related observations, check if data is now consolidated
+                    if [[ "$component" == "pipeline" ]] && [[ "$new_entities" -gt 0 ]]; then
+                        echo "  ✓ RESOLVED [$component]: Data consolidated into knowledge graph" >&2
+                        ((resolutions_found++))
+                        
+                        # Log resolution
+                        if command -v log_event &>/dev/null; then
+                            local resolution_data
+                            resolution_data=$(jq -n \
+                                --arg comp "$component" \
+                                --arg obs "$observation_text" \
+                                '{component: $comp, observation: $obs, resolution: "Data consolidated successfully"}')
+                            log_event "$session_dir" "observation_resolved" "$resolution_data" || true
+                        fi
+                    fi
+                fi
+            done < <(echo "$observations" | jq -c '.[]')
+            
+            if [ $resolutions_found -gt 0 ]; then
+                echo "  ✓ $resolutions_found observation(s) automatically resolved" >&2
+            fi
+        fi
     fi
 
     # Show knowledge graph statistics
