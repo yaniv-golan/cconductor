@@ -42,6 +42,8 @@ reports/
 # POC and experimental directories
 poc-subagent/
 test-json-format-only/
+test-multi-task/
+test-clean-dir/
 
 # Temporary fix/debug scripts
 fix-agent-json*.sh
@@ -53,3 +55,5 @@ test-phase0-simple.sh
 # Backup files
 *-backup-*/
 *.backup-*
+*.backup
+*.bak*
