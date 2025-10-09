@@ -1126,6 +1126,7 @@ These are great templates to learn from!
 - **[User Guide](USER_GUIDE.md)** - Complete CConductor usage
 - **[Quick Reference](QUICK_REFERENCE.md)** - Command cheat sheet
 - **[Security Guide](SECURITY_GUIDE.md)** - Keeping research secure
+- **[Knowledge System Technical Deep Dive](KNOWLEDGE_SYSTEM_TECHNICAL.md)** - Complete technical architecture and debugging
 
 ---
 

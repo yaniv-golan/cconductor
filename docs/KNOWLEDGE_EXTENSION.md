@@ -2,6 +2,8 @@
 
 This guide explains how to add custom domain knowledge to the CConductor without modifying core files.
 
+**For Technical Deep Dive**: See [Knowledge System Technical Documentation](KNOWLEDGE_SYSTEM_TECHNICAL.md) for complete system architecture, step-by-step impact traces, and debugging guides.
+
 ## Overview
 
 The CConductor uses a **WordPress-style extensible knowledge system** with convention-based auto-discovery and priority-based loading.
