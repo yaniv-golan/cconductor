@@ -60,6 +60,37 @@ find "$SESSION_DIR" -name "*.lock"
 
 **If any of these fail**, proceed to relevant section below.
 
+### Troubleshooting Decision Tree
+
+```mermaid
+flowchart TD
+    A[Problem Occurs] --> B{Authentication Issue?}
+    B -->|Yes<br/>Check: claude whoami| C[Run: claude login]
+    B -->|No| D{Installation Issue?}
+    D -->|Yes<br/>Check: ./cconductor --version| E[Reinstall or check dependencies]
+    D -->|No| F{Research Issue?}
+    F -->|Yes<br/>Check: ./cconductor latest| G[Check session status and logs]
+    F -->|No| H{Configuration Issue?}
+    H -->|Yes<br/>Check: config files| I[Validate and recreate configs]
+    H -->|No| J{Performance Issue?}
+    J -->|Yes<br/>Check: system resources| K[Check disk space, memory, CPU]
+    J -->|No| L{Report Bug<br/>GitHub Issues}
+
+    C --> M[Verify: claude whoami works]
+    E --> N[Check: bash, jq, curl, bc installed]
+    G --> O[Review: latest session logs]
+    I --> P[Run: ./src/utils/config-loader.sh init]
+    K --> Q[Check: df -h, free -h, top]
+
+    style A fill:#ffcccc
+    style L fill:#ffa500
+    style M fill:#d4edda
+    style N fill:#d4edda
+    style O fill:#d4edda
+    style P fill:#d4edda
+    style Q fill:#d4edda
+```
+
 ---
 
 ## Authentication Issues

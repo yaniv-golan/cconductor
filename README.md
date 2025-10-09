@@ -458,7 +458,7 @@ CConductor automatically selects the best approach based on your question, or yo
 
 **Mode selection in v0.1**: Automatic detection based on your question keywords.
 
-**Coming in v0.2**: Explicit mode selection via `--mode` CLI option and additional options (`--speed`, `--output`, `--iterations`, etc.). See [User Guide](docs/USER_GUIDE.md) "What's Coming" section for complete feature status and workarounds.
+**Coming in v1.1**: Explicit mode selection via `--mode` CLI option and additional options (`--speed`, `--output`, `--iterations`, etc.). See [User Guide](docs/USER_GUIDE.md) "What's Coming" section for complete feature status and workarounds.
 
 ---
 
@@ -607,66 +607,124 @@ Research uses an **Adaptive System** that dynamically iterates with gap detectio
 
 ## Project Structure
 
-### Project Directory (Application Code)
+### Visual Project Architecture
+
+```mermaid
+graph TD
+    subgraph "CConductor Project"
+        A[Application Code<br/>cconductor/]
+        B[User Data<br/>OS-Specific]
+        C[Configuration<br/>Overlay Pattern]
+
+        A --> D[Core Engine<br/>src/cconductor-adaptive.sh]
+        A --> E[Utilities<br/>src/utils/]
+        A --> F[Formatters<br/>src/formatters/]
+        A --> G[Documentation<br/>docs/]
+        A --> H[Agent Templates<br/>src/claude-runtime/]
+
+        B --> I[macOS<br/>~/Library/]
+        B --> J[Linux<br/>~/.local/]
+        B --> K[Windows<br/>%APPDATA%]
+
+        C --> L[Defaults<br/>config/*.default.json]
+        C --> M[User Overrides<br/>~/.config/cconductor/]
+    end
+
+    D --> N[Adaptive Research<br/>Multi-agent orchestration]
+    E --> O[Knowledge Injection<br/>Custom domain expertise]
+    E --> P[Session Management<br/>Conversation continuity]
+    E --> Q[PDF Processing<br/>Document analysis]
+    F --> R[Output Formats<br/>Markdown, HTML, JSON]
+
+    I --> S[Application Support<br/>research-sessions/]
+    I --> T[Caches<br/>pdfs/]
+    I --> U[Logs<br/>audit.log]
+
+    J --> V[Share<br/>research-sessions/]
+    J --> W[Cache<br/>pdfs/]
+    J --> X[State<br/>audit.log]
+
+    style A fill:#e1f5ff
+    style B fill:#f0f8e1
+    style C fill:#fff4e1
+    style D fill:#e8f5e8
+    style I fill:#ffeaa7
+    style J fill:#ffeaa7
+```
+
+### Detailed Directory Structure
+
+#### Application Code (Git-Tracked)
 
 ```
 cconductor/
 ├── cconductor                      # Main CLI entry point
 ├── src/
 │   ├── cconductor-adaptive.sh     # Adaptive research engine
-│   ├── knowledge-graph.sh    # Knowledge tracking
-│   ├── task-queue.sh         # Dynamic task management
-│   ├── shared-state.sh       # Concurrent access control
-│   ├── utils/                # Utility scripts (17 files)
-│   └── formatters/           # Output formatters (6 files)
+│   ├── knowledge-graph.sh         # Knowledge state tracking
+│   ├── task-queue.sh             # Dynamic task management
+│   ├── shared-state.sh           # Concurrent access control
+│   ├── utils/                    # Utility scripts (17 files)
+│   │   ├── knowledge-loader.sh   # Custom knowledge injection
+│   │   ├── invoke-agent.sh       # Agent invocation
+│   │   └── config-loader.sh      # Configuration management
+│   └── formatters/               # Output formatters (6 files)
 ├── config/
-│   ├── *.default.json        # Default configs (git-tracked, never edit)
-│   └── README.md             # Config documentation
-├── docs/                     # Documentation
-├── knowledge-base/           # Built-in knowledge (git-tracked)
-└── src/claude-runtime/       # Claude Code agent templates (copied per-session)
+│   ├── *.default.json           # Default configs (never edit)
+│   └── README.md                # Configuration documentation
+├── docs/                        # Documentation (this file!)
+├── knowledge-base/              # Built-in domain knowledge
+└── src/claude-runtime/          # Claude Code agent templates
 ```
 
-### User Directory (Your Data - OS-Appropriate Locations)
+#### User Data (OS-Appropriate, Git-Ignored)
 
 **macOS**:
-
 ```
-~/.config/cconductor/                           # Your configurations
-├── cconductor-config.json
-├── security-config.json
-├── cconductor-modes.json
-└── paths.json
+~/Library/Application Support/CConductor/
+├── research-sessions/          # Your research output
+├── knowledge-base-custom/      # Your custom knowledge files
+└── citations.json             # Citation database
 
-~/Library/Application Support/CConductor/      # Your data
-├── research-sessions/                     # Your research output
-├── knowledge-base-custom/                 # Your custom knowledge
-└── citations.json
+~/Library/Caches/CConductor/     # PDF cache and temp files
+└── pdfs/                      # Downloaded and processed PDFs
 
-~/Library/Caches/CConductor/                    # Cache
-└── pdfs/
-
-~/Library/Logs/CConductor/                      # Logs
-└── audit.log
+~/Library/Logs/CConductor/      # System logs
+└── audit.log                  # Security and usage audit log
 ```
 
-**Linux**:
-
+**Linux** (XDG Base Directory):
 ```
-~/.config/cconductor/                           # Your configurations
-~/.local/share/cconductor/                      # Your data
-~/.cache/cconductor/                            # Cache
-~/.local/state/cconductor/                      # Logs
+~/.local/share/cconductor/      # Your research data
+├── research-sessions/         # Research session outputs
+├── knowledge-base-custom/     # Custom knowledge files
+└── citations.json            # Citation tracking
+
+~/.cache/cconductor/           # Cache directory
+└── pdfs/                     # PDF processing cache
+
+~/.local/state/cconductor/     # State and logs
+└── audit.log                 # Audit trail
 ```
 
 **Windows**:
-
 ```
-%APPDATA%\CConductor\                           # Your configurations
-%LOCALAPPDATA%\CConductor\                      # Your data
+%LOCALAPPDATA%\CConductor\     # User data directory
+├── research-sessions/        # Research outputs
+├── knowledge-base-custom/    # Custom knowledge
+└── citations.json           # Citations
+
+%TEMP%\CConductor\            # Temporary files
+└── cache\                   # PDF and processing cache
 ```
 
-**Benefits**: Configs and data survive project deletion/reinstallation, proper multi-user support, follows OS conventions.
+**Directory Structure Benefits**:
+
+- **Separation of Concerns**: Code, data, and configuration are clearly separated
+- **Cross-Platform**: Works on macOS, Linux, and Windows with appropriate paths
+- **User Isolation**: Each user has their own data and configurations
+- **Upgrade Safety**: User data survives project reinstallation
+- **Git-Friendly**: Only application code is tracked, user data is ignored
 
 ---
 
@@ -705,6 +763,7 @@ Contributions are welcome! See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines
 
 For technical documentation:
 
+- [Knowledge System Technical Deep Dive](docs/KNOWLEDGE_SYSTEM_TECHNICAL.md) - Complete architecture and debugging
 - [Implementation Status](docs/technical/IMPLEMENTATION_STATUS.md)
 - [Agent Migration Guide](docs/technical/AGENT_MIGRATION_GUIDE.md)
 - [Adaptive Research Plan](docs/technical/ADAPTIVE_RESEARCH_PLAN.md)
