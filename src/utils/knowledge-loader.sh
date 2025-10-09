@@ -222,8 +222,8 @@ inject_knowledge_context() {
         return 0
     fi
 
-    # Build knowledge context section
-    local knowledge_context="# Domain Knowledge\n\nYou have access to the following domain-specific methodologies:\n\n"
+    # Build knowledge context section with XML structure
+    local knowledge_context="<domain_knowledge>\n\n# Domain Knowledge\n\nYou have access to the following domain-specific methodologies:\n\n"
 
     local idx=0
     while [ $idx -lt "$knowledge_count" ]; do
@@ -241,8 +241,10 @@ inject_knowledge_context() {
         idx=$((idx + 1))
     done
 
+    knowledge_context+="</domain_knowledge>"
+
     # Inject knowledge BEFORE the task-specific prompt
-    echo -e "${knowledge_context}\n---\n\n${base_prompt}"
+    echo -e "${knowledge_context}\n\n---\n\n${base_prompt}"
 }
 
 # List all available knowledge with sources
