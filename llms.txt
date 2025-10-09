@@ -1,0 +1,59 @@
+# CConductor
+
+> CConductor is a multi-agent AI research system that conducts comprehensive, adaptive research on any topic. Powered by Claude Code and specialized AI agents, it orchestrates research across academic papers, web sources, PDFs, and code repositories—delivering well-cited, validated research reports with quality scoring.
+
+**Key Capabilities:**
+
+- **Multi-Agent Architecture**: Specialized agents (research planner, web researcher, academic researcher, PDF analyzer, market analyzer, synthesis agent, fact checker) work in parallel
+- **Adaptive Research**: Dynamic task generation that identifies gaps, resolves contradictions, and explores leads until high confidence is achieved
+- **Quality Validation**: Automatic confidence scoring (0-100), citation tracking, contradiction detection, and gap coverage analysis
+- **Multi-Source Integration**: Academic databases (arXiv, Semantic Scholar, PubMed), web content, local PDFs, markdown files, and code repositories
+- **Extensible Knowledge**: Custom domain expertise via markdown files without code modification
+- **Cross-Platform**: Works on macOS, Linux, and Windows (WSL/Git Bash)
+
+**Important Notes:**
+
+- CConductor requires Claude Code CLI (`npm install -g @anthropic-ai/claude-code`) - it cannot run standalone with just an API key
+- Built with Bash 4.0+, uses jq for JSON processing, curl for HTTP requests, and bc for accurate calculations
+- Version 0.1.1 (Beta Release) - Production-ready with all core infrastructure operational
+- Research sessions typically take 5-40 minutes depending on complexity and depth
+
+## Getting Started
+
+- [README](https://raw.githubusercontent.com/yaniv-golan/cconductor/main/README.md): Project overview, installation, and quick start guide
+- [User Guide](https://raw.githubusercontent.com/yaniv-golan/cconductor/main/docs/USER_GUIDE.md): Comprehensive guide for all features and usage patterns
+- [Quick Reference](https://raw.githubusercontent.com/yaniv-golan/cconductor/main/docs/QUICK_REFERENCE.md): Command cheat sheet for daily use
+- [Installation & Configuration](https://raw.githubusercontent.com/yaniv-golan/cconductor/main/docs/INSTALLATION_CONFIG.md): Detailed installation steps and configuration setup
+
+## Core Concepts
+
+- [Usage Guide](https://raw.githubusercontent.com/yaniv-golan/cconductor/main/USAGE.md): How to use CConductor for AI-powered research
+- [Contributing Guide](https://raw.githubusercontent.com/yaniv-golan/cconductor/main/CONTRIBUTING.md): Guidelines for contributors and development setup
+
+## Configuration & Security
+
+- [Configuration Reference](https://raw.githubusercontent.com/yaniv-golan/cconductor/main/docs/CONFIGURATION_REFERENCE.md): All configuration files and options explained
+- [Security Guide](https://raw.githubusercontent.com/yaniv-golan/cconductor/main/docs/SECURITY_GUIDE.md): Security profiles (strict/permissive/max_automation) and domain allowlists
+- [Custom Knowledge Guide](https://raw.githubusercontent.com/yaniv-golan/cconductor/main/docs/CUSTOM_KNOWLEDGE.md): Adding domain expertise without code modification
+
+## Features & Quality
+
+- [Citations Guide](https://raw.githubusercontent.com/yaniv-golan/cconductor/main/docs/CITATIONS_GUIDE.md): Using citations and bibliography generation effectively
+- [Quality Guide](https://raw.githubusercontent.com/yaniv-golan/cconductor/main/docs/QUALITY_GUIDE.md): Understanding and improving research quality scores
+- [PDF Research Guide](https://raw.githubusercontent.com/yaniv-golan/cconductor/main/docs/PDF_RESEARCH_GUIDE.md): Working with academic papers and local documents
+- [Session Resume Guide](https://raw.githubusercontent.com/yaniv-golan/cconductor/main/docs/SESSION_RESUME_GUIDE.md): Continuing research to improve quality
+
+## Troubleshooting & Support
+
+- [Troubleshooting Guide](https://raw.githubusercontent.com/yaniv-golan/cconductor/main/docs/TROUBLESHOOTING.md): Common problems and solutions
+- [CLI Help](https://raw.githubusercontent.com/yaniv-golan/cconductor/main/docs/CLI_HELP.txt): Complete command-line reference
+
+## Optional
+
+- [Knowledge System Technical Deep Dive](https://raw.githubusercontent.com/yaniv-golan/cconductor/main/docs/KNOWLEDGE_SYSTEM_TECHNICAL.md): Complete architecture, step-by-step impact traces, and debugging guides
+- [Agent Tools Configuration](https://raw.githubusercontent.com/yaniv-golan/cconductor/main/docs/AGENT_TOOLS_CONFIG.md): Tool restrictions and security boundaries for agents
+- [Research Sources](https://raw.githubusercontent.com/yaniv-golan/cconductor/main/docs/RESEARCH_SOURCES.md): Supported academic databases and data sources
+- [Session Continuity Guide](https://raw.githubusercontent.com/yaniv-golan/cconductor/main/docs/SESSION_CONTINUITY_GUIDE.md): How session management optimizes costs and performance
+- [Knowledge Extension](https://raw.githubusercontent.com/yaniv-golan/cconductor/main/docs/KNOWLEDGE_EXTENSION.md): Advanced knowledge base customization
+- [Changelog](https://raw.githubusercontent.com/yaniv-golan/cconductor/main/CHANGELOG.md): Version history and recent updates
+

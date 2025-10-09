@@ -1,0 +1,565 @@
+# CConductor - Technical Reference for LLMs
+
+Version: 0.1.1 (Beta Release, October 2025)
+Repository: https://github.com/yaniv-golan/cconductor
+
+## System Overview
+
+CConductor is a multi-agent AI research system built in Bash that orchestrates Claude-powered agents to conduct comprehensive research. It integrates academic databases (arXiv, Semantic Scholar, PubMed), web sources, local PDFs, and generates cited research reports with quality scoring.
+
+### Core Architecture
+
+- **Language**: Bash 4.0+ (cross-platform: macOS, Linux, Windows WSL)
+- **Agent Runtime**: Claude Code CLI (required, not just API key)
+- **Dependencies**: jq (JSON), curl (HTTP), bc (calculations)
+- **Data Format**: JSON state management, Markdown output
+- **Agents**: 10+ specialized agents (research-coordinator, web-researcher, academic-researcher, pdf-analyzer, market-analyzer, synthesis-agent, fact-checker)
+
+### Key Capabilities
+
+- Adaptive research with dynamic task generation
+- Multi-source integration (academic, web, PDFs, code)
+- Automatic citation tracking and bibliography generation
+- Quality scoring (0-100) with detailed metrics
+- Configurable security profiles
+- Session continuity and resume functionality
+- Content-addressed PDF caching
+- Custom knowledge base extension
+
+## Installation
+
+### Prerequisites
+
+```bash
+# Required
+node --version    # v18+
+npm --version     # comes with Node.js
+bash --version    # 4.0+ (macOS ships with 3.2, must upgrade via Homebrew)
+jq --version
+curl --version
+bc --version
+
+# Install Claude Code CLI (REQUIRED)
+npm install -g @anthropic-ai/claude-code
+
+# Authenticate (requires Claude Pro/Max subscription or API credits)
+claude login
+claude whoami  # verify authentication
+```
+
+### macOS Bash 4.0+ Installation
+
+```bash
+brew install bash  # macOS ships with Bash 3.2
+# Apple Silicon: /opt/homebrew/bin/bash
+# Intel: /usr/local/bin/bash
+```
+
+### Setup
+
+```bash
+git clone https://github.com/yaniv-golan/cconductor.git
+cd cconductor
+chmod +x cconductor
+./cconductor --init  # first-time initialization
+```
+
+## Basic Usage
+
+### Commands
+
+```bash
+# Start research
+./cconductor "research question"
+
+# Research from markdown file
+./cconductor --question-file query.md
+
+# Research with local files (PDFs, markdown, text)
+./cconductor "question" --input-dir /path/to/files/
+
+# View latest results
+./cconductor latest
+
+# List sessions
+./cconductor sessions
+
+# Resume research to improve quality
+./cconductor resume session_ID
+
+# Check status
+./cconductor status
+
+# View dashboard
+./cconductor view-dashboard [session_ID]
+
+# Export research journal
+bash src/utils/export-journal.sh research-sessions/session_ID
+```
+
+### Typical Research Duration
+
+- Simple queries: 5-15 minutes
+- Complex queries: 20-40 minutes
+- Academic with PDFs: 40-90 minutes
+
+## Configuration
+
+Configuration uses overlay pattern: `*.default.json` files in `config/` directory, user overrides in `~/.config/cconductor/`.
+
+### Key Configuration Files
+
+**config/cconductor-config.json**: Main settings
+- Research preferences (default mode, quality thresholds)
+- Agent settings (timeouts, retries, parallel execution)
+- Output preferences
+
+**config/security-config.json**: Security settings
+- security_profile: "strict" (default), "permissive", "max_automation"
+- Domain allowlists/blocklists
+- Content validation rules
+
+**config/cconductor-modes.json**: Research mode definitions
+- default, scientific, market, technical, literature_review
+- Mode-specific agent configurations
+
+**config/paths.json**: Directory path overrides
+- Override platform default paths
+
+**config/adaptive-config.json**: Advanced tuning
+- Termination conditions
+- Task generation settings
+
+### Security Profiles
+
+```json
+{
+  "security_profile": "strict"  // Maximum safety, prompts for unknown domains
+  "security_profile": "permissive"  // Auto-allows trusted commercial sites
+  "security_profile": "max_automation"  // Minimal prompts (testing/VMs only)
+}
+```
+
+### Platform-Specific Paths
+
+**macOS**:
+- Config: `~/.config/cconductor/`
+- Data: `~/Library/Application Support/CConductor/`
+- Cache: `~/Library/Caches/CConductor/`
+- Logs: `~/Library/Logs/CConductor/`
+
+**Linux (XDG)**:
+- Config: `~/.config/cconductor/`
+- Data: `~/.local/share/cconductor/`
+- Cache: `~/.cache/cconductor/`
+- Logs: `~/.local/state/cconductor/`
+
+**Get exact paths**:
+```bash
+./src/utils/path-resolver.sh resolve session_dir
+./src/utils/path-resolver.sh resolve knowledge_base_custom_dir
+```
+
+## Custom Knowledge
+
+Add domain expertise via markdown files in OS-appropriate knowledge directory:
+- macOS: `~/Library/Application Support/CConductor/knowledge-base-custom/`
+- Linux: `~/.local/share/cconductor/knowledge-base-custom/`
+
+**Template**:
+```markdown
+## Overview
+[What this knowledge covers]
+
+## Key Concepts
+- Term 1: Definition
+- Term 2: Definition
+
+## Important Facts
+- Fact with numbers/dates
+- Specific data points
+
+## Data Sources
+- Source 1: URL and description
+- Source 2: URL and description
+
+## Research Tips
+- How to research this domain effectively
+```
+
+Files are auto-discovered. No configuration required.
+
+## Quality Scoring
+
+Every research session receives quality score (0-100):
+
+### Score Components
+
+1. **Source Quality (30%)**: Authority and credibility of sources
+   - High-authority: peer-reviewed, .gov, .edu
+   - Medium-authority: reputable news, industry publications
+   - Low-authority: personal blogs, unverified
+
+2. **Citation Coverage (25%)**: Percentage of claims with citations
+   - Academic: need 85-100%
+   - Business: 70-85%
+   - General: 60-75%
+
+3. **Completeness (20%)**: Topic coverage thoroughness
+
+4. **Evidence Quality (15%)**: Multiple sources, primary vs secondary, recency
+
+5. **Confidence (10%)**: Source agreement, absence of contradictions
+
+### Score Ranges
+
+- 90-100: EXCELLENT (publication-ready)
+- 80-89: VERY GOOD (professional quality)
+- 70-79: GOOD (solid research)
+- 60-69: ACCEPTABLE (usable with limitations)
+- <60: NEEDS WORK (significant gaps)
+
+### Improving Quality
+
+**Most effective**: Resume research
+```bash
+./cconductor resume session_ID
+# Typically adds +10 to +15 points
+```
+
+**Other methods**:
+- More specific questions with time frames and keywords
+- Provide known PDF sources
+- Let research complete fully (don't interrupt)
+- Use academic keywords: "peer-reviewed", "published research"
+
+## Citations and Bibliography
+
+### In-Text Citations
+
+```markdown
+Docker uses containerization [1]. Released in 2013 [2], it gained adoption [3][4].
+```
+
+### Bibliography Format
+
+```markdown
+## References
+
+[1] Author(s). (Year). "Title." Publication. URL/DOI
+
+[2] Docker Inc. (2024). "What is Docker?" Docker Documentation.
+    Retrieved from https://docs.docker.com/
+```
+
+### For Academic Use
+
+CConductor provides:
+- All major claims cited
+- Complete bibliography with URLs/DOIs
+- Multiple sources for key claims
+
+May need to add:
+- Format adjustments for specific journal styles (APA, MLA, Chicago)
+- DOIs for papers if not auto-included
+- Page numbers for direct quotes
+
+Trigger academic mode with keywords: "peer-reviewed", "systematic review", "meta-analysis"
+
+## Common Issues and Solutions
+
+### #1 Most Common: Authentication Error
+
+**Symptoms**: "Invalid API key", "Please run /login", research fails immediately
+
+**Solution**:
+```bash
+claude login      # Opens browser for authentication
+claude whoami     # Verify login
+```
+
+**Requirements**: Claude Pro/Max subscription or API credits (free accounts don't have CLI access)
+
+### Claude Code CLI Not Found
+
+```bash
+# Check Node.js
+node --version    # Must be v18+
+
+# Install if needed (macOS)
+brew install node
+
+# Install Claude Code CLI
+npm install -g @anthropic-ai/claude-code
+
+# Verify
+claude --version
+```
+
+### Bash Version Error (macOS)
+
+macOS ships with Bash 3.2. CConductor requires 4.0+.
+
+```bash
+brew install bash
+# Use: /opt/homebrew/bin/bash (Apple Silicon) or /usr/local/bin/bash (Intel)
+```
+
+### Research Hangs or Freezes
+
+Check if actually stuck:
+```bash
+ps aux | grep cconductor
+tail -f logs/research.log  # Should show activity
+```
+
+If genuinely stuck:
+```bash
+# Find PID from ps output
+kill -INT <PID>    # Graceful interrupt
+# Wait 30 seconds
+kill -9 <PID>      # Force if needed
+
+# Resume
+./cconductor resume session_ID
+```
+
+### Session Locked Error
+
+**Cause**: Stale lock files from crashed process
+
+**Solution**:
+```bash
+# Check for running processes
+ps aux | grep cconductor
+
+# Kill if stuck
+kill <PID>
+
+# Remove locks
+find research-sessions -name "*.lock" -exec rm -rf {} +
+
+# Resume
+./cconductor resume session_ID
+```
+
+### Low Quality Score
+
+**Quick fixes**:
+1. Resume research: `./cconductor resume session_ID`
+2. More specific question with dates/keywords
+3. Provide PDF sources
+4. Configure for scientific mode if academic
+
+### Missing Citations
+
+**Solutions**:
+1. Resume research
+2. Use keywords: "peer-reviewed studies on X"
+3. Configure academic mode in config
+4. Provide academic PDFs
+
+### API Key Issues
+
+```bash
+# Check if set
+echo $ANTHROPIC_API_KEY
+
+# Set if needed
+export ANTHROPIC_API_KEY="sk-ant-..."
+
+# Make permanent (add to ~/.bashrc or ~/.zshrc)
+echo 'export ANTHROPIC_API_KEY="sk-ant-..."' >> ~/.bashrc
+source ~/.bashrc
+```
+
+### Configuration Not Taking Effect
+
+**Checklist**:
+```bash
+# 1. Edit correct file (*.json not *.default.json)
+ls -la config/*.json
+
+# 2. Validate JSON syntax
+jq empty config/cconductor-config.json
+
+# 3. Check file permissions
+ls -la config/cconductor-config.json
+
+# 4. Restart research (changes only apply to new sessions)
+```
+
+### Can't Find Research Results
+
+```bash
+# View latest
+./cconductor latest
+
+# List all sessions
+./cconductor sessions
+
+# Find report
+ls research-sessions/*/research-report.md
+
+# Check .latest marker
+cat research-sessions/.latest
+```
+
+## Development and Contributing
+
+### Code Standards
+
+- Bash 4.0+ with `set -euo pipefail`
+- 2-space indentation
+- snake_case functions and variables
+- UPPERCASE constants
+- Always quote variables: `"$variable"`
+- ShellCheck validation required
+
+### Testing
+
+```bash
+# Run all tests
+./tests/run-all-tests.sh
+
+# Lint specific file
+shellcheck path/to/script.sh
+
+# Lint all scripts
+find . -name "*.sh" -type f -not -path "./.git/*" | while read -r file; do
+    shellcheck "$file" || exit 1
+done
+```
+
+### Pre-commit Hook
+
+Repository includes pre-commit hook that runs ShellCheck automatically.
+
+### Pull Request Process
+
+1. Create branch from main: `git checkout -b feature/name`
+2. Follow coding standards and add tests
+3. Run tests: `./tests/run-all-tests.sh`
+4. Update documentation and CHANGELOG.md
+5. Ensure ShellCheck passes
+6. Commit with clear messages (feat/fix/docs/refactor/test/chore)
+7. Push and create PR
+
+## Session Structure
+
+```
+research-sessions/session_TIMESTAMP/
+├── research-report.md           # Main output
+├── metadata.json                # Session metadata
+├── raw/                         # Initial research data
+│   ├── research-question.txt
+│   ├── research-plan.json
+│   └── agent-outputs/
+├── intermediate/                # Processing artifacts
+│   ├── knowledge-graph.json
+│   ├── task-queue.json
+│   └── validation.json
+├── final/                       # Final processed data
+├── events.jsonl                 # Event log for dashboard
+├── dashboard-metrics.json       # Real-time metrics
+└── .claude/                     # Per-session Claude config
+    ├── agents/                  # Agent definitions
+    ├── settings.json            # Claude settings
+    └── hooks/                   # Tool use hooks
+```
+
+## File Operations
+
+**Finding paths**:
+```bash
+SESSION_DIR=$(./src/utils/path-resolver.sh resolve session_dir)
+KNOWLEDGE_DIR=$(./src/utils/path-resolver.sh resolve knowledge_base_custom_dir)
+```
+
+**Cleaning old sessions**:
+```bash
+# Remove sessions older than 30 days
+find research-sessions -name "session_*" -type d -mtime +30 -exec rm -rf {} +
+```
+
+**Archiving**:
+```bash
+tar -czf research-archive-$(date +%Y%m).tar.gz research-sessions/session_old*
+rm -rf research-sessions/session_old*
+```
+
+## Agent Invocation
+
+CConductor uses `src/utils/invoke-agent.sh` with `invoke_agent_v2()` function:
+
+**Key features**:
+- System prompt injection via `--append-system-prompt`
+- Tool restrictions via `--allowedTools` and `--disallowedTools`
+- Structured JSON output via `--output-format json`
+- Domain restrictions: `WebFetch(*.edu)`, `WebFetch(domain.com)`
+- Session continuity via `--resume` (for research-coordinator only)
+
+**Tool restrictions** defined in `src/utils/agent-tools.json`.
+
+## Environment Variables
+
+```bash
+ANTHROPIC_API_KEY          # Claude API key (required if not using claude login)
+CCONDUCTOR_DEBUG=1         # Enable debug output
+CCONDUCTOR_SESSION_DIR     # Override session directory
+```
+
+## Performance Notes
+
+- Research sessions use multiple Claude API calls
+- Complex research: $2-10 typical cost
+- Academic with PDFs: $5-15 typical cost
+- Parallel agent execution (configurable: max_parallel_agents)
+- PDF caching via SHA-256 content addressing
+
+## Security Considerations
+
+- Domain allowlists prevent access to malicious sites
+- Three security profiles: strict (default), permissive, max_automation
+- Audit logging of all external access
+- File locking prevents race conditions
+- Atomic writes for state files
+
+## Known Limitations (v0.1.1)
+
+- Single machine execution (not distributed)
+- File-based state (potential bottleneck at scale)
+- Requires Claude Code CLI (cannot use API key alone)
+- Input directory: flat only (no recursive discovery)
+- Supported input files: PDF, MD, TXT only
+
+## Related Documentation (Raw URLs for Direct LLM Access)
+
+**Core**:
+- README: https://raw.githubusercontent.com/yaniv-golan/cconductor/main/README.md
+- Usage Guide: https://raw.githubusercontent.com/yaniv-golan/cconductor/main/USAGE.md
+- Contributing: https://raw.githubusercontent.com/yaniv-golan/cconductor/main/CONTRIBUTING.md
+
+**User Guides**:
+- User Guide: https://raw.githubusercontent.com/yaniv-golan/cconductor/main/docs/USER_GUIDE.md
+- Quick Reference: https://raw.githubusercontent.com/yaniv-golan/cconductor/main/docs/QUICK_REFERENCE.md
+- Troubleshooting: https://raw.githubusercontent.com/yaniv-golan/cconductor/main/docs/TROUBLESHOOTING.md
+
+**Configuration**:
+- Configuration Reference: https://raw.githubusercontent.com/yaniv-golan/cconductor/main/docs/CONFIGURATION_REFERENCE.md
+- Installation & Config: https://raw.githubusercontent.com/yaniv-golan/cconductor/main/docs/INSTALLATION_CONFIG.md
+- Security Guide: https://raw.githubusercontent.com/yaniv-golan/cconductor/main/docs/SECURITY_GUIDE.md
+
+**Features**:
+- Quality Guide: https://raw.githubusercontent.com/yaniv-golan/cconductor/main/docs/QUALITY_GUIDE.md
+- Citations Guide: https://raw.githubusercontent.com/yaniv-golan/cconductor/main/docs/CITATIONS_GUIDE.md
+- Custom Knowledge: https://raw.githubusercontent.com/yaniv-golan/cconductor/main/docs/CUSTOM_KNOWLEDGE.md
+- PDF Research: https://raw.githubusercontent.com/yaniv-golan/cconductor/main/docs/PDF_RESEARCH_GUIDE.md
+- Session Resume: https://raw.githubusercontent.com/yaniv-golan/cconductor/main/docs/SESSION_RESUME_GUIDE.md
+
+**Technical**:
+- Knowledge System: https://raw.githubusercontent.com/yaniv-golan/cconductor/main/docs/KNOWLEDGE_SYSTEM_TECHNICAL.md
+- Agent Tools Config: https://raw.githubusercontent.com/yaniv-golan/cconductor/main/docs/AGENT_TOOLS_CONFIG.md
+- Session Continuity: https://raw.githubusercontent.com/yaniv-golan/cconductor/main/docs/SESSION_CONTINUITY_GUIDE.md
+
+**Changelog**: https://raw.githubusercontent.com/yaniv-golan/cconductor/main/CHANGELOG.md
