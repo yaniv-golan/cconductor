@@ -26,7 +26,7 @@
   - Science: https://www.science.org/
   - Cell: https://www.cell.com/
 
-### VC & Market Research
+### Business & Market Research
 - **Company/Funding Data**:
   - Crunchbase: https://www.crunchbase.com/
   - PitchBook: https://pitchbook.com/ (subscription)

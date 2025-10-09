@@ -177,7 +177,7 @@ You may be called in two scenarios:
 - Look for independent replication
 - Verify methodology soundness
 
-**For VC/Market Claims**:
+**For Business/Market Claims**:
 
 - Verify market size with multiple methodologies
 - Check funding data via multiple sources (Crunchbase, press releases, SEC filings)

@@ -23,7 +23,7 @@
         "pubmed"
       ]
     },
-    "vc_market": {
+    "business_market": {
       "enabled": true,
       "require_tam_sam_som": true,
       "min_competitors_analyzed": 5,

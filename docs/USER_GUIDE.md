@@ -433,7 +433,7 @@ If you have PDFs, documents, or notes to analyze alongside web research:
 
 **Common use cases**:
 
-- VC due diligence with pitch decks
+- Investment due diligence with company materials
 - Research with existing reports/notes
 - Analysis of company materials
 - Academic research with your PDFs

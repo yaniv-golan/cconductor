@@ -455,7 +455,7 @@ and market analysis (Washington, Oregon, British Columbia).
 
 ### Technology
 - **Major Players**: Amazon, Microsoft, Google, Meta (all have large presences)
-- **Startups**: Thriving startup ecosystem, strong VC presence
+- **Startups**: Thriving startup ecosystem, strong investment community presence
 - **Focus Areas**: Cloud computing, AI/ML, e-commerce, enterprise software
 - **Employment**: 350,000+ tech workers across region
 - **Salaries**: Competitive with SF Bay Area, lower cost of living
@@ -516,7 +516,7 @@ and market analysis (Washington, Oregon, British Columbia).
 ## Business Environment
 
 ### Startup Ecosystem
-- **VC Availability**: Strong VC presence, but smaller than SF/NYC
+- **Investment Community**: Strong investment community presence, but smaller than SF/NYC
 - **Accelerators**: Techstars, Y Combinator presence, local accelerators
 - **Success Stories**: Amazon, Microsoft, Costco, Starbucks (historical), many recent unicorns
 - **Focus**: Enterprise SaaS, AI/ML, clean tech, outdoor tech
@@ -1109,7 +1109,7 @@ ls knowledge-base/
 # Files include:
 # - research-methodology.md
 # - scientific-methodology.md
-# - vc-methodology.md
+# - business-methodology.md
 # - verified-sources.md
 ```
 

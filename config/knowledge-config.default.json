@@ -5,9 +5,9 @@
     "session": "{session_dir}/knowledge"
   },
   "agent_knowledge_map": {
-    "market-analyzer": ["vc-methodology"],
-    "competitor-analyzer": ["vc-methodology"],
-    "financial-extractor": ["vc-methodology"],
+    "market-analyzer": ["business-methodology"],
+    "competitor-analyzer": ["business-methodology"],
+    "financial-extractor": ["business-methodology"],
     "web-researcher": ["scientific-methodology", "research-methodology"],
     "academic-researcher": ["scientific-methodology", "research-methodology"],
     "synthesis-agent": ["*"],

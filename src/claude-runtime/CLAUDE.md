@@ -7,7 +7,7 @@ This project implements a multi-agent research system that conducts comprehensiv
 @../knowledge-base/verified-sources.md
 @../knowledge-base/research-methodology.md
 @../knowledge-base/scientific-methodology.md
-@../knowledge-base/vc-methodology.md
+@../knowledge-base/business-methodology.md
 
 ## Research Guidelines
 

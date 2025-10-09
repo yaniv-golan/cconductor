@@ -851,7 +851,7 @@ This section documents where knowledge injection integrates with the broader sys
   "agent_knowledge_map": {
     "academic-researcher": ["scientific-methodology", "research-methodology"],
     "web-researcher": ["research-methodology"],
-    "market-analyzer": ["vc-methodology"],
+    "market-analyzer": ["business-methodology"],
     "synthesis-agent": ["*"],
     "fact-checker": ["*"]
   },

@@ -13,7 +13,7 @@ The CConductor uses a **WordPress-style extensible knowledge system** with conve
 ```
 research-engine/
 ├── knowledge-base/              # Core knowledge (git-tracked)
-│   ├── vc-methodology.md
+│   ├── business-methodology.md
 │   ├── scientific-methodology.md
 │   └── research-methodology.md
 │
@@ -42,16 +42,16 @@ When loading knowledge, the system checks in this order:
 ### Before (Problems)
 
 ```bash
-# User adds healthcare knowledge to vc-methodology.md
-vim knowledge-base/vc-methodology.md  # Edit core file
+# User adds healthcare knowledge to business-methodology.md
+vim knowledge-base/business-methodology.md  # Edit core file
 
 # Later: git pull
 git pull origin main
-# ❌ CONFLICT! Merge conflict in knowledge-base/vc-methodology.md
+# ❌ CONFLICT! Merge conflict in knowledge-base/business-methodology.md
 # User must manually resolve conflicts every time
 
 # OR: User commits customization
-git add knowledge-base/vc-methodology.md
+git add knowledge-base/business-methodology.md
 git commit -m "Add healthcare knowledge"
 # Now can't pull updates without merge conflicts
 ```
@@ -129,7 +129,7 @@ Example configuration:
 ```json
 {
   "agent_knowledge_map": {
-    "market-analyzer": ["vc-methodology", "healthcare-policy"],
+    "market-analyzer": ["business-methodology", "healthcare-policy"],
     "web-researcher": ["scientific-methodology"],
     "synthesis-agent": ["*"]
   },
@@ -186,8 +186,8 @@ SESSION_DIR="research-sessions/session_1234567890"
 mkdir -p "$SESSION_DIR/knowledge"
 
 # Override core methodology for this session only
-cat > "$SESSION_DIR/knowledge/vc-methodology.md" <<'EOF'
-# Temporary Override: 2024 VC Methodology
+cat > "$SESSION_DIR/knowledge/business-methodology.md" <<'EOF'
+# Temporary Override: 2024 Business Methodology
 
 Use updated metrics for this specific research:
 - ARR multiples adjusted for 2024 market
@@ -196,9 +196,9 @@ Use updated metrics for this specific research:
 EOF
 
 # Run research - uses session override
-./cconductor "VC question" --resume session_1234567890
+./cconductor "Business question" --resume session_1234567890
 
-# Other sessions still use default vc-methodology.md
+# Other sessions still use default business-methodology.md
 ```
 
 ## Creating Domain Knowledge
@@ -334,9 +334,9 @@ Default agent mappings:
 
 | Agent | Knowledge Loaded |
 |-------|------------------|
-| market-analyzer | vc-methodology |
-| competitor-analyzer | vc-methodology |
-| financial-extractor | vc-methodology |
+| market-analyzer | business-methodology |
+| competitor-analyzer | business-methodology |
+| financial-extractor | business-methodology |
 | web-researcher | scientific-methodology, research-methodology |
 | academic-researcher | scientific-methodology, research-methodology |
 | synthesis-agent | * (all knowledge) |

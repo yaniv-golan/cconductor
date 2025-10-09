@@ -54,7 +54,7 @@ When you provide local files with `--input-dir`:
 
 ### Use Cases
 
-**VC Due Diligence**:
+**Investment Due Diligence**:
 
 ```bash
 ./cconductor "Evaluate this startup" --input-dir ./deals/acme/

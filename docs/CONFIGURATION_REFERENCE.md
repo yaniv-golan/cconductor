@@ -153,7 +153,7 @@ PROJECT_ROOT/config/
     "track_citation_network": true,
     "preferred_databases": ["arxiv", "google_scholar", "pubmed"]
   },
-  "vc_market": { ... },
+  "business_market": { ... },
   "technical": { ... },
   "general": { ... }
 }
@@ -171,10 +171,10 @@ PROJECT_ROOT/config/
 | `track_citation_network` | boolean | `true` | Analyze citation relationships |
 | `preferred_databases` | array | See config | Prioritize these academic databases |
 
-**VC/Market Mode Options**:
+**Business/Market Mode Options**:
 
 ```json
-"vc_market": {
+"business_market": {
   "enabled": true,
   "require_tam_sam_som": true,
   "min_competitors_analyzed": 5,
@@ -1017,7 +1017,7 @@ jq '.mode_selection.default_mode' config/cconductor-modes.json
 ```json
 {
   "research_modes": {
-    "vc_market": {
+    "business_market": {
       "min_competitors_analyzed": 10
     }
   }

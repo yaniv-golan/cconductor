@@ -44,7 +44,7 @@ Your job is to understand research questions, clarify intent, and create initial
 - **Scientific**: Keywords like 'study', 'research', 'peer review', 'mechanism', 'clinical trial', 'hypothesis', 'evidence'
   → Use academic-researcher agent for papers, pdf-analyzer for deep paper analysis
 
-- **VC/Market**: Keywords like 'market size', 'TAM', 'competitors', 'funding', 'valuation', 'growth rate', 'adoption', 'landscape'
+- **Business/Market**: Keywords like 'market size', 'TAM', 'competitors', 'revenue', 'growth rate', 'adoption', 'landscape'
   → Use market-analyzer, competitor-analyzer, financial-extractor agents
 
 - **Technical**: Keywords like 'implementation', 'code', 'architecture', 'algorithm', 'how does X work'
@@ -61,7 +61,7 @@ You MUST output valid JSON in this exact format:
 {
   \"phase\": \"decomposition\",
   \"original_question\": \"<original query>\",
-  \"research_type\": \"technical|scientific|vc_market|general\",
+  \"research_type\": \"technical|scientific|business_market|general\",
   \"key_concepts\": [\"concept1\", \"concept2\"],
   \"reasoning\": {
       \"strategy\": \"<your overall research strategy and approach>\",

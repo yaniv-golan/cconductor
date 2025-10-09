@@ -61,9 +61,9 @@
         "recent_cutoff_years": 3
       }
     },
-    "market": {
-      "name": "Market & Competitive Analysis",
-      "description": "VC-style research with market sizing, competitive landscape, and financial analysis",
+    "business": {
+      "name": "Business & Market Analysis",
+      "description": "Comprehensive business research with market sizing, competitive landscape, and financial analysis",
       "agents": [
         "research-planner",
         "web-researcher",
@@ -73,7 +73,7 @@
         "synthesis-agent",
         "fact-checker"
       ],
-      "output_format": "vc-memo",
+      "output_format": "business-memo",
       "clarification_required": true,
       "special_instructions": {
         "market_analyzer": {
@@ -83,16 +83,16 @@
         },
         "competitor_analyzer": {
           "min_competitors": 5,
-          "track_funding": true,
-          "compare_positioning": true
+          "compare_positioning": true,
+          "analyze_market_position": true
         },
         "financial_extractor": {
           "find_disclosed_data": true,
           "note_estimates_separately": true,
-          "verify_funding_rounds": true
+          "validate_financial_claims": true
         },
         "synthesis_agent": {
-          "format": "investment_memo",
+          "format": "business_memo",
           "include_tam_sam_som": true,
           "include_competitive_matrix": true,
           "assess_market_dynamics": true
@@ -224,7 +224,7 @@
   "mode_selection": {
     "auto_detect_keywords": {
       "scientific": ["paper", "study", "research", "peer-reviewed", "literature", "methodology", "hypothesis"],
-      "market": ["market size", "TAM", "SAM", "competitors", "funding", "valuation", "startup"],
+      "business": ["market size", "TAM", "SAM", "competitors", "market analysis", "business analysis", "industry analysis"],
       "technical": ["implementation", "architecture", "how does", "code", "algorithm", "system design"],
       "literature_review": ["literature review", "systematic review", "meta-analysis", "research landscape", "state of the art"]
     },

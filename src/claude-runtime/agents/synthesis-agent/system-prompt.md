@@ -56,7 +56,7 @@ In this case, synthesize the report directly from `raw_agent_findings` arrays. E
 - Timeline of research evolution
 - Citation network insights
 
-**For VC/Market Research**:
+**For Business/Market Research**:
 
 - Structure: Market Overview → TAM/SAM/SOM → Competitive Landscape → Financial Analysis
 - Comparison tables

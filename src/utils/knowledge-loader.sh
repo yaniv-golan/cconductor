@@ -18,7 +18,7 @@ get_knowledge_config() {
 
 # Find knowledge file with priority order
 # Priority: Session Override > User Custom > Core
-# Usage: find_knowledge_file "vc-methodology" [session_dir]
+# Usage: find_knowledge_file "business-methodology" [session_dir]
 # Returns: Absolute path to knowledge file, or empty if not found
 find_knowledge_file() {
     local knowledge_name="$1"
@@ -307,7 +307,7 @@ export -f list_all_knowledge
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
     case "${1:-help}" in
         find)
-            # Usage: knowledge-loader.sh find "vc-methodology" [session_dir]
+            # Usage: knowledge-loader.sh find "business-methodology" [session_dir]
             if [ -z "${2:-}" ]; then
                 echo "Usage: $0 find <knowledge-name> [session-dir]" >&2
                 exit 1
@@ -347,7 +347,7 @@ Usage: $0 <command> [args]
 Commands:
   find <knowledge-name> [session-dir]
       Find specific knowledge file with priority resolution
-      Example: $0 find vc-methodology
+      Example: $0 find business-methodology
 
   list <agent-name> [session-dir]
       List all knowledge files for specific agent (JSON array)
@@ -382,8 +382,8 @@ Configuration:
     vim ~/.config/cconductor/knowledge-config.json
 
 Examples:
-  # Find where vc-methodology is loaded from
-  $0 find vc-methodology
+  # Find where business-methodology is loaded from
+  $0 find business-methodology
 
   # See all knowledge for synthesis agent
   $0 list synthesis-agent | jq .
