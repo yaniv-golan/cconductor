@@ -1,3 +1,5 @@
+![CConductor Banner](assets/banner.png)
+
 # CConductor 🔍
 
 **AI Research, Orchestrated**
