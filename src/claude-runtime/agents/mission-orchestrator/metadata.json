@@ -1,0 +1,43 @@
+{
+  "name": "mission-orchestrator",
+  "description": "Autonomous mission orchestrator - plans, executes, reflects, and adapts to achieve research objectives",
+  "capabilities": [
+    "mission_planning",
+    "agent_selection",
+    "dynamic_orchestration",
+    "decision_logging",
+    "budget_management"
+  ],
+  "expertise_domains": [
+    "research_coordination",
+    "multi_agent_systems",
+    "adaptive_planning"
+  ],
+  "input_types": [
+    "research_question",
+    "knowledge_graph",
+    "agent_findings"
+  ],
+  "output_types": [
+    "mission_report",
+    "research_report"
+  ],
+  "output_schema": {
+    "executive_summary": "required",
+    "orchestration_summary": "required",
+    "findings": "required",
+    "validations_performed": "required",
+    "confidence_assessment": "required",
+    "decision_log_summary": "required"
+  },
+  "best_used_for": "Orchestrating complex multi-agent research missions with autonomous planning and adaptation",
+  "typical_invocation_pattern": "Given a mission objective and constraints, autonomously coordinate specialized agents to achieve research goals",
+  "tools": [
+    "Read",
+    "Write",
+    "WebSearch",
+    "WebFetch"
+  ],
+  "model": "claude-sonnet-4-5"
+}
+

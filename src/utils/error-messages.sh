@@ -115,42 +115,6 @@ For more help: docs/TROUBLESHOOTING.md#agent-failures
 EOF
 }
 
-# Task queue is empty unexpectedly
-error_empty_task_queue() {
-    local session_dir="$1"
-    local iteration="$2"
-
-    cat >&2 <<EOF
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-⚠️  No tasks in queue
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-The task queue is empty at iteration $iteration.
-
-This might be normal if:
-  • Research question is very simple
-  • Coordinator determined research is complete
-  • All avenues have been explored
-
-Or it might indicate:
-  • Coordinator is not generating tasks properly
-  • Task generation logic has a bug
-
-What to do:
-
-1. Check knowledge graph for findings:
-   cat "$session_dir/knowledge-graph.json" | jq '.stats'
-
-2. Review coordinator output:
-   cat "$session_dir/intermediate/coordinator-output-${iteration}.json"
-
-3. If research seems incomplete, file a bug report
-
-For more help: docs/TROUBLESHOOTING.md#empty-queue
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-EOF
-}
-
 # Missing required file
 error_missing_file() {
     local file_path="$1"
@@ -175,7 +139,7 @@ What to do:
    ls -la research-sessions/
 
 2. Check if this is the correct session:
-   cat "$session_dir/metadata.json"
+   cat research-sessions/[session-name]/metadata.json
 
 3. If starting new research, use:
    ./research "your question here"
@@ -291,7 +255,6 @@ EOF
 export -f error_lock_failed
 export -f error_json_corrupted
 export -f error_agent_failed
-export -f error_empty_task_queue
 export -f error_missing_file
 export -f error_invalid_config
 export -f error_api_key

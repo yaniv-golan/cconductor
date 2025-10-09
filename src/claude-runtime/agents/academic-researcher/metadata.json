@@ -1,4 +1,23 @@
 {
   "name": "academic-researcher",
-  "description": "Use for scientific and academic research. Searches academic databases, fetches and caches PDFs, analyzes papers with full-text reading, evaluates methodology and peer review status"
+  "description": "Use for scientific and academic research. Searches academic databases, fetches and caches PDFs, analyzes papers with full-text reading, evaluates methodology and peer review status",
+  "capabilities": [
+    "academic_research",
+    "pdf_analysis",
+    "fact_checking"
+  ],
+  "input_types": [
+    "research_question",
+    "academic_paper"
+  ],
+  "output_types": [
+    "literature_review",
+    "citation_network"
+  ],
+  "tools": [
+    "WebSearch",
+    "WebFetch",
+    "Read"
+  ],
+  "model": "claude-sonnet-4-5"
 }

@@ -1,0 +1,58 @@
+{
+  "name": "technical-analysis",
+  "description": "Technical architecture and implementation analysis for software systems",
+  "version": "1.0",
+  
+  "objective": "Analyze technical architecture, implementation details, technology stack, scalability considerations, and provide technical assessment",
+  
+  "success_criteria": {
+    "required_outputs": [
+      "technical_assessment",
+      "research_report"
+    ],
+    "required_validations": [],
+    "confidence_threshold": 0.82,
+    "all_claims_cited": true,
+    "min_quality_score": 75
+  },
+  
+  "constraints": {
+    "max_iterations": 8,
+    "max_time_minutes": 50,
+    "max_agent_invocations": 20,
+    "budget_usd": 10.0
+  },
+  
+  "preferred_agents": [
+    {
+      "agent": "code-analyzer",
+      "for": "Code analysis and architecture assessment"
+    },
+    {
+      "agent": "web-researcher",
+      "for": "Technology research and best practices"
+    }
+  ],
+  
+  "orchestration_guidance": "Analyze architecture patterns, technology choices, and implementation quality. Assess scalability, performance, security, and maintainability. Identify technical risks and areas for improvement. Compare against industry best practices and similar systems.",
+  
+  "output_specification": {
+    "format": "markdown",
+    "structure": "technical_assessment_report",
+    "required_sections": [
+      "executive_summary",
+      "architecture_overview",
+      "technology_stack",
+      "scalability_assessment",
+      "security_considerations",
+      "code_quality",
+      "recommendations"
+    ]
+  },
+  
+  "domain_context": {
+    "research_type": "technical",
+    "custom_knowledge": []
+  }
+}
+

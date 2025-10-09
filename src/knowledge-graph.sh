@@ -40,8 +40,8 @@ kg_init() {
     # Use jq to safely construct JSON (prevents injection attacks)
     jq -n \
         --arg question "$research_question" \
-        --arg started "$(date -u +"%Y-%m-%dT%H:%M:%SZ")" \
-        --arg updated "$(date -u +"%Y-%m-%dT%H:%M:%SZ")" \
+        --arg started "$(get_timestamp)" \
+        --arg updated "$(get_timestamp)" \
         '{
             schema_version: "1.0",
             research_question: $question,
@@ -115,7 +115,7 @@ kg_increment_iteration() {
     # Single quotes intentional - this is a jq expression with literal $date
     # shellcheck disable=SC2016
     atomic_json_update "$kg_file" \
-        --arg date "$(date -u +"%Y-%m-%dT%H:%M:%SZ")" \
+        --arg date "$(get_timestamp)" \
         '.iteration += 1 | .last_updated = $date'
 }
 
@@ -150,7 +150,7 @@ kg_add_entity() {
         # Update existing entity
         jq --argjson entity "$entity_json" \
            --arg name "$entity_name" \
-           --arg date "$(date -u +"%Y-%m-%dT%H:%M:%SZ")" \
+           --arg date "$(get_timestamp)" \
            '(.entities[] | select(.name == $name)) |= ($entity + {last_updated: $date}) |
             .last_updated = $date' \
            "$kg_file" > "${kg_file}.tmp"
@@ -160,7 +160,7 @@ kg_add_entity() {
         entity_id="e$(jq '.stats.total_entities' "$kg_file")"
         jq --argjson entity "$entity_json" \
            --arg id "$entity_id" \
-           --arg date "$(date -u +"%Y-%m-%dT%H:%M:%SZ")" \
+           --arg date "$(get_timestamp)" \
            '.entities += [($entity + {id: $id, added_at: $date})] |
             .stats.total_entities += 1 |
             .last_updated = $date' \
@@ -200,7 +200,7 @@ kg_add_claim() {
 
     jq --argjson claim "$claim_json" \
        --arg id "$claim_id" \
-       --arg date "$(date -u +"%Y-%m-%dT%H:%M:%SZ")" \
+       --arg date "$(get_timestamp)" \
        '.claims += [($claim + {id: $id, added_at: $date, verified: false})] |
         .stats.total_claims += 1 |
         .last_updated = $date' \
@@ -241,7 +241,7 @@ kg_add_relationship() {
 
     jq --argjson rel "$relationship_json" \
        --arg id "$rel_id" \
-       --arg date "$(date -u +"%Y-%m-%dT%H:%M:%SZ")" \
+       --arg date "$(get_timestamp)" \
        '.relationships += [($rel + {id: $id, added_at: $date})] |
         .stats.total_relationships += 1 |
         .last_updated = $date' \
@@ -277,7 +277,7 @@ kg_add_gap() {
     jq --argjson gap "$gap_json" \
        --arg id "$gap_id" \
        --arg iter "$iteration" \
-       --arg date "$(date -u +"%Y-%m-%dT%H:%M:%SZ")" \
+       --arg date "$(get_timestamp)" \
        '.gaps += [($gap + {id: $id, detected_at_iteration: ($iter | tonumber), status: "pending", added_at: $date})] |
         .stats.total_gaps += 1 |
         .stats.unresolved_gaps += 1 |
@@ -323,7 +323,7 @@ kg_update_gap_status() {
     if [ "$status" = "resolved" ] && [ "$was_unresolved" -gt 0 ]; then
         jq --arg id "$gap_id" \
            --arg status "$status" \
-           --arg date "$(date -u +"%Y-%m-%dT%H:%M:%SZ")" \
+           --arg date "$(get_timestamp)" \
            '(.gaps[] | select(.id == $id)) |= (. + {status: $status, updated_at: $date}) |
             .stats.unresolved_gaps -= 1 |
             .last_updated = $date' \
@@ -331,7 +331,7 @@ kg_update_gap_status() {
     else
         jq --arg id "$gap_id" \
            --arg status "$status" \
-           --arg date "$(date -u +"%Y-%m-%dT%H:%M:%SZ")" \
+           --arg date "$(get_timestamp)" \
            '(.gaps[] | select(.id == $id)) |= (. + {status: $status, updated_at: $date}) |
             .last_updated = $date' \
            "$kg_file" > "${kg_file}.tmp"
@@ -367,7 +367,7 @@ kg_add_contradiction() {
     jq --argjson con "$contradiction_json" \
        --arg id "$con_id" \
        --arg iter "$iteration" \
-       --arg date "$(date -u +"%Y-%m-%dT%H:%M:%SZ")" \
+       --arg date "$(get_timestamp)" \
        '.contradictions += [($con + {id: $id, detected_at_iteration: ($iter | tonumber), status: "unresolved", added_at: $date})] |
         .stats.total_contradictions += 1 |
         .stats.unresolved_contradictions += 1 |
@@ -399,7 +399,7 @@ kg_resolve_contradiction() {
 
     jq --arg id "$con_id" \
        --arg resolution "$resolution" \
-       --arg date "$(date -u +"%Y-%m-%dT%H:%M:%SZ")" \
+       --arg date "$(get_timestamp)" \
        '(.contradictions[] | select(.id == $id)) |= (. + {status: "resolved", resolution: $resolution, resolved_at: $date}) |
         .stats.unresolved_contradictions -= 1 |
         .last_updated = $date' \
@@ -435,7 +435,7 @@ kg_add_lead() {
     jq --argjson lead "$lead_json" \
        --arg id "$lead_id" \
        --arg iter "$iteration" \
-       --arg date "$(date -u +"%Y-%m-%dT%H:%M:%SZ")" \
+       --arg date "$(get_timestamp)" \
        '.promising_leads += [($lead + {id: $id, detected_at_iteration: ($iter | tonumber), status: "pending", added_at: $date})] |
         .stats.total_leads += 1 |
         .last_updated = $date' \
@@ -463,7 +463,7 @@ kg_mark_lead_explored() {
     }
 
     jq --arg id "$lead_id" \
-       --arg date "$(date -u +"%Y-%m-%dT%H:%M:%SZ")" \
+       --arg date "$(get_timestamp)" \
        '(.promising_leads[] | select(.id == $id)) |= (. + {status: "explored", explored_at: $date}) |
         .stats.explored_leads += 1 |
         .last_updated = $date' \
@@ -491,7 +491,7 @@ kg_update_confidence() {
     }
 
     jq --argjson conf "$confidence_json" \
-       --arg date "$(date -u +"%Y-%m-%dT%H:%M:%SZ")" \
+       --arg date "$(get_timestamp)" \
        '.confidence_scores = $conf | .last_updated = $date' \
        "$kg_file" > "${kg_file}.tmp"
 
@@ -517,7 +517,7 @@ kg_update_coverage() {
     }
 
     jq --argjson cov "$coverage_json" \
-       --arg date "$(date -u +"%Y-%m-%dT%H:%M:%SZ")" \
+       --arg date "$(get_timestamp)" \
        '.coverage = $cov | .last_updated = $date' \
        "$kg_file" > "${kg_file}.tmp"
 
@@ -608,7 +608,7 @@ kg_bulk_update() {
         return 1
     fi
     local date
-    date="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
+    date="$(get_timestamp)"
     local iteration
     iteration=$(jq -r '.iteration // 0' "$kg_file")
 

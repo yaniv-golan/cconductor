@@ -136,9 +136,78 @@ GET /works?query={query}&rows=20
 
 **Example**: With `arxiv-mcp-server` configured, the academic-researcher agent will automatically use `mcp__arxiv__search_papers` when searching for academic papers, while also using WebSearch for broader discovery across multiple platforms.
 
-## Adding New MCP Servers to Sessions
+## Adding MCP Servers (Easy Method - Recommended)
 
-To add MCP servers to a research session, edit `.mcp.json` in the session directory:
+The easiest way to add MCP servers is with the `claude mcp` CLI:
+
+### Quick Add to All Sessions (User Scope)
+
+```bash
+# Add popular servers for all research sessions
+claude mcp add --scope user --transport http github https://api.githubcopilot.com/mcp/
+claude mcp add --scope user --transport http notion https://mcp.notion.com/mcp
+claude mcp add --scope user --transport sse linear https://mcp.linear.app/sse
+```
+
+### Add to Current Session Only
+
+```bash
+# Navigate to your research session first
+cd research-sessions/your-session-dir/
+
+# Add servers just for this session
+claude mcp add --transport stdio arxiv -- npx -y arxiv-mcp-server
+claude mcp add --transport http sentry https://mcp.sentry.dev/mcp
+```
+
+### Manage Your Servers
+
+```bash
+# List all configured servers
+claude mcp list
+
+# Remove a server
+claude mcp remove arxiv
+
+# Get server details
+claude mcp get github
+```
+
+### Popular MCP Servers
+
+See the [Claude Code MCP Catalog](https://docs.claude.com/en/docs/claude-code/mcp#popular-mcp-servers) for dozens of pre-built servers:
+
+**Development & Testing**:
+- `sentry` - Error monitoring and debugging
+- `socket` - Dependency security analysis
+- `jam` - Debug recordings with console logs
+
+**Project Management**:
+- `github` - Issues, PRs, code reviews
+- `linear` - Issue tracking
+- `atlassian` - Jira tickets and Confluence docs
+- `notion` - Documentation and notes
+
+**Databases**:
+- `postgres` - Database queries
+- `airtable` - Spreadsheet database
+- `hubspot` - CRM data
+
+**Design & Media**:
+- `figma` - Design context for code generation
+- `canva` - Design generation
+
+**Payments**:
+- `stripe` - Payment processing
+- `paypal` - Commerce capabilities
+
+## Adding MCP Servers (Manual JSON Method)
+
+If you prefer manual configuration or need advanced options, you can edit JSON files directly.
+
+### Session-Specific Servers
+
+Edit `.mcp.json` in the session directory:
 
 ```json
 {
@@ -156,11 +225,9 @@ To add MCP servers to a research session, edit `.mcp.json` in the session direct
 }
 ```
 
-See [Claude Code MCP documentation](https://docs.claude.com/en/docs/claude-code/mcp) for available MCP servers.
+### User-Wide Servers
 
-## Adding User-Wide MCP Servers
-
-To add MCP servers available to ALL sessions, create `~/.claude/mcp.json`:
+Create or edit `~/.claude/mcp.json`:
 
 ```json
 {
@@ -177,5 +244,140 @@ To add MCP servers available to ALL sessions, create `~/.claude/mcp.json`:
 }
 ```
 
-These will be available in all Claude Code sessions, including CConductor research sessions.
+### Secure API Keys with Environment Variables
+
+Use `${VAR}` syntax to keep secrets out of config files:
+
+```json
+{
+  "mcpServers": {
+    "github": {
+      "type": "http",
+      "url": "https://api.githubcopilot.com/mcp/",
+      "headers": {
+        "Authorization": "Bearer ${GITHUB_TOKEN}"
+      }
+    },
+    "custom-tool": {
+      "type": "stdio",
+      "command": "${HOME}/bin/my-tool",
+      "args": ["--api-key", "${MY_TOOL_API_KEY}"],
+      "env": {
+        "CACHE_DIR": "${XDG_CACHE_HOME}/cache"
+      }
+    }
+  }
+}
+```
+
+Set environment variables in your shell:
+
+```bash
+export GITHUB_TOKEN="ghp_your_token_here"
+export MY_TOOL_API_KEY="key_xyz..."
+```
+
+This approach keeps sensitive data secure and allows different values per environment.
+
+## Advanced MCP Features
+
+### Using MCP Resources (@mentions)
+
+If your MCP servers expose resources, reference them with @ mentions:
+
+```bash
+# Analyze a GitHub issue
+./cconductor "Analyze @github:issue://123 and suggest an implementation approach"
+
+# Compare database schema with documentation
+./cconductor "Compare @postgres:schema://users with our data model docs"
+
+# Reference design files
+./cconductor "Generate code from @figma:file://abc123"
+```
+
+Type `@` in Claude Code to see available resources from all configured servers.
+
+### Using MCP Prompts (Slash Commands)
+
+MCP servers can provide custom slash commands. When using CConductor in interactive mode, you can use these commands:
+
+```bash
+# List issues from Jira
+/mcp__jira__list_issues
+
+# Create GitHub PR
+/mcp__github__create_pr "Fix authentication bug"
+
+# Query database
+/mcp__postgres__run_query "SELECT * FROM users LIMIT 10"
+```
+
+Type `/` in Claude Code to see available MCP commands from your configured servers.
+
+---
+
+## Claude Code Plugins Compatibility
+
+CConductor is **fully compatible** with [Claude Code plugins](https://docs.claude.com/en/docs/claude-code/plugins). Any plugins you install via `/plugin install` will automatically be available in CConductor research sessions.
+
+### Why Use Plugins with CConductor?
+
+Plugins extend Claude Code with additional tools, commands, and integrations that enhance research capabilities:
+
+- **Data Sources**: GitHub, Notion, PostgreSQL, Airtable
+- **Development Tools**: Sentry, Socket, Jam
+- **Documentation**: Confluence, Notion, Box
+- **Business Tools**: HubSpot, Stripe, Plaid
+
+### How to Use Plugins
+
+**Install plugins globally** (available to all sessions):
+
+```bash
+# Add a marketplace
+/plugin marketplace add your-org/plugins
+
+# Install specific plugins
+/plugin install github@your-org
+/plugin install notion@your-org
+
+# Browse available plugins
+/plugin
+```
+
+**Use in CConductor** (plugins work automatically):
+
+```bash
+# Plugins are available in research sessions
+./cconductor "Analyze GitHub issues for Claude Code bugs"
+./cconductor "Summarize our Notion docs about product strategy"
+```
+
+### Recommended Plugins for Research
+
+**Development & Code Analysis**:
+- `github` - Access issues, PRs, and code
+- `sentry` - Error monitoring and debugging
+- `socket` - Dependency security analysis
+
+**Documentation & Knowledge**:
+- `notion` - Company documentation
+- `atlassian` - Jira tickets and Confluence
+- `box` - Enterprise content
+
+**Data & Business**:
+- `stripe` - Payment and transaction data
+- `hubspot` - CRM data
+- `airtable` - Structured data
+
+See the [Claude Code Plugin Catalog](https://docs.claude.com/en/docs/claude-code/mcp#popular-mcp-servers) for dozens more.
+
+### Architecture Note
+
+CConductor and plugins serve different purposes:
+- **CConductor**: Orchestrates multi-agent research workflows
+- **Plugins**: Provide tools and data sources
+
+They work together: CConductor orchestrates research, plugins provide the data sources and tools that agents use during research.
 

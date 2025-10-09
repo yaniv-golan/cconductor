@@ -181,7 +181,7 @@ export_journal() {
                             fi
                             ;;
                             
-                        research-coordinator)
+                        mission-orchestrator)
                             # Look for coordinator output with gap analysis in intermediate directory
                             local coordinator_file
                             coordinator_file=$(find "$session_dir/intermediate" "$session_dir/raw" -name "*coordinator*output*.json" 2>/dev/null | tail -1)

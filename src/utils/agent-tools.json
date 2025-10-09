@@ -80,20 +80,6 @@
             "Edit"
         ]
     },
-    "research-coordinator": {
-        "allowed": [
-            "Read",
-            "Write",
-            "Grep",
-            "Glob"
-        ],
-        "disallowed": [
-            "WebSearch",
-            "WebFetch",
-            "Bash",
-            "Edit"
-        ]
-    },
     "code-analyzer": {
         "allowed": [
             "Read",

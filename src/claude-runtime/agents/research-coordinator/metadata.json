@@ -1,9 +1,0 @@
-{
-  "name": "research-coordinator",
-  "description": "The cognitive center of adaptive research. Monitors findings in real-time, identifies gaps and contradictions, spawns new research tasks, and decides when research is complete.",
-  "tools": [
-    "Read",
-    "Bash"
-  ],
-  "model": "claude-sonnet-4-5"
-}

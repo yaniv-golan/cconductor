@@ -136,6 +136,20 @@ get_config_dir() {
     esac
 }
 
+# Get temporary directory (platform-aware)
+# Uses TMPDIR environment variable if set, falls back to /tmp
+get_tmp_dir() {
+    echo "${TMPDIR:-/tmp}"
+}
+
+# Export all path functions for use in other scripts
+export -f detect_os
+export -f get_data_dir
+export -f get_cache_dir
+export -f get_log_dir
+export -f get_config_dir
+export -f get_tmp_dir
+
 # Print all platform paths (for debugging)
 show_platform_paths() {
     local os
@@ -147,6 +161,7 @@ Data:     $(get_data_dir)
 Cache:    $(get_cache_dir)
 Logs:     $(get_log_dir)
 Config:   $(get_config_dir)
+Temp:     $(get_tmp_dir)
 EOF
 }
 
@@ -165,6 +180,9 @@ if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
         --config)
             get_config_dir
             ;;
+        --tmp|--temp)
+            get_tmp_dir
+            ;;
         --os)
             detect_os
             ;;
@@ -172,7 +190,7 @@ if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
             show_platform_paths
             ;;
         *)
-            echo "Usage: platform-paths.sh [--data|--cache|--logs|--config|--os|--show]"
+            echo "Usage: platform-paths.sh [--data|--cache|--logs|--config|--tmp|--os|--show]"
             exit 1
             ;;
     esac

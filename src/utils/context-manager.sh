@@ -67,6 +67,12 @@ summarize_for_synthesis() {
 }
 
 # Calculate context usage (estimate token count)
+# NOTE: This is a ROUGH ESTIMATE using 1 token ≈ 4 characters
+# Actual tokenization varies 2-6 chars/token depending on:
+# - Language (English, code, JSON)
+# - Special characters and formatting
+# - Unicode vs ASCII
+# For production use, consider tiktoken library for accurate counts
 estimate_tokens() {
     local file="$1"
 

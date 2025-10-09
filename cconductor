@@ -5,7 +5,7 @@
 
 set -euo pipefail
 
-VERSION="0.1.0"
+VERSION="0.2.0"
 CCONDUCTOR_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # Source CLI parser
@@ -80,9 +80,9 @@ show_version() {
     echo "CConductor v$version"
     
     # Trigger async update check
-    if [ -f "$CCONDUCTOR_ROOT/src/utils/version-checker.sh" ]; then
+    if [ -f "$CCONDUCTOR_ROOT/src/utils/version-manager.sh" ]; then
         # shellcheck disable=SC1091
-        source "$CCONDUCTOR_ROOT/src/utils/version-checker.sh"
+        source "$CCONDUCTOR_ROOT/src/utils/version-manager.sh"
         check_for_updates_async
     fi
 }
@@ -270,9 +270,12 @@ handle_research() {
         exit 1
     fi
     
+    # Build mission system command
+    local mission_cmd=("$CCONDUCTOR_ROOT/src/cconductor-mission.sh" "run" "--mission" "general-research")
+    
     # Check for --input-dir flag
-    local input_dir=""
     if has_flag "input-dir"; then
+        local input_dir
         input_dir=$(get_flag "input-dir")
         
         # Validate input directory exists
@@ -287,22 +290,24 @@ handle_research() {
         echo "📁 Loading input files from: $input_dir"
         echo ""
         
-        # Pass to cconductor-adaptive.sh via environment variable
-        export CCONDUCTOR_INPUT_DIR="$input_dir"
+        mission_cmd+=(--input-dir "$input_dir")
     fi
     
     # Check for --non-interactive or -y flag
     if has_flag "non-interactive" || has_flag "y"; then
-        export CCONDUCTOR_NON_INTERACTIVE=1
+        mission_cmd+=(--non-interactive)
     fi
     
-    # Call cconductor-adaptive.sh
-    "$CCONDUCTOR_ROOT/src/cconductor-adaptive.sh" "$question"
+    # Add research question
+    mission_cmd+=("$question")
+    
+    # Call mission system (v0.2.0)
+    "${mission_cmd[@]}"
     
     # Show update notification after research
-    if [ "${CCONDUCTOR_NO_UPDATE_CHECK:-0}" != "1" ] && [ -f "$CCONDUCTOR_ROOT/src/utils/version-checker.sh" ]; then
+    if [ "${CCONDUCTOR_NO_UPDATE_CHECK:-0}" != "1" ] && [ -f "$CCONDUCTOR_ROOT/src/utils/version-manager.sh" ]; then
         # shellcheck disable=SC1091
-        source "$CCONDUCTOR_ROOT/src/utils/version-checker.sh"
+        source "$CCONDUCTOR_ROOT/src/utils/version-manager.sh"
         show_cached_notification || check_for_updates_async
     fi
 }
@@ -328,12 +333,12 @@ main() {
     fi
     
     if has_flag "check-update"; then
-        if [ -f "$CCONDUCTOR_ROOT/src/utils/version-checker.sh" ]; then
+        if [ -f "$CCONDUCTOR_ROOT/src/utils/version-manager.sh" ]; then
             # shellcheck disable=SC1091
-            source "$CCONDUCTOR_ROOT/src/utils/version-checker.sh"
+            source "$CCONDUCTOR_ROOT/src/utils/version-manager.sh"
             check_for_updates_sync
         else
-            echo "Version checker not available"
+            echo "Version manager not available"
             exit 1
         fi
         return 0
@@ -393,50 +398,87 @@ main() {
     # Handle commands
     case "$command" in
         resume)
-            # Check initialization before resuming
-            if ! check_initialization; then
-                run_initialization true
-            fi
-            
-            local session_id
-            session_id=$(get_arg 1)
-            if [ -z "$session_id" ]; then
-                echo "Error: resume requires a session ID" >&2
-                exit 1
-            fi
-            
-            "$CCONDUCTOR_ROOT/src/cconductor-adaptive.sh" --resume "$session_id"
-            
-            # Show update notification after research
-            if [ "${CCONDUCTOR_NO_UPDATE_CHECK:-0}" != "1" ] && [ -f "$CCONDUCTOR_ROOT/src/utils/version-checker.sh" ]; then
-                # shellcheck disable=SC1091
-                source "$CCONDUCTOR_ROOT/src/utils/version-checker.sh"
-                show_cached_notification || check_for_updates_async
-            fi
+            echo "❌ Resume functionality not yet implemented in v0.2.0" >&2
+            echo "" >&2
+            echo "v0.2.0 uses the new mission system which doesn't support resuming yet." >&2
+            echo "This feature will be added in a future release." >&2
+            echo "" >&2
+            echo "For now, you can:" >&2
+            echo "  • View latest session: ./cconductor latest" >&2
+            echo "  • Start new research: ./cconductor \"your question\"" >&2
+            exit 1
             ;;
         sessions|list)
-            # Use the formatted list from cconductor-adaptive.sh
-            "$CCONDUCTOR_ROOT/src/cconductor-adaptive.sh" --list
+            # List research sessions from session directory
+            # shellcheck disable=SC1091
+            source "$CCONDUCTOR_ROOT/src/utils/path-resolver.sh"
+            local session_dir
+            session_dir=$(resolve_path "session_dir" 2>/dev/null || echo "$CCONDUCTOR_ROOT/research-sessions")
+            
+            if [ ! -d "$session_dir" ]; then
+                echo "No research sessions found"
+                echo "Start your first research: ./cconductor \"your question\""
+                exit 0
+            fi
+            
+            echo "Research Sessions:"
+            echo "══════════════════════════════════════════════════"
+            echo ""
+            
+            # Find all session directories
+            local count=0
+            for session in "$session_dir"/session_* "$session_dir"/mission_session_*; do
+                [ -d "$session" ] || continue
+                count=$((count + 1))
+                
+                local session_name=$(basename "$session")
+                local created="N/A"
+                local question="N/A"
+                local status="unknown"
+                
+                # Try to read session metadata
+                if [ -f "$session/session.json" ]; then
+                    created=$(jq -r '.created_at // .started_at // "N/A"' "$session/session.json" 2>/dev/null)
+                    question=$(jq -r '.research_question // .objective // "N/A"' "$session/session.json" 2>/dev/null)
+                    status=$(jq -r '.status // "unknown"' "$session/session.json" 2>/dev/null)
+                fi
+                
+                echo "[$count] $session_name"
+                echo "    Created: $created"
+                echo "    Status: $status"
+                echo "    Question: ${question:0:80}$([ ${#question} -gt 80 ] && echo '...')"
+                echo ""
+            done
+            
+            if [ $count -eq 0 ]; then
+                echo "No research sessions found"
+                echo ""
+                echo "Start your first research:"
+                echo "  ./cconductor \"your question\""
+            else
+                echo "Total: $count session(s)"
+                echo ""
+                echo "View latest: ./cconductor latest"
+            fi
             ;;
         status)
             echo "Checking for running research sessions..."
             
-            # Find cconductor-adaptive.sh processes, get just PIDs
+            # Find cconductor-mission.sh processes
             local pids
-            pids=$(pgrep -f "cconductor-adaptive.sh" || true)
+            pids=$(pgrep -f "cconductor-mission.sh" || true)
             
             if [ -z "$pids" ]; then
                 echo "No active sessions"
             else
                 echo ""
-                # Count unique parent processes (those without cconductor-adaptive as parent)
                 local count=0
                 for pid in $pids; do
                     local ppid=$(ps -o ppid= -p "$pid" 2>/dev/null | tr -d ' ')
                     local parent_cmd=$(ps -o command= -p "$ppid" 2>/dev/null || true)
                     
-                    # Skip if parent is also cconductor-adaptive (it's a child process)
-                    if ! echo "$parent_cmd" | grep -q "cconductor-adaptive.sh"; then
+                    # Skip if parent is also cconductor-mission (it's a child process)
+                    if ! echo "$parent_cmd" | grep -q "cconductor-mission.sh"; then
                         count=$((count + 1))
                         local start_time=$(ps -o lstart= -p "$pid" 2>/dev/null)
                         
@@ -576,16 +618,11 @@ main() {
                 exit 1
             fi
             
-            # Generate dashboard metrics if missing
-            if [ ! -f "$session_dir/dashboard-metrics.json" ]; then
-                bash -c "source '$CCONDUCTOR_ROOT/src/utils/dashboard-metrics.sh' && generate_dashboard_metrics '$session_dir'" 2>/dev/null || true
-            fi
-            
-            # Launch dashboard using shared utility
+            # Launch dashboard using unified utility
             echo "Starting Research Journal Viewer..."
             # shellcheck disable=SC1091
-            if source "$CCONDUCTOR_ROOT/src/utils/dashboard-viewer.sh" 2>/dev/null; then
-                if launch_dashboard_viewer "$session_dir" "true"; then
+            if source "$CCONDUCTOR_ROOT/src/utils/dashboard.sh" 2>/dev/null; then
+                if dashboard_view "$session_dir"; then
                     echo ""
                     echo "To stop the server later:"
                     if [ -f "$session_dir/.dashboard-server.pid" ]; then

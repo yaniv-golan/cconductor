@@ -11,7 +11,7 @@ mkdir -p "$LOG_DIR"
 
 # Read tool call information from stdin (JSON)
 TOOL_NAME=$(jq -r '.tool_name')
-TIMESTAMP=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+TIMESTAMP=$(get_timestamp)
 
 # Log based on tool type
 case "$TOOL_NAME" in

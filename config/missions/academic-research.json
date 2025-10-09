@@ -1,0 +1,64 @@
+{
+  "name": "academic-research",
+  "description": "Comprehensive academic literature review with peer-reviewed sources",
+  "version": "1.0",
+  
+  "objective": "Conduct systematic literature review on the research topic, prioritizing peer-reviewed sources, following citation chains, and validating key claims with multiple academic sources",
+  
+  "success_criteria": {
+    "required_outputs": [
+      "literature_review",
+      "citation_network"
+    ],
+    "required_validations": [],
+    "confidence_threshold": 0.88,
+    "all_claims_cited": true,
+    "min_peer_reviewed_sources": 10,
+    "min_quality_score": 85
+  },
+  
+  "constraints": {
+    "max_iterations": 10,
+    "max_time_minutes": 60,
+    "max_agent_invocations": 25,
+    "budget_usd": 15.0
+  },
+  
+  "preferred_agents": [
+    {
+      "agent": "academic-researcher",
+      "for": "Finding and analyzing academic papers from arXiv, Semantic Scholar, PubMed"
+    },
+    {
+      "agent": "fact-checker",
+      "for": "Validating key claims with multiple sources"
+    },
+    {
+      "agent": "synthesis-agent",
+      "for": "Synthesizing findings into coherent literature review"
+    }
+  ],
+  
+  "orchestration_guidance": "Prioritize peer-reviewed sources over general web content. Follow citation chains to find seminal papers. For controversial claims, seek multiple independent validations. Map the citation network to identify key papers and research clusters. Focus on recent work but include foundational papers.",
+  
+  "output_specification": {
+    "format": "markdown",
+    "structure": "academic_literature_review",
+    "required_sections": [
+      "abstract",
+      "introduction",
+      "methodology",
+      "key_findings",
+      "citation_analysis",
+      "research_gaps",
+      "conclusion",
+      "bibliography"
+    ]
+  },
+  
+  "domain_context": {
+    "research_type": "academic",
+    "custom_knowledge": ["research-methodology.md", "scientific-methodology.md"]
+  }
+}
+

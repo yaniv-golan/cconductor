@@ -155,14 +155,16 @@ Balanced research on any topic.
 
 ## Requirements
 
-- **Node.js** (18+) - Required to install Claude Code CLI
-  - npm comes bundled with Node.js
-  - Install: `brew install node` (macOS) or see [nodejs.org](https://nodejs.org/)
 - **Claude Code CLI** (required - CConductor is a Claude Code extension)
-  - Install: `npm install -g @anthropic-ai/claude-code`
+  - **Option 1: Native Installer** (Recommended, no Node.js needed):
+    ```bash
+    curl -fsSL https://claude.ai/install.sh | bash
+    ```
+  - **Option 2: npm** (if you prefer or already have Node.js):
+    - Requires Node.js 18+: `brew install node` (macOS) or see [nodejs.org](https://nodejs.org/)
+    - Install: `npm install -g @anthropic-ai/claude-code`
   - CConductor uses the Claude Code CLI in headless mode to invoke
-    specialized agents with allowed tools (e.g., Bash, Read, WebSearch,
-    MCP)
+    specialized agents with allowed tools (e.g., Bash, Read, WebSearch, MCP)
   - Cannot run standalone with just an API key
   - Available through Claude Pro/Max subscriptions or API/pay-as-you-go
   - See [Understanding Claude Code Access](#understanding-claude-code-access) below for details
@@ -170,6 +172,20 @@ Balanced research on any topic.
 - **jq** (JSON processor)
 - **curl** (for web requests)
 - **bc** (for calculations, pre-installed on most systems)
+- **ripgrep** (recommended for Search tool) - `brew install ripgrep` (macOS)
+
+### Platform Compatibility
+
+CConductor is tested and supported on:
+- **macOS** 10.15+ (Catalina and later)
+- **Linux** with GNU coreutils (Ubuntu 20.04+, Debian 10+, Fedora 33+)
+- **Windows** via WSL2 (Windows Subsystem for Linux)
+
+**Known Limitations**:
+- **FreeBSD/OpenBSD**: `date` command format differs, may cause timestamp issues
+- **Windows native**: Not supported - use WSL2
+
+**Date/Time Dependencies**: All timestamp generation uses `date -u +"%Y-%m-%dT%H:%M:%SZ"` which works on macOS (BSD date) and Linux (GNU date). For other BSD variants, timestamps may need adjustment.
 
 ### Installing Dependencies
 
@@ -183,25 +199,27 @@ brew --version
 # If not installed, install Homebrew:
 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
 
-# 1. Install Node.js (includes npm)
-brew install node
+# 1. Install Claude Code CLI (Native Installer - Recommended)
+curl -fsSL https://claude.ai/install.sh | bash
 
-# 2. Install Claude Code CLI
-npm install -g @anthropic-ai/claude-code
+# OR if you prefer npm:
+# brew install node
+# npm install -g @anthropic-ai/claude-code
 
-# 3. Login to Claude Code (REQUIRED)
+# 2. Login to Claude Code (REQUIRED)
 claude login
 # This opens a browser to authenticate with Claude.ai
 # You need a Claude Pro/Max subscription or API credits
 
-# 4. Install other dependencies
-brew install bash jq curl bc
+# 3. Install other dependencies
+brew install bash jq curl bc ripgrep
 # Note: macOS ships with Bash 3.2, but CConductor requires Bash 4.0+
 # The brew-installed bash (5.x) will be at /opt/homebrew/bin/bash
+# ripgrep is recommended for Search tool functionality
 
-# 5. Verify installations
-node --version    # Should be v18 or higher
+# 4. Verify installations
 claude --version  # Should show claude-code version
+rg --version      # Should show ripgrep version
 claude whoami     # Should show your authenticated account
 /opt/homebrew/bin/bash --version  # Should be 5.x or higher
 ```
@@ -209,29 +227,37 @@ claude whoami     # Should show your authenticated account
 **Linux** (Ubuntu/Debian):
 
 ```bash
-# 1. Install Node.js (includes npm)
-curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
-sudo apt-get install -y nodejs
+# 1. Install Claude Code CLI (Native Installer - Recommended)
+curl -fsSL https://claude.ai/install.sh | bash
 
-# 2. Install Claude Code CLI
-npm install -g @anthropic-ai/claude-code
+# OR if you prefer npm:
+# curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
+# sudo apt-get install -y nodejs
+# npm install -g @anthropic-ai/claude-code
+
+# 2. Login to Claude Code
+claude login
 
 # 3. Install other dependencies
-sudo apt-get install jq curl bash bc
+sudo apt-get install jq curl bash bc ripgrep
 ```
 
 **Windows** (WSL):
 
 ```bash
-# 1. Install Node.js
-curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
-sudo apt-get install -y nodejs
+# 1. Install Claude Code CLI (Native Installer - Recommended)
+curl -fsSL https://claude.ai/install.sh | bash
 
-# 2. Install Claude Code CLI
-npm install -g @anthropic-ai/claude-code
+# OR if you prefer npm:
+# curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
+# sudo apt-get install -y nodejs
+# npm install -g @anthropic-ai/claude-code
+
+# 2. Login to Claude Code
+claude login
 
 # 3. Install other dependencies
-sudo apt-get install jq curl bash bc
+sudo apt-get install jq curl bash bc ripgrep
 ```
 
 ---

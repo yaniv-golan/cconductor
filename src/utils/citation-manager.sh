@@ -21,7 +21,7 @@ cm_add_citation() {
 
     # Generate citation ID if not provided
     local citation_with_id
-    citation_with_id=$(echo "$citation_json" | jq --arg date "$(date -u +"%Y-%m-%dT%H:%M:%SZ")" '
+    citation_with_id=$(echo "$citation_json" | jq --arg date "$(get_timestamp)" '
         if .id then . else
             . + {
                 id: ("cite_" + (now | tostring)),

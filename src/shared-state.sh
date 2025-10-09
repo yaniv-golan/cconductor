@@ -67,6 +67,12 @@ lock_release() {
     fi
 }
 
+# Get ISO 8601 timestamp (UTC)
+# Centralized to ensure consistency across all modules
+get_timestamp() {
+    date -u +"%Y-%m-%dT%H:%M:%SZ"
+}
+
 # Execute with lock (automatic acquire and release)
 # Note: Uses explicit lock release instead of trap to avoid interfering with caller's traps
 with_lock() {
@@ -139,7 +145,15 @@ atomic_json_update() {
         return 1
     fi
 
-    mv "${file}.tmp" "$file"
+    # Move with error handling
+    if ! mv "${file}.tmp" "$file"; then
+        # Move failed - cleanup and report
+        rm -f "${file}.tmp"
+        lock_release "$file"
+        echo "Error: Failed to update $file (mv failed)" >&2
+        return 1
+    fi
+    
     lock_release "$file"
 }
 
@@ -150,3 +164,4 @@ export -f with_lock
 export -f atomic_read
 export -f atomic_write
 export -f atomic_json_update
+export -f get_timestamp

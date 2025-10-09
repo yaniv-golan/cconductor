@@ -1,4 +1,18 @@
 {
   "name": "pdf-analyzer",
-  "description": "Use for deep analysis of PDF documents. Extracts structure, content, figures, and metadata from academic papers and technical documents"
+  "description": "Use for deep analysis of PDF documents. Extracts structure, content, figures, and metadata from academic papers and technical documents",
+  "capabilities": [
+    "pdf_analysis"
+  ],
+  "input_types": [
+    "pitch_deck",
+    "academic_paper"
+  ],
+  "output_types": [
+    "research_report"
+  ],
+  "tools": [
+    "Read"
+  ],
+  "model": "claude-sonnet-4-5"
 }

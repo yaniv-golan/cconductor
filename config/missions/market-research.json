@@ -1,0 +1,64 @@
+{
+  "name": "market-research",
+  "description": "Market sizing and competitive landscape analysis with TAM/SAM/SOM calculations",
+  "version": "1.0",
+  
+  "objective": "Calculate and validate TAM/SAM/SOM for the target market, analyze the competitive landscape, identify market segments, and assess market drivers and challenges",
+  
+  "success_criteria": {
+    "required_outputs": [
+      "market_sizing_table",
+      "competitive_analysis"
+    ],
+    "required_validations": [
+      "tam_validation"
+    ],
+    "confidence_threshold": 0.85,
+    "all_claims_cited": true,
+    "min_quality_score": 80
+  },
+  
+  "constraints": {
+    "max_iterations": 8,
+    "max_time_minutes": 45,
+    "max_agent_invocations": 20,
+    "budget_usd": 10.0
+  },
+  
+  "preferred_agents": [
+    {
+      "agent": "market-analyzer",
+      "for": "Market sizing, TAM/SAM/SOM calculations, and market trend analysis"
+    },
+    {
+      "agent": "web-researcher",
+      "for": "Competitive intelligence and market data gathering"
+    },
+    {
+      "agent": "fact-checker",
+      "for": "Validating market size claims and competitive data"
+    }
+  ],
+  
+  "orchestration_guidance": "Use multiple methodologies for market sizing (top-down and bottom-up). Cross-validate TAM claims with multiple sources. Identify market segments and growth drivers. Map competitive landscape with current players, funding status, and market positioning. Flag wide variances in market estimates and explain discrepancies.",
+  
+  "output_specification": {
+    "format": "markdown",
+    "structure": "market_research_report",
+    "required_sections": [
+      "executive_summary",
+      "market_sizing",
+      "market_segments",
+      "competitive_landscape",
+      "market_drivers",
+      "market_challenges",
+      "growth_projections"
+    ]
+  },
+  
+  "domain_context": {
+    "research_type": "market",
+    "custom_knowledge": []
+  }
+}
+

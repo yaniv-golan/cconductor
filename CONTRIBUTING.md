@@ -122,6 +122,30 @@ cd cconductor
 
 ## Coding Standards
 
+### Error Handling Guidelines
+
+CConductor uses multiple error reporting patterns depending on the context:
+
+1. **User-facing errors**: Use `error_*()` functions from `src/utils/error-messages.sh`
+   - These provide formatted, actionable error messages with troubleshooting steps
+   - Example: `error_lock_failed "$file" "$timeout"`
+   
+2. **Internal errors**: Use `echo "Error: message" >&2` for simple cases
+   - Quick, lightweight error reporting for internal failures
+   - Example: `echo "Error: Invalid input" >&2; return 1`
+   
+3. **Structured errors**: Use `jq -n` for JSON error responses
+   - Used by tools and APIs that need machine-readable errors
+   - Example: `jq -n --arg err "Invalid format" '{error: $err, result: null}'`
+
+**Best Practices**:
+- Always return non-zero exit codes on error (`return 1`)
+- Clean up resources (locks, temp files) before returning
+- Provide context in error messages (what failed, why, how to fix)
+- Use consistent error formats within a module
+
+**Recommendation**: Standardize on pattern #1 (error_*() functions) for v0.3.0 for better user experience.
+
 ### Bash Style Guide
 
 **General Principles:**

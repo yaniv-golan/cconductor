@@ -1,6 +1,9 @@
 # User customizations (stored in user home directory, not in project)
 knowledge-base-custom/
 
+# Test user config (for testing user-specific agents/missions)
+user-test-config/
+
 # Internal documentation
 internal_docs/
 
@@ -52,7 +55,7 @@ rebuild-agent-json.py
 test-all-agents.sh
 test-phase0-simple.sh
 
-# Backup files
+# Backup files (includes perl -i.bak generated backups)
 *-backup-*/
 *.backup-*
 *.backup

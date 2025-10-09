@@ -41,7 +41,7 @@ if [ -z "$session_dir" ]; then
 fi
 
 # Create event for logging
-timestamp=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+timestamp=$(get_timestamp)
 event_data=$(jq -n \
     --arg tool "$tool_name" \
     --arg status "$status_text" \

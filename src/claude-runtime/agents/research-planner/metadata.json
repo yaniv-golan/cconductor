@@ -1,4 +1,17 @@
 {
   "name": "research-planner",
-  "description": "Use when user provides a research question. Clarifies intent, detects research type, and creates initial task breakdown"
+  "description": "Use when user provides a research question. Clarifies intent, detects research type, and creates initial task breakdown",
+  "capabilities": [
+    "mission_planning"
+  ],
+  "input_types": [
+    "research_question"
+  ],
+  "output_types": [
+    "research_report"
+  ],
+  "tools": [
+    "Read"
+  ],
+  "model": "claude-sonnet-4-5"
 }

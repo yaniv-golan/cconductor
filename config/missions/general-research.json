@@ -1,0 +1,56 @@
+{
+  "name": "general-research",
+  "description": "General-purpose research for any topic - the default mission for open-ended research questions",
+  "objective": "Conduct comprehensive research on the given topic, gathering information from multiple sources, synthesizing findings, and producing a well-structured research report with proper citations",
+  "success_criteria": {
+    "required_outputs": ["research_report"],
+    "min_confidence": 0.7,
+    "min_sources": 5,
+    "validations": [
+      "Report includes proper citations",
+      "Claims are supported by evidence",
+      "Multiple perspectives considered",
+      "Key findings clearly identified"
+    ]
+  },
+  "constraints": {
+    "max_cost_usd": 10.0,
+    "max_time_minutes": 60,
+    "max_iterations": 20
+  },
+  "preferred_agents": [
+    "web-researcher",
+    "academic-researcher",
+    "fact-checker",
+    "synthesis-agent"
+  ],
+  "orchestration_guidance": {
+    "strategy": "adaptive",
+    "priorities": ["accuracy", "completeness", "clarity"],
+    "phases": [
+      "Initial broad research to understand the topic",
+      "Deep-dive into specific aspects based on initial findings",
+      "Fact-checking and validation of key claims",
+      "Synthesis and report generation"
+    ],
+    "hints": [
+      "Start with web-researcher for broad overview",
+      "Use academic-researcher for scholarly sources if relevant",
+      "Always fact-check important claims",
+      "Synthesize findings into coherent narrative"
+    ]
+  },
+  "output_specification": {
+    "format": "markdown",
+    "required_sections": [
+      "Executive Summary",
+      "Key Findings",
+      "Detailed Analysis",
+      "Sources and Citations",
+      "Confidence Assessment"
+    ],
+    "style": "Clear, objective, well-structured"
+  }
+}
+
+

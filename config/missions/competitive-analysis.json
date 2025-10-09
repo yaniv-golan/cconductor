@@ -1,0 +1,58 @@
+{
+  "name": "competitive-analysis",
+  "description": "Comprehensive competitive landscape analysis with market positioning",
+  "version": "1.0",
+  
+  "objective": "Analyze competitive landscape, identify key players, assess market positioning, evaluate competitive advantages and threats, and provide strategic insights",
+  
+  "success_criteria": {
+    "required_outputs": [
+      "competitive_analysis",
+      "research_report"
+    ],
+    "required_validations": [],
+    "confidence_threshold": 0.83,
+    "all_claims_cited": true,
+    "min_quality_score": 75
+  },
+  
+  "constraints": {
+    "max_iterations": 7,
+    "max_time_minutes": 40,
+    "max_agent_invocations": 18,
+    "budget_usd": 8.0
+  },
+  
+  "preferred_agents": [
+    {
+      "agent": "web-researcher",
+      "for": "Gathering competitive intelligence from web sources"
+    },
+    {
+      "agent": "market-analyzer",
+      "for": "Market positioning and competitive dynamics analysis"
+    }
+  ],
+  
+  "orchestration_guidance": "Identify direct and indirect competitors. Analyze product offerings, pricing, market share, funding status, and growth trajectories. Assess competitive moats and differentiation strategies. Map market structure (leaders, challengers, niche players). Track recent M&A activity and partnerships.",
+  
+  "output_specification": {
+    "format": "markdown",
+    "structure": "competitive_analysis_report",
+    "required_sections": [
+      "executive_summary",
+      "key_players",
+      "market_structure",
+      "competitive_positioning",
+      "competitive_advantages",
+      "threats_and_risks",
+      "strategic_insights"
+    ]
+  },
+  
+  "domain_context": {
+    "research_type": "competitive",
+    "custom_knowledge": []
+  }
+}
+

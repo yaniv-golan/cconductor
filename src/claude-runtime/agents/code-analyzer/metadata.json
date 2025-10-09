@@ -1,4 +1,18 @@
 {
   "name": "code-analyzer",
-  "description": "Use when research involves code, implementations, or technical systems. Analyzes codebases and extracts technical implementations"
+  "description": "Use when research involves code, implementations, or technical systems. Analyzes codebases and extracts technical implementations",
+  "capabilities": [
+    "code_analysis"
+  ],
+  "input_types": [
+    "code_repository"
+  ],
+  "output_types": [
+    "technical_assessment"
+  ],
+  "tools": [
+    "Read",
+    "Code"
+  ],
+  "model": "claude-sonnet-4-5"
 }

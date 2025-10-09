@@ -1,4 +1,21 @@
 {
   "name": "fact-checker",
-  "description": "Use for validation. Verifies claims from knowledge graph, cross-references with authoritative sources, and assesses data quality"
+  "description": "Use for validation. Verifies claims from knowledge graph, cross-references with authoritative sources, and assesses data quality",
+  "capabilities": [
+    "fact_checking",
+    "tam_validation"
+  ],
+  "input_types": [
+    "market_claims",
+    "knowledge_graph"
+  ],
+  "output_types": [
+    "validation_report"
+  ],
+  "tools": [
+    "WebSearch",
+    "WebFetch",
+    "Read"
+  ],
+  "model": "claude-sonnet-4-5"
 }

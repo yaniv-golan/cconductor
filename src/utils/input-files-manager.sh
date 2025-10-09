@@ -29,7 +29,7 @@ init_input_manifest() {
     cat > "$manifest" <<EOF
 {
   "input_dir": "",
-  "processed_at": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+  "processed_at": "$(get_timestamp)",
   "pdfs": [],
   "markdown": [],
   "text": []
@@ -66,7 +66,7 @@ add_pdf_to_manifest() {
        --arg hash "$content_hash" \
        --arg cache "$cache_path" \
        --arg size "$file_size" \
-       --arg time "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+       --arg time "$(get_timestamp)" \
        '.pdfs += [{
          original_name: $name,
          original_path: $path,
@@ -95,7 +95,7 @@ add_text_to_manifest() {
        --arg path "$original_path" \
        --arg spath "$session_path" \
        --arg size "$file_size" \
-       --arg time "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+       --arg time "$(get_timestamp)" \
        ".${file_type} += [{
          original_name: \$name,
          original_path: \$path,

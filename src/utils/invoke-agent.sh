@@ -19,9 +19,19 @@ source "$SCRIPT_DIR/event-logger.sh" 2>/dev/null || true
 check_claude_cli() {
     if ! command -v claude &> /dev/null; then
         echo "Error: Claude CLI not found in PATH" >&2
-        echo "Please install Claude CLI: https://docs.claude.com/en/docs/claude-code/overview" >&2
+        echo "Install (native): curl -fsSL https://claude.ai/install.sh | bash" >&2
+        echo "Or (npm): npm install -g @anthropic-ai/claude-code" >&2
+        echo "Docs: https://docs.claude.com/en/docs/claude-code/overview" >&2
         return 1
     fi
+    
+    # Try to verify authentication (optional check, doesn't block)
+    if ! claude --version &> /dev/null; then
+        echo "Warning: Claude CLI may not be authenticated or properly installed" >&2
+        echo "If you encounter auth errors, run: claude login" >&2
+        # Don't fail - let it try anyway, claude --version might fail for other reasons
+    fi
+    
     return 0
 }
 
@@ -180,30 +190,6 @@ extract_agent_metadata() {
                        --argjson claims "$claims" \
                        --argjson gaps "$gaps" \
                        '{claims_synthesized: $claims, gaps_found: $gaps}')
-            ;;
-            
-        research-coordinator)
-            # Extract knowledge graph statistics from coordinator's output
-            local entities=0
-            local claims=0
-            local gaps=0
-            local contradictions=0
-            
-            # Extract from coordinator's output JSON (result_json already extracted above)
-            if [ -n "$result_json" ]; then
-                # Extract from knowledge_graph_updates (use correct field names)
-                entities=$(echo "$result_json" | jq '.knowledge_graph_updates.entities_discovered // [] | length' 2>/dev/null || echo "0")
-                claims=$(echo "$result_json" | jq '.knowledge_graph_updates.claims // [] | length' 2>/dev/null || echo "0")
-                gaps=$(echo "$result_json" | jq '.knowledge_graph_updates.gaps_detected // [] | length' 2>/dev/null || echo "0")
-                contradictions=$(echo "$result_json" | jq '.knowledge_graph_updates.contradictions_detected // [] | length' 2>/dev/null || echo "0")
-            fi
-            
-            metadata=$(jq -n \
-                       --argjson entities "$entities" \
-                       --argjson claims "$claims" \
-                       --argjson gaps "$gaps" \
-                       --argjson contradictions "$contradictions" \
-                       '{entities_discovered: $entities, claims_validated: $claims, gaps_identified: $gaps, contradictions_detected: $contradictions}')
             ;;
     esac
     

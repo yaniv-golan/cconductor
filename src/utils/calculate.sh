@@ -8,6 +8,14 @@ set -euo pipefail
 # Safe calculation with input validation
 safe_calculate() {
     local expression="$1"
+    
+    # Check bc availability (required for this specialized math tool)
+    if ! command -v bc &> /dev/null; then
+        jq -n \
+            --arg err "bc not installed. This Calculate tool requires bc for precise mathematical operations. Install: 'brew install bc' (macOS) or 'apt install bc' (Linux)" \
+            '{result: null, error: $err}' >&2
+        return 1
+    fi
 
     # Input validation - only allow safe characters
     if ! echo "$expression" | grep -qE '^[0-9+*/.()eE, 	-]+$'; then

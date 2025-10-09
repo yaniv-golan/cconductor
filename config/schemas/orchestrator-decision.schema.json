@@ -1,0 +1,139 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Mission Orchestrator Decision Schema",
+  "version": "1.0.0",
+  "description": "Schema for decisions emitted by the mission orchestrator",
+  "definitions": {
+    "invoke_action": {
+      "type": "object",
+      "required": ["action", "agent", "task"],
+      "properties": {
+        "action": {
+          "const": "invoke"
+        },
+        "agent": {
+          "type": "string",
+          "description": "Name of agent to invoke"
+        },
+        "task": {
+          "type": "string",
+          "description": "Specific task description for the agent"
+        },
+        "context": {
+          "type": "string",
+          "description": "Why this agent? What should they know?"
+        },
+        "input_artifacts": {
+          "type": "array",
+          "items": {"type": "string"},
+          "description": "Paths to input artifacts"
+        },
+        "expected_outputs": {
+          "type": "array",
+          "items": {"type": "string"},
+          "description": "Expected output types (from output_types.json)"
+        },
+        "constraints": {
+          "type": "object",
+          "properties": {
+            "max_time_minutes": {"type": "number"},
+            "max_cost_usd": {"type": "number"}
+          }
+        }
+      }
+    },
+    "reinvoke_action": {
+      "type": "object",
+      "required": ["action", "agent", "reason"],
+      "properties": {
+        "action": {
+          "const": "reinvoke"
+        },
+        "agent": {
+          "type": "string",
+          "description": "Name of agent to re-invoke"
+        },
+        "reason": {
+          "type": "string",
+          "description": "Why re-invoking this agent"
+        },
+        "refinements": {
+          "type": "string",
+          "description": "How to improve the task specification"
+        },
+        "previous_invocation_id": {
+          "type": "string",
+          "description": "ID of previous invocation being refined"
+        }
+      }
+    },
+    "handoff_action": {
+      "type": "object",
+      "required": ["action", "from_agent", "to_agent", "task"],
+      "properties": {
+        "action": {
+          "const": "handoff"
+        },
+        "from_agent": {
+          "type": "string",
+          "description": "Agent that produced the artifacts"
+        },
+        "to_agent": {
+          "type": "string",
+          "description": "Agent to receive the artifacts"
+        },
+        "task": {
+          "type": "string",
+          "description": "Task for receiving agent"
+        },
+        "input_artifacts": {
+          "type": "array",
+          "items": {"type": "string"},
+          "description": "Artifacts being handed off"
+        },
+        "expected_outputs": {
+          "type": "array",
+          "items": {"type": "string"}
+        },
+        "rationale": {
+          "type": "string",
+          "description": "Why this handoff makes sense"
+        }
+      }
+    },
+    "early_exit_action": {
+      "type": "object",
+      "required": ["action", "reason"],
+      "properties": {
+        "action": {
+          "const": "early_exit"
+        },
+        "reason": {
+          "type": "string",
+          "description": "Why exiting early"
+        },
+        "achieved_outputs": {
+          "type": "array",
+          "items": {"type": "string"},
+          "description": "Outputs that were achieved"
+        },
+        "missing_outputs": {
+          "type": "array",
+          "items": {"type": "string"},
+          "description": "Required outputs that are missing"
+        },
+        "partial_results_useful": {
+          "type": "boolean",
+          "description": "Whether partial results provide value"
+        }
+      }
+    }
+  },
+  "oneOf": [
+    {"$ref": "#/definitions/invoke_action"},
+    {"$ref": "#/definitions/reinvoke_action"},
+    {"$ref": "#/definitions/handoff_action"},
+    {"$ref": "#/definitions/early_exit_action"}
+  ]
+}
+

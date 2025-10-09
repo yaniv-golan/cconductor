@@ -9,7 +9,7 @@ mkdir -p "$(dirname "$CITATIONS_DB")"
 [ ! -f "$CITATIONS_DB" ] && echo "[]" > "$CITATIONS_DB"
 
 TOOL_NAME=$(jq -r '.tool_name')
-TIMESTAMP=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+TIMESTAMP=$(get_timestamp)
 
 # Track web sources
 if [ "$TOOL_NAME" = "WebFetch" ]; then

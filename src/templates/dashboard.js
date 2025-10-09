@@ -2,10 +2,10 @@
 class Dashboard {
     constructor() {
         this.updateInterval = 3000; // 3 seconds
-        this.expandedJournalTasks = new Set(); // Track expanded journal task breakdowns
+        this.expandedJournalTasks = new Set(); // Track expanded journal entry breakdowns
         this.expandedJournalTools = new Set(); // Track expanded journal tools sections
-        this.knownTaskIds = new Set(); // Track tasks we've seen before
-        this.newTaskIds = new Set(); // Track newly added tasks
+        this.knownTaskIds = new Set(); // Track tasks (legacy renderTasks compatibility)
+        this.newTaskIds = new Set(); // Track new tasks (legacy renderTasks compatibility)
         this.runtimeInterval = null; // Track runtime interval to avoid duplicates
         this.sessionStartTime = null; // Cache session start time
     }
@@ -17,9 +17,8 @@ class Dashboard {
 
     async loadAndRender() {
         try {
-            const [metrics, tasks, events, session] = await Promise.all([
+            const [metrics, events, session] = await Promise.all([
                 this.fetchJSON('dashboard-metrics.json'),
-                this.fetchJSON('task-queue.json'),
                 this.fetchJSONL('events.jsonl'),
                 this.fetchJSON('session.json')
             ]);
@@ -678,7 +677,7 @@ class Dashboard {
         }
         
         // Entry 2-N: Agent invocations
-        const agentNames = ['research-planner', 'academic-researcher', 'web-researcher', 'synthesis-agent', 'research-coordinator'];
+        const agentNames = ['research-planner', 'academic-researcher', 'web-researcher', 'synthesis-agent'];
         
         agentNames.forEach(agentName => {
             const invocations = events.filter(e => e.type === 'agent_invocation' && e.data.agent === agentName);
@@ -718,7 +717,7 @@ class Dashboard {
                 startTime: e.timestamp,
                 endTime: null,
                 content: this.formatIterationComplete(e.data),
-                agent: 'research-coordinator',
+                agent: 'mission-orchestrator',
                 metadata: e.data.stats || {},
                 events: [e]
             });

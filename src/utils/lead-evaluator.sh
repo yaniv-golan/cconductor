@@ -273,7 +273,7 @@ generate_lead_task() {
             agent: $agent,
             query: $query,
             priority: ($priority | tonumber),
-            spawned_by: "research-coordinator",
+            spawned_by: "mission-orchestrator",
             reason: $reason,
             pdf_path: $pdf
         }'

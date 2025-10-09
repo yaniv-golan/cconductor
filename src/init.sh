@@ -87,7 +87,23 @@ fi
 
 if ! command -v bc &> /dev/null; then
     missing_deps+=("bc")
-    missing_deps+=("uv")
+fi
+
+# Check for optional but recommended: ripgrep (for Search tool)
+if ! command -v rg &> /dev/null; then
+    echo ""
+    echo "   ⚠️  Recommended: ripgrep not found"
+    echo "      Many agents use the Search tool which requires ripgrep."
+    echo ""
+    echo "      Install with:"
+    echo "        macOS:        brew install ripgrep"
+    echo "        Ubuntu/Debian: sudo apt install ripgrep"
+    echo "        Arch Linux:    sudo pacman -S ripgrep"
+    echo ""
+    echo "      Without ripgrep, Search tool may not work properly."
+    echo "      Press Enter to continue without ripgrep, or Ctrl+C to cancel and install it first."
+    echo ""
+    read -r
 fi
 
 # Function to auto-install dependencies

@@ -94,7 +94,7 @@ init_pdf_cache() {
     # Create cache index if it doesn't exist
     local index_file="$PDF_CACHE_DIR/cache-index.json"
     if [ ! -f "$index_file" ]; then
-        echo '{"pdfs": [], "last_updated": "'"$(date -u +"%Y-%m-%dT%H:%M:%SZ")"'"}' > "$index_file" || {
+        echo '{"pdfs": [], "last_updated": "'"$(get_timestamp)"'"}' > "$index_file" || {
             echo "Error: Could not create cache index file" >&2
             return 1
         }
@@ -243,7 +243,7 @@ cache_local_pdf() {
         --arg source "local" \
         --arg cache_key "$content_hash" \
         --arg content_hash "$content_hash" \
-        --arg cached_at "$(date -u +"%Y-%m-%dT%H:%M:%SZ")" \
+        --arg cached_at "$(get_timestamp)" \
         --argjson file_size "$file_size" \
         --arg file_path "$cached_pdf" \
         '{
@@ -274,7 +274,7 @@ cache_local_pdf() {
        --arg content_hash "$content_hash" \
        --arg file_path "$cached_pdf" \
        --argjson file_size "$file_size" \
-       --arg cached_at "$(date -u +"%Y-%m-%dT%H:%M:%SZ")" \
+       --arg cached_at "$(get_timestamp)" \
        '.pdfs += [{
            url: $url,
            title: $title,
@@ -345,7 +345,7 @@ cache_pdf() {
         --arg title "$title" \
         --arg source "$source" \
         --arg cache_key "$cache_key" \
-        --arg cached_at "$(date -u +"%Y-%m-%dT%H:%M:%SZ")" \
+        --arg cached_at "$(get_timestamp)" \
         --argjson file_size "$file_size" \
         --arg file_path "$cached_pdf" \
         --arg sha256 "$sha256" \
@@ -389,7 +389,7 @@ update_cache_index() {
     if ! jq --arg url "$url" \
        --arg key "$cache_key" \
        --arg title "$title" \
-       --arg date "$(date -u +"%Y-%m-%dT%H:%M:%SZ")" \
+       --arg date "$(get_timestamp)" \
        '
        # Check if entry exists
        if (.pdfs | map(.url) | index($url)) then
@@ -475,7 +475,7 @@ fetch_and_cache_pdf() {
 
     # Download with timeout and size limit
     local temp_pdf
-    temp_pdf=$(mktemp /tmp/pdf-XXXXXX.pdf)
+    temp_pdf=$(mktemp "${TMPDIR:-/tmp}/pdf-XXXXXX.pdf")
     local max_size_bytes
     max_size_bytes=$((MAX_PDF_SIZE_MB * 1024 * 1024))
     
@@ -605,7 +605,7 @@ deduplicate_cache_index() {
     acquire_cache_lock $LOCK_TIMEOUT || return 1
     
     # Remove duplicates, keeping most recent entry per URL
-    if ! jq '.pdfs = [.pdfs | group_by(.url) | .[] | sort_by(.cached_at) | last] | .last_updated = "'"$(date -u +"%Y-%m-%dT%H:%M:%SZ")"'"' \
+    if ! jq '.pdfs = [.pdfs | group_by(.url) | .[] | sort_by(.cached_at) | last] | .last_updated = "'"$(get_timestamp)"'"' \
        "$index_file" > "${index_file}.tmp" 2>/dev/null; then
         release_cache_lock
         echo "Error: Failed to deduplicate index" >&2
@@ -697,7 +697,7 @@ rebuild_cache_index() {
     
     # Create new index from existing metadata
     local new_index
-    new_index='{"pdfs": [], "last_updated": "'"$(date -u +"%Y-%m-%dT%H:%M:%SZ")"'"}'
+    new_index='{"pdfs": [], "last_updated": "'"$(get_timestamp)"'"}'
     
     for metadata_file in "$PDF_METADATA_DIR"/*.json; do
         [ -f "$metadata_file" ] || continue

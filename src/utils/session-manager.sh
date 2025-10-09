@@ -107,9 +107,9 @@ start_agent_session() {
 {
   "agent_name": "$agent_name",
   "session_id": "$session_id",
-  "started_at": "$(date -u +"%Y-%m-%dT%H:%M:%SZ")",
+  "started_at": "$(get_timestamp)",
   "turn_count": 1,
-  "last_updated": "$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
+  "last_updated": "$(get_timestamp)"
 }
 EOF
 
@@ -271,7 +271,7 @@ continue_agent_session() {
             turn_count=$(jq -r '.turn_count' "$metadata_file")
             turn_count=$((turn_count + 1))
 
-            jq --arg timestamp "$(date -u +"%Y-%m-%dT%H:%M:%SZ")" \
+            jq --arg timestamp "$(get_timestamp)" \
                --arg turns "$turn_count" \
                '.turn_count = ($turns | tonumber) | .last_updated = $timestamp' \
                "$metadata_file" > "${metadata_file}.tmp"
