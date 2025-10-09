@@ -6,12 +6,13 @@ This document describes the research data sources available to CConductor agents
 
 ### arXiv (MCP Server)
 
-**Type**: MCP Server via npx  
-**Command**: `npx -y @modelcontextprotocol/server-arxiv`  
+**Type**: MCP Server via Python uv  
+**Command**: `uv tool install arxiv-mcp-server` (Python package)  
 **Description**: Search arXiv preprints for scientific papers  
 **Usage**: Physics, CS, math, and STEM papers  
 **Returns**: PDF URLs for caching  
-**Setup**: No setup required (auto-installs via npx)
+**Setup**: Install with uv: `uv tool install arxiv-mcp-server`
+**Source**: https://github.com/blazickjp/arxiv-mcp-server
 
 ### Semantic Scholar (Direct API)
 
@@ -121,6 +122,20 @@ GET /works?query={query}&rows=20
 - Synthesizes findings across multiple papers
 - Can request additional PDF analysis if needed
 
+## How Agents Use MCP Servers
+
+**Automatic Discovery**: MCP server tools are automatically available to agents when configured via `.mcp.json`. Agents will discover and use them based on task requirements without needing explicit instructions.
+
+**Tool Selection**: Agents autonomously decide when to use MCP tools vs. other methods (WebSearch, WebFetch). MCP tools are typically preferred for their specific domains due to:
+- More reliable access (no rate limits/Cloudflare blocking)
+- Structured data extraction
+- Better error handling
+- Direct API access vs. web scraping
+
+**No Explicit Instructions Needed**: You don't need to mention MCP servers in your research queries - agents will use them when appropriate for the task at hand.
+
+**Example**: With `arxiv-mcp-server` configured, the academic-researcher agent will automatically use `mcp__arxiv__search_papers` when searching for academic papers, while also using WebSearch for broader discovery across multiple platforms.
+
 ## Adding New MCP Servers to Sessions
 
 To add MCP servers to a research session, edit `.mcp.json` in the session directory:
@@ -130,7 +145,7 @@ To add MCP servers to a research session, edit `.mcp.json` in the session direct
   "mcpServers": {
     "arxiv": {
       "command": "npx",
-      "args": ["-y", "@modelcontextprotocol/server-arxiv"],
+      "args": ["-y", "arxiv-mcp-server"],
       "type": "stdio"
     },
     "your-mcp-server": {

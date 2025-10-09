@@ -1,13 +1,15 @@
 {
     "mcpServers": {
         "arxiv": {
-            "command": "npx",
+            "command": "uv",
             "args": [
-                "-y",
-                "@modelcontextprotocol/server-arxiv"
+                "tool",
+                "run",
+                "arxiv-mcp-server",
+                "--storage-path", "/tmp/arxiv-papers"
             ],
             "type": "stdio"
         }
     },
-    "_comment": "Default MCP servers for research sessions. Users can add global MCP servers in ~/.claude/mcp.json (user scope). Session-specific servers here take precedence."
+    "_comment": "ArXiv MCP server requires uv (Python package manager). Install with: uv tool install arxiv-mcp-server"
 }

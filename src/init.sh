@@ -87,6 +87,7 @@ fi
 
 if ! command -v bc &> /dev/null; then
     missing_deps+=("bc")
+    missing_deps+=("uv")
 fi
 
 # Function to auto-install dependencies
