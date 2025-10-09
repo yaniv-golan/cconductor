@@ -5,7 +5,33 @@ All notable changes to CConductor will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.1.1] - 2025-10-09
+
+### Added
+
+- **Enhanced Agent Prompts**: XML tags for improved Claude parsing and response quality
+- **arXiv MCP Server Integration**: Automatic tool discovery for enhanced academic research capabilities
+- **Research Journal Enhancements**: Improved agent reasoning extraction and markdown formatting in research outputs
+- **Journal Export Improvements**: Enhanced export functionality with better formatting and auto-refresh capabilities
+
+### Fixed
+
+- **Research Journal Viewer**: Fixed link visibility and auto-refresh functionality
+- **HTTP Server Management**: Improved server lifecycle management for dashboard
+- **Code Quality**: Added shellcheck compliance fixes and cleanup
+
+### Changed
+
+- **Business Terminology**: Generalized market/business research terminology for broader applicability
+
+### Documentation
+
+- **Technical Documentation**: Added comprehensive Knowledge System Technical Deep Dive
+- **Visual Documentation**: Added Mermaid diagrams for user experience and core functionality flows
+- **Cross-references**: Enhanced documentation with better internal linking
+- **README Updates**: Updated README and removed outdated configuration references
+
+## [0.1.0] - 2025-10-05
 
 ### Added
 
