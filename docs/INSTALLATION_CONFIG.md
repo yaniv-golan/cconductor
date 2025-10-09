@@ -4,21 +4,33 @@
 
 ### Installation Flow
 
-```
-install.sh
-    ↓
-    1. Clone/update repository to ~/.cconductor
-    2. Set permissions
-    3. Run: ./cconductor --init --yes
-        ↓
-        src/init.sh
-            ↓
-            1. Check dependencies (jq, curl, bash)
-            2. Create ~/.config/cconductor/ directory
-            3. Create OS-appropriate data directories
-            4. Set up .gitignore
-            5. Make scripts executable
-            6. Validate configurations
+```mermaid
+flowchart TD
+    A[Start Installation] --> B{Installation Method?}
+    B -->|Quick Install<br/>curl script| C[install.sh Script]
+    B -->|Manual Install<br/>git clone| D[Manual Clone]
+
+    C --> E[Clone/Update Repository<br/>to ~/.cconductor/]
+    D --> E
+
+    E --> F[Set File Permissions<br/>chmod +x cconductor]
+    F --> G[Run Initialization<br/>./cconductor --init --yes]
+
+    G --> H[Dependency Check<br/>src/init.sh]
+    H --> I{Check Passed?}
+    I -->|No| J[Install Missing Dependencies<br/>jq, curl, bash, bc]
+    I -->|Yes| K[Create Directories<br/>~/.config/cconductor/]
+
+    J --> K
+    K --> L[Create OS Data Directories<br/>Application Support/Caches/Logs]
+    L --> M[Setup .gitignore<br/>for user data directories]
+    M --> N[Make Scripts Executable<br/>All .sh files in src/]
+    N --> O[Validate Configurations<br/>Check all config files load correctly]
+    O --> P[Installation Complete<br/>Ready to use!]
+
+    style A fill:#e1f5ff
+    style P fill:#d4edda
+    style J fill:#fff3cd
 ```
 
 ### What Gets Created

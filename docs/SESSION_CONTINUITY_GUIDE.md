@@ -76,6 +76,43 @@ The system automatically:
 
 ### Session Lifecycle
 
+```mermaid
+stateDiagram-v2
+    [*] --> Start: Research begins
+    Start --> Iteration1: First coordinator invocation
+    Iteration1 --> SessionStarted: Session ID created<br/>.agent-sessions/abc-123<br/>Turn count: 1
+    SessionStarted --> Iteration2: Second coordinator invocation
+    Iteration2 --> ContextPreserved: Previous context maintained<br/>Only new findings sent<br/>Turn count: incremented
+    ContextPreserved --> IterationN: Additional iterations<br/>Context preserved across turns
+    IterationN --> FinalSynthesis: Research complete<br/>All iterations finished
+    FinalSynthesis --> SessionCleanup: Session ended<br/>Tracking files removed<br/>.agent-sessions/ cleaned up
+    SessionCleanup --> [*]
+
+    note right of SessionStarted
+        **Session Storage**:
+        - Session ID: abc-123
+        - Location: .agent-sessions/
+        - Turn count: 1
+        - Context: Initial knowledge graph
+    end note
+
+    note right of ContextPreserved
+        **Efficiency Gains**:
+        - 30-50% cost reduction
+        - 20-30% speed improvement
+        - Context preserved across iterations
+    end note
+
+    note right of SessionCleanup
+        **Cleanup Actions**:
+        - Remove session files
+        - Clear tracking data
+        - Free up disk space
+    end note
+```
+
+#### Detailed Session Lifecycle
+
 1. **Start** (Iteration 1):
 
    ```
