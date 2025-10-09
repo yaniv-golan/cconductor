@@ -158,7 +158,9 @@ Balanced research on any topic.
   - Install: `brew install node` (macOS) or see [nodejs.org](https://nodejs.org/)
 - **Claude Code CLI** (required - CConductor is a Claude Code extension)
   - Install: `npm install -g @anthropic-ai/claude-code`
-  - CConductor uses Claude Code's Task tool to invoke specialized AI agents
+  - CConductor uses the Claude Code CLI in headless mode to invoke
+    specialized agents with allowed tools (e.g., Bash, Read, WebSearch,
+    MCP)
   - Cannot run standalone with just an API key
   - Available through Claude Pro/Max subscriptions or API/pay-as-you-go
   - See [Understanding Claude Code Access](#understanding-claude-code-access) below for details
@@ -333,7 +335,7 @@ CConductor requires Claude Code to function and cannot run with just an Anthropi
 
 ### What is Claude Code?
 
-Claude Code allows Claude to run integrated developer workflows from your terminal/IDE. CConductor uses Claude Code's Task tool to orchestrate its multi-agent research system.
+Claude Code allows Claude to run integrated developer workflows from your terminal/IDE. CConductor uses the Claude Code CLI in headless mode with allowed tools to orchestrate its multi-agent research system.
 
 ### Getting Access
 

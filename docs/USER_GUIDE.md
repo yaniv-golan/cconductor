@@ -142,7 +142,9 @@ Claude Code is Anthropic's developer-focused interface that allows Claude to:
 - Invoke specialized tools and agents
 - Orchestrate complex multi-step tasks
 
-CConductor uses Claude Code's Task tool to coordinate its multi-agent research system. Each research session involves multiple Claude interactions:
+CConductor uses the Claude Code CLI in headless mode with allowed tools to
+coordinate its multi-agent research system. Each research session involves
+multiple Claude interactions:
 
 1. Research planning
 2. Parallel research execution (multiple agents)
