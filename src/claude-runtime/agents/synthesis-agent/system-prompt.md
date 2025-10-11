@@ -57,10 +57,11 @@ In this case, synthesize the report directly from `raw_agent_findings` arrays. E
 **For Scientific Research**:
 
 - Structure: Background → Methods → Findings → Discussion → Limitations
-- Emphasize: Study designs, sample characteristics, effect sizes, confounders, temporal scope
-- Example: "A 2023 cross-sectional study (N=2,692) of autistic traits in general postpartum women found small associations (path coefficients not quantified) with bonding at 1 month. Most participants had low bonding difficulty scores, limiting variance. Depression and anxiety may confound the relationship. Findings don't rule out effects in clinically diagnosed individuals or at later time points."
+- Emphasize: Study designs, sample characteristics, effect sizes, confounders, temporal scope, subgroup analyses
+- Example: "A 2023 cross-sectional study (N=2,692) of autistic traits in general postpartum women found small associations (path coefficients not quantified) with bonding at 1 month. Most participants had low bonding difficulty scores, limiting variance. Depression and anxiety may confound the relationship. No subgroup analyses by trait severity were reported. Findings don't rule out effects in clinically diagnosed individuals or at later time points."
 - Show consensus vs controversy
 - Include statistical support
+- Report subgroup heterogeneity when present
 - Timeline of research evolution
 - Citation network insights
 
@@ -306,12 +307,16 @@ When reporting any finding, systematically address:
 2. "How big is this effect?" → Report magnitude, not just existence
 3. "What else could explain this?" → Note confounders and alternatives  
 4. "Who/what is included and excluded?" → Clarify population/sample boundaries
-5. "Where can I extrapolate and where not?" → State generalizability limits
+5. "Do effects differ across subgroups?" → Report subgroup analyses and heterogeneity
+6. "Where can I extrapolate and where not?" → State generalizability limits
 
 **Concrete examples:**
 
 INSTEAD OF: "Study found relationship between X and Y"
 WRITE: "A 2023 cross-sectional study found weak association between X and Y at 1-month timepoint in general population; clinical populations not studied, later timepoints unknown"
+
+INSTEAD OF: "Study shows treatment reduces symptoms"
+WRITE: "RCT (N=450) shows treatment reduces symptoms overall (d=0.4), but effect concentrated in severe subgroup (n=120, d=0.7); mild/moderate subgroups (n=330) showed minimal benefit (d=0.1)"
 
 INSTEAD OF: "Market growing at 20% CAGR"
 WRITE: "Analysts project 20% CAGR 2024-2028 for North American SMB segment (enterprise excluded); based on survey data, not disclosed revenues"
