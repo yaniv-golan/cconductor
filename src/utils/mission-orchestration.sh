@@ -12,7 +12,9 @@ fi
 PROJECT_ROOT="${PROJECT_ROOT:-$(dirname "$SCRIPT_DIR")}"
 
 # Load dependencies from utils directory
-UTILS_DIR="$SCRIPT_DIR/utils"
+# Note: SCRIPT_DIR may be set to src/ by parent (cconductor-mission.sh sets CCONDUCTOR_MISSION_SCRIPT_DIR)
+# But mission-orchestration.sh is actually in src/utils/, so we need to detect where WE are
+UTILS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck disable=SC1091
 source "$UTILS_DIR/agent-registry.sh"
 # shellcheck disable=SC1091
@@ -27,6 +29,8 @@ source "$UTILS_DIR/artifact-manager.sh"
 source "$UTILS_DIR/json-parser.sh"
 # shellcheck disable=SC1091
 source "$PROJECT_ROOT/src/knowledge-graph.sh"
+# shellcheck disable=SC1091
+source "$UTILS_DIR/verbose.sh" 2>/dev/null || true
 # shellcheck disable=SC1091
 source "$UTILS_DIR/error-logger.sh"
 # shellcheck disable=SC1091
@@ -231,6 +235,7 @@ EOF
         fi
         
         echo "$decision_json"
+        return 0
     else
         echo "✗ Error: Agent invocation failed" >&2
         # Return early exit on invocation failure
@@ -264,7 +269,7 @@ _invoke_delegated_agent() {
         return 1
     fi
     
-    echo "  → Invoking $agent_name..."
+    # Note: verbose_agent_start is called by invoke_agent_v2, no need to call here
     
     # Build agent input message
     local agent_input
@@ -290,9 +295,7 @@ EOF
     # Setup agent in session if not already there
     local agent_file="$session_dir/.claude/agents/${agent_name}.json"
     if [[ ! -f "$agent_file" ]]; then
-        # Try to find agent in registry
-        agent_registry_init 2>/dev/null || true
-        
+        # Check if agent exists in registry (already initialized by main script)
         if agent_registry_exists "$agent_name"; then
             local agent_metadata
             agent_metadata=$(agent_registry_get "$agent_name")
@@ -355,8 +358,9 @@ EOF
             mkdir -p "$session_dir/artifacts"
             echo "$result" > "$artifact_file"
             
-            # Register artifact (5th parameter is optional content_hash, not needed here)
-            artifact_register "$session_dir" "$artifact_file" "agent_output" "$agent_name"
+            # Register artifact (capture ID but don't display it)
+            local artifact_id
+            artifact_id=$(artifact_register "$session_dir" "$artifact_file" "agent_output" "$agent_name")
         fi
         
         # Record budget (invocation tracking is done via orchestration log)
@@ -419,7 +423,7 @@ extract_orchestrator_decision() {
     # Use the battle-tested json-parser utilities
     local extracted_json
     if extracted_json=$(extract_json_from_text "$orchestrator_output" 2>/dev/null); then
-        # Check if it has an action field at root level
+        # Check if it has an action field
         local action
         action=$(echo "$extracted_json" | jq -r '.action // empty' 2>/dev/null)
         if [ -n "$action" ] && [ "$action" != "null" ]; then
@@ -430,6 +434,27 @@ extract_orchestrator_decision() {
     
     # Could not extract valid decision JSON with action field
     return 1
+}
+
+# Helper: Get agent display name
+get_agent_display_name() {
+    local agent_name="$1"
+    local session_dir="${2:-}"
+    local friendly_name=""
+    
+    if [[ -n "$session_dir" ]]; then
+        local metadata_file="$session_dir/.claude/agents/${agent_name}/metadata.json"
+        if [[ -f "$metadata_file" ]]; then
+            friendly_name=$(jq -r '.display_name // empty' "$metadata_file" 2>/dev/null)
+        fi
+    fi
+    
+    if [[ -z "$friendly_name" ]]; then
+        # Fallback: convert hyphens to spaces
+        friendly_name="${agent_name//-/ }"
+    fi
+    
+    echo "$friendly_name"
 }
 
 # Process orchestrator decisions
@@ -450,6 +475,26 @@ process_orchestrator_decisions() {
     local decision_action
     decision_action=$(echo "$decision_json" | jq -r '.action')
     
+    # Verbose: Show what the orchestrator decided
+    if [[ "${CCONDUCTOR_VERBOSE:-0}" == "1" ]]; then
+        case "$decision_action" in
+            invoke)
+                local agent_for_msg
+                agent_for_msg=$(echo "$decision_json" | jq -r '.agent')
+                echo "   → Delegating to $(get_agent_display_name "$agent_for_msg" "$session_dir")" >&2
+                ;;
+            reinvoke)
+                echo "   → Re-invoking previous agent" >&2
+                ;;
+            synthesize)
+                echo "   → Starting synthesis" >&2
+                ;;
+            handoff)
+                echo "   → Handing off between agents" >&2
+                ;;
+        esac
+    fi
+    
     case "$decision_action" in
         invoke)
             local agent_name
@@ -461,8 +506,34 @@ process_orchestrator_decisions() {
             local input_artifacts
             input_artifacts=$(echo "$decision_json" | jq -c '.input_artifacts // []')
             
-            # Log the decision
-            log_decision "$session_dir" "agent_invocation" "$orchestrator_output"
+            # Log the decision with proper format for journal export
+            local rationale
+            rationale=$(echo "$decision_json" | jq -r '.rationale // ""')
+            local alternatives
+            alternatives=$(echo "$decision_json" | jq -c '.alternatives_considered // []')
+            local expected_impact
+            expected_impact=$(echo "$decision_json" | jq -r '.expected_impact // ""')
+            
+            local decision_log_entry
+            decision_log_entry=$(jq -n \
+                --arg agent "$agent_name" \
+                --arg task "$task" \
+                --arg context "$context" \
+                --arg rationale "$rationale" \
+                --argjson alternatives "$alternatives" \
+                --arg expected_impact "$expected_impact" \
+                '{
+                    decision: {
+                        type: "agent_selection",
+                        agent: $agent,
+                        task: $task,
+                        context: $context,
+                        rationale: $rationale,
+                        alternatives_considered: $alternatives,
+                        expected_impact: $expected_impact
+                    }
+                }')
+            log_decision "$session_dir" "agent_invocation" "$decision_log_entry"
             
             # Actually invoke the agent - handle failures gracefully
             if _invoke_delegated_agent "$session_dir" "$agent_name" "$task" "$context" "$input_artifacts"; then
@@ -769,9 +840,12 @@ run_mission_orchestration() {
         context_json=$(prepare_orchestrator_context "$session_dir" "$mission_profile" "$iteration")
         
         # Invoke mission orchestrator
-        echo "→ Invoking mission orchestrator..."
+        # (invoke_agent.sh handles the invocation message)
         local orchestrator_output
-        orchestrator_output=$(invoke_mission_orchestrator "$session_dir" "$context_json")
+        local orchestrator_output_file="$session_dir/.orchestrator-output.tmp"
+        invoke_mission_orchestrator "$session_dir" "$context_json" > "$orchestrator_output_file"
+        orchestrator_output=$(cat "$orchestrator_output_file")
+        rm -f "$orchestrator_output_file"
         
         echo ""
         
@@ -919,9 +993,12 @@ run_mission_orchestration_resume() {
             "$session_dir" "$mission_profile" "$iteration" "$refinement")
         
         # Invoke orchestrator
-        echo "→ Invoking mission orchestrator..."
+        # (invoke_agent.sh handles the invocation message)
         local orchestrator_output
-        orchestrator_output=$(invoke_mission_orchestrator "$session_dir" "$context_json")
+        local orchestrator_output_file="$session_dir/.orchestrator-output.tmp"
+        invoke_mission_orchestrator "$session_dir" "$context_json" > "$orchestrator_output_file"
+        orchestrator_output=$(cat "$orchestrator_output_file")
+        rm -f "$orchestrator_output_file"
         
         echo ""
         
