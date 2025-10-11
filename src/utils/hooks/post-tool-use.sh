@@ -5,6 +5,16 @@
 
 set -euo pipefail
 
+# Source shared utilities for get_timestamp
+# Hooks run in session directory, so we need to find the project root
+HOOK_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(cd "$HOOK_DIR/../../../.." && pwd)"
+# shellcheck disable=SC1091
+source "$PROJECT_ROOT/src/shared-state.sh" 2>/dev/null || {
+    # Fallback: inline get_timestamp if shared-state.sh not found
+    get_timestamp() { date -u +"%Y-%m-%dT%H:%M:%S.%6NZ" 2>/dev/null || date -u +"%Y-%m-%dT%H:%M:%SZ"; }
+}
+
 # Read hook data from stdin
 hook_data=$(cat)
 

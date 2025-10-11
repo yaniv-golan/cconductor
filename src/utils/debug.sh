@@ -62,6 +62,63 @@ setup_error_trap() {
     fi
 }
 
+# Execute command with error capture for logging
+# Usage: debug_exec SESSION_DIR OPERATION COMMAND [ARGS...]
+# Returns: exit code of command
+# Side effects: Logs errors to system-errors.log if command fails
+debug_exec() {
+    local session_dir="$1"
+    local operation="$2"
+    shift 2
+    
+    local start_time
+    start_time=$(date +%s)
+    
+    # Capture both stdout and stderr
+    local temp_stderr
+    temp_stderr=$(mktemp)
+    local exit_code=0
+    
+    if is_debug_enabled; then
+        # Debug mode: show everything on console + capture stderr
+        debug "Executing: $*"
+        if ! "$@" 2> >(tee "$temp_stderr" >&2); then
+            exit_code=$?
+        fi
+    else
+        # Normal mode: capture stderr silently
+        if ! "$@" 2>"$temp_stderr"; then
+            exit_code=$?
+        fi
+    fi
+    
+    local end_time
+    end_time=$(date +%s)
+    local duration=$((end_time - start_time))
+    
+    # If command failed, log error
+    if [ "$exit_code" -ne 0 ]; then
+        local error_msg
+        error_msg=$(cat "$temp_stderr" 2>/dev/null || echo "No error output")
+        
+        # Load error logger if available
+        if declare -F log_error >/dev/null 2>&1; then
+            log_error "$session_dir" "$operation" \
+                "Command failed with exit code $exit_code" \
+                "Duration: ${duration}s, Command: $*, Error: $error_msg"
+        fi
+        
+        if is_debug_enabled; then
+            error "$operation failed (exit code $exit_code, duration ${duration}s)"
+        fi
+    elif is_debug_enabled; then
+        debug "$operation completed (duration ${duration}s)"
+    fi
+    
+    rm -f "$temp_stderr"
+    return "$exit_code"
+}
+
 # Export functions for use in subshells
 export -f is_debug_enabled
 export -f debug
@@ -72,6 +129,7 @@ export -f info
 export -f with_debug
 export -f trace_function
 export -f setup_error_trap
+export -f debug_exec
 
 # Usage examples (only shown when script is run directly)
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then

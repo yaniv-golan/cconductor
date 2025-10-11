@@ -23,6 +23,9 @@ class Dashboard {
                 this.fetchJSON('session.json')
             ]);
 
+            // Store metrics for use in journal rendering (completion messages)
+            this.currentMetrics = metrics;
+
             this.renderHeader(session);
             this.renderStats(metrics);
             // Task Queue panel removed - tasks now shown inline in journal entries
@@ -660,16 +663,17 @@ class Dashboard {
     groupEventsIntoJournalEntries(events) {
         const entries = [];
         
-        // Entry 1: Session creation
-        const sessionCreated = events.find(e => e.type === 'session_created');
+        // Entry 1: Session/Mission start
+        const sessionCreated = events.find(e => e.type === 'session_created' || e.type === 'mission_started');
         if (sessionCreated) {
+            const objective = sessionCreated.data?.objective || 'research query';
             entries.push({
                 type: 'milestone',
                 icon: '🎯',
                 title: 'Research Session Started',
                 startTime: sessionCreated.timestamp,
                 endTime: null,
-                content: 'I initialized a new research session and prepared to analyze your query.',
+                content: `I initialized a new research session and prepared to analyze your query: "${objective}"`,
                 agent: 'system',
                 metadata: {},
                 events: [sessionCreated]
@@ -723,21 +727,33 @@ class Dashboard {
             });
         });
         
-        // Entry N+2: Research completion
-        const researchComplete = events.find(e => e.type === 'research_complete');
+        // Entry N+2: Research completion (support both old and new event types)
+        const researchComplete = events.find(e => e.type === 'research_complete' || e.type === 'mission_completed');
         if (researchComplete) {
+            const reportFile = researchComplete.data?.report_file || 'mission-report.md';
+            
+            // For mission_completed events, we need to enrich data from metrics
+            // The formatResearchComplete function expects claims_synthesized, entities_integrated, report_sections
+            const completionData = researchComplete.type === 'mission_completed' ? {
+                claims_synthesized: this.currentMetrics?.knowledge?.claims || 0,
+                entities_integrated: this.currentMetrics?.knowledge?.entities || 0,
+                report_sections: 0, // Not tracked separately
+                report_file: reportFile
+            } : researchComplete.data;
+            
             entries.push({
                 type: 'milestone',
                 icon: '🎉',
                 title: 'Research Report Complete',
                 startTime: researchComplete.timestamp,
                 endTime: null,
-                content: this.formatResearchComplete(researchComplete.data),
+                content: this.formatResearchComplete(completionData),
                 agent: 'synthesis-agent',
                 metadata: {
-                    claims_synthesized: researchComplete.data.claims_synthesized || 0,
-                    entities_integrated: researchComplete.data.entities_integrated || 0,
-                    report_sections: researchComplete.data.report_sections || 0
+                    claims_synthesized: completionData.claims_synthesized || 0,
+                    entities_integrated: completionData.entities_integrated || 0,
+                    report_sections: completionData.report_sections || 0,
+                    report_file: reportFile
                 },
                 events: [researchComplete]
             });
@@ -886,7 +902,12 @@ class Dashboard {
         const sections = data.report_sections || 0;
         const reportFile = data.report_file || 'research-report.md';
         
-        return `I synthesized all research findings into a comprehensive report with ${sections} section${sections !== 1 ? 's' : ''}, integrating ${claims} claim${claims !== 1 ? 's' : ''} and ${entities} entit${entities !== 1 ? 'ies' : 'y'}. 
+        // Build message based on whether we have section count
+        const sectionText = sections > 0 
+            ? `with ${sections} section${sections !== 1 ? 's' : ''}, ` 
+            : '';
+        
+        return `I synthesized all research findings into a comprehensive report ${sectionText}integrating ${claims} claim${claims !== 1 ? 's' : ''} and ${entities} entit${entities !== 1 ? 'ies' : 'y'}. 
         
 📄 <strong><a href="${reportFile}" target="_blank">View Research Report</a></strong>
 
@@ -1334,6 +1355,12 @@ class Dashboard {
                 return `⚠️ Gap (${event.data.priority})`;
             case 'gap_resolved':
                 return `✓ Gap resolved`;
+            case 'mission_started':
+                const objective = event.data.objective || 'Research mission';
+                return `🚀 Starting research: ${objective}`;
+            case 'mission_completed':
+                const reportFile = event.data.report_file || 'mission-report.md';
+                return `✅ Research complete! Report: ${reportFile}`;
             case 'agent_invocation':
                 return `⚡ Invoking ${event.data.agent}`;
             case 'agent_result':
