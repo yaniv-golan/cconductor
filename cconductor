@@ -8,70 +8,27 @@ set -euo pipefail
 VERSION="0.2.0"
 CCONDUCTOR_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
+# Debug mode support
+if [ "${CCONDUCTOR_DEBUG:-0}" = "1" ]; then
+    echo "🐛 Debug mode enabled" >&2
+    echo "   All errors will be logged and displayed" >&2
+    echo "   Check system-errors.log in session directory for details" >&2
+    echo "" >&2
+    set -x  # Enable bash trace mode
+fi
+
 # Source CLI parser
 # shellcheck disable=SC1091
 source "$CCONDUCTOR_ROOT/src/utils/cli-parser.sh"
 
-check_initialization() {
-    # Check if user config directory exists (created by init.sh)
-    # Platform-aware check
-    if [ -f "$CCONDUCTOR_ROOT/src/utils/platform-paths.sh" ]; then
-        # shellcheck disable=SC1091
-        source "$CCONDUCTOR_ROOT/src/utils/platform-paths.sh"
-        local config_dir
-        config_dir=$(get_config_dir)
-        
-        # Check if config directory exists
-        # We don't require configs to exist, just the directory
-        if [ -d "$config_dir" ]; then
-            return 0
-        fi
-    fi
-    
-    return 1
-}
+# ============================================================================
+# Initialization and Update Functions
+# ============================================================================
+# All init/update functions have been moved to src/utils/init-and-update.sh
+# They are sourced below
 
-show_init_prompt() {
-    cat <<EOF
-┌─────────────────────────────────────────────────────┐
-│ Welcome to CConductor! First-time setup required.        │
-└─────────────────────────────────────────────────────┘
-
-I will now:
-  1. Check for dependencies (claude, jq, curl, bash, python3)
-  2. Create user config directory (~/.config/cconductor/)
-  3. Create OS-appropriate data directories
-  4. Configure .gitignore to protect your data
-  5. Make scripts executable
-  6. Validate all configurations
-
-This takes ~5 seconds. Run initialization? [Y/n] 
-EOF
-}
-
-run_initialization() {
-    local interactive="${1:-true}"
-    
-    if [ "$interactive" = "true" ]; then
-        show_init_prompt
-        read -r response
-        
-        case "${response:-y}" in
-            [Yy]|[Yy][Ee][Ss]|"")
-                echo ""
-                "$CCONDUCTOR_ROOT/src/init.sh"
-                ;;
-            *)
-                echo ""
-                echo "Initialization cancelled. Run './cconductor --init' when ready."
-                exit 0
-                ;;
-        esac
-    else
-        # Non-interactive mode
-        "$CCONDUCTOR_ROOT/src/init.sh"
-    fi
-}
+# shellcheck disable=SC1091
+source "$CCONDUCTOR_ROOT/src/utils/init-and-update.sh"
 
 # Version management
 show_version() {
@@ -84,51 +41,6 @@ show_version() {
         # shellcheck disable=SC1091
         source "$CCONDUCTOR_ROOT/src/utils/version-manager.sh"
         check_for_updates_async
-    fi
-}
-
-# Self-update functionality
-perform_update() {
-    echo "🔄 Updating CConductor..."
-    echo ""
-    
-    # Detect installation method
-    if [ -d "$CCONDUCTOR_ROOT/.git" ]; then
-        # Git installation
-        echo "→ Detected git installation"
-        echo "→ Pulling latest changes..."
-        cd "$CCONDUCTOR_ROOT"
-        git fetch origin
-        git pull origin main
-        
-        echo "→ Running initialization..."
-        "$CCONDUCTOR_ROOT/src/init.sh"
-        
-        local new_version
-        new_version=$(cat "$CCONDUCTOR_ROOT/VERSION" 2>/dev/null || echo "unknown")
-        echo ""
-        echo "✅ Updated to v$new_version"
-    else
-        # Installed via install.sh
-        echo "→ Detected installer-based installation"
-        echo "→ Downloading latest installer..."
-        
-        local temp_installer="/tmp/cconductor-install-$$.sh"
-        if curl -fsSL "https://github.com/yaniv-golan/cconductor/releases/latest/download/install.sh" \
-            -o "$temp_installer" 2>/dev/null; then
-            chmod +x "$temp_installer"
-            echo "→ Running installer..."
-            bash "$temp_installer" "$CCONDUCTOR_ROOT"
-            rm "$temp_installer"
-            echo ""
-            echo "✅ Updated successfully"
-        else
-            echo "✗ Failed to download installer"
-            echo ""
-            echo "Manual update:"
-            echo "  curl -fsSL https://github.com/yaniv-golan/cconductor/releases/latest/download/install.sh | bash"
-            exit 1
-        fi
     fi
 }
 
@@ -247,377 +159,11 @@ DOCUMENTATION:
 EOF
 }
 
-# Helper: Show session details
-show_session_details() {
-    local session_path="$1"
-    
-    if [ ! -f "$session_path/session.json" ]; then
-        echo "Invalid session directory"
-        return 1
-    fi
-    
-    echo "Session Details:"
-    echo "=================="
-    echo ""
-    
-    local objective=$(jq -r '.objective // "N/A"' "$session_path/session.json" 2>/dev/null)
-    local created=$(jq -r '.created_at // "N/A"' "$session_path/session.json" 2>/dev/null)
-    local mission=$(jq -r '.mission_name // "general-research"' "$session_path/session.json" 2>/dev/null)
-    
-    echo "Objective: $objective"
-    echo "Mission: $mission"
-    echo "Created: $created"
-    echo ""
-    
-    # Budget info
-    if [ -f "$session_path/budget.json" ]; then
-        local spent=$(jq -r '.spent.cost_usd // 0' "$session_path/budget.json" 2>/dev/null)
-        local invocations=$(jq -r '.spent.agent_invocations // 0' "$session_path/budget.json" 2>/dev/null)
-        echo "Budget spent: \$$spent ($invocations invocations)"
-    fi
-    
-    # Iteration count
-    if [ -f "$session_path/orchestration-log.jsonl" ]; then
-        local iterations=$(wc -l < "$session_path/orchestration-log.jsonl" | tr -d ' ')
-        echo "Iterations: $iterations"
-    fi
-    
-    # Report status
-    if [ -f "$session_path/final/mission-report.md" ]; then
-        echo "Status: Complete (report available)"
-    else
-        echo "Status: In progress or incomplete"
-    fi
-    
-    echo ""
-}
-
-# Helper: Resume session interactively
-resume_session_interactive() {
-    local session_path="$1"
-    
-    echo ""
-    echo "Resume Session"
-    echo "=============="
-    show_session_details "$session_path"
-    
-    echo "Would you like to add refinement guidance? [y/N]"
-    read -r add_refinement
-    
-    local refinement=""
-    if [[ "$add_refinement" =~ ^[Yy] ]]; then
-        echo ""
-        echo "Enter refinement guidance (press Ctrl+D when done):"
-        refinement=$(cat)
-    fi
-    
-    # Extract session ID
-    local session_id=$(basename "$session_path")
-    
-    # Call mission resume
-    "$CCONDUCTOR_ROOT/src/cconductor-mission.sh" resume --session "$session_path" ${refinement:+--refine "$refinement"}
-}
-
-# Simple interactive mode (fallback)
-interactive_mode_simple() {
-    echo "🔍 CConductor - AI Research, Orchestrated"
-    echo ""
-    echo "What would you like to research?"
-    read -r research_question
-    
-    if [ -z "$research_question" ]; then
-        echo "No research question provided. Exiting."
-        return 0
-    fi
-    
-    echo ""
-    echo "Select mission type:"
-    echo "  1) general-research (default - flexible for any topic)"
-    echo "  2) academic-research (scholarly sources, scientific papers)"
-    echo "  3) market-research (market sizing, trends, TAM/SAM/SOM)"
-    echo "  4) competitive-analysis (competitor landscape)"
-    echo "  5) technical-analysis (technical deep-dive)"
-    echo ""
-    echo -n "Choice [1-5] (default: 1): "
-    read -r mission_choice
-    
-    local mission_name="general-research"
-    case "${mission_choice:-1}" in
-        1) mission_name="general-research" ;;
-        2) mission_name="academic-research" ;;
-        3) mission_name="market-research" ;;
-        4) mission_name="competitive-analysis" ;;
-        5) mission_name="technical-analysis" ;;
-        *) echo "Invalid choice, using general-research"; mission_name="general-research" ;;
-    esac
-    
-    echo ""
-    echo "Starting research with $mission_name mission..."
-    echo ""
-    
-    # Build and execute mission command
-    local mission_cmd=("$CCONDUCTOR_ROOT/src/cconductor-mission.sh" "run" "--mission" "$mission_name" "$research_question")
-    "${mission_cmd[@]}"
-}
-
-# Advanced interactive mode with dialog
-interactive_mode_advanced() {
-    if ! command -v dialog &> /dev/null; then
-        interactive_mode_simple
-        return
-    fi
-    
-    while true; do
-        choice=$(dialog --clear --title "CConductor - AI Research System" \
-            --menu "What would you like to do?" 16 60 6 \
-            1 "Start New Research" \
-            2 "View Sessions" \
-            3 "Resume Session" \
-            4 "Check Status" \
-            5 "Configure" \
-            6 "Exit" \
-            2>&1 >/dev/tty)
-        
-        clear
-        case $choice in
-            1) research_wizard ;;
-            2) sessions_browser ;;
-            3) resume_wizard ;;
-            4) 
-                # shellcheck disable=SC2317
-                pids=$(pgrep -f "cconductor-mission.sh" || true)
-                if [ -z "$pids" ]; then
-                    dialog --msgbox "No active research sessions" 7 40
-                else
-                    dialog --msgbox "Active sessions found:\nPIDs: $pids" 10 50
-                fi
-                ;;
-            5)
-                clear
-                main configure
-                read -p "Press Enter to continue..."
-                ;;
-            6|"") break ;;
-        esac
-    done
-}
-
-# Research wizard for dialog TUI
-research_wizard() {
-    # Input method selection
-    local input_method=$(dialog --title "Research Input" \
-        --menu "How would you like to provide your research question?" 12 60 3 \
-        1 "Type question directly" \
-        2 "Load from file" \
-        3 "Back" \
-        2>&1 >/dev/tty)
-    
-    clear
-    local question=""
-    case $input_method in
-        1)
-            question=$(dialog --title "Research Question" \
-                --inputbox "What would you like to research?" 10 60 \
-                2>&1 >/dev/tty)
-            clear
-            ;;
-        2)
-            local file=$(dialog --title "Question File" \
-                --fselect "$HOME/" 14 48 \
-                2>&1 >/dev/tty)
-            clear
-            if [ -f "$file" ]; then
-                question=$(cat "$file")
-            fi
-            ;;
-        3|"") return ;;
-    esac
-    
-    if [ -z "$question" ]; then return; fi
-    
-    # Input directory selection
-    local use_input_dir=$(dialog --title "Input Directory" \
-        --yesno "Do you have local files (PDFs, documents) to analyze?" 7 60 \
-        2>&1 >/dev/tty && echo "yes" || echo "no")
-    clear
-    
-    local input_dir=""
-    if [ "$use_input_dir" = "yes" ]; then
-        input_dir=$(dialog --title "Select Input Directory" \
-            --dselect "$HOME/" 14 48 \
-            2>&1 >/dev/tty)
-        clear
-    fi
-    
-    # Mission type selection
-    local mission=$(dialog --title "Mission Type" \
-        --menu "Select research mission type:" 15 70 5 \
-        1 "General Research (flexible for any topic)" \
-        2 "Academic Research (scholarly sources)" \
-        3 "Market Research (market sizing, trends)" \
-        4 "Competitive Analysis (competitor landscape)" \
-        5 "Technical Analysis (technical deep-dive)" \
-        2>&1 >/dev/tty)
-    clear
-    
-    local mission_name="general-research"
-    case $mission in
-        1) mission_name="general-research" ;;
-        2) mission_name="academic-research" ;;
-        3) mission_name="market-research" ;;
-        4) mission_name="competitive-analysis" ;;
-        5) mission_name="technical-analysis" ;;
-        *) return ;;
-    esac
-    
-    # Advanced options
-    local show_advanced=$(dialog --title "Advanced Options" \
-        --yesno "Configure advanced options (budget, time limits)?" 7 60 \
-        2>&1 >/dev/tty && echo "yes" || echo "no")
-    clear
-    
-    local budget=""
-    local max_time=""
-    local max_invocations=""
-    
-    if [ "$show_advanced" = "yes" ]; then
-        budget=$(dialog --title "Budget Limit" \
-            --inputbox "Budget limit in USD (leave empty for mission default):" 10 60 \
-            2>&1 >/dev/tty)
-        clear
-        
-        max_time=$(dialog --title "Time Limit" \
-            --inputbox "Time limit in minutes (leave empty for mission default):" 10 60 \
-            2>&1 >/dev/tty)
-        clear
-        
-        max_invocations=$(dialog --title "Invocation Limit" \
-            --inputbox "Max agent invocations (leave empty for mission default):" 10 60 \
-            2>&1 >/dev/tty)
-        clear
-    fi
-    
-    # Build command
-    local mission_cmd=("$CCONDUCTOR_ROOT/src/cconductor-mission.sh" "run" "--mission" "$mission_name")
-    [ -n "$input_dir" ] && mission_cmd+=(--input-dir "$input_dir")
-    [ -n "$budget" ] && mission_cmd+=(--budget "$budget")
-    [ -n "$max_time" ] && mission_cmd+=(--max-time "$max_time")
-    [ -n "$max_invocations" ] && mission_cmd+=(--max-invocations "$max_invocations")
-    mission_cmd+=("$question")
-    
-    "${mission_cmd[@]}"
-    
-    read -p "Press Enter to continue..."
-}
-
-# Sessions browser for dialog TUI
-sessions_browser() {
-    # shellcheck disable=SC1091
-    source "$CCONDUCTOR_ROOT/src/utils/path-resolver.sh" 2>/dev/null || true
-    local session_dir=$(resolve_path "session_dir" 2>/dev/null || echo "$CCONDUCTOR_ROOT/research-sessions")
-    
-    if [ ! -d "$session_dir" ]; then
-        dialog --msgbox "No sessions found. Start your first research!" 7 50
-        return
-    fi
-    
-    # Build session list sorted by modification time (newest first)
-    local sessions=()
-    local session_paths=()
-    local idx=1
-    
-    # Sort by modification time, newest first
-    for session in $(ls -dt "$session_dir"/mission_* 2>/dev/null); do
-        [ -d "$session" ] || continue
-        
-        local session_name=$(basename "$session")
-        local created="N/A"
-        local question="N/A"
-        local status="unknown"
-        
-        if [ -f "$session/session.json" ]; then
-            created=$(jq -r '.created_at // "N/A"' "$session/session.json" 2>/dev/null)
-            question=$(jq -r '.objective // "N/A"' "$session/session.json" 2>/dev/null)
-        fi
-        
-        if [ -f "$session/final/mission-report.md" ]; then
-            status="Complete"
-        else
-            status="In progress"
-        fi
-        
-        # Truncate question for display
-        local display_text="$status | ${question:0:35}..."
-        sessions+=("$idx" "$display_text")
-        session_paths+=("$session")
-        idx=$((idx + 1))
-    done
-    
-    if [ ${#sessions[@]} -eq 0 ]; then
-        dialog --msgbox "No sessions found." 7 50
-        return
-    fi
-    
-    local choice=$(dialog --title "Research Sessions (Newest First)" \
-        --menu "Select a session:" 20 70 10 \
-        "${sessions[@]}" \
-        2>&1 >/dev/tty)
-    
-    clear
-    [ -z "$choice" ] && return
-    
-    # Get selected session path
-    local selected_idx=$((choice - 1))
-    local session_path="${session_paths[$selected_idx]}"
-    
-    # Action menu for selected session
-    local action=$(dialog --title "Session Actions" \
-        --menu "What would you like to do?" 12 60 4 \
-        1 "View Details" \
-        2 "Resume Research" \
-        3 "View Journal" \
-        4 "Back" \
-        2>&1 >/dev/tty)
-    
-    clear
-    case $action in
-        1) 
-            show_session_details "$session_path"
-            read -p "Press Enter to continue..."
-            ;;
-        2) 
-            resume_session_interactive "$session_path"
-            read -p "Press Enter to continue..."
-            ;;
-        3) 
-            # shellcheck disable=SC1091
-            if source "$CCONDUCTOR_ROOT/src/utils/dashboard.sh" 2>/dev/null; then
-                dashboard_view "$session_path"
-            else
-                echo "Error: Dashboard utility not found" >&2
-            fi
-            read -p "Press Enter to continue..."
-            ;;
-    esac
-}
-
-# Resume wizard (uses sessions browser)
-resume_wizard() {
-    sessions_browser
-}
-
-# Main interactive mode entry point
-interactive_mode() {
-    # Check for CI environment or non-TTY
-    if [ -n "${CI:-}" ] || [ ! -t 0 ]; then
-        echo "Error: Interactive mode requires a TTY" >&2
-        echo "In CI or non-interactive environments, provide explicit arguments" >&2
-        echo "Run: ./cconductor --help" >&2
-        return 1
-    fi
-    
-    interactive_mode_advanced
-}
+# ============================================================================
+# TUI Functions - Interactive text user interface
+# ============================================================================
+# All TUI functions have been moved to src/utils/tui.sh
+# They are loaded on-demand when interactive mode is used
 
 handle_research() {
     local question="$1"
@@ -798,6 +344,9 @@ main() {
     
     # Handle empty command - launch interactive mode
     if [ -z "$command" ]; then
+        # Load TUI module on-demand
+        # shellcheck disable=SC1091
+        source "$CCONDUCTOR_ROOT/src/utils/tui.sh"
         interactive_mode
         return $?
     fi
@@ -805,283 +354,12 @@ main() {
     # Handle commands
     case "$command" in
         sessions)
+            # Load session commands module
+            # shellcheck disable=SC1091
+            source "$CCONDUCTOR_ROOT/src/utils/session-commands.sh"
             local subcommand
             subcommand=$(get_arg 1)
-            
-            case "${subcommand:-list}" in
-                list)
-            # List research sessions from session directory
-            # shellcheck disable=SC1091
-            source "$CCONDUCTOR_ROOT/src/utils/path-resolver.sh"
-            local session_dir
-            session_dir=$(resolve_path "session_dir" 2>/dev/null || echo "$CCONDUCTOR_ROOT/research-sessions")
-            
-            if [ ! -d "$session_dir" ]; then
-                echo "No research sessions found"
-                echo "Start your first research: ./cconductor \"your question\""
-                exit 0
-            fi
-            
-            echo "Research Sessions:"
-            echo "══════════════════════════════════════════════════"
-            echo ""
-            
-            # Find all session directories
-            local count=0
-            for session in "$session_dir"/session_* "$session_dir"/mission_session_*; do
-                [ -d "$session" ] || continue
-                count=$((count + 1))
-                
-                local session_name=$(basename "$session")
-                local created="N/A"
-                local question="N/A"
-                local status="unknown"
-                
-                # Try to read session metadata
-                if [ -f "$session/session.json" ]; then
-                    created=$(jq -r '.created_at // .started_at // "N/A"' "$session/session.json" 2>/dev/null)
-                    question=$(jq -r '.research_question // .objective // "N/A"' "$session/session.json" 2>/dev/null)
-                    status=$(jq -r '.status // "unknown"' "$session/session.json" 2>/dev/null)
-                fi
-                
-                echo "[$count] $session_name"
-                echo "    Created: $created"
-                echo "    Status: $status"
-                echo "    Question: ${question:0:80}$([ ${#question} -gt 80 ] && echo '...')"
-                echo ""
-            done
-            
-            if [ $count -eq 0 ]; then
-                echo "No research sessions found"
-                echo ""
-                echo "Start your first research:"
-                echo "  ./cconductor \"your question\""
-            else
-                echo "Total: $count session(s)"
-                echo ""
-                echo "View latest: ./cconductor sessions latest"
-            fi
-            ;;
-                
-                latest)
-            # Get session directory from path resolver (with fallback)
-            local session_dir="$CCONDUCTOR_ROOT/research-sessions"
-            if [ -f "$CCONDUCTOR_ROOT/src/utils/path-resolver.sh" ]; then
-                # shellcheck disable=SC1091
-                source "$CCONDUCTOR_ROOT/src/utils/path-resolver.sh" 2>/dev/null
-                local resolved
-                # Use return code instead of string check
-                if resolved=$(resolve_path "session_dir" 2>/dev/null) && [ -n "$resolved" ]; then
-                    session_dir="$resolved"
-                fi
-            fi
-            
-            if [ -f "$session_dir/.latest" ]; then
-                LATEST_SESSION=$(cat "$session_dir/.latest")
-                LATEST_PATH="$session_dir/$LATEST_SESSION"
-                
-                if [ -d "$LATEST_PATH" ]; then
-                    echo "Latest session: $LATEST_SESSION"
-                    echo "Location: $LATEST_PATH"
-                    echo ""
-                    
-                    # Show session metadata if available
-                    if [ -f "$LATEST_PATH/session.json" ]; then
-                        local question
-                        question=$(jq -r '.research_question // "N/A"' "$LATEST_PATH/session.json" 2>/dev/null || echo "N/A")
-                        local status
-                        status=$(jq -r '.status // "unknown"' "$LATEST_PATH/session.json" 2>/dev/null || echo "unknown")
-                        local created
-                        created=$(jq -r '.created_at // "N/A"' "$LATEST_PATH/session.json" 2>/dev/null || echo "N/A")
-                        
-                        echo "Question: $question"
-                        echo "Status: $status"
-                        echo "Created: $created"
-                        echo ""
-                    fi
-                    
-                    # Show knowledge graph summary if available
-                    if [ -f "$LATEST_PATH/knowledge-graph.json" ]; then
-                        local entities
-                        local claims
-                        local confidence
-                        local gaps
-                        entities=$(jq -r '.stats.total_entities // 0' "$LATEST_PATH/knowledge-graph.json" 2>/dev/null)
-                        claims=$(jq -r '.stats.total_claims // 0' "$LATEST_PATH/knowledge-graph.json" 2>/dev/null)
-                        confidence=$(jq -r '.confidence_scores.overall // 0' "$LATEST_PATH/knowledge-graph.json" 2>/dev/null)
-                        gaps=$(jq -r '.stats.unresolved_gaps // 0' "$LATEST_PATH/knowledge-graph.json" 2>/dev/null)
-                        
-                        echo "Progress:"
-                        echo "  • Entities: $entities"
-                        echo "  • Claims: $claims"
-                        echo "  • Confidence: $confidence"
-                        echo "  • Unresolved gaps: $gaps"
-                        echo ""
-                    fi
-                    
-                    # Show report if exists
-                    if [ -f "$LATEST_PATH/research-report.md" ]; then
-                        echo "✓ Report available: $LATEST_PATH/research-report.md"
-                        echo ""
-                        echo "View with:"
-                        echo "  cat $LATEST_PATH/research-report.md"
-                        echo "  open $LATEST_PATH/research-report.md"
-                        echo ""
-                        echo "Resume with:"
-                        echo "  ./cconductor resume $LATEST_SESSION"
-                    else
-                        echo "⏳ Research in progress or not yet complete"
-                        echo ""
-                        echo "Resume with:"
-                        echo "  ./cconductor resume $LATEST_SESSION"
-                    fi
-                else
-                    echo "Error: Latest session directory not found: $LATEST_SESSION"
-                    exit 1
-                fi
-            else
-                echo "No research sessions yet. Start one with:"
-                echo "  ./cconductor \"your research question\""
-            fi
-            ;;
-                
-                viewer)
-            # Get session directory (optional parameter)
-            local session_arg
-            session_arg=$(get_arg 2)
-            local session_dir=""
-            
-            if [ -z "$session_arg" ]; then
-                # No argument - use latest session
-                local latest_file="$CCONDUCTOR_ROOT/research-sessions/.latest"
-                if [ ! -f "$latest_file" ]; then
-                    echo "Error: No active session found" >&2
-                    echo "Run a research query first: ./cconductor \"your question\"" >&2
-                    exit 1
-                fi
-                local session_id
-                session_id=$(cat "$latest_file")
-                session_dir="$CCONDUCTOR_ROOT/research-sessions/$session_id"
-            elif [[ "$session_arg" == /* ]]; then
-                # Absolute path provided
-                session_dir="$session_arg"
-            else
-                # Session ID provided (with or without 'session_' prefix)
-                local session_id="$session_arg"
-                if [[ ! "$session_id" == session_* ]]; then
-                    session_id="session_${session_id}"
-                fi
-                session_dir="$CCONDUCTOR_ROOT/research-sessions/$session_id"
-            fi
-            
-            # Validate session directory exists
-            if [ ! -d "$session_dir" ]; then
-                echo "Error: Session directory not found: $session_dir" >&2
-                exit 1
-            fi
-            
-            # Launch dashboard using unified utility
-            echo "Starting Research Journal Viewer..."
-            # shellcheck disable=SC1091
-            if source "$CCONDUCTOR_ROOT/src/utils/dashboard.sh" 2>/dev/null; then
-                if dashboard_view "$session_dir"; then
-                    echo ""
-                    echo "To stop the server later:"
-                    if [ -f "$session_dir/.dashboard-server.pid" ]; then
-                        local server_pid
-                        server_pid=$(cat "$session_dir/.dashboard-server.pid")
-                        echo "  kill $server_pid"
-                    fi
-                    echo "  or: pkill -f 'http-server'"
-                else
-                    echo "Error: Failed to launch dashboard viewer" >&2
-                    exit 1
-                fi
-            else
-                echo "Error: Dashboard viewer utility not found" >&2
-                exit 1
-            fi
-            ;;
-                
-                resume)
-            local session_id
-            session_id=$(get_arg 2)
-            
-            if [ -z "$session_id" ]; then
-                echo "Error: Session ID required" >&2
-                echo "Usage: cconductor sessions resume <session_id> [--refine \"guidance\" | --refine-file path]" >&2
-                exit 1
-            fi
-            
-            # Get refinement if provided
-            local refinement=""
-            if has_flag "refine"; then
-                refinement=$(get_flag "refine")
-            elif has_flag "refine-file"; then
-                local refine_file
-                refine_file=$(get_flag "refine-file")
-                if [ ! -f "$refine_file" ]; then
-                    echo "Error: Refinement file not found: $refine_file" >&2
-                    exit 1
-                fi
-                refinement=$(cat "$refine_file")
-            fi
-            
-            # Interactive refinement prompt if no flags provided
-            if [ -z "$refinement" ] && [ -t 0 ]; then
-                echo "Resume session: $session_id"
-                echo ""
-                echo "Would you like to add refinement guidance? [y/N]"
-                read -r add_refinement
-                
-                if [[ "$add_refinement" =~ ^[Yy] ]]; then
-                    echo ""
-                    echo "Enter refinement guidance (Ctrl+D when done):"
-                    refinement=$(cat)
-                fi
-            fi
-            
-            # Build session path
-            local session_path
-            # shellcheck disable=SC1091
-            source "$CCONDUCTOR_ROOT/src/utils/path-resolver.sh"
-            local sessions_dir
-            sessions_dir=$(resolve_path "session_dir" 2>/dev/null || echo "$CCONDUCTOR_ROOT/research-sessions")
-            
-            if [[ "$session_id" == /* ]]; then
-                session_path="$session_id"
-            elif [[ "$session_id" == mission_* ]]; then
-                session_path="$sessions_dir/$session_id"
-            else
-                session_path="$sessions_dir/mission_$session_id"
-            fi
-            
-            if [ ! -d "$session_path" ]; then
-                echo "Error: Session not found: $session_id" >&2
-                exit 1
-            fi
-            
-            # Call mission resume
-            if [ -n "$refinement" ]; then
-                "$CCONDUCTOR_ROOT/src/cconductor-mission.sh" resume --session "$session_path" --refine "$refinement"
-            else
-                "$CCONDUCTOR_ROOT/src/cconductor-mission.sh" resume --session "$session_path"
-            fi
-            ;;
-                
-                *)
-            echo "Unknown sessions subcommand: $subcommand" >&2
-            echo "" >&2
-            echo "Available subcommands:" >&2
-            echo "  list                       List all research sessions" >&2
-            echo "  latest                     Show latest session" >&2
-            echo "  viewer [session_id]        View research journal" >&2
-            echo "  resume <session_id>        Resume a session" >&2
-            echo "    --refine \"guidance\"       Add refinement when resuming" >&2
-            echo "    --refine-file path       Load refinement from file" >&2
-            exit 1
-            ;;
-            esac
+            handle_sessions_command "$subcommand"
             ;;
         status)
             echo "Checking for running research sessions..."
@@ -1096,20 +374,24 @@ main() {
                 echo ""
                 local count=0
                 for pid in $pids; do
-                    local ppid=$(ps -o ppid= -p "$pid" 2>/dev/null | tr -d ' ')
-                    local parent_cmd=$(ps -o command= -p "$ppid" 2>/dev/null || true)
+                    local ppid
+                    ppid=$(ps -o ppid= -p "$pid" 2>/dev/null | tr -d ' ')
+                    local parent_cmd
+                    parent_cmd=$(ps -o command= -p "$ppid" 2>/dev/null || true)
                     
                     # Skip if parent is also cconductor-mission (it's a child process)
                     if ! echo "$parent_cmd" | grep -q "cconductor-mission.sh"; then
                         count=$((count + 1))
-                        local start_time=$(ps -o lstart= -p "$pid" 2>/dev/null)
+                        local start_time
+                        start_time=$(ps -o lstart= -p "$pid" 2>/dev/null)
                         
                         echo "Active Session #$count:"
                         echo "  PID: $pid (Parent PID: $ppid)"
                         echo "  Started: $start_time"
                         
                         # Check for child agent processes
-                        local child_count=$(pgrep -P "$pid" 2>/dev/null | wc -l | tr -d ' ')
+                        local child_count
+                        child_count=$(pgrep -P "$pid" 2>/dev/null | wc -l | tr -d ' ')
                         if [ "$child_count" -gt 0 ]; then
                             echo "  Status: Running ($child_count child process(es))"
                         else
