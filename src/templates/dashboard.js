@@ -233,7 +233,13 @@ class Dashboard {
                 'recently';
             message.textContent = `Research session finished ${completedTime}`;
 
-            // Show report link (assumes research-report.md exists in session dir)
+            // Get actual report filename from events
+            const completionEvent = this.currentEvents?.find(e => 
+                e.type === 'research_complete' || e.type === 'mission_completed');
+            const reportFile = completionEvent?.data?.report_file || 'mission-report.md';
+
+            // Update link href dynamically
+            reportLink.href = reportFile;
             reportLink.style.display = 'inline-block';
 
             // Stop the runtime counter - research is done
@@ -435,7 +441,7 @@ class Dashboard {
         const truncDesc = desc.length > 60 ? desc.substring(0, 60) + '...' : desc;
 
         return `
-            <div class="task-item" style="font-size: 0.85em; padding: 8px 12px; margin-bottom: 6px; background: rgba(255,255,255,0.05); border-radius: 4px; display: flex; align-items: center;">
+            <div class="task-item" style="font-size: 0.85em; padding: 8px 12px; margin-bottom: 6px; background: rgba(255,255,255,0.05); border-radius: 4px; display: flex; align-items: center;" title="${this.escapeHtml(desc)}">
                 <span style="margin-right: 8px; font-size: 1.2em;">${emoji}</span>
                 <span style="flex: 1;"><strong style="color: #4a90e2;">${agent}</strong> - ${truncDesc}${newBadge}</span>
             </div>
@@ -528,10 +534,21 @@ class Dashboard {
         // For each tool start, find its corresponding complete event
         toolStarts.forEach(startEvent => {
             const tool = startEvent.data.tool;
+            
+            // Hide internal tools (Bash, TodoRead)
+            if (tool === 'Bash' || tool === 'TodoRead') {
+                return;
+            }
+            
             const agent = startEvent.data.agent || 'unknown';
-            const summary = startEvent.data.input_summary || '';
+            let summary = startEvent.data.input_summary || '';
             const timestamp = startEvent.timestamp;
             const startTime = new Date(timestamp).getTime();
+            
+            // For TodoWrite, add "Planning: " prefix if not already there
+            if (tool === 'TodoWrite' && summary && !summary.startsWith('Planning:')) {
+                summary = 'Planning: ' + summary;
+            }
 
             // Find corresponding complete event
             // Match by: same tool, not yet used, within 60s, closest timestamp
@@ -604,16 +621,30 @@ class Dashboard {
             }
 
             // Truncate summary intelligently
-            const truncSummary = call.summary.length > 35 ?
-                call.summary.substring(0, 35) + '...' :
-                call.summary;
+
+            // For file paths, show the end (filename) instead of beginning
+            let truncSummary;
+            if (call.summary.length > 35) {
+                if (call.tool === 'Read' || call.tool === 'Write' || call.tool === 'Edit' || call.tool === 'MultiEdit' || call.tool === 'Glob') {
+                    // File path: show "...filename" instead of "long/path/to..."
+                    truncSummary = '...' + call.summary.substring(call.summary.length - 32);
+                } else {
+                    // Other tools: truncate from start
+                    truncSummary = call.summary.substring(0, 35) + '...';
+                }
+            } else {
+                truncSummary = call.summary;
+            }
+            
+            // Get friendly tool name
+            const friendlyToolName = this.getFriendlyToolName(call.tool);
 
             return `
                 <div class="tool-item ${statusClass}" title="${this.escapeHtml(call.summary)}">
                     <span class="tool-icon">${this.getToolIcon(call.tool)}</span>
                     <div class="tool-content">
                         <div class="tool-header">
-                            <span class="tool-name">${call.tool}</span>
+                            <span class="tool-name">${friendlyToolName}</span>
                             <span class="tool-status ${statusIconClass}">${statusIcon}</span>
                         </div>
                         <div class="tool-details">${this.escapeHtml(truncSummary)}</div>
@@ -625,6 +656,19 @@ class Dashboard {
                 </div>
             `;
         }).join('');
+    }
+    
+    getFriendlyToolName(toolName) {
+        const friendlyNames = {
+            'WebSearch': 'Web Search',
+            'WebFetch': 'Fetch Page',
+            'TodoWrite': 'Planning',
+            'TodoRead': 'Check Tasks',
+            'MultiEdit': 'Edit Files',
+            'Grep': 'Search',
+            'Glob': 'Find Files'
+        };
+        return friendlyNames[toolName] || toolName;
     }
 
     // ========================================
@@ -681,7 +725,7 @@ class Dashboard {
         }
         
         // Entry 2-N: Agent invocations
-        const agentNames = ['research-planner', 'academic-researcher', 'web-researcher', 'synthesis-agent'];
+        const agentNames = ['mission-orchestrator', 'research-planner', 'academic-researcher', 'web-researcher', 'synthesis-agent'];
         
         agentNames.forEach(agentName => {
             const invocations = events.filter(e => e.type === 'agent_invocation' && e.data.agent === agentName);
@@ -845,6 +889,7 @@ class Dashboard {
 
     getAgentTitle(agentName) {
         const titles = {
+            'mission-orchestrator': 'Coordinating Research Step',
             'research-planner': 'Research Strategy Planned',
             'academic-researcher': 'Searching Academic Literature',
             'web-researcher': 'Searching Web Sources',
@@ -900,7 +945,7 @@ class Dashboard {
         const claims = data.claims_synthesized || 0;
         const entities = data.entities_integrated || 0;
         const sections = data.report_sections || 0;
-        const reportFile = data.report_file || 'research-report.md';
+        const reportFile = data.report_file || 'mission-report.md';
         
         // Build message based on whether we have section count
         const sectionText = sections > 0 
@@ -1026,7 +1071,9 @@ class Dashboard {
             'Grep': '🔎',
             'Glob': '📁',
             'Bash': '🔧',
-            'Task': '📋'
+            'Task': '📋',
+            'TodoWrite': '📋',
+            'TodoRead': '📋'
         };
         return icons[toolName] || '🔧';
     }
@@ -1064,6 +1111,8 @@ class Dashboard {
                 <div class="journal-content">
                     ${entry.content}
                 </div>
+                
+                ${this.renderReasoningSection(entry, entryId)}
                 
                 <div class="journal-metadata">
                     <span>🤖 ${entry.agent}</span>
@@ -1161,6 +1210,45 @@ class Dashboard {
         return parts.join('\n                    ');
     }
 
+    renderReasoningSection(entry, entryId) {
+        // Extract reasoning from metadata (orchestrator adds it after flattening)
+        const reasoning = entry.metadata?.reasoning;
+        if (!reasoning) return '';
+        
+        // Build reasoning content
+        let reasoningHtml = '<div style="margin: 12px 0; padding: 12px; background: rgba(99, 102, 241, 0.1); border-left: 3px solid #6366f1; border-radius: 4px;">';
+        reasoningHtml += '<div style="font-weight: 600; color: #6366f1; margin-bottom: 8px;">💡 Research Reasoning</div>';
+        
+        if (reasoning.synthesis_approach) {
+            reasoningHtml += `<div style="margin-bottom: 6px;"><strong>Approach:</strong> ${this.escapeHtml(reasoning.synthesis_approach)}</div>`;
+        }
+        
+        if (reasoning.gap_prioritization) {
+            reasoningHtml += `<div style="margin-bottom: 6px;"><strong>Priority:</strong> ${this.escapeHtml(reasoning.gap_prioritization)}</div>`;
+        }
+        
+        if (reasoning.key_insights && reasoning.key_insights.length > 0) {
+            reasoningHtml += '<div style="margin-bottom: 6px;"><strong>Key Insights:</strong></div>';
+            reasoningHtml += '<ul style="margin: 4px 0 0 20px; padding: 0;">';
+            reasoning.key_insights.forEach(insight => {
+                reasoningHtml += `<li style="margin-bottom: 2px;">${this.escapeHtml(insight)}</li>`;
+            });
+            reasoningHtml += '</ul>';
+        }
+        
+        if (reasoning.strategic_decisions && reasoning.strategic_decisions.length > 0) {
+            reasoningHtml += '<div style="margin-top: 6px;"><strong>Strategic Decisions:</strong></div>';
+            reasoningHtml += '<ul style="margin: 4px 0 0 20px; padding: 0;">';
+            reasoning.strategic_decisions.forEach(decision => {
+                reasoningHtml += `<li style="margin-bottom: 2px;">${this.escapeHtml(decision)}</li>`;
+            });
+            reasoningHtml += '</ul>';
+        }
+        
+        reasoningHtml += '</div>';
+        return reasoningHtml;
+    }
+
     renderTasksExpander(entry, entryId) {
         if (!entry.tasks || entry.tasks.length === 0) return '';
         
@@ -1201,16 +1289,32 @@ class Dashboard {
     renderToolsExpander(entry, entryId) {
         if (!entry.tools || entry.tools.length === 0) return '';
         
-        const toolsList = entry.tools.map(tool => `
-            <div class="tool-used-item ${tool.status}">
-                <span class="tool-used-icon">${tool.icon}</span>
-                <span class="tool-used-name">${tool.tool}</span>
-                <span class="tool-used-details">${this.escapeHtml(tool.details.substring(0, 60))}${tool.details.length > 60 ? '...' : ''}</span>
-                <span class="tool-used-result ${tool.status}">
-                    ${tool.result || '...'}
-                </span>
-            </div>
-        `).join('');
+        const toolsList = entry.tools.map(tool => {
+            // Smart truncation: show end of file paths, start of everything else
+            let truncDetails;
+            if (tool.details.length > 60) {
+                if (tool.tool === 'Read' || tool.tool === 'Write' || tool.tool === 'Edit' || tool.tool === 'MultiEdit' || tool.tool === 'Glob') {
+                    // File path: show "...filename"
+                    truncDetails = '...' + tool.details.substring(tool.details.length - 57);
+                } else {
+                    // Other: show "start..."
+                    truncDetails = tool.details.substring(0, 60) + '...';
+                }
+            } else {
+                truncDetails = tool.details;
+            }
+            
+            return `
+                <div class="tool-used-item ${tool.status}">
+                    <span class="tool-used-icon">${tool.icon}</span>
+                    <span class="tool-used-name">${tool.tool}</span>
+                    <span class="tool-used-details" title="${this.escapeHtml(tool.details)}">${this.escapeHtml(truncDetails)}</span>
+                    <span class="tool-used-result ${tool.status}">
+                        ${tool.result || '...'}
+                    </span>
+                </div>
+            `;
+        }).join('');
         
         const isExpanded = this.expandedJournalTools.has(entryId);
         const expandedClass = isExpanded ? 'expanded' : '';
