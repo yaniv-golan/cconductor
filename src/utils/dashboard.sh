@@ -8,6 +8,8 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(dirname "$(dirname "$SCRIPT_DIR")")"
 # shellcheck disable=SC1091
 source "$SCRIPT_DIR/../shared-state.sh"
+# shellcheck disable=SC1091
+source "$SCRIPT_DIR/error-logger.sh" 2>/dev/null || true
 
 # ============================================================================
 # SECTION 1: Metrics Generation (from dashboard-metrics.sh)
@@ -40,14 +42,26 @@ dashboard_generate_metrics() {
     confidence=$(echo "$kg" | jq '.confidence_scores.overall // 0')
     
     # NEW: Get agent invocation stats from events (v0.2.0 mission system)
-    local total_invocations
-    total_invocations=$(grep -c '"agent_invocation"' "$session_dir/events.jsonl" 2>/dev/null || echo "0")
-    local completed_invocations
-    completed_invocations=$(grep -c '"agent_result"' "$session_dir/events.jsonl" 2>/dev/null || echo "0")
+    local total_invocations=0
+    if [ -f "$session_dir/events.jsonl" ]; then
+        total_invocations=$(grep -c '"agent_invocation"' "$session_dir/events.jsonl" 2>/dev/null || true)
+        total_invocations=${total_invocations:-0}
+    fi
+    
+    local completed_invocations=0
+    if [ -f "$session_dir/events.jsonl" ]; then
+        completed_invocations=$(grep -c '"agent_result"' "$session_dir/events.jsonl" 2>/dev/null || true)
+        completed_invocations=${completed_invocations:-0}
+    fi
+    
     local in_progress
     in_progress=$((total_invocations - completed_invocations))
-    local failed
-    failed=$(grep '"agent_result"' "$session_dir/events.jsonl" 2>/dev/null | grep -c '"status":"failed"' || echo "0")
+    
+    local failed=0
+    if [ -f "$session_dir/events.jsonl" ]; then
+        failed=$(grep '"agent_result"' "$session_dir/events.jsonl" 2>/dev/null | grep -c '"status":"failed"' 2>/dev/null || true)
+        failed=${failed:-0}
+    fi
     
     local entities
     entities=$(echo "$kg" | jq '.stats.total_entities // 0')
@@ -108,13 +122,25 @@ dashboard_generate_metrics() {
             ) | .[-20:] | reverse
         ' 2>/dev/null || echo '[]')
     
+    # Get error/warning counts from system-errors.log
+    local error_count=0
+    local warning_count=0
+    if [ -f "$session_dir/system-errors.log" ]; then
+        error_count=$(grep -c '"severity": "error"' "$session_dir/system-errors.log" 2>/dev/null || true)
+        warning_count=$(grep -c '"severity": "warning"' "$session_dir/system-errors.log" 2>/dev/null || true)
+        
+        # Sanitize counts (ensure single numeric value)
+        error_count=${error_count:-0}
+        warning_count=${warning_count:-0}
+    fi
+    
     # Build metrics JSON
     # Use atomic write pattern: write to temp file, then atomic rename
     # This prevents corruption during concurrent access or interruptions
     local temp_metrics_file="${metrics_file}.tmp.$$"
     
-    jq -n \
-        --arg updated "20 20 12 61 79 80 81 33 98 100 204 250 395 398 399 400 701 702get_timestamp)" \
+    if ! jq -n \
+        --arg updated "$(get_timestamp)" \
         --argjson iter "$iteration" \
         --argjson confidence "$confidence" \
         --argjson total "$total_invocations" \
@@ -130,6 +156,8 @@ dashboard_generate_metrics() {
         --argjson elapsed "$elapsed_seconds" \
         --argjson agents "$active_agents" \
         --argjson observations "$observations" \
+        --argjson errors "$error_count" \
+        --argjson warnings "$warning_count" \
         --arg session_status "$session_status" \
         --arg session_created "$created_at" \
         --arg session_completed "$completed_at" \
@@ -169,12 +197,30 @@ dashboard_generate_metrics() {
                 active_agents: $agents
             },
             system_health: {
+                errors: $errors,
+                warnings: $warnings,
                 observations: $observations
             }
-        }' > "$temp_metrics_file"
+        }' > "$temp_metrics_file" 2>&1; then
+        # jq failed - log error if error logger is available
+        if command -v log_error &>/dev/null && [ -n "${session_dir:-}" ]; then
+            log_error "$session_dir" "dashboard_metrics" "Failed to generate dashboard metrics JSON" \
+                "Check variables: iter=$iteration, confidence=$confidence, total=$total_invocations"
+        fi
+        echo "Error: Failed to generate dashboard metrics" >&2
+        # Create minimal valid JSON so dashboard doesn't break
+        echo '{"error": "Failed to generate metrics", "last_updated": "'"$(date -u +%Y-%m-%dT%H:%M:%SZ)"'"}' > "$metrics_file"
+        return 1
+    fi
     
     # Atomic rename (POSIX guarantees atomicity)
-    mv "$temp_metrics_file" "$metrics_file"
+    if ! mv "$temp_metrics_file" "$metrics_file" 2>&1; then
+        if command -v log_error &>/dev/null && [ -n "${session_dir:-}" ]; then
+            log_error "$session_dir" "dashboard_metrics" "Failed to move temp metrics file"
+        fi
+        echo "Error: Failed to write dashboard metrics" >&2
+        return 1
+    fi
 }
 
 # Calculate total cost from events

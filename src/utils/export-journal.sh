@@ -29,15 +29,31 @@ export_journal() {
     # Get session metadata
     local session_file="$session_dir/session.json"
     local question="Unknown"
+    local objective="Unknown"
     if [ -f "$session_file" ]; then
         question=$(jq -r '.question // "Unknown"' "$session_file" 2>/dev/null || echo "Unknown")
+        objective=$(jq -r '.objective // .question // "Unknown"' "$session_dir/session.json" 2>/dev/null || echo "Unknown")
     fi
+    
+    # Load orchestration log for decision lookups
+    local orchestration_log="$session_dir/orchestration-log.jsonl"
+    local has_orchestration_log=false
+    if [ -f "$orchestration_log" ]; then
+        has_orchestration_log=true
+    fi
+    
+    # Track current iteration for section markers
+    local current_iteration=0
     
     # Start markdown document
     {
         echo "# Research Journal"
         echo ""
-        echo "**Research Question:** $question"
+        if [ "$objective" != "Unknown" ]; then
+            echo "**Research Objective:** $objective"
+        else
+            echo "**Research Question:** $question"
+        fi
         echo ""
         echo "**Session:** $(basename "$session_dir")"
         echo ""
@@ -60,6 +76,21 @@ export_journal() {
             formatted_time=$(date -j -f "%Y-%m-%dT%H:%M:%SZ" "$clean_timestamp" "+%B %d, %Y at %l:%M %p" 2>/dev/null | sed 's/  / /g' || echo "$timestamp")
             
             case "$event_type" in
+                mission_started)
+                    local mission_objective
+                    mission_objective=$(echo "$line" | jq -r '.data.objective // "research query"')
+                    echo "## 🚀 Mission Started"
+                    echo ""
+                    echo "**Time:** $formatted_time"
+                    echo ""
+                    echo "**Objective:** $mission_objective"
+                    echo ""
+                    echo "Research mission initialized. The orchestrator will coordinate specialized agents to gather, analyze, and synthesize information."
+                    echo ""
+                    echo "---"
+                    echo ""
+                    ;;
+                
                 session_created)
                     echo "## 🎯 Session Started"
                     echo ""
@@ -77,11 +108,74 @@ export_journal() {
                     local tools
                     tools=$(echo "$line" | jq -r '.data.tools // "N/A"')
                     
+                    # Check if iteration changed (for mission-orchestrator)
+                    if [ "$agent" = "mission-orchestrator" ] && [ "$has_orchestration_log" = true ]; then
+                        # Extract iteration from orchestration log near this timestamp
+                        # Match by time proximity (within a minute)
+                        local iteration_number
+                        local timestamp_minute
+                        timestamp_minute="${clean_timestamp%:??Z}"  # 2025-10-11T12:03
+                        iteration_number=$(grep "$timestamp_minute" "$orchestration_log" 2>/dev/null | head -1 | jq -r '.decision.iteration // 0' 2>/dev/null || echo "0")
+                        
+                        if [ "$iteration_number" != "0" ] && [ "$iteration_number" != "$current_iteration" ]; then
+                            current_iteration=$iteration_number
+                            echo "---"
+                            echo ""
+                            echo "## 🔄 Iteration $current_iteration"
+                            echo ""
+                        fi
+                    fi
+                    
                     echo "### ⚡ Agent Invoked: $agent"
                     echo ""
                     echo "**Time:** $formatted_time  "
                     echo "**Tools:** $tools"
                     echo ""
+                    
+                    # For mission-orchestrator, show orchestration decision
+                    if [ "$agent" = "mission-orchestrator" ] && [ "$has_orchestration_log" = true ]; then
+                        # Find matching decision in orchestration log
+                        # Match by time proximity (within a minute)
+                        local decision_entry
+                        local timestamp_minute
+                        timestamp_minute="${clean_timestamp%:??Z}"  # 2025-10-11T12:03
+                        decision_entry=$(grep "$timestamp_minute" "$orchestration_log" 2>/dev/null | head -1)
+                        
+                        if [ -n "$decision_entry" ]; then
+                            local decision_type
+                            decision_type=$(echo "$decision_entry" | jq -r '.decision.type // "decision"' 2>/dev/null)
+                            local rationale
+                            rationale=$(echo "$decision_entry" | jq -r '.decision.rationale // ""' 2>/dev/null)
+                            local expected_impact
+                            expected_impact=$(echo "$decision_entry" | jq -r '.decision.expected_impact // ""' 2>/dev/null)
+                            
+                            if [ -n "$rationale" ]; then
+                                echo "> [!NOTE]"
+                                echo "> **🧠 Orchestration Decision: $decision_type**"
+                                echo ">"
+                                echo "> *Rationale:* $rationale"
+                                
+                                # Show alternatives considered
+                                local alternatives
+                                alternatives=$(echo "$decision_entry" | jq -r '.decision.alternatives_considered // [] | .[]' 2>/dev/null)
+                                if [ -n "$alternatives" ]; then
+                                    echo ">"
+                                    echo "> *Alternatives Considered:*"
+                                    while IFS= read -r alt; do
+                                        echo "> - $alt"
+                                    done <<< "$alternatives"
+                                fi
+                                
+                                # Show expected impact
+                                if [ -n "$expected_impact" ]; then
+                                    echo ">"
+                                    echo "> *Expected Impact:* $expected_impact"
+                                fi
+                                
+                                echo ""
+                            fi
+                        fi
+                    fi
                     ;;
                     
                 agent_result)
@@ -498,6 +592,41 @@ export_journal() {
                     echo "- **Entities Integrated:** $entities"
                     echo ""
                     echo "📄 **[View Final Report]($report_file)**"
+                    echo ""
+                    echo "---"
+                    echo ""
+                    ;;
+                
+                mission_completed)
+                    local report_file
+                    report_file=$(echo "$line" | jq -r '.data.report_file // "mission-report.md"')
+                    local completion_status
+                    completion_status=$(echo "$line" | jq -r '.data.status // "success"')
+                    
+                    # Get final KG stats if available
+                    local kg_file="$session_dir/knowledge-graph.json"
+                    local claims=0
+                    local entities=0
+                    local citations=0
+                    if [ -f "$kg_file" ]; then
+                        claims=$(jq -r '.stats.total_claims // 0' "$kg_file" 2>/dev/null || echo "0")
+                        entities=$(jq -r '.stats.total_entities // 0' "$kg_file" 2>/dev/null || echo "0")
+                        citations=$(jq -r '.stats.total_citations // 0' "$kg_file" 2>/dev/null || echo "0")
+                    fi
+                    
+                    echo "## 🎉 Mission Complete"
+                    echo ""
+                    echo "**Time:** $formatted_time"
+                    echo "**Status:** $completion_status"
+                    echo ""
+                    echo "Research mission completed successfully! Final knowledge graph contains:"
+                    echo "- **Entities:** $entities"
+                    echo "- **Claims:** $claims"
+                    echo "- **Citations:** $citations"
+                    echo ""
+                    echo "📄 **[View Final Report]($report_file)**"
+                    echo ""
+                    echo "📖 **[View Research Journal](research-journal.md)** (This document)"
                     echo ""
                     echo "---"
                     echo ""

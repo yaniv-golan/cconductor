@@ -27,6 +27,10 @@ source "$UTILS_DIR/artifact-manager.sh"
 source "$UTILS_DIR/json-parser.sh"
 # shellcheck disable=SC1091
 source "$PROJECT_ROOT/src/knowledge-graph.sh"
+# shellcheck disable=SC1091
+source "$UTILS_DIR/error-logger.sh"
+# shellcheck disable=SC1091
+source "$UTILS_DIR/debug.sh"
 
 # Prepare orchestrator context for invocation
 prepare_orchestrator_context() {
@@ -37,28 +41,28 @@ prepare_orchestrator_context() {
     # Get agent registry as JSON
     local agents_json
     if ! agents_json=$(agent_registry_export_json); then
-        echo "Error: Failed to export agent registry" >&2
+        echo "✗ Error: Failed to export agent registry" >&2
         return 1
     fi
     
     # Get knowledge graph
     local kg_json
     if ! kg_json=$(kg_read "$session_dir"); then
-        echo "Error: Could not read knowledge graph from $session_dir" >&2
+        echo "✗ Error: Could not read knowledge graph from $session_dir" >&2
         return 1
     fi
     
     # Get budget status
     local budget_json
     if ! budget_json=$(budget_status "$session_dir"); then
-        echo "Error: Could not read budget status from $session_dir" >&2
+        echo "✗ Error: Could not read budget status from $session_dir" >&2
         return 1
     fi
     
     # Get previous decisions
     local decisions_json
     if ! decisions_json=$(get_orchestration_log "$session_dir"); then
-        echo "Error: Could not read orchestration log from $session_dir" >&2
+        echo "✗ Error: Could not read orchestration log from $session_dir" >&2
         return 1
     fi
     
@@ -191,7 +195,7 @@ EOF
         result=$(jq -r '.result // empty' "$output_file" 2>/dev/null)
         
         if [[ -z "$result" ]]; then
-            echo "Error: Orchestrator returned empty result" >&2
+            echo "✗ Error: Orchestrator returned empty result" >&2
             echo "  Output file: $output_file" >&2
             if [[ -f "$output_file" ]]; then
                 echo "  Output preview: $(head -c 200 "$output_file")" >&2
@@ -213,7 +217,7 @@ EOF
         
         # Validate extraction succeeded
         if [[ -z "$decision_json" ]]; then
-            echo "Error: Could not extract valid JSON from orchestrator" >&2
+            echo "✗ Error: Could not extract valid JSON from orchestrator" >&2
             echo "Result preview: ${result:0:300}" >&2
             # Return early exit on parse error
             jq -n '{
@@ -228,7 +232,7 @@ EOF
         
         echo "$decision_json"
     else
-        echo "Error: Agent invocation failed" >&2
+        echo "✗ Error: Agent invocation failed" >&2
         # Return early exit on invocation failure
         jq -n '{
             "action": "early_exit",
@@ -314,11 +318,11 @@ EOF
                         "model": $model
                     }' > "$agent_file"
             else
-                echo "  ⚠ Warning: Agent $agent_name system prompt not found" >&2
+                echo "  ⚠️  Warning: Agent $agent_name system prompt not found" >&2
                 return 1
             fi
         else
-            echo "  ⚠ Warning: Agent $agent_name not found in registry" >&2
+            echo "  ⚠️  Warning: Agent $agent_name not found in registry" >&2
             return 1
         fi
     fi
@@ -365,35 +369,111 @@ EOF
     fi
 }
 
+# Validate synthesis agent outputs
+# Ensures mission-report.md and knowledge-graph.json are created
+validate_synthesis_outputs() {
+    local session_dir="$1"
+    local agent="$2"
+    
+    # Only validate for synthesis-agent
+    if [ "$agent" != "synthesis-agent" ]; then
+        return 0
+    fi
+    
+    local mission_report="$session_dir/mission-report.md"
+    local kg_file="$session_dir/knowledge-graph.json"
+    local kg_updated=false
+    
+    # Check mission report exists
+    if [ ! -f "$mission_report" ]; then
+        echo "  ⚠️  Warning: synthesis-agent did not create mission-report.md" >&2
+        return 1
+    fi
+    
+    # Check KG was updated (last_updated timestamp changed or entities added)
+    local entities_count
+    entities_count=$(jq -r '.entities | length' "$kg_file" 2>/dev/null || echo "0")
+    
+    if [ "$entities_count" -gt 0 ]; then
+        kg_updated=true
+    fi
+    
+    # Also check if file was modified after session creation
+    if [ "$kg_file" -nt "$session_dir/session.json" ]; then
+        kg_updated=true
+    fi
+    
+    if [ "$kg_updated" = false ]; then
+        echo "  ⚠️  Warning: synthesis-agent may not have updated knowledge-graph.json" >&2
+        return 1
+    fi
+    
+    echo "  ✓ Synthesis outputs validated" >&2
+    return 0
+}
+
+# Extract JSON decision from orchestrator output (may include text + JSON)
+extract_orchestrator_decision() {
+    local orchestrator_output="$1"
+    
+    # Use the battle-tested json-parser utilities
+    local extracted_json
+    if extracted_json=$(extract_json_from_text "$orchestrator_output" 2>/dev/null); then
+        # Check if it has an action field at root level
+        local action
+        action=$(echo "$extracted_json" | jq -r '.action // empty' 2>/dev/null)
+        if [ -n "$action" ] && [ "$action" != "null" ]; then
+            echo "$extracted_json"
+            return 0
+        fi
+    fi
+    
+    # Could not extract valid decision JSON with action field
+    return 1
+}
+
 # Process orchestrator decisions
 process_orchestrator_decisions() {
     local session_dir="$1"
     local orchestrator_output="$2"
     
-    # Parse decision from output
+    # Extract decision JSON from output (may include prose)
+    local decision_json
+    if ! decision_json=$(extract_orchestrator_decision "$orchestrator_output"); then
+        echo "⚠️  Warning: Orchestrator did not return valid decision JSON" >&2
+        echo "   Output preview: $(echo "$orchestrator_output" | head -c 200)..." >&2
+        log_decision "$session_dir" "invalid_output" "$(echo "$orchestrator_output" | head -c 500)"
+        return 1
+    fi
+    
+    # Parse decision from extracted JSON
     local decision_action
-    decision_action=$(echo "$orchestrator_output" | jq -r '.action')
+    decision_action=$(echo "$decision_json" | jq -r '.action')
     
     case "$decision_action" in
         invoke)
             local agent_name
-            agent_name=$(echo "$orchestrator_output" | jq -r '.agent')
+            agent_name=$(echo "$decision_json" | jq -r '.agent')
             local task
-            task=$(echo "$orchestrator_output" | jq -r '.task')
+            task=$(echo "$decision_json" | jq -r '.task')
             local context
-            context=$(echo "$orchestrator_output" | jq -r '.context // "No additional context"')
+            context=$(echo "$decision_json" | jq -r '.context // "No additional context"')
             local input_artifacts
-            input_artifacts=$(echo "$orchestrator_output" | jq -c '.input_artifacts // []')
-            
-            echo "→ Invoking agent: $agent_name"
-            echo "  Task: $task"
+            input_artifacts=$(echo "$decision_json" | jq -c '.input_artifacts // []')
             
             # Log the decision
             log_decision "$session_dir" "agent_invocation" "$orchestrator_output"
             
             # Actually invoke the agent - handle failures gracefully
             if _invoke_delegated_agent "$session_dir" "$agent_name" "$task" "$context" "$input_artifacts"; then
-                log_decision "$session_dir" "agent_invocation_success" "$orchestrator_output"
+                # Validate synthesis outputs if applicable
+                if validate_synthesis_outputs "$session_dir" "$agent_name"; then
+                    log_decision "$session_dir" "agent_invocation_success" "$orchestrator_output"
+                else
+                    echo "  ⚠ Agent $agent_name succeeded but outputs incomplete" >&2
+                    log_decision "$session_dir" "agent_invocation_failure" \
+                        "$(echo "$orchestrator_output" | jq --arg reason "Outputs incomplete" '. + {failure_reason: $reason}')"
+                fi
             else
                 echo "  ⚠ Agent $agent_name failed - orchestrator will adapt" >&2
                 log_decision "$session_dir" "agent_invocation_failure" \
@@ -403,14 +483,11 @@ process_orchestrator_decisions() {
             
         reinvoke)
             local agent_name
-            agent_name=$(echo "$orchestrator_output" | jq -r '.agent')
+            agent_name=$(echo "$decision_json" | jq -r '.agent')
             local reason
-            reason=$(echo "$orchestrator_output" | jq -r '.reason')
+            reason=$(echo "$decision_json" | jq -r '.reason')
             local refinements
-            refinements=$(echo "$orchestrator_output" | jq -r '.refinements // "Please provide more detail"')
-            
-            echo "→ Re-invoking agent: $agent_name"
-            echo "  Reason: $reason"
+            refinements=$(echo "$decision_json" | jq -r '.refinements // "Please provide more detail"')
             
             log_decision "$session_dir" "agent_reinvocation" "$orchestrator_output"
             
@@ -426,17 +503,15 @@ process_orchestrator_decisions() {
             
         handoff)
             local from_agent
-            from_agent=$(echo "$orchestrator_output" | jq -r '.from_agent')
+            from_agent=$(echo "$decision_json" | jq -r '.from_agent')
             local to_agent
-            to_agent=$(echo "$orchestrator_output" | jq -r '.to_agent')
+            to_agent=$(echo "$decision_json" | jq -r '.to_agent')
             local task
-            task=$(echo "$orchestrator_output" | jq -r '.task')
+            task=$(echo "$decision_json" | jq -r '.task')
             local input_artifacts
-            input_artifacts=$(echo "$orchestrator_output" | jq -c '.input_artifacts // []')
+            input_artifacts=$(echo "$decision_json" | jq -c '.input_artifacts // []')
             local rationale
-            rationale=$(echo "$orchestrator_output" | jq -r '.rationale // "Handoff requested"')
-            
-            echo "→ Agent handoff: $from_agent → $to_agent"
+            rationale=$(echo "$decision_json" | jq -r '.rationale // "Handoff requested"')
             
             # Log handoff decision (tracking is done via orchestration log)
             log_agent_handoff "$session_dir" "$from_agent" "$to_agent" "$orchestrator_output"
@@ -453,16 +528,14 @@ process_orchestrator_decisions() {
             
         early_exit)
             local reason
-            reason=$(echo "$orchestrator_output" | jq -r '.reason')
-            
-            echo "→ Early exit: $reason"
+            reason=$(echo "$decision_json" | jq -r '.reason')
             
             log_decision "$session_dir" "early_exit" "$orchestrator_output"
             return 2  # Signal early exit
             ;;
             
         *)
-            echo "Warning: Unknown decision action: $decision_action" >&2
+            echo "⚠️  Warning: Unknown decision action: $decision_action" >&2
             log_decision "$session_dir" "unknown_action" "$orchestrator_output"
             ;;
     esac
@@ -476,12 +549,16 @@ check_mission_complete() {
     local mission_profile="$2"
     local orchestrator_output="$3"
     
-    # Check if orchestrator explicitly signaled completion
-    local decision_action
-    decision_action=$(echo "$orchestrator_output" | jq -r '.action')
-    
-    if [[ "$decision_action" == "early_exit" ]]; then
-        return 0  # Complete (early)
+    # Extract decision JSON from output
+    local decision_json
+    if decision_json=$(extract_orchestrator_decision "$orchestrator_output" 2>/dev/null); then
+        # Check if orchestrator explicitly signaled completion
+        local decision_action
+        decision_action=$(echo "$decision_json" | jq -r '.action')
+        
+        if [[ "$decision_action" == "early_exit" ]]; then
+            return 0  # Complete (early)
+        fi
     fi
     
     # Check success criteria - verify required outputs exist in artifacts
@@ -622,17 +699,37 @@ run_mission_orchestration() {
     echo "→ Loading agent registry..."
     agent_registry_init
     
+    # Log mission start event for journal
+    local objective
+    objective=$(cat "$session_dir/session.json" | jq -r '.objective // "Unknown"')
+    log_event "$session_dir" "mission_started" "$(jq -n \
+        --arg mission "$mission_name" \
+        --arg objective "$objective" \
+        '{
+            mission: $mission,
+            objective: $objective,
+            started_at: (now | strftime("%Y-%m-%dT%H:%M:%SZ"))
+        }')"
+    
+    # Clean up stale dashboard servers from previous sessions
+    # shellcheck disable=SC1091
+    if source "$UTILS_DIR/dashboard.sh" 2>/dev/null; then
+        dashboard_cleanup_orphans "$(dirname "$session_dir")" >/dev/null 2>&1 || true
+    fi
+    
     # Launch dashboard viewer
     echo "→ Launching Research Journal Viewer..."
     # shellcheck disable=SC1091
-    if source "$UTILS_DIR/dashboard.sh" 2>/dev/null; then
-        if dashboard_view "$session_dir" 2>/dev/null; then
+    if source "$UTILS_DIR/dashboard.sh"; then
+        if dashboard_view "$session_dir"; then
             echo "  ✓ Dashboard viewer launched"
         else
-            echo "  ⚠ Dashboard viewer failed to launch (continuing anyway)" >&2
+            log_error "$session_dir" "dashboard_launch" "Dashboard viewer failed to launch"
+            echo "  ⚠ Dashboard viewer failed (check system-errors.log)" >&2
         fi
     else
-        echo "  ⚠ Dashboard utility not found (continuing anyway)" >&2
+        log_error "$session_dir" "dashboard_source" "Failed to source dashboard.sh"
+        echo "  ⚠ Dashboard utility not found" >&2
     fi
     
     echo ""
@@ -643,11 +740,24 @@ run_mission_orchestration() {
     max_iterations=$(echo "$mission_profile" | jq -r '.constraints.max_iterations')
     
     while [[ $iteration -le $max_iterations ]]; do
+        # Sync KG iteration with mission iteration FIRST (before any work)
+        # This ensures dashboard always shows the current iteration number
+        local kg_current
+        kg_current=$(jq -r '.iteration // 0' "$session_dir/knowledge-graph.json" 2>/dev/null || echo "0")
+        if [[ "$kg_current" -lt "$iteration" ]]; then
+            kg_increment_iteration "$session_dir"
+            # Update dashboard metrics immediately so dashboard shows current iteration
+            if command -v dashboard_update_metrics &>/dev/null; then
+                dashboard_update_metrics "$session_dir" || true
+            fi
+        fi
+        
         echo "═══ Mission Iteration $iteration/$max_iterations ═══"
         echo ""
         
         # Check budget before proceeding
-        if ! budget_check "$session_dir" 2>/dev/null; then
+        if ! budget_check "$session_dir"; then
+            log_warning "$session_dir" "budget_limit" "Budget limit reached at iteration $iteration"
             echo ""
             echo "⚠ Budget limit reached - generating partial results"
             break
@@ -693,8 +803,34 @@ run_mission_orchestration() {
     echo "════════════════════════════════════════════════════════════"
     echo ""
     
+    # Mark session as completed
+    local completed_at
+    completed_at=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+    jq --arg completed "$completed_at" \
+        '.completed_at = $completed | .status = "completed"' \
+        "$session_dir/session.json" > "$session_dir/session.json.tmp" && \
+        mv "$session_dir/session.json.tmp" "$session_dir/session.json"
+    
     # Generate final report
     generate_mission_report "$session_dir" "$mission_profile"
+    
+    # Export research journal as markdown
+    # shellcheck source=/dev/null
+    if command -v export_journal &>/dev/null || source "$UTILS_DIR/export-journal.sh" 2>/dev/null; then
+        echo "→ Generating research journal..."
+        export_journal "$session_dir" "$session_dir/research-journal.md" 2>&1 || echo "  ⚠️  Warning: Could not generate research journal"
+    fi
+    
+    # Log mission completion event for journal
+    local report_path="$session_dir/mission-report.md"
+    log_event "$session_dir" "mission_completed" "$(jq -n \
+        --arg completed "$completed_at" \
+        --arg report "$([ -f "$report_path" ] && echo "mission-report.md" || echo "")" \
+        '{
+            completed_at: $completed,
+            report_file: $report,
+            status: "success"
+        }')"
     
     echo ""
     echo "Session saved at: $session_dir"
@@ -740,8 +876,12 @@ run_mission_orchestration_resume() {
     if [ ! -f "$session_dir/.dashboard-server.pid" ]; then
         echo "→ Launching Research Journal Viewer..."
         # shellcheck disable=SC1091
-        if source "$UTILS_DIR/dashboard.sh" 2>/dev/null; then
-            dashboard_view "$session_dir" 2>/dev/null || true
+        if source "$UTILS_DIR/dashboard.sh"; then
+            if ! dashboard_view "$session_dir"; then
+                log_error "$session_dir" "dashboard_refresh" "Dashboard refresh failed on resume"
+            fi
+        else
+            log_error "$session_dir" "dashboard_source" "Failed to source dashboard.sh on resume"
         fi
     fi
     
@@ -749,11 +889,24 @@ run_mission_orchestration_resume() {
     
     # Continue orchestration loop
     while [[ $iteration -le $max_iterations ]]; do
+        # Sync KG iteration with mission iteration FIRST (before any work)
+        # This ensures dashboard always shows the current iteration number
+        local kg_current
+        kg_current=$(jq -r '.iteration // 0' "$session_dir/knowledge-graph.json" 2>/dev/null || echo "0")
+        if [[ "$kg_current" -lt "$iteration" ]]; then
+            kg_increment_iteration "$session_dir"
+            # Update dashboard metrics immediately so dashboard shows current iteration
+            if command -v dashboard_update_metrics &>/dev/null; then
+                dashboard_update_metrics "$session_dir" || true
+            fi
+        fi
+        
         echo "═══ Mission Iteration $iteration/$max_iterations (Resume) ═══"
         echo ""
         
         # Check budget
-        if ! budget_check "$session_dir" 2>/dev/null; then
+        if ! budget_check "$session_dir"; then
+            log_warning "$session_dir" "budget_limit" "Budget limit reached at iteration $iteration (resume)"
             echo ""
             echo "⚠ Budget limit reached"
             break
@@ -799,8 +952,35 @@ run_mission_orchestration_resume() {
     echo "════════════════════════════════════════════════════════════"
     echo ""
     
+    # Mark session as completed
+    local completed_at
+    completed_at=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+    jq --arg completed "$completed_at" \
+        '.completed_at = $completed | .status = "completed"' \
+        "$session_dir/session.json" > "$session_dir/session.json.tmp" && \
+        mv "$session_dir/session.json.tmp" "$session_dir/session.json"
+    
     # Update final report
     generate_mission_report "$session_dir" "$mission_profile"
+    
+    # Export research journal as markdown
+    # shellcheck source=/dev/null
+    if command -v export_journal &>/dev/null || source "$UTILS_DIR/export-journal.sh" 2>/dev/null; then
+        echo "→ Generating research journal..."
+        export_journal "$session_dir" "$session_dir/research-journal.md" 2>&1 || echo "  ⚠️  Warning: Could not generate research journal"
+    fi
+    
+    # Log mission completion event for journal
+    local report_path="$session_dir/mission-report.md"
+    log_event "$session_dir" "mission_completed" "$(jq -n \
+        --arg completed "$completed_at" \
+        --arg report "$([ -f "$report_path" ] && echo "mission-report.md" || echo "")" \
+        '{
+            completed_at: $completed,
+            report_file: $report,
+            status: "success"
+        }')"
+    
     echo ""
     echo "Session saved at: $session_dir"
 }
@@ -815,25 +995,25 @@ prepare_orchestrator_context_resume() {
     # Get existing state
     local agents_json
     if ! agents_json=$(agent_registry_export_json); then
-        echo "Error: Failed to export agent registry" >&2
+        echo "✗ Error: Failed to export agent registry" >&2
         return 1
     fi
     
     local kg_json
     if ! kg_json=$(kg_read "$session_dir"); then
-        echo "Error: Could not read knowledge graph" >&2
+        echo "✗ Error: Could not read knowledge graph" >&2
         return 1
     fi
     
     local budget_json
     if ! budget_json=$(budget_status "$session_dir"); then
-        echo "Error: Could not read budget status" >&2
+        echo "✗ Error: Could not read budget status" >&2
         return 1
     fi
     
     local decisions_json
     if ! decisions_json=$(get_orchestration_log "$session_dir"); then
-        echo "Error: Could not read orchestration log" >&2
+        echo "✗ Error: Could not read orchestration log" >&2
         return 1
     fi
     
