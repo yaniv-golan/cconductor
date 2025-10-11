@@ -21,6 +21,28 @@ fi
 # shellcheck disable=SC1091
 source "$CCONDUCTOR_ROOT/src/utils/cli-parser.sh"
 
+# Parse arguments early to check for --verbose and --debug flags
+parse_cli_args "$@"
+
+# Debug mode support (check both flag and environment variable)
+if has_flag "debug" || [ "${CCONDUCTOR_DEBUG:-0}" = "1" ]; then
+    export CCONDUCTOR_DEBUG=1
+    set -x  # Enable bash trace
+    echo "🐛 Debug mode enabled - bash trace active" >&2
+    echo "" >&2
+fi
+
+# Verbose mode support (check both flag and environment variable)
+if has_flag "verbose" || [ "${CCONDUCTOR_VERBOSE:-0}" = "1" ]; then
+    export CCONDUCTOR_VERBOSE=1
+    echo "📢 Verbose mode enabled - showing detailed progress" >&2
+    echo "" >&2
+fi
+
+# Source verbose utility
+# shellcheck disable=SC1091
+source "$CCONDUCTOR_ROOT/src/utils/verbose.sh"
+
 # ============================================================================
 # Initialization and Update Functions
 # ============================================================================
@@ -79,6 +101,9 @@ OPTIONS:
   --non-interactive, -y            Skip interactive plan confirmation
                                    Useful for automation and testing
                                    Note: Flags must come AFTER the question
+  --verbose                        Show detailed, user-friendly progress messages
+                                   Displays agent reasoning, tool use, and file operations
+                                   Alternative: Set CCONDUCTOR_VERBOSE=1 environment variable
 
 SESSIONS SUBCOMMANDS:
   list                                  List all research sessions
@@ -266,8 +291,8 @@ handle_research() {
 }
 
 main() {
-    # Parse all CLI arguments
-    parse_cli_args "$@"
+    # CLI arguments already parsed at top of script for --verbose flag
+    # No need to parse again
     
     # Handle special flags first
     if has_flag "help" || has_flag "h"; then

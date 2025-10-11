@@ -4,6 +4,11 @@
 
 set -euo pipefail
 
+# Re-enable bash trace if debug mode is active
+if [[ "${CCONDUCTOR_DEBUG:-0}" == "1" ]]; then
+    set -x
+fi
+
 # Save script directory before sourcing other files (they may redefine SCRIPT_DIR)
 CCONDUCTOR_MISSION_SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(dirname "$CCONDUCTOR_MISSION_SCRIPT_DIR")"

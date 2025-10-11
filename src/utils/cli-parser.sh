@@ -27,6 +27,24 @@ fi
 declare -A CLI_FLAGS
 declare -a CLI_ARGS
 
+# Known boolean flags (flags that never take a value)
+declare -a BOOLEAN_FLAGS=(
+    "verbose" "debug" "help" "h" "version" "v" 
+    "update" "check-update" "no-update-check" 
+    "init" "yes" "y" "non-interactive"
+)
+
+# Check if a flag is boolean
+is_boolean_flag() {
+    local flag="$1"
+    for bool_flag in "${BOOLEAN_FLAGS[@]}"; do
+        if [[ "$flag" == "$bool_flag" ]]; then
+            return 0
+        fi
+    done
+    return 1
+}
+
 # Parse command-line arguments
 # Usage: parse_cli_args "$@"
 parse_cli_args() {
@@ -47,7 +65,12 @@ parse_cli_args() {
             --*)
                 # Handle --flag value format
                 local flag="${1#--}"
-                if [[ $# -gt 1 ]] && [[ ! "$2" =~ ^- ]]; then
+                
+                # Check if this is a known boolean flag
+                if is_boolean_flag "$flag"; then
+                    CLI_FLAGS["$flag"]="true"
+                    shift
+                elif [[ $# -gt 1 ]] && [[ ! "$2" =~ ^- ]]; then
                     # Next arg doesn't start with dash, treat as value
                     CLI_FLAGS["$flag"]="$2"
                     shift 2
@@ -60,8 +83,13 @@ parse_cli_args() {
             -*)
                 # Handle single-dash flags like -y
                 local flag="${1#-}"
-                # Check if it's a value flag (next arg doesn't start with dash)
-                if [[ $# -gt 1 ]] && [[ ! "$2" =~ ^- ]]; then
+                
+                # Check if this is a known boolean flag
+                if is_boolean_flag "$flag"; then
+                    CLI_FLAGS["$flag"]="true"
+                    shift
+                elif [[ $# -gt 1 ]] && [[ ! "$2" =~ ^- ]]; then
+                    # Check if it's a value flag (next arg doesn't start with dash)
                     CLI_FLAGS["$flag"]="$2"
                     shift 2
                 else
