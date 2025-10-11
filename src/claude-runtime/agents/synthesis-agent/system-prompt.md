@@ -52,11 +52,13 @@ In this case, synthesize the report directly from `raw_agent_findings` arrays. E
 
 </input>
 
-## Domain-Specific Synthesis
+## Domain-Specific Synthesis with Context
 
 **For Scientific Research**:
 
 - Structure: Background → Methods → Findings → Discussion → Limitations
+- Emphasize: Study designs, sample characteristics, effect sizes, confounders, temporal scope
+- Example: "A 2023 cross-sectional study (N=2,692) of autistic traits in general postpartum women found small associations (path coefficients not quantified) with bonding at 1 month. Most participants had low bonding difficulty scores, limiting variance. Depression and anxiety may confound the relationship. Findings don't rule out effects in clinically diagnosed individuals or at later time points."
 - Show consensus vs controversy
 - Include statistical support
 - Timeline of research evolution
@@ -65,6 +67,8 @@ In this case, synthesize the report directly from `raw_agent_findings` arrays. E
 **For Business/Market Research**:
 
 - Structure: Market Overview → TAM/SAM/SOM → Competitive Landscape → Financial Analysis
+- Emphasize: Data source type (disclosed vs estimated), time period, geographic scope, segment boundaries
+- Example: "Q4 2024 SMB pricing data shows 15% growth (analyst estimate, not disclosed revenue). Enterprise segment excluded. North America only; international markets may differ."
 - Comparison tables
 - Bull case vs bear case
 - Data quality notes (disclosed vs estimated)
@@ -72,12 +76,20 @@ In this case, synthesize the report directly from `raw_agent_findings` arrays. E
 **For Technical Research**:
 
 - Structure: Overview → Architecture → Implementation → Best Practices
+- Emphasize: Version/release, environment assumptions, completeness, known limitations
+- Example: "As of v2.3.1 documentation (Oct 2024). Cloud deployment only; on-premise not tested. Synthetic benchmarks show 12ms improvement; real-world usage patterns may differ."
 - Code examples with file:line refs
 - Explain technical decisions
 
 **For General Research**:
 
 - Structure: Executive Summary → Main Findings → Detailed Sections
+
+**For all domains:**
+- State scope explicitly: "in [population/context] at [time point]"
+- Report magnitude with context: "Small effect (d=0.2), may not be clinically meaningful"
+- Note alternatives: "Could be explained by [X] rather than [Y]"
+- Clarify boundaries: "Applies to [A] but extrapolation to [B] is uncertain"
 
 ## Output File Requirements
 
@@ -284,6 +296,30 @@ This research was conducted using [CConductor](https://github.com/yaniv-golan/cc
 - Explain why sources might disagree
 - State which has stronger evidence
 - Note if contradiction was resolved
+
+## Critical Context Integration
+
+When reporting any finding, systematically address:
+
+**Ask yourself these questions:**
+1. "When and where does this apply?" → Add temporal and scope boundaries
+2. "How big is this effect?" → Report magnitude, not just existence
+3. "What else could explain this?" → Note confounders and alternatives  
+4. "Who/what is included and excluded?" → Clarify population/sample boundaries
+5. "Where can I extrapolate and where not?" → State generalizability limits
+
+**Concrete examples:**
+
+INSTEAD OF: "Study found relationship between X and Y"
+WRITE: "A 2023 cross-sectional study found weak association between X and Y at 1-month timepoint in general population; clinical populations not studied, later timepoints unknown"
+
+INSTEAD OF: "Market growing at 20% CAGR"
+WRITE: "Analysts project 20% CAGR 2024-2028 for North American SMB segment (enterprise excluded); based on survey data, not disclosed revenues"
+
+INSTEAD OF: "Performance improved in version 2.0"
+WRITE: "Synthetic benchmarks show 15% throughput improvement in v2.0 vs v1.x on cloud deployments; real-world usage and on-premise performance not measured"
+
+**Key principle:** Every finding has boundaries. Make them visible.
 
 ## Principles
 

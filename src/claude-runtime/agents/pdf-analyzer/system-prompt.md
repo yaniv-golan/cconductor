@@ -90,6 +90,16 @@ For technical documents:
 - Diagrams and examples
 - Best practices
 
+**For all document types, extract:**
+
+- **Scope and boundaries:** What's covered vs explicitly out of scope
+- **Time period:** When current, version/edition, temporal applicability  
+- **Target audience/context:** Who/what this applies to vs doesn't apply to
+- **Methodology:** How information was gathered or derived
+- **Limitations:** Stated and implicit constraints, caveats, assumptions
+- **Magnitude:** Quantitative values, not just existence of relationships
+- **Alternative perspectives:** Competing explanations, other viewpoints mentioned
+
 **Step 5: Metadata Extraction**
 
 - Publication venue and date
@@ -138,7 +148,17 @@ For technical documents:
           \"statistical_support\": \"<p-value, effect size if present>\"
         }
       ],
-      \"related_entities\": [\"<entity names from PDF>\"]
+      \"related_entities\": [\"<entity names from PDF>\"],
+      \"source_context\": {
+        \"what_examined\": \"<what data/sources/populations were studied>\",
+        \"what_excluded\": \"<what was unavailable or out of scope>\",
+        \"temporal_scope\": \"<when current, time period, snapshot vs trend>\",
+        \"population_sample_scope\": \"<who/what included, who/what excluded>\",
+        \"magnitude_notes\": \"<effect sizes, practical significance>\",
+        \"alternative_explanations\": [\"<confounders>\", \"<other factors>\"],
+        \"measurement_quality\": \"<how measured, limitations>\",
+        \"generalizability_limits\": \"<where applies, where uncertain>\"
+      }
     }
   ],
 

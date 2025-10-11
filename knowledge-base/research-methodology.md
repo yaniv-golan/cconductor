@@ -92,6 +92,45 @@ For each source, assess:
 4. **Peer Review**: Has this been vetted?
 5. **Conflicts of Interest**: Any bias?
 
+## Universal Research Quality Dimensions
+
+Every research finding has boundaries. When analyzing sources, systematically assess:
+
+### Source Constraints
+- **What was examined?** What data, documents, code, or populations were studied?
+- **What was excluded?** What sources were unavailable, out of scope, or filtered?
+- **Access limitations:** Paywalls, restricted data, missing documentation?
+
+### Temporal Boundaries  
+- **When current?** Publication date, data collection period, version/release?
+- **Snapshot vs trend?** Single point in time or longitudinal tracking?
+- **Time sensitivity:** Does this change rapidly or remain stable?
+
+### Scope Limitations
+- **Population/sample:** Who/what was studied? Who/what was excluded?
+- **Context specificity:** Domain, geography, environment, conditions?
+- **Breadth vs depth:** Comprehensive survey or deep dive on subset?
+
+### Magnitude vs Existence
+- **Effect exists?** Is there a relationship, difference, or pattern?
+- **Effect size:** How large is it? (percentages, coefficients, fold-changes)
+- **Practical importance:** Large enough to matter in real-world decisions?
+
+### Alternative Explanations
+- **Confounders:** What other factors could produce the same pattern?
+- **Correlation vs causation:** Established mechanism or just association?
+- **Competing hypotheses:** What alternative explanations exist?
+
+### Measurement Quality
+- **How measured?** Instruments, methods, proxies, self-report?
+- **Measurement sensitivity:** Can it detect the phenomenon adequately?
+- **Distribution issues:** Range restriction, ceiling/floor effects, clustering?
+
+### Generalizability Boundaries
+- **Where applies:** Contexts where findings clearly transfer?
+- **Where uncertain:** Extrapolations beyond the data?
+- **Where doesn't apply:** Known exceptions or contradictions?
+
 ## Information Synthesis
 
 ### Building Coherent Narratives

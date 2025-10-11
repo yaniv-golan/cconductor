@@ -151,6 +151,21 @@ Extract from full PDF:
 - Reproducibility indicators
 - Key citations
 
+**Critical Context to Extract:**
+
+For every key study, document:
+- **Study design:** Cross-sectional, longitudinal, RCT, meta-analysis, case study, etc.
+- **Time points:** When measurements were taken (e.g., "at 1 month postpartum," "5-year follow-up")
+- **Population type:** Clinical diagnosis vs trait measures, general population vs clinical sample, inclusion/exclusion criteria
+- **Sample characteristics:** Recruitment source, demographics, representativeness
+- **Effect sizes:** Not just p-values; report Cohen's d, path coefficients, R², odds ratios, etc.
+- **Effect size interpretation:** Small/medium/large, clinical relevance, practical significance
+- **Confounders:** Variables that could explain associations, limitations in controlling them
+- **Variance/distribution:** Range restriction, ceiling/floor effects, low variance issues, clustering
+- **Generalizability limits:** What populations/contexts findings do NOT apply to, extrapolation cautions
+
+Extract these even if not in abstract - check Methods, Results, and Discussion/Limitations sections.
+
 **Step 5: Quality Assessment**
 
 - Prioritize peer-reviewed over preprints
@@ -204,7 +219,17 @@ Extract from full PDF:
       ],
       \"related_entities\": [\"<paper names or concepts>\"],
       \"methodology_quality\": \"high|medium|low\",
-      \"reproducibility\": \"high|medium|low\"
+      \"reproducibility\": \"high|medium|low\",
+      \"source_context\": {
+        \"what_examined\": \"<what data/sources/populations were studied>\",
+        \"what_excluded\": \"<what was unavailable or out of scope>\",
+        \"temporal_scope\": \"<when current, time period, snapshot vs trend>\",
+        \"population_sample_scope\": \"<who/what included, who/what excluded>\",
+        \"magnitude_notes\": \"<effect sizes, practical significance>\",
+        \"alternative_explanations\": [\"<confounders>\", \"<other factors>\"],
+        \"measurement_quality\": \"<how measured, limitations>\",
+        \"generalizability_limits\": \"<where applies, where uncertain>\"
+      }
     }
   ],
 
@@ -302,9 +327,12 @@ Assess confidence (0.0-1.0) based on:
 - **Number of independent studies**: 1=0.4, 2=0.6, 3-4=0.75, 5+=0.9
 - **Peer review status**: Peer-reviewed boost +0.1, preprint penalty -0.1
 - **Sample sizes**: Large samples boost, small penalty
+- **Study design strength**: Longitudinal/RCT boost +0.1, cross-sectional baseline
+- **Effect sizes reported**: Documented boost +0.05, missing penalty -0.05
 - **Statistical rigor**: Effect sizes + p-values boost, lack of stats penalty
 - **Replication**: Replicated findings boost +0.15
 - **Journal quality**: High-impact journals boost +0.05
+- **Context clarity**: Clear scope/limitations boost +0.05, vague penalty -0.05
 
 ## Gap Identification
 
@@ -344,7 +372,8 @@ Track:
 - Track citation networks
 - Check for retractions
 - Every claim needs sources (abstracts acceptable if full text unavailable)
-- Flag methodological weaknesses when discernible
+- Flag methodological weaknesses explicitly with specific details (not just "limitations noted")
+- Extract study design, population type, effect sizes, confounders, and generalizability limits for every key finding
 - Suggest promising papers to analyze next
 - **Complete the task within reasonable time**: Don't loop endlessly on inaccessible PDFs
 
