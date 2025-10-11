@@ -29,6 +29,28 @@ Specialized AI agents with defined capabilities:
 
 ## Quick Start
 
+### Simple Method (Using Wrapper)
+
+For most users, the convenient wrapper provides easy access to missions:
+
+```bash
+# Default general-research mission
+./cconductor "your research question"
+
+# Specify mission type
+./cconductor "your question" --mission market-research
+./cconductor "your question" --mission academic-research
+./cconductor "your question" --mission competitive-analysis
+./cconductor "your question" --mission technical-analysis
+
+# With additional options
+./cconductor "your question" --mission market-research --input-dir ~/data/ --non-interactive
+```
+
+### Advanced Method (Direct Access)
+
+For advanced users who need more control:
+
 ### 1. List Available Missions
 
 ```bash

@@ -139,6 +139,56 @@ cmd_agents_describe() {
     fi
 }
 
+# Command: resume
+cmd_resume() {
+    local session_dir="$1"
+    local refinement="${2:-}"
+    
+    # Load session metadata
+    if [ ! -f "$session_dir/session.json" ]; then
+        echo "Error: Invalid session directory" >&2
+        exit 1
+    fi
+    
+    local objective
+    objective=$(jq -r '.objective' "$session_dir/session.json")
+    echo "→ Resuming session..."
+    echo "  Original objective: $objective"
+    
+    if [ -n "$refinement" ]; then
+        echo "  With refinement: ${refinement:0:60}..."
+        
+        # Add refinement to session metadata with safe array init
+        local temp_file
+        temp_file=$(mktemp)
+        jq --arg ref "$refinement" \
+           --arg time "$(date -u +"%Y-%m-%dT%H:%M:%SZ")" \
+           '.refinements = (.refinements // []) | .refinements += [{refinement: $ref, added_at: $time}]' \
+           "$session_dir/session.json" > "$temp_file"
+        mv "$temp_file" "$session_dir/session.json"
+    fi
+    
+    # Load mission profile from original session
+    local mission_name
+    mission_name=$(jq -r '.mission_name // "general-research"' "$session_dir/session.json" 2>/dev/null || echo "general-research")
+    
+    # Store mission_name in session if not present
+    if ! jq -e '.mission_name' "$session_dir/session.json" >/dev/null 2>&1; then
+        local temp_file
+        temp_file=$(mktemp)
+        jq --arg mn "$mission_name" '.mission_name = $mn' "$session_dir/session.json" > "$temp_file"
+        mv "$temp_file" "$session_dir/session.json"
+    fi
+    
+    local mission_profile
+    if ! mission_profile=$(mission_load "$mission_name"); then
+        exit 1
+    fi
+    
+    # Continue orchestration with resume flag
+    run_mission_orchestration_resume "$mission_profile" "$session_dir" "$refinement"
+}
+
 # Command: dry-run
 cmd_dry_run() {
     local mission_name="$1"
@@ -212,6 +262,8 @@ cmd_dry_run() {
 cmd_run() {
     local mission_name="$1"
     local input_dir="${2:-}"
+    local research_question="${3:-}"
+    local non_interactive="${4:-false}"
     
     # Load mission
     echo "→ Loading mission profile..."
@@ -220,8 +272,13 @@ cmd_run() {
         exit 1
     fi
     
+    # Use research question if provided, otherwise use mission objective
     local mission_objective
-    mission_objective=$(echo "$mission_profile" | jq -r '.objective')
+    if [[ -n "$research_question" ]]; then
+        mission_objective="$research_question"
+    else
+        mission_objective=$(echo "$mission_profile" | jq -r '.objective')
+    fi
     
     # Initialize session
     echo "→ Initializing session..."
@@ -255,6 +312,8 @@ main() {
             # Parse run options
             local mission_name=""
             local input_dir=""
+            local non_interactive=false
+            local research_question=""
             
             while [[ $# -gt 0 ]]; do
                 case "$1" in
@@ -266,9 +325,18 @@ main() {
                         input_dir="$2"
                         shift 2
                         ;;
-                    *)
+                    --non-interactive|-y)
+                        non_interactive=true
+                        shift
+                        ;;
+                    --*)
                         echo "Error: Unknown option: $1" >&2
                         exit 1
+                        ;;
+                    *)
+                        # Positional argument (research question)
+                        research_question="$1"
+                        shift
                         ;;
                 esac
             done
@@ -278,7 +346,7 @@ main() {
                 exit 1
             fi
             
-            cmd_run "$mission_name" "$input_dir"
+            cmd_run "$mission_name" "$input_dir" "$research_question" "$non_interactive"
             ;;
             
         missions)
@@ -345,6 +413,44 @@ main() {
             fi
             
             cmd_dry_run "$mission_name" "$input_dir"
+            ;;
+        
+        resume)
+            # Parse resume options
+            local session_path=""
+            local refinement=""
+            
+            while [[ $# -gt 0 ]]; do
+                case "$1" in
+                    --session)
+                        session_path="$2"
+                        shift 2
+                        ;;
+                    --refine)
+                        refinement="$2"
+                        shift 2
+                        ;;
+                    --refine-file)
+                        if [ ! -f "$2" ]; then
+                            echo "Error: Refinement file not found: $2" >&2
+                            exit 1
+                        fi
+                        refinement=$(cat "$2")
+                        shift 2
+                        ;;
+                    *)
+                        echo "Error: Unknown option: $1" >&2
+                        exit 1
+                        ;;
+                esac
+            done
+            
+            if [[ -z "$session_path" ]]; then
+                echo "Error: --session required" >&2
+                exit 1
+            fi
+            
+            cmd_resume "$session_path" "$refinement"
             ;;
             
         help|--help|-h)

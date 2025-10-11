@@ -40,7 +40,7 @@ initialize_session() {
     # Create session metadata
     jq -n \
         --arg objective "$mission_objective" \
-        --arg timestamp "20 20 12 61 79 80 81 33 98 100 204 250 395 398 399 400 701 702get_timestamp)" \
+        --arg timestamp "$(date -u +"%Y-%m-%dT%H:%M:%SZ")" \
         --arg session_type "mission" \
         --arg version "0.2.0" \
         '{

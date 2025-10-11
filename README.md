@@ -22,7 +22,14 @@ CConductor is a multi-agent AI research system that conducts comprehensive, adap
 
 ## Quick Start
 
-Get up and running in 1 command:
+**Interactive Mode** (easiest):
+
+```bash
+./cconductor
+# Launches dialog-based TUI for guided research setup
+```
+
+**Direct Command**:
 
 ```bash
 ./cconductor "What is quantum computing?"
@@ -32,10 +39,20 @@ On first run, CConductor will automatically set up directories and configuration
 
 Your research report will be in `research-sessions/` with full citations and quality assessment.
 
+**Choose mission type** (optional):
+
+```bash
+./cconductor "your question" --mission market-research       # Market analysis
+./cconductor "your question" --mission academic-research     # Scholarly sources
+./cconductor "your question" --mission competitive-analysis  # Competitor research
+./cconductor "your question" --mission technical-analysis    # Technical deep-dive
+# Default: general-research (flexible for any topic)
+```
+
 **View your results**:
 
 ```bash
-./cconductor latest
+./cconductor sessions latest
 ```
 
 ---

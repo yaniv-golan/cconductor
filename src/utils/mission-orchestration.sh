@@ -3,24 +3,30 @@
 
 set -euo pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_ROOT="$(dirname "$(dirname "$SCRIPT_DIR")")"
+# Use CCONDUCTOR_MISSION_SCRIPT_DIR if available (when sourced), otherwise detect
+if [ -z "${CCONDUCTOR_MISSION_SCRIPT_DIR:-}" ]; then
+    SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+else
+    SCRIPT_DIR="$CCONDUCTOR_MISSION_SCRIPT_DIR"
+fi
+PROJECT_ROOT="${PROJECT_ROOT:-$(dirname "$SCRIPT_DIR")}"
 
-# Load dependencies
+# Load dependencies from utils directory
+UTILS_DIR="$SCRIPT_DIR/utils"
 # shellcheck disable=SC1091
-source "$SCRIPT_DIR/agent-registry.sh"
+source "$UTILS_DIR/agent-registry.sh"
 # shellcheck disable=SC1091
-source "$SCRIPT_DIR/mission-loader.sh"
+source "$UTILS_DIR/mission-loader.sh"
 # shellcheck disable=SC1091
-source "$SCRIPT_DIR/orchestration-logger.sh"
+source "$UTILS_DIR/orchestration-logger.sh"
 # shellcheck disable=SC1091
-source "$SCRIPT_DIR/budget-tracker.sh"
+source "$UTILS_DIR/budget-tracker.sh"
 # shellcheck disable=SC1091
-source "$SCRIPT_DIR/artifact-manager.sh"
+source "$UTILS_DIR/artifact-manager.sh"
 # shellcheck disable=SC1091
-source "$SCRIPT_DIR/json-parser.sh"
+source "$UTILS_DIR/json-parser.sh"
 # shellcheck disable=SC1091
-source "$SCRIPT_DIR/../knowledge-graph.sh"
+source "$PROJECT_ROOT/src/knowledge-graph.sh"
 
 # Prepare orchestrator context for invocation
 prepare_orchestrator_context() {
@@ -177,7 +183,7 @@ EOF
     
     # Source invoke-agent utility
     # shellcheck disable=SC1091
-    source "$SCRIPT_DIR/invoke-agent.sh"
+    source "$UTILS_DIR/invoke-agent.sh"
     
         if invoke_agent_v2 "mission-orchestrator" "$input_file" "$output_file" 600 "$session_dir"; then
         # Extract result from agent output
@@ -322,7 +328,7 @@ EOF
     
     # Source invoke-agent utility
     # shellcheck disable=SC1091
-    source "$SCRIPT_DIR/invoke-agent.sh"
+    source "$UTILS_DIR/invoke-agent.sh"
     
     local start_time
     start_time=$(date +%s)
@@ -349,17 +355,7 @@ EOF
             artifact_register "$session_dir" "$artifact_file" "agent_output" "$agent_name"
         fi
         
-        # Record invocation in KG
-        local artifact_json
-        if [[ -n "$artifact_file" ]]; then
-            artifact_json="[\"$artifact_file\"]"
-        else
-            artifact_json="[]"
-        fi
-        kg_add_invocation "$session_dir" "$agent_name" "$task" "$input_artifacts" \
-            "$artifact_json" 0 "$duration"
-        
-        # Record budget
+        # Record budget (invocation tracking is done via orchestration log)
         budget_record_invocation "$session_dir" "$agent_name" 0 "$duration"
         
         return 0
@@ -402,8 +398,6 @@ process_orchestrator_decisions() {
                 echo "  ⚠ Agent $agent_name failed - orchestrator will adapt" >&2
                 log_decision "$session_dir" "agent_invocation_failure" \
                     "$(echo "$orchestrator_output" | jq --arg reason "Agent failed" '. + {failure_reason: $reason}')"
-                # Record failed invocation in KG with empty outputs
-                kg_add_invocation "$session_dir" "$agent_name" "$task" "$input_artifacts" "[]" 0 0
             fi
             ;;
             
@@ -427,7 +421,6 @@ process_orchestrator_decisions() {
                 echo "  ⚠ Agent $agent_name re-invocation failed" >&2
                 log_decision "$session_dir" "agent_reinvocation_failure" \
                     "$(echo "$orchestrator_output" | jq --arg reason "Re-invocation failed" '. + {failure_reason: $reason}')"
-                kg_add_invocation "$session_dir" "$agent_name" "$refinements" "[]" "[]" 0 0
             fi
             ;;
             
@@ -445,12 +438,7 @@ process_orchestrator_decisions() {
             
             echo "→ Agent handoff: $from_agent → $to_agent"
             
-            # Record handoff in KG
-            local handoff_id
-            # Record handoff in knowledge graph (ID not currently used but may be needed later)
-            # shellcheck disable=SC2034
-            handoff_id=$(kg_add_handoff "$session_dir" "$from_agent" "$to_agent" "$task" "$input_artifacts" "{}")
-            
+            # Log handoff decision (tracking is done via orchestration log)
             log_agent_handoff "$session_dir" "$from_agent" "$to_agent" "$orchestrator_output"
             
             # Invoke receiving agent - handle failures
@@ -605,7 +593,7 @@ $(artifact_list_all "$session_dir" | jq -r '.[] | "- \(.path) (\(.type), produce
 
 ---
 
-Report generated at: 20 20 12 61 79 80 81 33 98 100 204 250 395 398 399 400 701 702get_timestamp)
+Report generated at: $(date -u +"%Y-%m-%dT%H:%M:%SZ")
 EOF
     
     echo "  ✓ Report generated: $report_file"
@@ -633,6 +621,19 @@ run_mission_orchestration() {
     # Initialize agent registry
     echo "→ Loading agent registry..."
     agent_registry_init
+    
+    # Launch dashboard viewer
+    echo "→ Launching Research Journal Viewer..."
+    # shellcheck disable=SC1091
+    if source "$UTILS_DIR/dashboard.sh" 2>/dev/null; then
+        if dashboard_view "$session_dir" 2>/dev/null; then
+            echo "  ✓ Dashboard viewer launched"
+        else
+            echo "  ⚠ Dashboard viewer failed to launch (continuing anyway)" >&2
+        fi
+    else
+        echo "  ⚠ Dashboard utility not found (continuing anyway)" >&2
+    fi
     
     echo ""
     
@@ -697,5 +698,164 @@ run_mission_orchestration() {
     
     echo ""
     echo "Session saved at: $session_dir"
+}
+
+# Resume mission orchestration
+run_mission_orchestration_resume() {
+    local mission_profile="$1"
+    local session_dir="$2"
+    local refinement="${3:-}"
+    
+    local mission_name
+    mission_name=$(echo "$mission_profile" | jq -r '.name')
+    
+    echo "════════════════════════════════════════════════════════════"
+    echo "Mission: $mission_name (Resume)"
+    echo "════════════════════════════════════════════════════════════"
+    echo ""
+    
+    echo "→ Resuming orchestration..."
+    
+    # Get current iteration from orchestration log (robust method)
+    local current_iteration=0
+    if [ -f "$session_dir/orchestration-log.jsonl" ]; then
+        # Try to get last iteration from decision entries
+        current_iteration=$(awk 'NF{print}' "$session_dir/orchestration-log.jsonl" | \
+            jq -r 'select(.decision.iteration!=null) | .decision.iteration' 2>/dev/null | \
+            tail -1)
+        
+        # Fallback to line count if no iteration found
+        if [ -z "$current_iteration" ] || [ "$current_iteration" = "null" ]; then
+            current_iteration=$(wc -l < "$session_dir/orchestration-log.jsonl" | tr -d ' ')
+        fi
+    fi
+    
+    local max_iterations
+    max_iterations=$(echo "$mission_profile" | jq -r '.constraints.max_iterations')
+    local iteration=$((current_iteration + 1))
+    
+    echo "  Continuing from iteration $iteration/$max_iterations"
+    
+    # Launch dashboard if not already running
+    if [ ! -f "$session_dir/.dashboard-server.pid" ]; then
+        echo "→ Launching Research Journal Viewer..."
+        # shellcheck disable=SC1091
+        if source "$UTILS_DIR/dashboard.sh" 2>/dev/null; then
+            dashboard_view "$session_dir" 2>/dev/null || true
+        fi
+    fi
+    
+    echo ""
+    
+    # Continue orchestration loop
+    while [[ $iteration -le $max_iterations ]]; do
+        echo "═══ Mission Iteration $iteration/$max_iterations (Resume) ═══"
+        echo ""
+        
+        # Check budget
+        if ! budget_check "$session_dir" 2>/dev/null; then
+            echo ""
+            echo "⚠ Budget limit reached"
+            break
+        fi
+        
+        # Prepare context with resume flag and refinement
+        echo "→ Preparing orchestrator context..."
+        local context_json
+        context_json=$(prepare_orchestrator_context_resume \
+            "$session_dir" "$mission_profile" "$iteration" "$refinement")
+        
+        # Invoke orchestrator
+        echo "→ Invoking mission orchestrator..."
+        local orchestrator_output
+        orchestrator_output=$(invoke_mission_orchestrator "$session_dir" "$context_json")
+        
+        echo ""
+        
+        # Process decisions
+        if ! process_orchestrator_decisions "$session_dir" "$orchestrator_output"; then
+            local exit_code=$?
+            if [[ $exit_code -eq 2 ]]; then
+                echo ""
+                echo "✓ Mission completed"
+                break
+            fi
+        fi
+        
+        echo ""
+        
+        # Check completion
+        if check_mission_complete "$session_dir" "$mission_profile" "$orchestrator_output"; then
+            echo "✓ Mission complete - all success criteria met"
+            break
+        fi
+        
+        iteration=$((iteration + 1))
+    done
+    
+    echo ""
+    echo "════════════════════════════════════════════════════════════"
+    echo "Mission Completed"
+    echo "════════════════════════════════════════════════════════════"
+    echo ""
+    
+    # Update final report
+    generate_mission_report "$session_dir" "$mission_profile"
+    echo ""
+    echo "Session saved at: $session_dir"
+}
+
+# Prepare orchestrator context for resume
+prepare_orchestrator_context_resume() {
+    local session_dir="$1"
+    local mission_profile="$2"
+    local iteration="$3"
+    local refinement="${4:-}"
+    
+    # Get existing state
+    local agents_json
+    if ! agents_json=$(agent_registry_export_json); then
+        echo "Error: Failed to export agent registry" >&2
+        return 1
+    fi
+    
+    local kg_json
+    if ! kg_json=$(kg_read "$session_dir"); then
+        echo "Error: Could not read knowledge graph" >&2
+        return 1
+    fi
+    
+    local budget_json
+    if ! budget_json=$(budget_status "$session_dir"); then
+        echo "Error: Could not read budget status" >&2
+        return 1
+    fi
+    
+    local decisions_json
+    if ! decisions_json=$(get_orchestration_log "$session_dir"); then
+        echo "Error: Could not read orchestration log" >&2
+        return 1
+    fi
+    
+    # Build context with resume metadata
+    jq -n \
+        --argjson mission "$mission_profile" \
+        --argjson agents "$agents_json" \
+        --argjson kg "$kg_json" \
+        --argjson budget "$budget_json" \
+        --argjson decisions "$decisions_json" \
+        --argjson iteration "$iteration" \
+        --argjson is_resume true \
+        --arg refinement "$refinement" \
+        '{
+            mission: $mission,
+            agents: $agents,
+            knowledge_graph: $kg,
+            budget: $budget,
+            previous_decisions: $decisions,
+            iteration: $iteration,
+            is_resume: $is_resume,
+            refinement_guidance: (if $refinement != "" then $refinement else null end)
+        }'
 }
 

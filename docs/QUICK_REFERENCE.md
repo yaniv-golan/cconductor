@@ -7,8 +7,15 @@
 ## 🚀 Most Common Commands
 
 ```bash
+# Interactive mode (dialog-based TUI)
+./cconductor
+
 # Start research
 ./cconductor "your question"
+
+# Research with specific mission type
+./cconductor "your question" --mission market-research
+./cconductor "your question" --mission academic-research
 
 # Complex research from markdown file
 ./cconductor --question-file research-query.md
@@ -16,24 +23,18 @@
 # Research with local files (PDFs, markdown, text)
 ./cconductor "your question" --input-dir /path/to/files/
 
-# View latest results
-./cconductor latest
-
-# View real-time research dashboard (auto-launches during research)
-./cconductor view-dashboard              # Latest session
-./cconductor view-dashboard session_123  # Specific session
+# Session management
+./cconductor sessions list               # List all sessions
+./cconductor sessions latest             # View latest results
+./cconductor sessions viewer mission_123 # View research journal
+./cconductor sessions resume mission_123 # Continue research
+./cconductor sessions resume mission_123 --refine "Focus on X"  # Resume with refinement
 
 # Export research journal as markdown
 SESSION_DIR=$(./src/utils/path-resolver.sh resolve session_dir)
 bash src/utils/export-journal.sh "$SESSION_DIR/$(cat "$SESSION_DIR/.latest")"
 
-# List all sessions
-./cconductor sessions
-
-# Continue previous research
-./cconductor resume session_1759420487
-
-# Check if running
+# Check running processes
 ./cconductor status
 
 # Run/re-run initialization
