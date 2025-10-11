@@ -360,8 +360,21 @@ dashboard_serve() {
     # Store PID for cleanup
     echo "$server_pid" > "$session_dir/.dashboard-server.pid"
     
-    # Give server a moment to start
-    sleep 1
+    # Wait for server to be ready (poll until it responds)
+    local max_wait=10  # Maximum 10 seconds
+    local elapsed=0
+    while [ $elapsed -lt $max_wait ]; do
+        if curl -s -o /dev/null -w "%{http_code}" "http://localhost:$dashboard_port/" 2>/dev/null | grep -q "200\|404"; then
+            # Server is responding (200 or 404 both mean server is up)
+            break
+        fi
+        sleep 0.5
+        elapsed=$((elapsed + 1))
+    done
+    
+    if [ $elapsed -ge $max_wait ]; then
+        echo "  ⚠ Warning: Server may still be starting..." >&2
+    fi
     
     # Add session ID to URL to prevent caching
     local session_id
