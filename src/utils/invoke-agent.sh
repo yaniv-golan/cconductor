@@ -14,6 +14,8 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck disable=SC1091
 source "$SCRIPT_DIR/event-logger.sh" 2>/dev/null || true
+# shellcheck disable=SC1091
+source "$SCRIPT_DIR/error-logger.sh" 2>/dev/null || true
 
 # Check if Claude CLI is available
 check_claude_cli() {
@@ -401,6 +403,13 @@ invoke_agent_v2() {
         # Validate JSON output
         # VALIDATED: diagnostic-json-structure.sh confirmed .result path
         if ! jq empty "$output_file" 2>/dev/null; then
+            local error_sample
+            error_sample=$(head -c 500 "$output_file" 2>/dev/null || echo "Unable to read output")
+            if command -v log_error &>/dev/null; then
+                log_error "$session_dir" "invalid_json" \
+                    "Agent $agent_name returned invalid JSON" \
+                    "Output sample: $error_sample"
+            fi
             echo "✗ Agent $agent_name returned invalid JSON" >&2
             echo "Raw output:" >&2
             cat "$output_file" >&2
@@ -437,6 +446,11 @@ invoke_agent_v2() {
         # Log agent result with metrics and metadata
         if [ -n "${session_dir:-}" ] && command -v log_agent_result &>/dev/null; then
             log_agent_result "$session_dir" "$agent_name" "$cost" "$duration" "$metadata" || true
+        fi
+        
+        # Regenerate dashboard metrics after each agent completes (for live updates)
+        if [ -n "${session_dir:-}" ] && command -v dashboard_update_metrics &>/dev/null; then
+            dashboard_update_metrics "$session_dir" || true
         fi
 
         echo "✓ Agent $agent_name completed successfully" >&2

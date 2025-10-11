@@ -7,6 +7,75 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(dirname "$(dirname "$SCRIPT_DIR")")"
 
+# Load error logger for session initialization
+# shellcheck disable=SC1091
+source "$SCRIPT_DIR/error-logger.sh" 2>/dev/null || true
+
+# Copy runtime settings to session
+# Ensures session inherits proper permissions for WebFetch, Write, etc.
+copy_runtime_settings() {
+    local session_dir="$1"
+    local source_settings="$PROJECT_ROOT/src/claude-runtime/settings.json"
+    local target_settings="$session_dir/.claude/settings.json"
+    
+    if [ -f "$source_settings" ]; then
+        mkdir -p "$session_dir/.claude"
+        cp "$source_settings" "$target_settings"
+        echo "  ✓ Runtime permissions configured" >&2
+    else
+        echo "  ⚠ Warning: No runtime settings found at $source_settings" >&2
+    fi
+}
+
+# Copy and configure hooks for tool usage tracking
+# Enables live tool tracking in dashboard
+copy_hooks() {
+    local session_dir="$1"
+    local source_hooks="$PROJECT_ROOT/src/utils/hooks"
+    local target_hooks="$session_dir/.claude/hooks"
+    local settings_file="$session_dir/.claude/settings.json"
+    
+    if [ ! -d "$source_hooks" ]; then
+        echo "  ⚠ Warning: Hooks directory not found at $source_hooks" >&2
+        return 1
+    fi
+    
+    # Copy hook scripts
+    mkdir -p "$target_hooks"
+    cp "$source_hooks/"*.sh "$target_hooks/" 2>/dev/null || true
+    chmod +x "$target_hooks/"*.sh 2>/dev/null || true
+    
+    # Configure hooks in settings.json (required for Claude CLI to invoke them)
+    if [ -f "$settings_file" ]; then
+        # Create hooks configuration using RELATIVE paths
+        local hooks_config
+        hooks_config=$(jq -n '{
+            hooks: {
+                PreToolUse: [{
+                    matcher: "*",
+                    hooks: [{
+                        type: "command",
+                        command: ".claude/hooks/pre-tool-use.sh"
+                    }]
+                }],
+                PostToolUse: [{
+                    matcher: "*",
+                    hooks: [{
+                        type: "command",
+                        command: ".claude/hooks/post-tool-use.sh"
+                    }]
+                }]
+            }
+        }')
+        
+        # Merge with existing settings
+        jq --argjson hooks "$hooks_config" '. + $hooks' "$settings_file" > "${settings_file}.tmp"
+        mv "${settings_file}.tmp" "$settings_file"
+    fi
+    
+    echo "  ✓ Tool tracking hooks installed and configured" >&2
+}
+
 # Initialize a new mission session
 # Creates session directory with unique timestamp and minimal structure
 #
@@ -36,6 +105,17 @@ initialize_session() {
     # Create directory structure
     mkdir -p "$session_dir/artifacts"
     mkdir -p "$session_dir/.claude/agents"
+    
+    # Initialize error log
+    if command -v init_error_log &>/dev/null; then
+        init_error_log "$session_dir"
+    fi
+    
+    # Copy runtime settings to session
+    copy_runtime_settings "$session_dir"
+    
+    # Copy hooks for tool tracking
+    copy_hooks "$session_dir"
     
     # Create session metadata
     jq -n \
