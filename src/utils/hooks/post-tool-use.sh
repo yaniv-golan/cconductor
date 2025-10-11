@@ -15,6 +15,14 @@ source "$PROJECT_ROOT/src/shared-state.sh" 2>/dev/null || {
     get_timestamp() { date -u +"%Y-%m-%dT%H:%M:%S.%6NZ" 2>/dev/null || date -u +"%Y-%m-%dT%H:%M:%SZ"; }
 }
 
+# Source verbose utility
+# shellcheck disable=SC1091
+source "$PROJECT_ROOT/src/utils/verbose.sh" 2>/dev/null || {
+    # Fallback: stub functions if verbose.sh not available
+    is_verbose_enabled() { [[ "${CCONDUCTOR_VERBOSE:-0}" == "1" ]]; }
+    verbose_completion() { :; }
+}
+
 # Read hook data from stdin
 hook_data=$(cat)
 
@@ -92,7 +100,15 @@ if [ -n "$session_dir" ] && [ -d "$session_dir" ]; then
 fi
 
 # Print to stdout for real-time visibility
-echo "    $status $tool_name ($duration_display)" >&2
+# In verbose mode, skip completion messages (handled by event tailer if needed)
+if [[ "${CCONDUCTOR_VERBOSE:-0}" == "1" ]]; then
+    # Skip all completion messages in verbose mode - they're too noisy
+    # Only show failures if we want to add that back later
+    :
+else
+    # Normal/debug mode: technical format
+    echo "    $status $tool_name ($duration_display)" >&2
+fi
 
 # Exit 0 to continue
 exit 0

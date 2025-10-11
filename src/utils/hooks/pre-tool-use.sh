@@ -15,6 +15,17 @@ source "$PROJECT_ROOT/src/shared-state.sh" 2>/dev/null || {
     get_timestamp() { date -u +"%Y-%m-%dT%H:%M:%S.%6NZ" 2>/dev/null || date -u +"%Y-%m-%dT%H:%M:%SZ"; }
 }
 
+# Source verbose utility
+# shellcheck disable=SC1091
+if source "$PROJECT_ROOT/src/utils/verbose.sh" 2>/dev/null; then
+    # Successfully loaded verbose.sh
+    :
+else
+    # Fallback: stub functions if verbose.sh not available
+    is_verbose_enabled() { [[ "${CCONDUCTOR_VERBOSE:-0}" == "1" ]]; }
+    verbose_tool_use() { :; }
+fi
+
 # Read hook data from stdin
 hook_data=$(cat)
 
@@ -40,6 +51,23 @@ case "$tool_name" in
         ;;
     Write|Edit|MultiEdit)
         tool_input_summary=$(echo "$hook_data" | jq -r '.tool_input.file_path // "no path"')
+        ;;
+    Glob)
+        tool_input_summary=$(echo "$hook_data" | jq -r '.tool_input.pattern // "no pattern"')
+        ;;
+    TodoWrite)
+        # Extract high-priority or in-progress todos (most relevant)
+        # Format: "content (status)" for up to 3 most important tasks
+        tool_input_summary=$(echo "$hook_data" | jq -r '
+            [.tool_input.todos[]? | 
+             select(.priority == "high" or .status == "in_progress") | 
+             .content] | 
+            .[0:3] | 
+            join("; ")' 2>/dev/null)
+        # Fallback: if no high-priority tasks, show first 3 todos
+        if [[ -z "$tool_input_summary" ]]; then
+            tool_input_summary=$(echo "$hook_data" | jq -r '[.tool_input.todos[]?.content // empty] | .[0:3] | join("; ")' 2>/dev/null || echo "tasks")
+        fi
         ;;
     *)
         tool_input_summary=$(echo "$hook_data" | jq -r '.tool_input | keys | join(", ")' 2>/dev/null || echo "...")
@@ -98,8 +126,10 @@ if [ -n "$session_dir" ] && [ -d "$session_dir" ]; then
     done
 fi
 
-# Print to stdout for real-time visibility
-echo "  🔧 $tool_name: $tool_input_summary" >&2
+# Print to stderr for real-time visibility
+# Hooks only write to events.jsonl (event tailer displays both verbose and dots)
+# Claude Code captures hook stderr, so tailer is needed to show output
+# (no direct output from hooks)
 
 # Exit 0 to allow the tool to proceed
 exit 0
