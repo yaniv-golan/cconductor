@@ -310,7 +310,10 @@ dashboard_generate_html() {
     sed "s|<script src=\"./dashboard.js\"></script>|<script src=\"./dashboard.js?${js_version}\"></script>|" \
         "$template" > "$session_dir/dashboard.html"
     
-    echo "$session_dir/dashboard.html"
+    # Only output file path in verbose mode
+    if [[ "${CCONDUCTOR_VERBOSE:-0}" == "1" ]]; then
+        echo "$session_dir/dashboard.html"
+    fi
 }
 
 # ============================================================================
@@ -366,7 +369,10 @@ dashboard_serve() {
     local viewer_url="http://localhost:$dashboard_port/dashboard.html?session=$session_id"
     
     echo "  ✓ Research Journal Viewer: $viewer_url"
-    echo "     (HTTP server PID: $server_pid, port: $dashboard_port)"
+    # Only show server details in verbose mode
+    if [[ "${CCONDUCTOR_VERBOSE:-0}" == "1" ]]; then
+        echo "     (HTTP server PID: $server_pid, port: $dashboard_port)"
+    fi
     
     # Auto-open in browser if requested
     if [ "$auto_open" = "true" ]; then

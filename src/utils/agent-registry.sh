@@ -77,7 +77,10 @@ agent_registry_init() {
     done
   fi
   
-  echo "Agent registry initialized: ${#AGENT_REGISTRY_CACHE[@]} agents" >&2
+  # Only show in verbose mode
+  if [[ "${CCONDUCTOR_VERBOSE:-0}" == "1" ]]; then
+    echo "  ✓ Agent registry initialized: ${#AGENT_REGISTRY_CACHE[@]} agents" >&2
+  fi
 }
 
 # Validate agent metadata against schema
