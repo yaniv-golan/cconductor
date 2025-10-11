@@ -379,14 +379,27 @@ export_journal() {
                     metadata_keys=$(echo "$line" | jq -r '.data | keys | .[] | select(. != "agent" and . != "duration_ms" and . != "cost_usd" and . != "reasoning" and . != "model")' 2>/dev/null)
                     
                     if [ -n "$metadata_keys" ]; then
-                        echo "**Summary:**"
+                        echo "**Research Activity:**"
                         echo ""
                         while IFS= read -r key; do
                             local value
                             value=$(echo "$line" | jq -r ".data.${key}" 2>/dev/null)
-                            # Format key name (convert snake_case to Title Case)
+                            # Format key name (convert snake_case to Title Case with context-appropriate labels)
                             local formatted_key
-                            formatted_key=$(echo "$key" | sed 's/_/ /g' | awk '{for(i=1;i<=NF;i++) $i=toupper(substr($i,1,1)) tolower(substr($i,2));}1')
+                            case "$key" in
+                                claims_found)
+                                    formatted_key="Claims investigated"
+                                    ;;
+                                papers_found)
+                                    formatted_key="Papers consulted"
+                                    ;;
+                                searches_performed)
+                                    formatted_key="Searches performed"
+                                    ;;
+                                *)
+                                    formatted_key=$(echo "$key" | sed 's/_/ /g' | awk '{for(i=1;i<=NF;i++) $i=toupper(substr($i,1,1)) tolower(substr($i,2));}1')
+                                    ;;
+                            esac
                             echo "- **$formatted_key:** $value"
                         done <<< "$metadata_keys"
                         echo ""
@@ -434,71 +447,6 @@ export_journal() {
                     
                     # Find and include detailed findings
                     case "$agent" in
-                        academic-researcher|web-researcher)
-                            # Look for most recent findings file for this agent
-                            # Since multiple tasks may complete around the same time, get the most recent one
-                            local findings_file
-                            findings_file=$(find "$session_dir/raw" -name "findings-*.json" -type f 2>/dev/null | tail -1)
-                            
-                            if [ -n "$findings_file" ] && [ -f "$findings_file" ]; then
-                                # Check if this file has any content
-                                local has_content="no"
-                                if jq -e '(.entities_discovered // [] | length) > 0 or (.claims // [] | length) > 0' "$findings_file" >/dev/null 2>&1; then
-                                    has_content="yes"
-                                fi
-                                
-                                if [ "$has_content" = "yes" ]; then
-                                    echo "#### 📊 Detailed Findings"
-                                    echo ""
-                                    
-                                    # Extract entities
-                                    local entities_count
-                                    entities_count=$(jq '(.entities_discovered // []) | length' "$findings_file" 2>/dev/null || echo "0")
-                                    if [ "$entities_count" -gt 0 ]; then
-                                        echo "**Entities Discovered ($entities_count):**"
-                                        echo ""
-                                        jq -r '(.entities_discovered // []) | .[] | "- **\(.name)** (\(.type)): \(.description)\n  _Confidence: \((.confidence // 0) * 100 | floor)%_"' "$findings_file" 2>/dev/null
-                                        echo ""
-                                    fi
-                                    
-                                    # Extract claims  
-                                    local claims_count
-                                    claims_count=$(jq '(.claims // []) | length' "$findings_file" 2>/dev/null || echo "0")
-                                    if [ "$claims_count" -gt 0 ]; then
-                                        echo "**Claims Validated ($claims_count):**"
-                                        echo ""
-                                        jq -r '(.claims // []) | .[] | "- \(.statement)\n  - Confidence: \((.confidence // 0) * 100 | floor)%, Evidence Quality: \(.evidence_quality // "unknown")\n  - Sources: \(.sources | length)"' "$findings_file" 2>/dev/null
-                                        echo ""
-                                    fi
-                                    
-                                    # Show top sources with details
-                                    local top_sources
-                                    top_sources=$(jq -r '(.claims // []) | .[0].sources // []' "$findings_file" 2>/dev/null)
-                                    if [ -n "$top_sources" ] && [ "$top_sources" != "[]" ]; then
-                                    echo "**Key Sources (sample):**"
-                                    echo ""
-                                    jq -r '
-                                        def format_credibility:
-                                            gsub("_"; " ") | split(" ") | map(.[0:1] as $first | .[1:] as $rest | ($first | ascii_upcase) + $rest) | join(" ");
-                                        ([.claims // [] | .[].sources // [] | .[]] | unique_by(.url) | .[0:5] | .[] | 
-                                        "- [\(.title)](\(.url))\n  - Credibility: \((.credibility // "unknown") | format_credibility)")
-                                    ' "$findings_file" 2>/dev/null
-                                    echo ""
-                                    fi
-                                    
-                                    # Show gaps if any
-                                    local gaps_count
-                                    gaps_count=$(jq '(.gaps_identified // []) | length' "$findings_file" 2>/dev/null || echo "0")
-                                    if [ "$gaps_count" -gt 0 ]; then
-                                        echo "**Gaps Identified:**"
-                                        echo ""
-                                        jq -r '(.gaps_identified // []) | .[] | "- **\(.question)**\n  - Priority: \(.priority // "N/A"), Reason: \(.reason // "N/A")"' "$findings_file" 2>/dev/null
-                                        echo ""
-                                    fi
-                                fi
-                            fi
-                            ;;
-                            
                         mission-orchestrator)
                             # Look for coordinator output with gap analysis in intermediate directory
                             local coordinator_file
@@ -900,8 +848,85 @@ export_journal() {
             esac
         done < "$events_file"
         
-        # Add comprehensive research summary at the end
+        # Add comprehensive research findings section
         echo ""
+        echo "---"
+        echo ""
+        echo "## Comprehensive Research Findings"
+        echo ""
+        
+        local findings_files
+        findings_files=$(find "$session_dir/raw" -name "findings-*.json" -type f 2>/dev/null)
+        
+        if [ -n "$findings_files" ]; then
+            # Count totals
+            local total_entities total_claims total_sources total_gaps
+            total_entities=$(echo "$findings_files" | xargs jq -r '[.entities_discovered // [] | .[]] | length' 2>/dev/null | awk '{sum+=$1} END {print sum}')
+            total_claims=$(echo "$findings_files" | xargs jq -r '[.claims // [] | .[]] | length' 2>/dev/null | awk '{sum+=$1} END {print sum}')
+            total_sources=$(echo "$findings_files" | xargs jq -r '.claims[]?.sources[]?.url // empty' 2>/dev/null | sort -u | wc -l | tr -d ' ')
+            total_gaps=$(echo "$findings_files" | xargs jq -r '[.gaps_identified // [] | .[]] | length' 2>/dev/null | awk '{sum+=$1} END {print sum}')
+            
+            echo "Throughout this investigation, the research agents discovered **${total_entities} entities**, validated **${total_claims} claims**, consulted **${total_sources} authoritative sources**, and identified **${total_gaps} knowledge gaps** requiring further investigation."
+            echo ""
+            
+            echo "<details><summary>View detailed findings</summary>"
+            echo ""
+            
+            # Entities
+            if [ "$total_entities" -gt 0 ]; then
+                echo "### Entities Discovered"
+                echo ""
+                echo "$findings_files" | xargs jq -r '
+                    .entities_discovered // [] | .[] | 
+                    "- **\(.name)** (\(.type)): \(.description)\n  _Confidence: \((.confidence // 0) * 100 | floor)%_\n"
+                ' 2>/dev/null
+                echo ""
+            fi
+            
+            # Claims
+            if [ "$total_claims" -gt 0 ]; then
+                echo "### Claims Validated"
+                echo ""
+                echo "$findings_files" | xargs jq -r '
+                    .claims // [] | .[] | 
+                    "- \(.statement)\n  - Confidence: \((.confidence // 0) * 100 | floor)%, Evidence Quality: \(.evidence_quality // "unknown")\n  - Sources: \((.sources // [] | length))\n"
+                ' 2>/dev/null
+                echo ""
+            fi
+            
+            # Key Sources
+            if [ "$total_sources" -gt 0 ]; then
+                echo "### Key Sources"
+                echo ""
+                # shellcheck disable=SC2016
+                echo "$findings_files" | xargs jq -r '
+                    def format_credibility:
+                        gsub("_"; " ") | split(" ") | map(.[0:1] as $first | .[1:] as $rest | ($first | ascii_upcase) + $rest) | join(" ");
+                    [.claims // [] | .[].sources // [] | .[]] | unique_by(.url) | .[] | 
+                    "- [\(.title)](\(.url))\n  - Credibility: \((.credibility // "unknown") | format_credibility)\n"
+                ' 2>/dev/null | head -50
+                echo ""
+            fi
+            
+            # Gaps
+            if [ "$total_gaps" -gt 0 ]; then
+                echo "### Research Gaps Identified"
+                echo ""
+                echo "$findings_files" | xargs jq -r '
+                    .gaps_identified // [] | .[] | 
+                    "- **\(.question)**\n  - Priority: \(.priority // 0), Reason: \(.reason // "Not specified")\n"
+                ' 2>/dev/null
+                echo ""
+            fi
+            
+            echo "</details>"
+        else
+            echo "No detailed findings data available for this session."
+        fi
+        
+        echo ""
+        
+        # Add comprehensive research summary at the end
         echo "---"
         echo ""
         echo "## Research Summary"
