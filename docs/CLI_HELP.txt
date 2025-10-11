@@ -1,13 +1,15 @@
 CConductor - Deep Research, Done Right
 
 USAGE:
-  cconductor <question>                 Start new research (auto-launches dashboard)
+  cconductor                            Interactive mode (guided setup)
+  cconductor <question>                 Start new research
+  cconductor <question> --mission TYPE  Start research with specific mission
   cconductor --question-file FILE       Start research from markdown file
   cconductor <question> --input-dir DIR Analyze local files with research
-  cconductor latest                     Show latest research session
-  cconductor view-dashboard [SESSION]   View research dashboard (auto-launched)
-  cconductor resume <session>           Continue previous research
-  cconductor sessions                   List all research sessions
+  cconductor sessions list              List all research sessions
+  cconductor sessions latest            Show latest research session
+  cconductor sessions viewer [SESSION]  View research dashboard
+  cconductor sessions resume <session>  Continue previous research
   cconductor status                     Check running research
   cconductor configure                  Show configuration files
   cconductor --update                   Update to latest version
@@ -17,32 +19,40 @@ USAGE:
   cconductor --help                     Show this help
   cconductor --version                  Show version
 
+MISSION TYPES:
+  academic-research       Academic literature review with peer-reviewed sources
+  market-research         Market sizing and competitive landscape analysis
+  competitive-analysis    Competitive analysis with market positioning
+  technical-analysis      Technical architecture and implementation analysis
+
 EXAMPLES:
-  # Start research (dashboard auto-launches)
+  # Interactive mode (recommended for new users)
+  cconductor
+  
+  # Start research with auto mission selection
   cconductor "What are the latest advances in CRISPR?"
-  cconductor "SaaS market size 2024"
+  
+  # Start research with specific mission
+  cconductor "What are the latest advances in CRISPR?" --mission academic-research
+  cconductor "SaaS market size 2024" --mission market-research
+  cconductor "Compare top CRM platforms" --mission competitive-analysis
+  cconductor "Docker architecture deep dive" --mission technical-analysis
   
   # Complex research from file
-  cconductor --question-file research-query.md
+  cconductor --question-file research-query.md --mission academic-research
   
   # Research with local files
-  cconductor "Analyze pitch deck" --input-dir ./materials/
+  cconductor "Analyze pitch deck" --input-dir ./materials/ --mission market-research
   
-  # View latest results
-  cconductor latest
-  
-  # View research dashboard
-  cconductor view-dashboard              # Latest session
-  cconductor view-dashboard session_123  # Specific session
+  # Session management
+  cconductor sessions list               # List all sessions
+  cconductor sessions latest             # View latest results
+  cconductor sessions viewer mission_123 # View research dashboard
+  cconductor sessions resume mission_123 # Continue research
+  cconductor sessions resume mission_123 --refine "Focus on 2024 papers"
   
   # Export research journal
-  bash src/utils/export-journal.sh research-sessions/session_123
-  
-  # Resume previous session
-  cconductor resume session_1759356338
-  
-  # List all sessions
-  cconductor sessions
+  bash src/utils/export-journal.sh research-sessions/mission_123
   
   # Check what's running
   cconductor status

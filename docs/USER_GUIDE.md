@@ -2,7 +2,7 @@
 
 **Complete guide to using CConductor for research**
 
-**Version**: 0.1.0  
+**Version**: 0.2.0  
 **Last Updated**: October 2025  
 **For**: Semi-technical users (CLI comfortable, no coding required)
 
@@ -340,7 +340,17 @@ If both commands work, you're ready!
 
 ### Basic Syntax
 
-The simplest way to use CConductor:
+CConductor can be used in two ways:
+
+**Interactive Mode** (recommended for new users):
+
+```bash
+./cconductor
+```
+
+This launches an interactive wizard that guides you through research setup.
+
+**Command-Line Mode** (faster for experienced users):
 
 ```bash
 ./cconductor "your research question here"
@@ -350,20 +360,30 @@ The simplest way to use CConductor:
 
 - Put your question in quotes
 - Be specific for better results
-- No complex syntax needed
+- Use `--mission` flag to specify research type (optional)
 
 ### Example: Simple Research
 
 ```bash
+# General research (default)
 ./cconductor "What causes climate change?"
+
+# Academic research with peer-reviewed sources
+./cconductor "What causes climate change?" --mission academic-research
+
+# Market research with business focus
+./cconductor "AI chatbot market size" --mission market-research
 ```
 
 ### Example: Research from File (Complex Queries)
 
-For complex, multi-part research queries, use a markdown file instead of command-line text:
+For complex, multi-part research queries, use a markdown file:
 
 ```bash
 ./cconductor --question-file research-query.md
+
+# With mission type
+./cconductor --question-file research-query.md --mission academic-research
 ```
 
 **Why use a question file**:
@@ -404,11 +424,14 @@ adoption, key players, and growth trends 2023-2025.
 **Combine with other flags**:
 
 ```bash
-# Non-interactive research from file
-./cconductor --question-file research-query.md --non-interactive
+# Research from file with mission type
+./cconductor --question-file research-query.md --mission market-research
 
 # Question file + local materials
 ./cconductor --question-file research-query.md --input-dir ./materials/
+
+# Full example with all options
+./cconductor --question-file research-query.md --mission academic-research --input-dir ./materials/
 ```
 
 ### Example: Research with Local Files
@@ -695,7 +718,7 @@ CConductor supports different approaches (configured in `config/cconductor-modes
 - Citation networks
 - 30-45 minutes typical
 
-**Note**: v0.1 automatically selects the best mode based on your question. Explicit mode selection via CLI will be available in v0.2.
+**Note**: v0.2 uses mission-based orchestration. Specify mission type with `--mission` flag or let the system select the best approach automatically.
 
 ---
 
@@ -728,6 +751,7 @@ CConductor automatically launches a **Research Journal Viewer** when you start r
 
 - **Live Progress**: See what agents are working on right now
 - **Research Timeline**: Complete history of research activities
+- **Agent Reasoning**: See how agents think and make decisions
 - **Entities & Claims**: Clickable cards showing discovered entities and validated claims
 - **Agent Statistics**: Papers found, searches performed, gaps identified
 - **System Health**: Early warnings about potential issues
@@ -738,11 +762,11 @@ CConductor automatically launches a **Research Journal Viewer** when you start r
 **Manual access**: If you closed it or want to view a completed session:
 
 ```bash
-./cconductor view-dashboard                    # View latest session
-./cconductor view-dashboard session_123        # View specific session
+./cconductor sessions viewer                   # View latest session
+./cconductor sessions viewer mission_123       # View specific session
 ```
 
-The dashboard shows your research unfold in real-time, like watching the research process happen.
+The dashboard shows your research unfold in real-time, including agent reasoning and decision-making.
 
 ### Exporting Research Journal
 
@@ -754,11 +778,12 @@ SESSION_DIR=$(./src/utils/path-resolver.sh resolve session_dir)
 bash src/utils/export-journal.sh "$SESSION_DIR/$(cat "$SESSION_DIR/.latest")"
 
 # Export specific session
-bash src/utils/export-journal.sh research-sessions/session_123
+bash src/utils/export-journal.sh research-sessions/mission_123
 ```
 
 The exported journal (`research-journal.md`) includes:
 - Complete timeline of all research activities
+- Agent reasoning and decision-making process
 - All entities discovered with descriptions
 - All claims validated with evidence
 - All relationships identified
@@ -817,18 +842,18 @@ cp research-sessions/$(cat research-sessions/.latest)/research-report.md ~/Docum
 ### Listing Sessions
 
 ```bash
-./cconductor sessions
+./cconductor sessions list
 ```
 
-Shows all your research, newest first.
+Shows all your research sessions with details.
 
 ### Finding Specific Research
 
 **By recency**:
 
 ```bash
-./cconductor latest              # Most recent
-./cconductor sessions | head -5  # 5 most recent
+./cconductor sessions latest     # Most recent with details
+./cconductor sessions list       # All sessions
 ```
 
 **By date**:
@@ -849,7 +874,14 @@ grep -r "keyword" research-sessions/*/research-report.md
 Continue previous research to improve quality:
 
 ```bash
-./cconductor resume session_1759420487
+# Resume with refinement guidance
+./cconductor sessions resume mission_1759420487
+
+# Resume with specific refinement
+./cconductor sessions resume mission_1759420487 --refine "Focus on recent papers from 2024"
+
+# Resume with refinement from file
+./cconductor sessions resume mission_1759420487 --refine-file refinement.md
 ```
 
 **When to resume**:
@@ -859,7 +891,7 @@ Continue previous research to improve quality:
 - Found gaps in coverage
 - Need more citations
 
-**Expected improvement**: +10-20 quality points per iteration
+**Note**: Session resumption improvements are ongoing in v0.2.x
 
 ### Checking Status
 
@@ -1406,10 +1438,13 @@ tar -czf sessions-backup.tar.gz ~/Library/Application\ Support/CConductor/resear
 
 | Command | Purpose |
 |---------|---------|
+| `./cconductor` | Interactive mode (guided setup) |
 | `./cconductor "question"` | Start new research |
-| `./cconductor latest` | Show most recent session |
-| `./cconductor sessions` | List all sessions |
-| `./cconductor resume SESSION` | Continue research |
+| `./cconductor "question" --mission TYPE` | Start research with specific mission |
+| `./cconductor sessions list` | List all sessions |
+| `./cconductor sessions latest` | Show most recent session |
+| `./cconductor sessions viewer SESSION` | View session dashboard |
+| `./cconductor sessions resume SESSION` | Continue research |
 | `./cconductor status` | Check if research running |
 | `./cconductor configure` | View configuration |
 | `./cconductor --init` | Run/re-run initialization |
@@ -1462,46 +1497,39 @@ tar -czf sessions-backup.tar.gz ~/Library/Application\ Support/CConductor/resear
 
 ---
 
-## What's Coming
+## What's New in v0.2.0
 
-### v0.2 Planned Features
+### Mission-Based Orchestration
 
-The following features are **planned but not yet available in v0.1**:
+v0.2.0 introduces autonomous, agentic research coordination:
 
-🚧 **CLI Options** (not yet implemented):
+- **Mission Types**: Choose from academic-research, market-research, competitive-analysis, technical-analysis
+- **Dynamic Agent Selection**: System selects best agents based on research needs
+- **Budget Tracking**: Monitor and control research costs
+- **Enhanced Observability**: See agent reasoning and decision-making
 
-```bash
-# These will work in v0.2, but DO NOT work in v0.1:
-./cconductor "question" --mode scientific    # Explicit mode selection
-./cconductor "question" --speed fast         # Control research depth
-./cconductor "question" --output html        # HTML/JSON output formats
-./cconductor "question" --name my-research   # Custom session names
-./cconductor "question" --iterations 5       # Control iteration count
-./cconductor "question" --interactive        # Guided research mode
-./cconductor "question" --quiet              # Minimal output
-```
+### Interactive Mode
 
-**Current v0.1 workarounds**:
+- **Guided Setup**: Launch `./cconductor` for interactive research wizard
+- **Session Browser**: Easy session management with `sessions` command
+- **Resume with Refinement**: Continue research with specific guidance
 
-- Mode selection: Automatic based on keywords in your question
-- Speed control: Edit `config/cconductor-config.json` settings
-- Session naming: Use timestamp-based names (session_TIMESTAMP)
+### Enhanced Research Journal
 
-🚧 **Enhanced Output**:
+- **Agent Reasoning**: See how agents think and make decisions
+- **Verbose Mode**: Real-time progress updates (enabled by default)
+- **Better Exports**: Improved markdown exports with full reasoning
 
-- HTML reports with styling
-- JSON export for processing
-- Multiple citation styles (APA, MLA, Chicago)
-- BibTeX export for reference managers
+### Coming in Future Versions
 
-🚧 **Better UX**:
+🚧 **Planned enhancements**:
 
-- Real-time progress indicators
-- Enhanced session management UI
-- Interactive configuration wizard
-- Session tagging and search
+- Custom mission templates
+- Parallel agent invocation
+- Session comparison tools
+- Enhanced knowledge graph visualization
 
-See internal roadmap for complete feature list.
+See CHANGELOG.md for complete feature list.
 
 ---
 

@@ -1,24 +1,27 @@
 # CConductor Quick Reference
 
-**Command cheat sheet for daily use** - v0.1.0
+**Command cheat sheet for daily use** - v0.2.0
 
 ---
 
 ## 🚀 Most Common Commands
 
 ```bash
-# Interactive mode (dialog-based TUI)
+# Interactive mode (dialog-based TUI) - RECOMMENDED FOR NEW USERS
 ./cconductor
 
-# Start research
+# Start research (command-line mode)
 ./cconductor "your question"
 
 # Research with specific mission type
-./cconductor "your question" --mission market-research
 ./cconductor "your question" --mission academic-research
+./cconductor "your question" --mission market-research
+./cconductor "your question" --mission competitive-analysis
+./cconductor "your question" --mission technical-analysis
 
 # Complex research from markdown file
 ./cconductor --question-file research-query.md
+./cconductor --question-file research-query.md --mission academic-research
 
 # Research with local files (PDFs, markdown, text)
 ./cconductor "your question" --input-dir /path/to/files/
@@ -33,6 +36,10 @@
 # Export research journal as markdown
 SESSION_DIR=$(./src/utils/path-resolver.sh resolve session_dir)
 bash src/utils/export-journal.sh "$SESSION_DIR/$(cat "$SESSION_DIR/.latest")"
+
+# Verbose mode (real-time progress) - ENABLED BY DEFAULT
+./cconductor "your question" --verbose   # Show detailed progress
+./cconductor "your question" --quiet     # Minimal output only
 
 # Check running processes
 ./cconductor status
@@ -190,17 +197,20 @@ rm ~/.config/cconductor/security-config.json
 ### Basic Research
 
 ```bash
-# Simple question
+# Simple question (auto-selects best mission)
 ./cconductor "What is Docker?"
 
-# Detailed question
-./cconductor "What are the latest advances in CRISPR gene editing?"
+# Academic research with peer-reviewed sources
+./cconductor "What are the latest advances in CRISPR gene editing?" --mission academic-research
 
-# Business question
-./cconductor "Total addressable market for AI SaaS tools in 2024"
+# Market research with business focus
+./cconductor "Total addressable market for AI SaaS tools in 2024" --mission market-research
 
-# Technical question
-./cconductor "How does Kubernetes handle container orchestration?"
+# Technical analysis
+./cconductor "How does Kubernetes handle container orchestration?" --mission technical-analysis
+
+# Competitive analysis
+./cconductor "Compare top 5 CRM platforms" --mission competitive-analysis
 ```
 
 ### Research with Local Files
@@ -221,40 +231,40 @@ rm ~/.config/cconductor/security-config.json
 ### Academic Research
 
 ```bash
-# Latest research
-./cconductor "Latest advances in CRISPR gene editing 2023-2024"
+# Latest research with academic mission
+./cconductor "Latest advances in CRISPR gene editing 2023-2024" --mission academic-research
 
-# Specific topic
-./cconductor "Machine learning in healthcare diagnostics"
+# Specific topic with peer-reviewed focus
+./cconductor "Machine learning in healthcare diagnostics" --mission academic-research
 
 # Methodology focus
-./cconductor "Quantum error correction methods and effectiveness"
+./cconductor "Quantum error correction methods and effectiveness" --mission academic-research
 ```
 
 ### Market Research
 
 ```bash
-# Market sizing
-./cconductor "SaaS CRM market size and growth 2024"
+# Market sizing with market research mission
+./cconductor "SaaS CRM market size and growth 2024" --mission market-research
 
-# Competitive analysis
-./cconductor "Compare top 5 CRM platforms: features and pricing"
+# Competitive analysis mission
+./cconductor "Compare top 5 CRM platforms: features and pricing" --mission competitive-analysis
 
 # Industry trends
-./cconductor "Emerging trends in fintech 2024-2025"
+./cconductor "Emerging trends in fintech 2024-2025" --mission market-research
 ```
 
 ### Technical Research
 
 ```bash
-# Architecture
-./cconductor "Docker containerization architecture"
+# Architecture with technical analysis mission
+./cconductor "Docker containerization architecture" --mission technical-analysis
 
-# Comparison
-./cconductor "Kubernetes vs Docker Swarm comparison"
+# Technical comparison
+./cconductor "Kubernetes vs Docker Swarm comparison" --mission technical-analysis
 
 # Best practices
-./cconductor "Best practices for implementing OAuth 2.0"
+./cconductor "Best practices for implementing OAuth 2.0" --mission technical-analysis
 ```
 
 ---
@@ -359,8 +369,9 @@ Edit `config/security-config.json`:
 ### Resume Research
 
 ```bash
-./cconductor resume session_1759420487
-./cconductor resume $(cat research-sessions/.latest)  # Resume latest
+./cconductor sessions resume mission_1759420487
+./cconductor sessions resume mission_1759420487 --refine "Focus on recent papers"
+./cconductor sessions resume $(cat research-sessions/.latest)  # Resume latest
 ```
 
 ### Check Status
@@ -443,29 +454,34 @@ dlr session_123                # Resume
 
 ---
 
-## 🚧 Coming in v0.2
+## 🎉 New in v0.2.0
 
-The following features are **planned but not yet available**:
+**Mission-Based Orchestration**:
+- Use `--mission` flag to specify research type
+- Available missions: academic-research, market-research, competitive-analysis, technical-analysis
+- Autonomous agent selection based on research needs
 
-```bash
-# CLI options (NOT available in v0.1, coming in v0.2)
-./cconductor "question" --mode scientific    # Explicit mode selection
-./cconductor "question" --speed fast         # Control research depth
-./cconductor "question" --output html        # HTML/JSON output formats
-./cconductor "question" --name my-research   # Custom session names
-./cconductor "question" --iterations 5       # Control iteration count
-./cconductor "question" --interactive        # Guided research mode
-./cconductor "question" --quiet              # Minimal output
-```
+**Interactive Mode**:
+- Run `./cconductor` without arguments for guided setup
+- Dialog-based TUI with session browser
 
-**v0.1 alternatives**:
+**Enhanced Observability**:
+- Verbose mode shows real-time progress (enabled by default)
+- Agent reasoning visible in dashboard
+- Use `--quiet` for minimal output
 
-- Mode selection: Use keywords in question (e.g., "peer-reviewed research on...")
-- Speed control: Edit `config/cconductor-config.json`
-- Session naming: Use timestamp-based names (session_TIMESTAMP)
-- Output format: Markdown only (HTML/JSON in v0.2)
+**Session Management**:
+- Unified `sessions` command with list/latest/viewer/resume subcommands
+- Resume with refinement guidance
 
-See internal roadmap for complete feature list.
+## 🚧 Coming in Future Versions
+
+- Custom mission templates
+- Parallel agent invocation
+- Session comparison and merging
+- Enhanced knowledge graph visualization
+
+See CHANGELOG.md for complete roadmap.
 
 ---
 
