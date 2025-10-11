@@ -139,13 +139,44 @@ class Dashboard {
     renderHeader(session) {
         if (!session) return;
 
-        // Display research question
+        // Display clean objective (primary display)
         const questionElement = document.getElementById('research-question');
-        const questionText = session.research_question || 'Loading...';
-        questionElement.textContent = questionText;
+        const objectiveText = session.objective || session.research_question || 'Loading...';
+        questionElement.textContent = objectiveText;
 
         // Setup expand/collapse for long questions
-        this.setupQuestionToggle(questionText);
+        this.setupQuestionToggle(objectiveText);
+
+        // Show expandable full prompt if different from objective
+        if (session.research_question && session.research_question !== session.objective) {
+            // Remove any existing full prompt details
+            const existingDetails = questionElement.parentNode.querySelector('.full-prompt-details');
+            if (existingDetails) {
+                existingDetails.remove();
+            }
+            
+            const details = document.createElement('details');
+            details.className = 'full-prompt-details';
+            details.style.marginTop = '10px';
+            details.style.fontSize = '0.9em';
+            
+            const summary = document.createElement('summary');
+            summary.textContent = 'Show full user prompt';
+            summary.style.cursor = 'pointer';
+            summary.style.color = '#666';
+            
+            const content = document.createElement('div');
+            content.style.marginTop = '8px';
+            content.style.whiteSpace = 'pre-wrap';
+            content.style.padding = '10px';
+            content.style.backgroundColor = '#f5f5f5';
+            content.style.borderRadius = '4px';
+            content.textContent = session.research_question;
+            
+            details.appendChild(summary);
+            details.appendChild(content);
+            questionElement.parentNode.appendChild(details);
+        }
 
         // Display session ID from URL parameter if available
         const urlParams = new URLSearchParams(window.location.search);

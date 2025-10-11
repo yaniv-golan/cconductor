@@ -140,16 +140,16 @@ score_gap_priority() {
         entity_boost=1
     fi
 
-    # Boost priority if related to research question core concepts
-    local research_question
-    research_question=$(echo "$kg_json" | jq -r '.research_question')
+    # Boost priority if related to research objective core concepts
+    local research_objective
+    research_objective=$(echo "$kg_json" | jq -r '.research_objective // .research_question // ""')
     local question_text
     question_text=$(echo "$gap_json" | jq -r '.question')
 
     # Simple keyword matching (would be better with NLP)
     local relevance_boost=0
     local rq_words
-    rq_words=$(echo "$research_question" | tr '[:upper:]' '[:lower:]' | tr -cs '[:alnum:]' '\n')
+    rq_words=$(echo "$research_objective" | tr '[:upper:]' '[:lower:]' | tr -cs '[:alnum:]' '\n')
     local gap_words
     gap_words=$(echo "$question_text" | tr '[:upper:]' '[:lower:]' | tr -cs '[:alnum:]' '\n')
 

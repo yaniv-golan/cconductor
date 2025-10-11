@@ -29,22 +29,22 @@ debug "knowledge-graph.sh: All dependencies sourced"
 # Initialize a new knowledge graph
 kg_init() {
     local session_dir="$1"
-    local research_question="$2"
+    local research_objective="$2"
 
     # Validate inputs
     validate_directory "session_dir" "$session_dir" || return 1
-    validate_required "research_question" "$research_question" || return 1
+    validate_required "research_objective" "$research_objective" || return 1
 
     local kg_file="$session_dir/knowledge-graph.json"
 
     # Use jq to safely construct JSON (prevents injection attacks)
     jq -n \
-        --arg question "$research_question" \
+        --arg objective "$research_objective" \
         --arg started "$(get_timestamp)" \
         --arg updated "$(get_timestamp)" \
         '{
             schema_version: "1.0",
-            research_question: $question,
+            research_objective: $objective,
             started_at: $started,
             last_updated: $updated,
             iteration: 0,
@@ -825,6 +825,11 @@ kg_integrate_agent_output() {
         return 1
     fi
     
+    # Backup knowledge graph before any writes
+    if [ -f "$kg_file" ]; then
+        cp "$kg_file" "${kg_file}.backup" 2>/dev/null || true
+    fi
+    
     # Tier 1: Extract findings files list from agent output manifest
     local findings_files
     findings_files=$(jq -r '.findings_files[]? // empty' "$agent_output_file" 2>/dev/null)
@@ -902,6 +907,16 @@ kg_integrate_agent_output() {
         # If there's a separate citations array, we could process it here
         
     done <<< "$findings_files"
+    
+    # Validate knowledge graph after integration
+    if ! jq empty "$kg_file" 2>/dev/null; then
+        echo "ERROR: Knowledge graph corrupted after integration. Restoring backup." >&2
+        if [ -f "${kg_file}.backup" ]; then
+            cp "${kg_file}.backup" "$kg_file"
+            echo "  ✓ Backup restored successfully" >&2
+        fi
+        return 1
+    fi
     
     if [ "$integrated" -gt 0 ]; then
         return 0

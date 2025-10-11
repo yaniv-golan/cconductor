@@ -138,9 +138,14 @@ initialize_session() {
         fi
     fi
     
+    # Store raw prompt - parsing will be done by orchestrator
+    # This ensures prompt-parser is invoked through the proper agent infrastructure
+    
     # Create session metadata with runtime information
+    # Note: objective will be updated by orchestrator after prompt parsing
     jq -n \
         --arg objective "$mission_objective" \
+        --arg question "$mission_objective" \
         --arg timestamp "$(date -u +"%Y-%m-%dT%H:%M:%SZ")" \
         --arg session_type "mission" \
         --arg version "0.2.0" \
@@ -148,7 +153,9 @@ initialize_session() {
         '{
             session_type: $session_type,
             objective: $objective,
-            research_question: $objective,
+            research_question: $question,
+            output_specification: null,
+            prompt_parsed: false,
             created_at: $timestamp,
             version: $version,
             runtime: {

@@ -292,9 +292,11 @@ cmd_run() {
     echo "  ✓ Session: $(basename "$session_dir")"
     echo ""
     
-    # Initialize knowledge graph
+    # Initialize knowledge graph with clean objective
     echo "→ Initializing knowledge graph..."
-    kg_init "$session_dir" "$mission_objective" >/dev/null
+    local clean_objective
+    clean_objective=$(jq -r '.objective' "$session_dir/session.json")
+    kg_init "$session_dir" "$clean_objective" >/dev/null
     echo "  ✓ Knowledge graph ready"
     echo ""
     

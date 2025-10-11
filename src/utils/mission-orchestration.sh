@@ -170,7 +170,10 @@ EOF
     if [[ ! -f "$orchestrator_agent_file" ]]; then
         mkdir -p "$session_dir/.claude/agents"
         
-        local orchestrator_dir="$PROJECT_ROOT/src/claude-runtime/agents/mission-orchestrator"
+        # Calculate orchestrator directory relative to this script
+        # This script is in src/utils/, orchestrator is in src/claude-runtime/agents/mission-orchestrator
+        local orchestrator_dir
+        orchestrator_dir="$(cd "$UTILS_DIR/../claude-runtime/agents/mission-orchestrator" && pwd)"
         local system_prompt
         system_prompt=$(cat "$orchestrator_dir/system-prompt.md")
         
@@ -294,6 +297,21 @@ _invoke_delegated_agent() {
         fi
     fi
     
+    # Add output specification for synthesis-agent
+    local output_spec_section=""
+    if [[ "$agent_name" == "synthesis-agent" ]]; then
+        local output_spec
+        output_spec=$(jq -r '.output_specification // ""' "$session_dir/session.json" 2>/dev/null)
+        if [[ -n "$output_spec" && "$output_spec" != "null" ]]; then
+            output_spec_section=$(cat <<SPEC_EOF
+
+## User's Output Format Requirements
+$output_spec
+SPEC_EOF
+)
+        fi
+    fi
+    
     local agent_input
     agent_input=$(cat <<EOF
 $task
@@ -302,7 +320,7 @@ $task
 $context
 
 ## Input Artifacts
-$artifacts_section
+$artifacts_section${output_spec_section}
 
 ## Instructions
 Please complete this task and provide your findings in a structured format.
@@ -863,6 +881,19 @@ run_mission_orchestration() {
         
         echo "═══ Mission Iteration $iteration/$max_iterations ═══"
         echo ""
+        
+        # Parse prompt on first iteration if not yet done
+        if [[ $iteration -eq 1 ]]; then
+            # shellcheck disable=SC1091
+            source "$UTILS_DIR/prompt-parser-handler.sh" 2>/dev/null || true
+            
+            if command -v needs_prompt_parsing &>/dev/null && needs_prompt_parsing "$session_dir"; then
+                if command -v parse_prompt &>/dev/null; then
+                    parse_prompt "$session_dir" || true
+                    echo ""
+                fi
+            fi
+        fi
         
         # Check budget before proceeding
         if ! budget_check "$session_dir"; then

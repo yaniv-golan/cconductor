@@ -76,6 +76,18 @@ export_journal() {
         fi
         echo ""
         
+        # Display output format if specified
+        local output_spec
+        output_spec=$(jq -r '.output_specification // ""' "$session_file" 2>/dev/null)
+        if [ -n "$output_spec" ] && [ "$output_spec" != "null" ]; then
+            echo "**User's Format Requirements:**"
+            echo ""
+            echo "$output_spec"
+            echo ""
+            echo "---"
+            echo ""
+        fi
+        
         # Display research date
         local session_created
         session_created=$(jq -r '.created_at // "unknown"' "$session_file" 2>/dev/null || echo "unknown")
