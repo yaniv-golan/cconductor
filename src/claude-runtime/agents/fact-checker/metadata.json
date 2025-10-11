@@ -18,5 +18,6 @@
     "WebFetch",
     "Read"
   ],
-  "model": "claude-sonnet-4-5"
+  "model": "claude-sonnet-4-5",
+  "action_verb": "Verifying"
 }

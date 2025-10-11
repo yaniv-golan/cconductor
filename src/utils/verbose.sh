@@ -46,7 +46,21 @@ verbose_agent_start() {
     if [[ -n "$task" ]] && \
        [[ ! "$task" =~ ^"I am providing" ]] && \
        [[ ${#task} -lt 150 ]]; then
-        echo "   Looking for: $task" >&2
+        # Try to get action verb from agent metadata
+        local action_verb=""
+        if command -v agent_registry_get_metadata &>/dev/null; then
+            local metadata_json
+            if metadata_json=$(agent_registry_get_metadata "$agent_name" 2>/dev/null); then
+                action_verb=$(echo "$metadata_json" | jq -r '.action_verb // empty' 2>/dev/null)
+            fi
+        fi
+        
+        # Fallback to generic "Looking for" if no action verb defined
+        if [[ -z "$action_verb" ]]; then
+            action_verb="Looking for"
+        fi
+        
+        echo "   $action_verb: $task" >&2
     fi
 }
 

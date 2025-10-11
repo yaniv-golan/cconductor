@@ -12,5 +12,6 @@
     "confidence-scores.json",
     "coverage.json",
     "key-findings.json"
-  ]
+  ],
+  "action_verb": "Synthesizing"
 }

@@ -171,6 +171,21 @@
             "Edit",
             "NotebookEdit"
         ]
+    },
+    "prompt-parser": {
+        "allowed": [
+            "Read"
+        ],
+        "disallowed": [
+            "WebSearch",
+            "WebFetch",
+            "Bash",
+            "Write",
+            "Edit",
+            "Grep",
+            "Glob",
+            "NotebookEdit"
+        ]
     }
 }
 
