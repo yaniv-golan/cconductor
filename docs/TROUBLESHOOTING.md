@@ -1673,9 +1673,112 @@ claude --print --settings .claude/settings.json "list files" 2>&1 | grep "HOOK"
 
 ---
 
+## Verbose Mode
+
+**New in v0.2.0**: Show detailed, user-friendly progress messages during research.
+
+### What is Verbose Mode?
+
+Verbose mode displays detailed progress information in plain language without the technical bash trace output of debug mode. It's perfect for:
+
+- **Understanding what's happening** during research
+- **Tracking progress** in long-running sessions
+- **Seeing agent reasoning** and decisions in real-time
+- **Following the research flow** without technical details
+
+### Enabling Verbose Mode
+
+```bash
+# Using command-line flag
+./cconductor "your research question" --verbose
+
+# Using environment variable
+export CCONDUCTOR_VERBOSE=1
+./cconductor "your research question"
+
+# Or inline for single run
+CCONDUCTOR_VERBOSE=1 ./cconductor "your research question"
+
+# Resume with verbose mode
+./cconductor sessions resume session_XXX --verbose
+```
+
+### What Verbose Mode Shows
+
+1. **Agent activity in plain language**
+   - "Starting web researcher" instead of "Invoking web-researcher with systemPrompt"
+   - Clear task descriptions
+   - Agent reasoning and decisions when available
+
+2. **Tool use in friendly terms**
+   - "🔍 Searching the web for: [query]" instead of "WebSearch: [query]"
+   - "📄 Getting information from: [domain]" instead of "WebFetch: [url]"
+   - "💾 Saving: [filename]" for research files
+
+3. **Progress updates**
+   - Research coordination steps
+   - File operations (research files only)
+   - Completion status with timing
+
+4. **Agent reasoning** (when available)
+   - Key insights discovered
+   - Strategic decisions made
+   - Research priorities
+
+### Verbose Mode Output Example
+
+```bash
+$ ./cconductor "What is the SaaS market size?" --verbose
+📢 Verbose mode enabled - showing detailed progress
+
+🚀 Starting research coordinator
+   Looking for: overall research strategy
+
+🎯 Coordinating next research step...
+
+🚀 Starting web researcher
+   Looking for: SaaS market size data and trends
+
+🔍 Searching the web for: "SaaS market size 2024"
+✓ Done in 1.2s
+
+📄 Getting information from: gartner.com
+✓ Done in 2.3s
+
+💾 Saving: findings-web-001.json
+
+💡 Research reasoning:
+   - Found 3 authoritative sources on market sizing
+   - Prioritizing recent data from analyst firms
+   - Need additional data on growth trends
+
+✓ Agent web-researcher completed successfully
+```
+
+### When to Use Verbose vs Debug
+
+**Use Verbose Mode when:**
+- You want to understand the research flow
+- You're tracking progress on a complex query
+- You want to see what agents are thinking
+- You prefer user-friendly messages
+
+**Use Debug Mode when:**
+- You're troubleshooting technical issues
+- You need to see exact bash commands
+- You're debugging system errors
+- You need complete execution traces
+
+**Use both together** for maximum visibility:
+```bash
+CCONDUCTOR_DEBUG=1 CCONDUCTOR_VERBOSE=1 ./cconductor "query"
+```
+
+---
+
 ## Debug Mode
 
-**New in v0.2.0**: Enable verbose logging for troubleshooting.
+**New in v0.2.0**: Enable technical logging for troubleshooting.
 
 ### Enabling Debug Mode
 

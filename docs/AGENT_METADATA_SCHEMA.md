@@ -9,6 +9,7 @@ Agent metadata defines an agent's capabilities, tools, inputs/outputs, and other
 ```json
 {
   "name": "string (required)",
+  "display_name": "string (optional)",
   "description": "string (required)",
   "capabilities": ["capability_id", ...] (optional),
   "expertise_domains": ["domain", ...] (optional),
@@ -50,6 +51,14 @@ Agent metadata defines an agent's capabilities, tools, inputs/outputs, and other
 - **Example**: `"claude-sonnet-4-5"`
 
 ## Optional Fields
+
+### display_name
+- **Type**: string
+- **Description**: Human-friendly name for display in UI and verbose mode
+- **Purpose**: Used by verbose mode and future UI components for user-friendly agent identification
+- **Format**: Title case with spaces (e.g., "Market Sizing Expert")
+- **Example**: `"Market Sizing Expert"`
+- **Fallback**: If not provided, the `name` field is converted (hyphens → spaces)
 
 ### capabilities
 - **Type**: array of strings
