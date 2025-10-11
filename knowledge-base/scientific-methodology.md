@@ -239,6 +239,51 @@ When identifying leading studies for research reports:
 
 ## Understanding Research Findings
 
+## Subgroup Analysis & Population Heterogeneity
+
+### Why Subgroups Matter
+
+Pooling heterogeneous participants can mask important differences. Average effects may not apply to specific subgroups, or subgroups may show opposite patterns.
+
+### What to Assess
+
+**1. Sample Composition**
+- Are participants homogeneous or heterogeneous?
+- Are different groups combined (clinical diagnosis vs. trait measures, different severity levels, comorbidities present/absent)?
+- Could important subgroups be hidden in the "overall" sample?
+
+**2. Subgroup Analyses Performed**
+- Were subgroup analyses conducted? Pre-specified or post-hoc?
+- What was the scientific rationale for each subgroup?
+- Sample sizes per subgroup (need typically n≥30 minimum per subgroup)
+- Were interaction tests performed to test if effects differ?
+
+**3. Effect Heterogeneity**
+- Do effects differ meaningfully across subgroups?
+- Are subgroup-specific effect sizes and confidence intervals reported?
+- Is the "overall effect" representative or misleading?
+
+**4. Stratification & Adjustment**
+- Did analyses stratify by important moderators?
+- Were stratified analyses or interaction terms included?
+- Was adjustment for confounders done within strata?
+
+### Red Flags
+
+- **Inappropriate pooling**: Combining clinical and subclinical populations, different diagnostic criteria, or severity levels without justification
+- **Underpowered subgroup analyses**: Too few participants per subgroup to detect differences
+- **Post-hoc fishing**: Multiple subgroup analyses without correction for multiple testing
+- **No interaction tests**: Claiming subgroups differ without proper statistical test
+- **Ignoring heterogeneity**: High I² in meta-analyses without exploring sources
+
+### Reporting in Findings
+
+Always note:
+- Which subgroups were examined (or not examined)
+- Sample sizes per subgroup
+- Whether effects differ across subgroups
+- Limitations if subgroups not analyzed or underpowered
+
 ### Sample Size Matters
 
 **Underpowered Studies** (too small):

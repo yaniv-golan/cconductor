@@ -140,7 +140,8 @@ For every market finding, document:
         "magnitude_notes": "<effect sizes, practical significance>",
         "alternative_explanations": ["<confounders>", "<other factors>"],
         "measurement_quality": "<how measured, limitations>",
-        "generalizability_limits": "<where applies, where uncertain>"
+        "generalizability_limits": "<where applies, where uncertain>",
+        "subgroup_analyses": "<which subgroups examined, sample sizes per subgroup, whether effects differ across subgroups; or 'none performed' or 'not reported'>"
       }
     }
   ],

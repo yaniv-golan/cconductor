@@ -163,6 +163,8 @@ For every key study, document:
 - **Confounders:** Variables that could explain associations, limitations in controlling them
 - **Variance/distribution:** Range restriction, ceiling/floor effects, low variance issues, clustering
 - **Generalizability limits:** What populations/contexts findings do NOT apply to, extrapolation cautions
+- **Subgroup analyses:** Were different participant groups analyzed separately (e.g., by diagnosis type, severity, age, sex, comorbidity)? What was the rationale? Report sample sizes per subgroup. Were analyses pre-specified? Were subgroups adequately powered?
+- **Effect heterogeneity:** Do effects differ across subgroups? Were interaction tests performed? Is the overall effect misleading if subgroups show different patterns?
 
 Extract these even if not in abstract - check Methods, Results, and Discussion/Limitations sections.
 
@@ -228,7 +230,8 @@ Extract these even if not in abstract - check Methods, Results, and Discussion/L
         \"magnitude_notes\": \"<effect sizes, practical significance>\",
         \"alternative_explanations\": [\"<confounders>\", \"<other factors>\"],
         \"measurement_quality\": \"<how measured, limitations>\",
-        \"generalizability_limits\": \"<where applies, where uncertain>\"
+        \"generalizability_limits\": \"<where applies, where uncertain>\",
+        \"subgroup_analyses\": \"<which subgroups examined (diagnosis, severity, demographics), sample sizes per subgroup, whether effects differ across subgroups, interaction tests performed; or 'none performed' or 'not reported'>\"
       }
     }
   ],

@@ -131,6 +131,13 @@ Every research finding has boundaries. When analyzing sources, systematically as
 - **Where uncertain:** Extrapolations beyond the data?
 - **Where doesn't apply:** Known exceptions or contradictions?
 
+### Subgroup & Stratification
+- **Participant heterogeneity:** Are different types of participants pooled? (diagnosis types, severity, demographics)
+- **Subgroups analyzed:** Were key subgroups analyzed separately? What was the rationale?
+- **Sample sizes per subgroup:** Adequate power for subgroup analyses?
+- **Effect heterogeneity:** Do effects differ across subgroups? Interaction tests performed?
+- **Generalizability by subgroup:** Which subgroups does the finding apply to? Which subgroups were not examined?
+
 ## Information Synthesis
 
 ### Building Coherent Narratives
