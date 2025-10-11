@@ -40,6 +40,93 @@
    - Cannot generalize
    - Lowest evidence level
 
+## Defining Leading Studies
+
+A "**leading study**" is one that provides the strongest, most reliable evidence for a specific claim. When citing evidence, prioritize studies that satisfy most of these criteria:
+
+### Core Criteria
+
+**1. High Level of Evidence**
+- **Preferred**: Systematic reviews/meta-analyses (≥5 studies aggregated)
+- **Strong**: Large RCTs with pre-registration, or large prospective cohorts
+- **Domain-Specific**: 
+  - Computer Science: Top-tier conference/journal papers with reproducibility artifacts
+  - Economics: RCTs or strong quasi-experimental designs
+  - Clinical: Phase III trials registered on ClinicalTrials.gov
+
+**2. Methodological Rigor**
+- Pre-registered analysis plans (when applicable)
+- Appropriate controls and blinding
+- Validated measurement instruments
+- Confounders identified and addressed
+- Statistical methods clearly justified
+- Limitations transparently discussed
+- Low risk of bias assessment
+
+**3. Scale & Statistical Power**
+- Adequate sample size for field (typically n≥100, or multicenter/population-based)
+- Meta-analyses: Include heterogeneity analysis and publication bias assessment
+- Effect sizes reported with confidence intervals
+- Sufficient power to detect meaningful effects
+
+**4. Publication Quality & Recognition**
+- Published in high-impact journals (IF >10) or premier field-specific venues
+- Peer-reviewed (not just preprints, unless explicitly noted)
+- Highly cited relative to age (>100 citations for papers >2 years old)
+- Referenced in subsequent systematic reviews or clinical guidelines
+- Indexed in major databases (PubMed, Web of Science, Scopus)
+
+**5. Replication & Convergence**
+- Findings independently replicated by other research groups
+- Consistent with multiple high-quality studies
+- Aligns with established mechanisms or theoretical frameworks
+- Part of a converging body of evidence
+
+**6. Recency & Relevance**
+- Current for fast-moving fields (within 2-5 years)
+- Directly addresses the specific population, outcome, timing, and context of the claim
+- Not superseded by more recent, higher-quality research
+
+**7. Transparency & Low Bias Risk**
+- Conflicts of interest disclosed
+- Data and/or code available (or strong reproducibility signals)
+- Funding sources transparent
+- Results don't obviously favor funders
+- No retractions or major corrections
+
+### Domain-Specific Considerations
+
+**Emerging Topics**:
+- Recent preprints from top research groups may be "provisional leading studies"
+- Must be explicitly flagged as "not yet peer-reviewed"
+- Prefer those with multiple independent replications
+
+**Rare Diseases / Low-Data Domains**:
+- Best-available evidence may be high-quality case series or multicenter registries
+- Judge relative to field norms, not absolute criteria
+- Explicitly note limited evidence base
+
+**Definitive Null Results**:
+- High-quality studies showing no effect or small effects are also "leading studies"
+- Important for establishing boundaries and preventing overstatement
+- Must be adequately powered to detect meaningful effects
+
+### Practical Selection Guide
+
+When identifying leading studies for research reports:
+
+1. **First Choice**: Recent systematic review or meta-analysis from Cochrane or comparable source
+2. **Second Choice**: Multiple (≥2) independent high-quality primary studies showing consistent results
+3. **Third Choice**: Single landmark study if it's large, rigorous, and widely cited
+4. **Context-Dependent**: Best available evidence with explicit caveats about limitations
+
+**Red Flags** (studies that are NOT leading):
+- Single small pilot studies
+- Industry-funded studies without independent replication
+- High risk of bias on quality assessments
+- Cannot access full methodology
+- Contradicted by subsequent higher-quality research
+
 ## Statistical Significance vs. Practical Significance
 
 ### Understanding P-Values
