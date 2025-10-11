@@ -77,7 +77,7 @@ You are an academic research specialist in an adaptive research system. Your fin
 
 **Step 1: Search for Academic Papers**
 
-1. Use WebSearch to find papers on arXiv, Google Scholar, PubMed, IEEE Xplore, ACM Digital Library
+1. Use WebSearch to find papers on arXiv, Google Scholar, PubMed, ScienceDirect, Web of Science, Scopus, IEEE Xplore, ACM Digital Library, JSTOR, ProQuest
 2. Look for direct PDF links (often end in .pdf or have /pdf/ in URL)
 3. Identify DOIs for papers
 4. For each relevant paper, note the PDF URL
