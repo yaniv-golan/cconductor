@@ -150,23 +150,50 @@ Key: You decided the flow, identified the critical issue, and adapted (early com
 
 ### For Each Orchestration Turn
 
-**CRITICAL**: You must return a structured JSON decision for the orchestration system to execute. Your output must be a single JSON object with one of these action types:
+**CRITICAL**: You must return a structured JSON decision wrapped in a markdown code block. Your output format must be:
 
-#### 1. Invoke an Agent
 ```json
 {
+  "reasoning": {
+    "synthesis_approach": "How I'm integrating findings from previous agents and current state",
+    "gap_prioritization": "Why I'm prioritizing certain gaps or actions over others",
+    "key_insights": [
+      "Major insight 1 from current state analysis",
+      "Major insight 2 about research direction"
+    ],
+    "strategic_decisions": [
+      "Decision 1 and its rationale",
+      "Decision 2 and why it matters"
+    ]
+  },
+  "action": "invoke|reinvoke|handoff|early_exit",
+  ...action-specific fields...
+}
+```
+
+**The `reasoning` object is REQUIRED** - it provides transparency into your decision-making process and is displayed to users in verbose mode.
+
+#### Action Types
+
+**1. Invoke an Agent**
+```json
+{
+  "reasoning": { ...as above... },
   "action": "invoke",
   "agent": "agent-name",
   "task": "Clear, specific task description",
   "context": "Why this agent? What should they know?",
   "input_artifacts": ["path/to/file.json"],
-  "rationale": "Why this decision makes sense"
+  "rationale": "Why this decision makes sense",
+  "alternatives_considered": ["other-agent: reason not chosen", "another-option: why not suitable"],
+  "expected_impact": "What this agent invocation will achieve"
 }
 ```
 
-#### 2. Re-invoke an Agent (for refinement)
+**2. Re-invoke an Agent (for refinement)**
 ```json
 {
+  "reasoning": { ...as above... },
   "action": "reinvoke",
   "agent": "agent-name",
   "reason": "What was incomplete or needs refinement",
@@ -175,9 +202,10 @@ Key: You decided the flow, identified the critical issue, and adapted (early com
 }
 ```
 
-#### 3. Handoff Between Agents
+**3. Handoff Between Agents**
 ```json
 {
+  "reasoning": { ...as above... },
   "action": "handoff",
   "from_agent": "previous-agent",
   "to_agent": "next-agent",
@@ -187,9 +215,10 @@ Key: You decided the flow, identified the critical issue, and adapted (early com
 }
 ```
 
-#### 4. Signal Mission Complete (Early Exit)
+**4. Signal Mission Complete (Early Exit)**
 ```json
 {
+  "reasoning": { ...as above... },
   "action": "early_exit",
   "reason": "All success criteria met",
   "confidence": 0.95,
@@ -197,9 +226,11 @@ Key: You decided the flow, identified the critical issue, and adapted (early com
 }
 ```
 
-**If you return ANYTHING other than valid JSON with one of these actions, the orchestration will fail.**
-
-You may include additional analysis in your response BEFORE the JSON, but the JSON decision must be present and parseable.
+**IMPORTANT**: 
+- Your entire response should be the JSON object wrapped in markdown code fences (```json ... ```)
+- Do NOT include prose analysis before or after the JSON
+- The JSON must be valid and parseable
+- The `reasoning` field provides your analytical commentary
 
 ### Final Mission Report
 
