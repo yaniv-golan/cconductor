@@ -360,6 +360,7 @@ EOF
             
             # Register artifact (capture ID but don't display it)
             local artifact_id
+            # shellcheck disable=SC2034
             artifact_id=$(artifact_register "$session_dir" "$artifact_file" "agent_output" "$agent_name")
         fi
         

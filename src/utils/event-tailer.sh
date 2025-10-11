@@ -65,7 +65,8 @@ start_event_tailer() {
                     
                     # Acquire lock and display
                     local lock_dir="$session_dir/.output.lock"
-                    local start_time=$(date +%s)
+                    local start_time
+                    start_time=$(date +%s)
                     while ! mkdir "$lock_dir" 2>/dev/null; do
                         [[ $(($(date +%s) - start_time)) -ge 5 ]] && continue 2
                         sleep 0.05

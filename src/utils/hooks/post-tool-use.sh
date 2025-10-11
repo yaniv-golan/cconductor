@@ -19,7 +19,9 @@ source "$PROJECT_ROOT/src/shared-state.sh" 2>/dev/null || {
 # shellcheck disable=SC1091
 source "$PROJECT_ROOT/src/utils/verbose.sh" 2>/dev/null || {
     # Fallback: stub functions if verbose.sh not available
+    # shellcheck disable=SC2329
     is_verbose_enabled() { [[ "${CCONDUCTOR_VERBOSE:-0}" == "1" ]]; }
+    # shellcheck disable=SC2329
     verbose_completion() { :; }
 }
 
