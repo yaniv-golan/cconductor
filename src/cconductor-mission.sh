@@ -298,6 +298,35 @@ cmd_run() {
     echo "  ✓ Knowledge graph ready"
     echo ""
     
+    # Process input files if provided
+    local UTILS_DIR="$CCONDUCTOR_MISSION_SCRIPT_DIR/utils"
+    if [[ -n "$input_dir" ]]; then
+        echo "→ Processing input files..."
+        # shellcheck disable=SC1091
+        source "$UTILS_DIR/input-files-manager.sh"
+        
+        if process_input_directory "$input_dir" "$session_dir"; then
+            echo "  ✓ Input files processed"
+            
+            # Store input_dir reference in session metadata
+            local temp_session="$session_dir/session.json.tmp"
+            jq --arg input_dir "$input_dir" \
+               '.input_dir = $input_dir' \
+               "$session_dir/session.json" > "$temp_session" && \
+               mv "$temp_session" "$session_dir/session.json"
+        else
+            echo "  ⚠  Warning: Failed to process some input files"
+        fi
+        echo ""
+    fi
+    
+    # Store mission name in session metadata for journal
+    local temp_session="$session_dir/session.json.tmp"
+    jq --arg mission "$mission_name" \
+       '.mission_name = $mission' \
+       "$session_dir/session.json" > "$temp_session" && \
+       mv "$temp_session" "$session_dir/session.json"
+    
     # Run mission orchestration
     run_mission_orchestration "$mission_profile" "$session_dir"
 }
