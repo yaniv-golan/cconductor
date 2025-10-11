@@ -13,6 +13,24 @@ format_credibility() {
     echo "$cred" | sed 's/_/ /g' | awk '{for(i=1;i<=NF;i++) $i=toupper(substr($i,1,1)) tolower(substr($i,2));}1'
 }
 
+# Helper function to make paths relative to session directory
+make_path_relative() {
+    local path="$1"
+    local session_dir="$2"
+    
+    # Normalize session_dir to absolute path
+    local abs_session_dir
+    abs_session_dir=$(cd "$session_dir" 2>/dev/null && pwd)
+    
+    # If path starts with absolute session_dir, make it relative
+    if [[ "$path" == "$abs_session_dir"/* ]]; then
+        echo "${path#"$abs_session_dir"/}"
+    else
+        # Otherwise return as-is
+        echo "$path"
+    fi
+}
+
 export_journal() {
     local session_dir="$1"
     local output_file="${2:-$session_dir/research-journal.md}"
@@ -49,14 +67,81 @@ export_journal() {
     {
         echo "# Research Journal"
         echo ""
+        
+        # Display objective/question
         if [ "$objective" != "Unknown" ]; then
             echo "**Research Objective:** $objective"
         else
             echo "**Research Question:** $question"
         fi
         echo ""
+        
+        # Display research date
+        local session_created
+        session_created=$(jq -r '.created_at // "unknown"' "$session_file" 2>/dev/null || echo "unknown")
+        if [ "$session_created" != "unknown" ]; then
+            local formatted_date
+            # Convert UTC to local time: parse UTC to epoch, then format in local timezone
+            local epoch
+            epoch=$(TZ=UTC date -j -f "%Y-%m-%dT%H:%M:%SZ" "$session_created" "+%s" 2>/dev/null || echo "0")
+            if [ "$epoch" != "0" ]; then
+                formatted_date=$(date -r "$epoch" "+%B %d, %Y" 2>/dev/null || echo "$session_created")
+            else
+                formatted_date="$session_created"
+            fi
+            echo "**Research Date:** $formatted_date"
+            echo ""
+        fi
+        
+        # Display runtime information
+        local cconductor_ver claude_ver mission_name
+        cconductor_ver=$(jq -r '.runtime.cconductor_version // .version // "unknown"' "$session_file" 2>/dev/null || echo "unknown")
+        claude_ver=$(jq -r '.runtime.claude_code_version // "unknown"' "$session_file" 2>/dev/null || echo "unknown")
+        mission_name=$(jq -r '.mission_name // "unknown"' "$session_file" 2>/dev/null || echo "unknown")
+        
+        if [ "$cconductor_ver" != "unknown" ] || [ "$claude_ver" != "unknown" ] || [ "$mission_name" != "unknown" ]; then
+            echo "**Research Environment:**"
+            [ "$mission_name" != "unknown" ] && echo "- Mission profile: $mission_name"
+            [ "$cconductor_ver" != "unknown" ] && echo "- [CConductor](https://github.com/yaniv-golan/cconductor) version $cconductor_ver"
+            [ "$claude_ver" != "unknown" ] && echo "- Claude Code CLI $claude_ver"
+            echo ""
+        fi
+        
         echo "**Session:** $(basename "$session_dir")"
         echo ""
+        
+        # Display input materials if provided
+        local input_manifest="$session_dir/input-files.json"
+        if [ -f "$input_manifest" ]; then
+            local input_dir_path
+            input_dir_path=$(jq -r '.input_dir // ""' "$input_manifest" 2>/dev/null)
+            
+            if [ -n "$input_dir_path" ] && [ "$input_dir_path" != "" ]; then
+                local pdf_count md_count txt_count
+                pdf_count=$(jq '.pdfs | length' "$input_manifest" 2>/dev/null || echo "0")
+                md_count=$(jq '.markdown | length' "$input_manifest" 2>/dev/null || echo "0")
+                txt_count=$(jq '.text | length' "$input_manifest" 2>/dev/null || echo "0")
+                local total_count=$((pdf_count + md_count + txt_count))
+                
+                if [ "$total_count" -gt 0 ]; then
+                    echo "**Initial Materials:** Research began with $total_count provided document(s) for analysis:"
+                    echo ""
+                    
+                    # List files naturally
+                    if [ "$pdf_count" -gt 0 ]; then
+                        jq -r '.pdfs[] | "- \(.original_name) (PDF document)"' "$input_manifest" 2>/dev/null
+                    fi
+                    if [ "$md_count" -gt 0 ]; then
+                        jq -r '.markdown[] | "- \(.original_name) (markdown notes)"' "$input_manifest" 2>/dev/null
+                    fi
+                    if [ "$txt_count" -gt 0 ]; then
+                        jq -r '.text[] | "- \(.original_name) (text document)"' "$input_manifest" 2>/dev/null
+                    fi
+                    echo ""
+                fi
+            fi
+        fi
+        
         echo "---"
         echo ""
         
@@ -68,103 +153,205 @@ export_journal() {
             local timestamp
             timestamp=$(echo "$line" | jq -r '.timestamp // "unknown"')
             local formatted_time
-            # Format: "October 8, 2025 at 7:35 AM"
+            # Format: "October 8, 2025 at 7:35 AM" in local timezone
             # Strip microseconds if present (2025-10-08T07:35:57.159051Z -> 2025-10-08T07:35:57Z)
             local clean_timestamp
             # shellcheck disable=SC2001
             clean_timestamp=$(echo "$timestamp" | sed 's/\.[0-9]*Z$/Z/')
-            formatted_time=$(date -j -f "%Y-%m-%dT%H:%M:%SZ" "$clean_timestamp" "+%B %d, %Y at %l:%M %p" 2>/dev/null | sed 's/  / /g' || echo "$timestamp")
+            # Convert UTC to local: parse UTC to epoch (using -u flag), then format in local timezone
+            local epoch
+            epoch=$(TZ=UTC date -j -f "%Y-%m-%dT%H:%M:%SZ" "$clean_timestamp" "+%s" 2>/dev/null || echo "0")
+            if [ "$epoch" != "0" ]; then
+                formatted_time=$(date -r "$epoch" "+%B %d, %Y at %l:%M %p" 2>/dev/null | sed 's/  / /g' || echo "$timestamp")
+            else
+                formatted_time="$timestamp"
+            fi
             
             case "$event_type" in
                 mission_started)
-                    local mission_objective
-                    mission_objective=$(echo "$line" | jq -r '.data.objective // "research query"')
-                    echo "## 🚀 Mission Started"
+                    echo "## Investigation Commenced"
                     echo ""
-                    echo "**Time:** $formatted_time"
+                    echo "*$formatted_time*"
                     echo ""
-                    echo "**Objective:** $mission_objective"
-                    echo ""
-                    echo "Research mission initialized. The orchestrator will coordinate specialized agents to gather, analyze, and synthesize information."
+                    echo "Beginning mission-based research investigation. The research will proceed through iterative cycles, with specialized analysis agents coordinated to gather, validate, and synthesize information."
                     echo ""
                     echo "---"
                     echo ""
                     ;;
                 
                 session_created)
-                    echo "## 🎯 Session Started"
+                    echo "## Session Established"
                     echo ""
-                    echo "**Time:** $formatted_time"
+                    echo "*$formatted_time*"
                     echo ""
-                    echo "Research session initialized. Preparing to analyze the query and generate research tasks."
+                    echo "Session established. Initial analysis of the research question will guide task generation and source selection."
                     echo ""
                     echo "---"
                     echo ""
                     ;;
                     
                 agent_invocation)
-                    local agent
+                    local agent tools model
                     agent=$(echo "$line" | jq -r '.data.agent // "unknown"')
-                    local tools
                     tools=$(echo "$line" | jq -r '.data.tools // "N/A"')
+                    model=$(echo "$line" | jq -r '.data.model // "unknown"')
                     
-                    # Check if iteration changed (for mission-orchestrator)
+                    # Check iteration context for mission-orchestrator
                     if [ "$agent" = "mission-orchestrator" ] && [ "$has_orchestration_log" = true ]; then
-                        # Extract iteration from orchestration log near this timestamp
-                        # Match by time proximity (within a minute)
-                        local iteration_number
-                        local timestamp_minute
-                        timestamp_minute="${clean_timestamp%:??Z}"  # 2025-10-11T12:03
+                        local iteration_number timestamp_minute
+                        timestamp_minute="${clean_timestamp%:??Z}"
                         iteration_number=$(grep "$timestamp_minute" "$orchestration_log" 2>/dev/null | head -1 | jq -r '.decision.iteration // 0' 2>/dev/null || echo "0")
                         
                         if [ "$iteration_number" != "0" ] && [ "$iteration_number" != "$current_iteration" ]; then
                             current_iteration=$iteration_number
                             echo "---"
                             echo ""
-                            echo "## 🔄 Iteration $current_iteration"
+                            echo "## Research Cycle $current_iteration"
                             echo ""
                         fi
                     fi
                     
-                    echo "### ⚡ Agent Invoked: $agent"
-                    echo ""
-                    echo "**Time:** $formatted_time  "
-                    echo "**Tools:** $tools"
-                    echo ""
+                    # Narrative based on agent type (natural language, not technical)
+                    case "$agent" in
+                        mission-orchestrator)
+                            echo "### Strategic Planning"
+                            echo ""
+                            echo "*$formatted_time*"
+                            echo ""
+                            ;;
+                        academic-researcher)
+                            echo "### Academic Literature Review"
+                            echo ""
+                            echo "*$formatted_time*"
+                            echo ""
+                            echo "Consulting peer-reviewed academic sources to establish theoretical foundation."
+                            echo ""
+                            ;;
+                        web-researcher)
+                            echo "### Web Research"
+                            echo ""
+                            echo "*$formatted_time*"
+                            echo ""
+                            echo "Gathering information from web sources to complement academic findings."
+                            echo ""
+                            ;;
+                        research-planner)
+                            echo "### Research Planning"
+                            echo ""
+                            echo "*$formatted_time*"
+                            echo ""
+                            echo "Analyzing the research question to develop a structured investigation plan."
+                            echo ""
+                            ;;
+                        synthesis-agent)
+                            echo "### Synthesis and Integration"
+                            echo ""
+                            echo "*$formatted_time*"
+                            echo ""
+                            echo "Integrating findings from multiple sources to develop coherent understanding."
+                            echo ""
+                            ;;
+                        pdf-analyzer)
+                            echo "### Document Analysis"
+                            echo ""
+                            echo "*$formatted_time*"
+                            echo ""
+                            echo "Analyzing provided PDF documents for relevant information and insights."
+                            echo ""
+                            ;;
+                        fact-checker)
+                            echo "### Fact Verification"
+                            echo ""
+                            echo "*$formatted_time*"
+                            echo ""
+                            echo "Cross-referencing claims against multiple sources to ensure accuracy."
+                            echo ""
+                            ;;
+                        market-analyzer|market-sizing-expert)
+                            echo "### Market Analysis"
+                            echo ""
+                            echo "*$formatted_time*"
+                            echo ""
+                            echo "Evaluating market data and trends to inform business insights."
+                            echo ""
+                            ;;
+                        *)
+                            # Generic case for custom agents
+                            local agent_display="${agent//-/ }"
+                            echo "### ${agent_display^} Analysis"
+                            echo ""
+                            echo "*$formatted_time*"
+                            echo ""
+                            ;;
+                    esac
                     
-                    # For mission-orchestrator, show orchestration decision
+                    # Show technical details in collapsed section if model is known
+                    if [ "$model" != "unknown" ]; then
+                        echo "<details><summary>Technical details</summary>"
+                        echo ""
+                        echo "- Model: \`$model\`"
+                        echo "- Tools: \`$tools\`"
+                        echo ""
+                        echo "</details>"
+                        echo ""
+                    fi
+                    
+                    # Check for orchestration decisions for any agent (not just mission-orchestrator)
+                    if [ "$has_orchestration_log" = true ]; then
+                        # Look for agent_invocation decisions in orchestration log that match this agent
+                        # Match on hour:minute only since seconds may differ slightly between logs
+                        local decision_entry timestamp_hhmm
+                        timestamp_hhmm="${clean_timestamp%:??Z}"  # Extract YYYY-MM-DDTHH:MM
+                        
+                        # Try to find the decision entry that led to this agent invocation
+                        # Match on hour:minute window and agent name
+                        decision_entry=$(jq -c "select(.type == \"agent_invocation\" and (.timestamp | startswith(\"$timestamp_hhmm\")) and .decision.decision.agent == \"$agent\")" "$orchestration_log" 2>/dev/null | head -1)
+                        
+                        if [ -n "$decision_entry" ]; then
+                            local rationale alternatives_count
+                            rationale=$(echo "$decision_entry" | jq -r '.decision.decision.rationale // ""' 2>/dev/null)
+                            alternatives_count=$(echo "$decision_entry" | jq '.decision.decision.alternatives_considered // [] | length' 2>/dev/null)
+                            
+                            if [ -n "$rationale" ] && [ "$alternatives_count" -gt 0 ]; then
+                                echo "<details><summary>Research strategy</summary>"
+                                echo ""
+                                echo "**Why this approach:** $rationale"
+                                echo ""
+                                
+                                # Show alternatives considered
+                                local alternatives
+                                alternatives=$(echo "$decision_entry" | jq -r '.decision.decision.alternatives_considered // [] | .[]' 2>/dev/null)
+                                if [ -n "$alternatives" ]; then
+                                    echo "**Alternatives considered:**"
+                                    while IFS= read -r alt; do
+                                        echo "- $alt"
+                                    done <<< "$alternatives"
+                                fi
+                                
+                                echo ""
+                                echo "</details>"
+                                echo ""
+                            fi
+                        fi
+                    fi
+                    
+                    # Show orchestration reasoning for mission-orchestrator (keep existing logic for backward compatibility)
                     if [ "$agent" = "mission-orchestrator" ] && [ "$has_orchestration_log" = true ]; then
-                        # Find matching decision in orchestration log
-                        # Match by time proximity (within a minute)
-                        local decision_entry
-                        local timestamp_minute
-                        timestamp_minute="${clean_timestamp%:??Z}"  # 2025-10-11T12:03
+                        local decision_entry timestamp_minute
+                        timestamp_minute="${clean_timestamp%:??Z}"
                         decision_entry=$(grep "$timestamp_minute" "$orchestration_log" 2>/dev/null | head -1)
                         
                         if [ -n "$decision_entry" ]; then
-                            local decision_type
+                            local decision_type rationale expected_impact
                             decision_type=$(echo "$decision_entry" | jq -r '.decision.type // "decision"' 2>/dev/null)
-                            local rationale
                             rationale=$(echo "$decision_entry" | jq -r '.decision.rationale // ""' 2>/dev/null)
-                            local expected_impact
                             expected_impact=$(echo "$decision_entry" | jq -r '.decision.expected_impact // ""' 2>/dev/null)
                             
                             if [ -n "$rationale" ]; then
                                 echo "> [!NOTE]"
-                                echo "> **🧠 Orchestration Decision: $decision_type**"
+                                echo "> **Orchestration Decision: $decision_type**"
                                 echo ">"
                                 echo "> *Rationale:* $rationale"
-                                
-                                # Show alternatives considered
-                                local alternatives
-                                alternatives=$(echo "$decision_entry" | jq -r '.decision.alternatives_considered // [] | .[]' 2>/dev/null)
-                                if [ -n "$alternatives" ]; then
-                                    echo ">"
-                                    echo "> *Alternatives Considered:*"
-                                    while IFS= read -r alt; do
-                                        echo "> - $alt"
-                                    done <<< "$alternatives"
-                                fi
                                 
                                 # Show expected impact
                                 if [ -n "$expected_impact" ]; then
@@ -179,22 +366,17 @@ export_journal() {
                     ;;
                     
                 agent_result)
-                    local agent
+                    local agent duration
                     agent=$(echo "$line" | jq -r '.data.agent // "unknown"')
-                    local duration
                     duration=$(echo "$line" | jq -r '.data.duration_ms // 0')
-                    local cost
-                    cost=$(echo "$line" | jq -r '.data.cost_usd // 0')
-                    
-                    # Convert duration to seconds
                     local duration_sec=$((duration / 1000))
                     
-                    echo "**Completed:** $formatted_time (${duration_sec}s, \$$(printf "%.3f" "$cost"))"
+                    echo "*Analysis completed in ${duration_sec}s*"
                     echo ""
                     
                     # Extract metadata summary
                     local metadata_keys
-                    metadata_keys=$(echo "$line" | jq -r '.data | keys | .[] | select(. != "agent" and . != "duration_ms" and . != "cost_usd" and . != "reasoning")' 2>/dev/null)
+                    metadata_keys=$(echo "$line" | jq -r '.data | keys | .[] | select(. != "agent" and . != "duration_ms" and . != "cost_usd" and . != "reasoning" and . != "model")' 2>/dev/null)
                     
                     if [ -n "$metadata_keys" ]; then
                         echo "**Summary:**"
@@ -210,45 +392,43 @@ export_journal() {
                         echo ""
                     fi
                     
-                    # Special handling for mission-orchestrator reasoning
-                    if [ "$agent" = "mission-orchestrator" ]; then
-                        local reasoning
-                        reasoning=$(echo "$line" | jq -c '.data.reasoning // empty' 2>/dev/null)
+                    # Display reasoning from any agent that provides it
+                    local reasoning
+                    reasoning=$(echo "$line" | jq -c '.data.reasoning // empty' 2>/dev/null)
+                    
+                    if [ -n "$reasoning" ] && [ "$reasoning" != "null" ]; then
+                        echo "> [!NOTE]"
+                        echo "> **🧠 Research Reasoning**"
+                        echo ">"
                         
-                        if [ -n "$reasoning" ] && [ "$reasoning" != "null" ]; then
-                            echo "> [!NOTE]"
-                            echo "> **🧠 Research Reasoning**"
+                        local synthesis_approach
+                        synthesis_approach=$(echo "$reasoning" | jq -r '.synthesis_approach // empty' 2>/dev/null)
+                        if [ -n "$synthesis_approach" ]; then
+                            echo "> *Approach:* $synthesis_approach"
                             echo ">"
-                            
-                            local synthesis_approach
-                            synthesis_approach=$(echo "$reasoning" | jq -r '.synthesis_approach // empty' 2>/dev/null)
-                            if [ -n "$synthesis_approach" ]; then
-                                echo "> *Approach:* $synthesis_approach"
-                                echo ">"
-                            fi
-                            
-                            local gap_prioritization
-                            gap_prioritization=$(echo "$reasoning" | jq -r '.gap_prioritization // empty' 2>/dev/null)
-                            if [ -n "$gap_prioritization" ]; then
-                                echo "> *Priority:* $gap_prioritization"
-                                echo ">"
-                            fi
-                            
-                            local key_insights_count
-                            key_insights_count=$(echo "$reasoning" | jq '.key_insights // [] | length' 2>/dev/null)
-                            if [ "$key_insights_count" -gt 0 ]; then
-                                echo "> *Key Insights:*"
-                                echo "$reasoning" | jq -r '.key_insights // [] | .[] | "> - \(.)"' 2>/dev/null
-                                echo ">"
-                            fi
-                            
-                            local strategic_decisions_count
-                            strategic_decisions_count=$(echo "$reasoning" | jq '.strategic_decisions // [] | length' 2>/dev/null)
-                            if [ "$strategic_decisions_count" -gt 0 ]; then
-                                echo "> *Strategic Decisions:*"
-                                echo "$reasoning" | jq -r '.strategic_decisions // [] | .[] | "> - \(.)"' 2>/dev/null
-                                echo ""
-                            fi
+                        fi
+                        
+                        local gap_prioritization
+                        gap_prioritization=$(echo "$reasoning" | jq -r '.gap_prioritization // empty' 2>/dev/null)
+                        if [ -n "$gap_prioritization" ]; then
+                            echo "> *Priority:* $gap_prioritization"
+                            echo ">"
+                        fi
+                        
+                        local key_insights_count
+                        key_insights_count=$(echo "$reasoning" | jq '.key_insights // [] | length' 2>/dev/null)
+                        if [ "$key_insights_count" -gt 0 ]; then
+                            echo "> *Key Insights:*"
+                            echo "$reasoning" | jq -r '.key_insights // [] | .[] | "> - \(.)"' 2>/dev/null
+                            echo ">"
+                        fi
+                        
+                        local strategic_decisions_count
+                        strategic_decisions_count=$(echo "$reasoning" | jq '.strategic_decisions // [] | length' 2>/dev/null)
+                        if [ "$strategic_decisions_count" -gt 0 ]; then
+                            echo "> *Strategic Decisions:*"
+                            echo "$reasoning" | jq -r '.strategic_decisions // [] | .[] | "> - \(.)"' 2>/dev/null
+                            echo ""
                         fi
                     fi
                     
@@ -262,8 +442,10 @@ export_journal() {
                             
                             if [ -n "$findings_file" ] && [ -f "$findings_file" ]; then
                                 # Check if this file has any content
-                                local has_content
-                                has_content=$(jq -e '(.entities_discovered // [] | length) > 0 or (.claims // [] | length) > 0' "$findings_file" 2>/dev/null && echo "yes" || echo "no")
+                                local has_content="no"
+                                if jq -e '(.entities_discovered // [] | length) > 0 or (.claims // [] | length) > 0' "$findings_file" >/dev/null 2>&1; then
+                                    has_content="yes"
+                                fi
                                 
                                 if [ "$has_content" = "yes" ]; then
                                     echo "#### 📊 Detailed Findings"
@@ -271,7 +453,7 @@ export_journal() {
                                     
                                     # Extract entities
                                     local entities_count
-                                    entities_count=$(jq '[.entities_discovered // []] | length' "$findings_file" 2>/dev/null || echo "0")
+                                    entities_count=$(jq '(.entities_discovered // []) | length' "$findings_file" 2>/dev/null || echo "0")
                                     if [ "$entities_count" -gt 0 ]; then
                                         echo "**Entities Discovered ($entities_count):**"
                                         echo ""
@@ -281,7 +463,7 @@ export_journal() {
                                     
                                     # Extract claims  
                                     local claims_count
-                                    claims_count=$(jq '[.claims // []] | length' "$findings_file" 2>/dev/null || echo "0")
+                                    claims_count=$(jq '(.claims // []) | length' "$findings_file" 2>/dev/null || echo "0")
                                     if [ "$claims_count" -gt 0 ]; then
                                         echo "**Claims Validated ($claims_count):**"
                                         echo ""
@@ -292,7 +474,7 @@ export_journal() {
                                     # Show top sources with details
                                     local top_sources
                                     top_sources=$(jq -r '(.claims // []) | .[0].sources // []' "$findings_file" 2>/dev/null)
-                                if [ -n "$top_sources" ] && [ "$top_sources" != "[]" ]; then
+                                    if [ -n "$top_sources" ] && [ "$top_sources" != "[]" ]; then
                                     echo "**Key Sources (sample):**"
                                     echo ""
                                     jq -r '
@@ -302,15 +484,15 @@ export_journal() {
                                         "- [\(.title)](\(.url))\n  - Credibility: \((.credibility // "unknown") | format_credibility)")
                                     ' "$findings_file" 2>/dev/null
                                     echo ""
-                                fi
+                                    fi
                                     
                                     # Show gaps if any
                                     local gaps_count
-                                    gaps_count=$(jq '[.gaps_identified // []] | length' "$findings_file" 2>/dev/null || echo "0")
+                                    gaps_count=$(jq '(.gaps_identified // []) | length' "$findings_file" 2>/dev/null || echo "0")
                                     if [ "$gaps_count" -gt 0 ]; then
                                         echo "**Gaps Identified:**"
                                         echo ""
-                                        jq -r '(.gaps_identified // []) | .[] | "- \(.)"' "$findings_file" 2>/dev/null
+                                        jq -r '(.gaps_identified // []) | .[] | "- **\(.question)**\n  - Priority: \(.priority // "N/A"), Reason: \(.reason // "N/A")"' "$findings_file" 2>/dev/null
                                         echo ""
                                     fi
                                 fi
@@ -483,37 +665,29 @@ export_journal() {
                     ;;
                     
                 task_started)
-                    # Add H3 header if we just completed an iteration
                     if [ "$NEED_TASK_SECTION_HEADER" = "true" ]; then
-                        echo "### New Research Tasks"
+                        echo "### Research Tasks"
                         echo ""
                         NEED_TASK_SECTION_HEADER=false
                     fi
                     
-                    local task_id
+                    local task_id agent query
                     task_id=$(echo "$line" | jq -r '.data.task_id // "unknown"')
-                    local agent
                     agent=$(echo "$line" | jq -r '.data.agent // "unknown"')
-                    local query
                     query=$(echo "$line" | jq -r '.data.query // "N/A"')
                     
-                    echo "#### 📋 Task Started: $task_id"
+                    echo "#### $query"
                     echo ""
-                    echo "**Time:** $formatted_time  "
-                    echo "**Agent:** $agent  "
-                    echo "**Query:** $query"
+                    echo "*Initiated $formatted_time*"
                     echo ""
                     ;;
                     
                 task_completed)
-                    local task_id
+                    local task_id duration
                     task_id=$(echo "$line" | jq -r '.data.task_id // "unknown"')
-                    local agent
-                    agent=$(echo "$line" | jq -r '.data.agent // "unknown"')
-                    local duration
                     duration=$(echo "$line" | jq -r '.data.duration // 0')
                     
-                    echo "**✅ Task Completed:** $formatted_time (${duration}s)"
+                    echo "*Completed after ${duration}s*"
                     echo ""
                     
                     # Look for findings file for this specific task
@@ -592,25 +766,20 @@ export_journal() {
                     ;;
                     
                 iteration_complete)
-                    local iteration
+                    local iteration total_entities total_claims
                     iteration=$(echo "$line" | jq -r '.data.iteration // "?"')
-                    local total_entities
                     total_entities=$(echo "$line" | jq -r '.data.stats.total_entities // 0')
-                    local total_claims
                     total_claims=$(echo "$line" | jq -r '.data.stats.total_claims // 0')
                     
-                    echo "## ✅ Iteration $iteration Complete"
+                    echo "## Research Cycle $iteration Complete"
                     echo ""
-                    echo "**Time:** $formatted_time"
+                    echo "*$formatted_time*"
                     echo ""
-                    echo "**Knowledge Graph Status:**"
-                    echo "- Entities: $total_entities"
-                    echo "- Claims: $total_claims"
+                    echo "Current knowledge base: $total_entities entities documented, $total_claims claims validated."
                     echo ""
                     echo "---"
                     echo ""
                     
-                    # Set flag to add H3 header before next task_started
                     NEED_TASK_SECTION_HEADER=true
                     ;;
                     
@@ -642,33 +811,23 @@ export_journal() {
                 mission_completed)
                     local report_file
                     report_file=$(echo "$line" | jq -r '.data.report_file // "mission-report.md"')
-                    local completion_status
-                    completion_status=$(echo "$line" | jq -r '.data.status // "success"')
                     
-                    # Get final KG stats if available
+                    # Get final stats from knowledge graph
                     local kg_file="$session_dir/knowledge-graph.json"
-                    local claims=0
-                    local entities=0
-                    local citations=0
+                    local claims=0 entities=0 citations=0
                     if [ -f "$kg_file" ]; then
                         claims=$(jq -r '.stats.total_claims // 0' "$kg_file" 2>/dev/null || echo "0")
                         entities=$(jq -r '.stats.total_entities // 0' "$kg_file" 2>/dev/null || echo "0")
                         citations=$(jq -r '.stats.total_citations // 0' "$kg_file" 2>/dev/null || echo "0")
                     fi
                     
-                    echo "## 🎉 Mission Complete"
+                    echo "## Research Investigation Complete"
                     echo ""
-                    echo "**Time:** $formatted_time"
-                    echo "**Status:** $completion_status"
+                    echo "*$formatted_time*"
                     echo ""
-                    echo "Research mission completed successfully! Final knowledge graph contains:"
-                    echo "- **Entities:** $entities"
-                    echo "- **Claims:** $claims"
-                    echo "- **Citations:** $citations"
+                    echo "Mission concluded successfully. Final knowledge base contains $entities documented entities, $claims validated claims, and $citations source citations."
                     echo ""
-                    echo "📄 **[View Final Report]($report_file)**"
-                    echo ""
-                    echo "📖 **[View Research Journal](research-journal.md)** (This document)"
+                    echo "**Final Report:** [$report_file]($report_file)"
                     echo ""
                     echo "---"
                     echo ""
@@ -692,9 +851,7 @@ export_journal() {
                             ;;
                         WebFetch)
                             if [ -n "$input_summary" ]; then
-                                local domain
-                                domain=$(echo "$input_summary" | sed -E 's|^https?://([^/]+).*|\1|')
-                                echo "  📄 **Fetching**: $domain"
+                                echo "  📄 **Fetching**: <$input_summary>"
                                 echo ""
                             fi
                             ;;
@@ -707,7 +864,9 @@ export_journal() {
                         Write|Edit|MultiEdit)
                             # Only show research-facing file writes
                             if [[ "$input_summary" =~ findings-|mission-report|research-|synthesis- ]]; then
-                                echo "  💾 **Saving**: $input_summary"
+                                local relative_path
+                                relative_path=$(make_path_relative "$input_summary" "$session_dir")
+                                echo "  💾 **Saving**: $relative_path"
                                 echo ""
                             fi
                             ;;
@@ -741,7 +900,140 @@ export_journal() {
             esac
         done < "$events_file"
         
+        # Add comprehensive research summary at the end
         echo ""
+        echo "---"
+        echo ""
+        echo "## Research Summary"
+        echo ""
+        
+        # Load metrics from various sources
+        local dashboard_metrics="$session_dir/dashboard-metrics.json"
+        local kg_file="$session_dir/knowledge-graph.json"
+        
+        # Calculate duration
+        local start_time end_time duration_minutes
+        start_time=$(jq -r '.created_at // ""' "$session_file" 2>/dev/null)
+        end_time=$(jq -r '.completed_at // ""' "$session_file" 2>/dev/null)
+        
+        if [ -n "$start_time" ] && [ -n "$end_time" ] && [ "$end_time" != "" ]; then
+            local start_epoch end_epoch duration_seconds
+            start_epoch=$(TZ=UTC date -j -f "%Y-%m-%dT%H:%M:%SZ" "$start_time" "+%s" 2>/dev/null || echo "0")
+            end_epoch=$(TZ=UTC date -j -f "%Y-%m-%dT%H:%M:%SZ" "$end_time" "+%s" 2>/dev/null || echo "0")
+            duration_seconds=$((end_epoch - start_epoch))
+            duration_minutes=$((duration_seconds / 60))
+        fi
+        
+        # Get iteration count and entity/claim counts
+        local iterations entities claims sources
+        if [ -f "$dashboard_metrics" ]; then
+            iterations=$(jq -r '.iteration // 0' "$dashboard_metrics" 2>/dev/null)
+            entities=$(jq -r '.knowledge.entities // 0' "$dashboard_metrics" 2>/dev/null)
+            claims=$(jq -r '.knowledge.claims // 0' "$dashboard_metrics" 2>/dev/null)
+        elif [ -f "$kg_file" ]; then
+            entities=$(jq -r '.stats.total_entities // 0' "$kg_file" 2>/dev/null)
+            claims=$(jq -r '.stats.total_claims // 0' "$kg_file" 2>/dev/null)
+        fi
+        
+        # Count unique sources from findings files
+        sources=0
+        local findings_files
+        findings_files=$(find "$session_dir/raw" -name "findings-*.json" -type f 2>/dev/null)
+        if [ -n "$findings_files" ]; then
+            sources=$(echo "$findings_files" | xargs jq -r '.claims[]?.sources[]?.url // empty' 2>/dev/null | sort -u | wc -l | tr -d ' ')
+        fi
+        
+        # Build narrative summary
+        if [ -n "$duration_minutes" ] && [ "$duration_minutes" -gt 0 ]; then
+            echo "This investigation was completed in **$duration_minutes minutes**"
+            if [ "$iterations" -gt 0 ]; then
+                echo -n " across **$iterations research iterations**"
+            fi
+            if [ "$sources" -gt 0 ]; then
+                echo -n ", consulting **$sources authoritative sources**"
+            fi
+            if [ "$claims" -gt 0 ]; then
+                echo -n " to validate **$claims factual claims**"
+            fi
+            if [ "$entities" -gt 0 ]; then
+                echo -n " about $entities key concepts"
+            fi
+            echo "."
+        else
+            # Fallback if timing not available
+            if [ "$claims" -gt 0 ] && [ "$sources" -gt 0 ]; then
+                echo "This investigation validated **$claims factual claims** from **$sources authoritative sources**"
+                if [ "$entities" -gt 0 ]; then
+                    echo " about $entities key concepts"
+                fi
+                echo "."
+            fi
+        fi
+        
+        echo ""
+        
+        # Quality assessment from findings
+        if [ -n "$findings_files" ]; then
+            local avg_confidence
+            avg_confidence=$(echo "$findings_files" | xargs jq -r '[.claims[]?.confidence // 0] | add / length * 100 | floor' 2>/dev/null | head -1)
+            
+            if [ -n "$avg_confidence" ] && [ "$avg_confidence" -gt 0 ]; then
+                echo "**Quality Assessment:**"
+                echo "- Average confidence: ${avg_confidence}%"
+                
+                # Check evidence quality
+                local high_quality_count
+                high_quality_count=$(echo "$findings_files" | xargs jq -r '[.claims[]? | select(.evidence_quality == "high")] | length' 2>/dev/null | head -1)
+                if [ -n "$high_quality_count" ] && [ "$high_quality_count" -gt 0 ]; then
+                    echo "- Evidence quality: High"
+                fi
+                
+                # List source types
+                local has_official has_academic
+                has_official=$(echo "$findings_files" | xargs jq -r '.claims[]?.sources[]? | select(.credibility == "official") | .credibility' 2>/dev/null | head -1)
+                has_academic=$(echo "$findings_files" | xargs jq -r '.claims[]?.sources[]? | select(.credibility == "academic") | .credibility' 2>/dev/null | head -1)
+                
+                if [ -n "$has_official" ] || [ -n "$has_academic" ]; then
+                    echo -n "- Sources: "
+                    local source_desc=""
+                    [ -n "$has_official" ] && source_desc="Official standards bodies"
+                    [ -n "$has_academic" ] && [ -n "$source_desc" ] && source_desc="$source_desc, academic institutions" || source_desc="${source_desc}Academic institutions"
+                    echo "$source_desc"
+                fi
+                
+                echo ""
+            fi
+        fi
+        
+        # System health warnings (only if there were issues)
+        if [ -f "$dashboard_metrics" ]; then
+            local errors warnings
+            errors=$(jq -r '.system_health.errors // 0' "$dashboard_metrics" 2>/dev/null)
+            warnings=$(jq -r '.system_health.warnings // 0' "$dashboard_metrics" 2>/dev/null)
+            
+            if [ "$errors" -gt 0 ] || [ "$warnings" -gt 0 ]; then
+                echo "> [!WARNING]"
+                echo "> **Research Notes:** This investigation encountered $errors error(s) and $warnings warning(s)."
+                
+                # Show observations if available
+                local observations
+                observations=$(jq -r '.system_health.observations[]? // empty' "$dashboard_metrics" 2>/dev/null)
+                if [ -n "$observations" ]; then
+                    echo ">"
+                    while IFS= read -r obs; do
+                        echo "> - $obs"
+                    done <<< "$observations"
+                fi
+                echo ""
+            fi
+        fi
+        
+        # Link to final report
+        if [ -f "$session_dir/mission-report.md" ]; then
+            echo "**Final Report:** [mission-report.md](mission-report.md)"
+            echo ""
+        fi
+        
         echo "---"
         echo ""
         echo "*Generated by CConductor Research Journal Exporter*"
