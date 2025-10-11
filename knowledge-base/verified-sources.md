@@ -18,13 +18,24 @@
   - Google Scholar: https://scholar.google.com/
   - Semantic Scholar: https://www.semanticscholar.org/
   - PubMed: https://pubmed.ncbi.nlm.nih.gov/ (biomedical)
-- **Digital Libraries**:
+  - PubMed Central: https://www.ncbi.nlm.nih.gov/pmc/ (open access full texts)
+- **Subscription Databases**:
+  - ScienceDirect: https://www.sciencedirect.com/ (Elsevier journals)
+  - Web of Science: https://www.webofscience.com/ (citation database)
+  - Scopus: https://www.scopus.com/ (Elsevier citation database)
+  - JSTOR: https://www.jstor.com/ (archive of academic journals)
+  - ProQuest: https://www.proquest.com/ (dissertations & journals)
+- **Field-Specific Libraries**:
   - IEEE Xplore: https://ieeexplore.ieee.org/ (engineering)
   - ACM Digital Library: https://dl.acm.org/ (computer science)
-- **Journals**:
+- **Top-Tier Journals**:
   - Nature: https://www.nature.com/
   - Science: https://www.science.org/
   - Cell: https://www.cell.com/
+- **Open Access Publishers**:
+  - PLOS: https://plos.org/ (Public Library of Science)
+  - Frontiers: https://www.frontiersin.org/ (peer-reviewed, variable quality)
+  - MDPI: https://www.mdpi.com/ (open access, variable quality)
 
 ### Business & Market Research
 - **Company/Funding Data**:
