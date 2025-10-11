@@ -861,10 +861,16 @@ export_journal() {
         if [ -n "$findings_files" ]; then
             # Count totals
             local total_entities total_claims total_sources total_gaps
-            total_entities=$(echo "$findings_files" | xargs jq -r '[.entities_discovered // [] | .[]] | length' 2>/dev/null | awk '{sum+=$1} END {print sum}')
-            total_claims=$(echo "$findings_files" | xargs jq -r '[.claims // [] | .[]] | length' 2>/dev/null | awk '{sum+=$1} END {print sum}')
+            total_entities=$(echo "$findings_files" | xargs jq -r '[.entities_discovered // [] | .[]] | length' 2>/dev/null | awk '{sum+=$1} END {print sum+0}')
+            total_claims=$(echo "$findings_files" | xargs jq -r '[.claims // [] | .[]] | length' 2>/dev/null | awk '{sum+=$1} END {print sum+0}')
             total_sources=$(echo "$findings_files" | xargs jq -r '.claims[]?.sources[]?.url // empty' 2>/dev/null | sort -u | wc -l | tr -d ' ')
-            total_gaps=$(echo "$findings_files" | xargs jq -r '[.gaps_identified // [] | .[]] | length' 2>/dev/null | awk '{sum+=$1} END {print sum}')
+            total_gaps=$(echo "$findings_files" | xargs jq -r '[.gaps_identified // [] | .[]] | length' 2>/dev/null | awk '{sum+=$1} END {print sum+0}')
+            
+            # Ensure variables are numeric (default to 0 if empty)
+            total_entities=${total_entities:-0}
+            total_claims=${total_claims:-0}
+            total_sources=${total_sources:-0}
+            total_gaps=${total_gaps:-0}
             
             echo "Throughout this investigation, the research agents discovered **${total_entities} entities**, validated **${total_claims} claims**, consulted **${total_sources} authoritative sources**, and identified **${total_gaps} knowledge gaps** requiring further investigation."
             echo ""
