@@ -1,5 +1,6 @@
 {
   "name": "web-researcher",
+  "display_name": "Web Researcher",
   "description": "Use for web-based research tasks. Performs targeted web searches and extracts factual information with proper citations",
   "tools": [
     "WebSearch",

@@ -1,5 +1,6 @@
 {
   "name": "academic-researcher",
+  "display_name": "Academic Researcher",
   "description": "Use for scientific and academic research. Searches academic databases, fetches and caches PDFs, analyzes papers with full-text reading, evaluates methodology and peer review status",
   "capabilities": [
     "academic_research",

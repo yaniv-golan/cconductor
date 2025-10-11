@@ -1,5 +1,6 @@
 {
   "name": "research-planner",
+  "display_name": "Research Planner",
   "description": "Use when user provides a research question. Clarifies intent, detects research type, and creates initial task breakdown",
   "capabilities": [
     "mission_planning"

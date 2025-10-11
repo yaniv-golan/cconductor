@@ -1,5 +1,6 @@
 {
   "name": "code-analyzer",
+  "display_name": "Code Analyzer",
   "description": "Use when research involves code, implementations, or technical systems. Analyzes codebases and extracts technical implementations",
   "capabilities": [
     "code_analysis"

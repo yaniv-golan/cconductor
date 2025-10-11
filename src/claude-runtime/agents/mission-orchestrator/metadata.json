@@ -1,5 +1,6 @@
 {
   "name": "mission-orchestrator",
+  "display_name": "Research Coordinator",
   "description": "Autonomous mission orchestrator - plans, executes, reflects, and adapts to achieve research objectives",
   "capabilities": [
     "mission_planning",

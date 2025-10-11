@@ -1,5 +1,6 @@
 {
   "name": "synthesis-agent",
+  "display_name": "Synthesis Coordinator",
   "description": "Use after research phase completes. Consolidates knowledge graph into a coherent, well-structured final report",
   "tools": [
     "Read"

@@ -1,5 +1,6 @@
 {
   "name": "market-analyzer",
+  "display_name": "Market Analyzer",
   "description": "Use for market research and sizing. Analyzes TAM/SAM/SOM, market trends, adoption curves, and market dynamics",
   "tools": [
     "WebSearch",
