@@ -1,11 +1,11 @@
 # CConductor - Technical Reference for LLMs
 
-Version: 0.1.1 (Beta Release, October 2025)
+Version: 0.2.0 (October 2025)
 Repository: https://github.com/yaniv-golan/cconductor
 
 ## System Overview
 
-CConductor is a multi-agent AI research system built in Bash that orchestrates Claude-powered agents to conduct comprehensive research. It integrates academic databases (arXiv, Semantic Scholar, PubMed), web sources, local PDFs, and generates cited research reports with quality scoring.
+CConductor is a multi-agent AI research system built in Bash that uses mission-based orchestration to conduct comprehensive research. It features autonomous agent selection, budget tracking, and interactive session management. Integrates academic databases (arXiv, Semantic Scholar, PubMed), web sources, local PDFs, and generates cited research reports with quality scoring.
 
 ### Core Architecture
 
@@ -13,16 +13,23 @@ CConductor is a multi-agent AI research system built in Bash that orchestrates C
 - **Agent Runtime**: Claude Code CLI (required, not just API key)
 - **Dependencies**: jq (JSON), curl (HTTP), bc (calculations)
 - **Data Format**: JSON state management, Markdown output
-- **Agents**: 10+ specialized agents (research-coordinator, web-researcher, academic-researcher, pdf-analyzer, market-analyzer, synthesis-agent, fact-checker)
+- **Orchestration**: Mission-based with autonomous agent selection
+- **Agents**: 10+ specialized agents with capability-based discovery
 
-### Key Capabilities
+### Key Capabilities (v0.2.0)
 
-- Adaptive research with dynamic task generation
+- Mission-based orchestration with four mission types
+- Autonomous agent selection based on capabilities
+- Interactive mode with dialog-based TUI
+- Budget tracking (USD, time, invocations)
+- Decision logging and orchestration observability
+- Verbose mode with real-time progress updates
+- Agent reasoning visibility in dashboard
 - Multi-source integration (academic, web, PDFs, code)
 - Automatic citation tracking and bibliography generation
 - Quality scoring (0-100) with detailed metrics
 - Configurable security profiles
-- Session continuity and resume functionality
+- Session resume with refinement guidance
 - Content-addressed PDF caching
 - Custom knowledge base extension
 
@@ -66,36 +73,47 @@ chmod +x cconductor
 
 ## Basic Usage
 
-### Commands
+### Commands (v0.2.0)
 
 ```bash
+# Interactive mode (recommended for new users)
+./cconductor
+
 # Start research
 ./cconductor "research question"
 
+# Start research with specific mission type
+./cconductor "research question" --mission academic-research
+./cconductor "research question" --mission market-research
+./cconductor "research question" --mission competitive-analysis
+./cconductor "research question" --mission technical-analysis
+
 # Research from markdown file
-./cconductor --question-file query.md
+./cconductor --question-file query.md --mission academic-research
 
 # Research with local files (PDFs, markdown, text)
-./cconductor "question" --input-dir /path/to/files/
+./cconductor "question" --input-dir /path/to/files/ --mission market-research
 
-# View latest results
-./cconductor latest
-
-# List sessions
-./cconductor sessions
-
-# Resume research to improve quality
-./cconductor resume session_ID
+# Session management
+./cconductor sessions list              # List all sessions
+./cconductor sessions latest            # View latest results
+./cconductor sessions viewer mission_ID # View research dashboard
+./cconductor sessions resume mission_ID # Resume research
+./cconductor sessions resume mission_ID --refine "Focus on 2024 papers"
 
 # Check status
 ./cconductor status
 
-# View dashboard
-./cconductor view-dashboard [session_ID]
-
 # Export research journal
-bash src/utils/export-journal.sh research-sessions/session_ID
+bash src/utils/export-journal.sh research-sessions/mission_ID
 ```
+
+### Mission Types
+
+- **academic-research**: Academic literature review with peer-reviewed sources
+- **market-research**: Market sizing and competitive landscape analysis
+- **competitive-analysis**: Competitive analysis with market positioning
+- **technical-analysis**: Technical architecture and implementation analysis
 
 ### Typical Research Duration
 
@@ -221,15 +239,17 @@ Every research session receives quality score (0-100):
 
 ### Improving Quality
 
-**Most effective**: Resume research
+**Most effective**: Resume research with refinement
 ```bash
-./cconductor resume session_ID
+./cconductor sessions resume mission_ID
+./cconductor sessions resume mission_ID --refine "Focus on recent papers from 2024"
 # Typically adds +10 to +15 points
 ```
 
 **Other methods**:
+- Use specific mission types (--mission academic-research for scholarly work)
 - More specific questions with time frames and keywords
-- Provide known PDF sources
+- Provide known PDF sources via --input-dir
 - Let research complete fully (don't interrupt)
 - Use academic keywords: "peer-reviewed", "published research"
 
@@ -321,7 +341,7 @@ kill -INT <PID>    # Graceful interrupt
 kill -9 <PID>      # Force if needed
 
 # Resume
-./cconductor resume session_ID
+./cconductor sessions resume mission_ID
 ```
 
 ### Session Locked Error
@@ -346,18 +366,18 @@ find research-sessions -name "*.lock" -exec rm -rf {} +
 ### Low Quality Score
 
 **Quick fixes**:
-1. Resume research: `./cconductor resume session_ID`
-2. More specific question with dates/keywords
-3. Provide PDF sources
-4. Configure for scientific mode if academic
+1. Resume research: `./cconductor sessions resume mission_ID --refine "guidance"`
+2. Use specific mission type: `--mission academic-research`
+3. More specific question with dates/keywords
+4. Provide PDF sources via `--input-dir`
 
 ### Missing Citations
 
 **Solutions**:
-1. Resume research
-2. Use keywords: "peer-reviewed studies on X"
-3. Configure academic mode in config
-4. Provide academic PDFs
+1. Resume research with refinement
+2. Use academic mission: `--mission academic-research`
+3. Use keywords: "peer-reviewed studies on X"
+4. Provide academic PDFs via `--input-dir`
 
 ### API Key Issues
 
@@ -393,13 +413,13 @@ ls -la config/cconductor-config.json
 
 ```bash
 # View latest
-./cconductor latest
+./cconductor sessions latest
 
 # List all sessions
-./cconductor sessions
+./cconductor sessions list
 
-# Find report
-ls research-sessions/*/research-report.md
+# Find report (v0.2.0 uses mission_ prefix)
+ls research-sessions/mission_*/research-report.md
 
 # Check .latest marker
 cat research-sessions/.latest
@@ -445,21 +465,23 @@ Repository includes pre-commit hook that runs ShellCheck automatically.
 6. Commit with clear messages (feat/fix/docs/refactor/test/chore)
 7. Push and create PR
 
-## Session Structure
+## Session Structure (v0.2.0)
 
 ```
-research-sessions/session_TIMESTAMP/
+research-sessions/mission_TIMESTAMP/
 ├── research-report.md           # Main output
-├── metadata.json                # Session metadata
+├── session.json                 # Session metadata with mission info
+├── budget.json                  # Budget tracking (USD, time, invocations)
+├── orchestration-log.jsonl      # Orchestrator decisions and reasoning
+├── artifacts/                   # Content-addressed artifacts
+│   ├── manifest.json
+│   └── [SHA256-hash files]
 ├── raw/                         # Initial research data
-│   ├── research-question.txt
-│   ├── research-plan.json
-│   └── agent-outputs/
+│   └── agent-findings/
 ├── intermediate/                # Processing artifacts
-│   ├── knowledge-graph.json
-│   ├── task-queue.json
-│   └── validation.json
+│   └── knowledge-graph.json
 ├── final/                       # Final processed data
+│   └── mission-report.md
 ├── events.jsonl                 # Event log for dashboard
 ├── dashboard-metrics.json       # Real-time metrics
 └── .claude/                     # Per-session Claude config
@@ -476,16 +498,16 @@ SESSION_DIR=$(./src/utils/path-resolver.sh resolve session_dir)
 KNOWLEDGE_DIR=$(./src/utils/path-resolver.sh resolve knowledge_base_custom_dir)
 ```
 
-**Cleaning old sessions**:
+**Cleaning old sessions** (v0.2.0 uses mission_ prefix):
 ```bash
 # Remove sessions older than 30 days
-find research-sessions -name "session_*" -type d -mtime +30 -exec rm -rf {} +
+find research-sessions -name "mission_*" -type d -mtime +30 -exec rm -rf {} +
 ```
 
 **Archiving**:
 ```bash
-tar -czf research-archive-$(date +%Y%m).tar.gz research-sessions/session_old*
-rm -rf research-sessions/session_old*
+tar -czf research-archive-$(date +%Y%m).tar.gz research-sessions/mission_old*
+rm -rf research-sessions/mission_old*
 ```
 
 ## Agent Invocation
@@ -525,13 +547,15 @@ CCONDUCTOR_SESSION_DIR     # Override session directory
 - File locking prevents race conditions
 - Atomic writes for state files
 
-## Known Limitations (v0.1.1)
+## Known Limitations (v0.2.0)
 
 - Single machine execution (not distributed)
 - File-based state (potential bottleneck at scale)
 - Requires Claude Code CLI (cannot use API key alone)
 - Input directory: flat only (no recursive discovery)
 - Supported input files: PDF, MD, TXT only
+- Parallel agent invocation not yet implemented
+- Session resumption improvements ongoing
 
 ## Related Documentation (Raw URLs for Direct LLM Access)
 
@@ -556,6 +580,12 @@ CCONDUCTOR_SESSION_DIR     # Override session directory
 - Custom Knowledge: https://raw.githubusercontent.com/yaniv-golan/cconductor/main/docs/CUSTOM_KNOWLEDGE.md
 - PDF Research: https://raw.githubusercontent.com/yaniv-golan/cconductor/main/docs/PDF_RESEARCH_GUIDE.md
 - Session Resume: https://raw.githubusercontent.com/yaniv-golan/cconductor/main/docs/SESSION_RESUME_GUIDE.md
+
+**Mission System (v0.2.0)**:
+- Mission Quick Start: https://raw.githubusercontent.com/yaniv-golan/cconductor/main/docs/MISSION_QUICKSTART.md
+- Agent Metadata Schema: https://raw.githubusercontent.com/yaniv-golan/cconductor/main/docs/AGENT_METADATA_SCHEMA.md
+- Events Contract: https://raw.githubusercontent.com/yaniv-golan/cconductor/main/docs/EVENTS_CONTRACT.md
+- Extending Capabilities: https://raw.githubusercontent.com/yaniv-golan/cconductor/main/docs/EXTENDING_CAPABILITIES.md
 
 **Technical**:
 - Knowledge System: https://raw.githubusercontent.com/yaniv-golan/cconductor/main/docs/KNOWLEDGE_SYSTEM_TECHNICAL.md

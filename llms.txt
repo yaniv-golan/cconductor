@@ -1,21 +1,23 @@
 # CConductor
 
-> CConductor is a multi-agent AI research system that conducts comprehensive, adaptive research on any topic. Powered by Claude Code and specialized AI agents, it orchestrates research across academic papers, web sources, PDFs, and code repositories—delivering well-cited, validated research reports with quality scoring.
+> CConductor is a multi-agent AI research system that conducts comprehensive, adaptive research on any topic. Powered by Claude Code and specialized AI agents, it uses mission-based orchestration to dynamically plan and execute research across academic papers, web sources, PDFs, and code repositories—delivering well-cited, validated research reports with quality scoring.
 
 **Key Capabilities:**
 
-- **Multi-Agent Architecture**: Specialized agents (research planner, web researcher, academic researcher, PDF analyzer, market analyzer, synthesis agent, fact checker) work in parallel
-- **Adaptive Research**: Dynamic task generation that identifies gaps, resolves contradictions, and explores leads until high confidence is achieved
+- **Mission-Based Orchestration**: Autonomous research coordination with four mission types (academic-research, market-research, competitive-analysis, technical-analysis)
+- **Multi-Agent Architecture**: Specialized agents dynamically selected based on research needs and capabilities
+- **Interactive Mode**: Dialog-based TUI for guided research setup and session management
+- **Adaptive Research**: Dynamic agent selection, budget tracking, and strategy adaptation based on findings
 - **Quality Validation**: Automatic confidence scoring (0-100), citation tracking, contradiction detection, and gap coverage analysis
 - **Multi-Source Integration**: Academic databases (arXiv, Semantic Scholar, PubMed), web content, local PDFs, markdown files, and code repositories
-- **Extensible Knowledge**: Custom domain expertise via markdown files without code modification
+- **Enhanced Observability**: Real-time progress updates, agent reasoning visibility, and comprehensive decision logging
 - **Cross-Platform**: Works on macOS, Linux, and Windows (WSL/Git Bash)
 
 **Important Notes:**
 
 - CConductor requires Claude Code CLI (`npm install -g @anthropic-ai/claude-code`) - it cannot run standalone with just an API key
 - Built with Bash 4.0+, uses jq for JSON processing, curl for HTTP requests, and bc for accurate calculations
-- Version 0.1.1 (Beta Release) - Production-ready with all core infrastructure operational
+- Version 0.2.0 (October 2025) - Mission-based orchestration with breaking changes from v0.1.x
 - Research sessions typically take 5-40 minutes depending on complexity and depth
 
 ## Getting Started
@@ -48,7 +50,14 @@
 - [Troubleshooting Guide](https://raw.githubusercontent.com/yaniv-golan/cconductor/main/docs/TROUBLESHOOTING.md): Common problems and solutions
 - [CLI Help](https://raw.githubusercontent.com/yaniv-golan/cconductor/main/docs/CLI_HELP.txt): Complete command-line reference
 
-## Optional
+## Advanced Topics
+
+- [Mission Quick Start](https://raw.githubusercontent.com/yaniv-golan/cconductor/main/docs/MISSION_QUICKSTART.md): Mission-based orchestration guide and mission types
+- [Agent Metadata Schema](https://raw.githubusercontent.com/yaniv-golan/cconductor/main/docs/AGENT_METADATA_SCHEMA.md): Agent capabilities, input/output types, and metadata structure
+- [Events Contract](https://raw.githubusercontent.com/yaniv-golan/cconductor/main/docs/EVENTS_CONTRACT.md): Event schema and backward compatibility guarantees
+- [Extending Capabilities](https://raw.githubusercontent.com/yaniv-golan/cconductor/main/docs/EXTENDING_CAPABILITIES.md): Adding custom capabilities and agents
+
+## Technical Reference
 
 - [Knowledge System Technical Deep Dive](https://raw.githubusercontent.com/yaniv-golan/cconductor/main/docs/KNOWLEDGE_SYSTEM_TECHNICAL.md): Complete architecture, step-by-step impact traces, and debugging guides
 - [Agent Tools Configuration](https://raw.githubusercontent.com/yaniv-golan/cconductor/main/docs/AGENT_TOOLS_CONFIG.md): Tool restrictions and security boundaries for agents
