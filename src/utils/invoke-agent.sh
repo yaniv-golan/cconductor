@@ -169,8 +169,6 @@ extract_agent_metadata() {
             if [ -f "$session_dir/knowledge-graph.json" ]; then
                 local kg_entities
                 kg_entities=$(jq '.entities | length' "$session_dir/knowledge-graph.json" 2>/dev/null || echo "0")
-                local kg_claims
-                kg_claims=$(jq '.claims | length' "$session_dir/knowledge-graph.json" 2>/dev/null || echo "0")
                 
                 # If we found findings but KG is still low, log warning
                 if [ "$entities" -gt 5 ] && [ "$kg_entities" -lt 5 ]; then
@@ -247,8 +245,6 @@ extract_agent_metadata() {
             if [ -f "$session_dir/knowledge-graph.json" ]; then
                 local kg_entities
                 kg_entities=$(jq '.entities | length' "$session_dir/knowledge-graph.json" 2>/dev/null || echo "0")
-                local kg_claims
-                kg_claims=$(jq '.claims | length' "$session_dir/knowledge-graph.json" 2>/dev/null || echo "0")
                 
                 # If we found findings but KG is still low, log warning
                 if [ "$entities" -gt 5 ] && [ "$kg_entities" -lt 5 ]; then
@@ -429,6 +425,11 @@ invoke_agent_v2() {
         echo "    Consider adding tool restrictions in agent-tools.json" >&2
     fi
 
+    # Extract model from agent definition (written by mission-orchestration.sh from agent metadata)
+    # This supports per-agent models - each agent can specify its own model in metadata.json
+    local agent_model
+    agent_model=$(jq -r '.model // "sonnet"' "$agent_file" 2>/dev/null || echo "sonnet")
+    
     # Build Claude command with validated flags
     # VALIDATED:
     # - --output-format json: test-01
@@ -438,7 +439,7 @@ invoke_agent_v2() {
     local claude_cmd=(
         claude
         --print
-        --model sonnet
+        --model "$agent_model"  # Now uses per-agent model
         --output-format json          # VALIDATED: test-01
         --append-system-prompt "$system_prompt"  # VALIDATED: test-append-system-prompt.sh
     )
@@ -509,9 +510,9 @@ invoke_agent_v2() {
     # macOS-compatible milliseconds (date +%s gives seconds, multiply by 1000)
     start_time=$(($(date +%s) * 1000))
 
-    # Phase 2: Log agent invocation
+    # Phase 2: Log agent invocation with model
     if [ -n "${session_dir:-}" ] && command -v log_agent_invocation &>/dev/null; then
-        log_agent_invocation "$session_dir" "$agent_name" "${allowed_tools:-all}" "" || true
+        log_agent_invocation "$session_dir" "$agent_name" "${allowed_tools:-all}" "" "$agent_model" || true
     fi
 
     # Start event tailer for real-time tool display
@@ -597,9 +598,9 @@ invoke_agent_v2() {
         # Compact JSON to single line to avoid quoting issues
         metadata=$(echo "$metadata" | jq -c '.' 2>/dev/null || echo "{}")
         
-        # Log agent result with metrics and metadata
+        # Log agent result with metrics, metadata, and model
         if [ -n "${session_dir:-}" ] && command -v log_agent_result &>/dev/null; then
-            log_agent_result "$session_dir" "$agent_name" "$cost" "$duration" "$metadata" || true
+            log_agent_result "$session_dir" "$agent_name" "$cost" "$duration" "$metadata" "$agent_model" || true
         fi
         
         # Integrate findings into knowledge graph for research agents
@@ -625,6 +626,7 @@ invoke_agent_v2() {
         if is_verbose_enabled 2>/dev/null && [ "$(type -t verbose_agent_reasoning)" = "function" ]; then
             # Try to extract reasoning from agent output (JSON format)
             local reasoning_json
+            # shellcheck disable=SC2016
             reasoning_json=$(jq -r '.result' "$output_file" 2>/dev/null | \
                             sed -n '/^```json$/,/^```$/p' | sed '1d;$d' | \
                             jq -c '.reasoning // empty' 2>/dev/null || echo "")

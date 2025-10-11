@@ -168,8 +168,9 @@ log_agent_invocation() {
     local agent_name="$2"
     local allowed_tools="$3"
     local session_id="${4:-}"
+    local model="${5:-unknown}"  # New parameter
     log_event "$session_dir" "agent_invocation" \
-        "{\"agent\": \"$agent_name\", \"tools\": \"$allowed_tools\", \"session_id\": \"$session_id\"}"
+        "{\"agent\": \"$agent_name\", \"tools\": \"$allowed_tools\", \"session_id\": \"$session_id\", \"model\": \"$model\"}"
 }
 
 log_agent_result() {
@@ -178,18 +179,21 @@ log_agent_result() {
     local cost="${3:-0}"
     local duration="${4:-0}"
     local metadata="${5}"  # Optional JSON metadata object
+    local model="${6:-unknown}"  # New parameter
+    
     # Set default if empty
     if [ -z "$metadata" ]; then
         metadata="{}"
     fi
     
-    # Merge base data with optional metadata
+    # Build base data with model
     local base_data
     base_data=$(jq -n \
         --arg agent "$agent_name" \
+        --arg model "$model" \
         --argjson cost "$cost" \
         --argjson duration "$duration" \
-        '{agent: $agent, cost_usd: $cost, duration_ms: $duration}')
+        '{agent: $agent, model: $model, cost_usd: $cost, duration_ms: $duration}')
     
     # Merge with metadata if provided
     local final_data
