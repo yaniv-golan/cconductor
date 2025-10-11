@@ -79,6 +79,45 @@ In this case, synthesize the report directly from `raw_agent_findings` arrays. E
 
 - Structure: Executive Summary → Main Findings → Detailed Sections
 
+## Output File Requirements
+
+You MUST create files in specific locations:
+
+### Required Files:
+
+1. **Mission Report**: `mission-report.md` (in session root)
+   - Full research report with all sections
+   - Use domain-specific structure above
+   - Include all citations with URLs
+   
+2. **Knowledge Graph Update**: `knowledge-graph.json` (in session root)
+   - Read existing KG from session root
+   - Add all entities, claims, relationships, citations
+   - Update confidence scores and coverage stats
+   - Write back to same location
+
+### Additional Outputs (optional):
+
+- `artifacts/<agent>-output.md` - Agent-specific summaries
+- `raw/<name>.json` - Intermediate data files
+- `final/mission-report.md` - Copy for archival
+
+### File Path Examples:
+
+```bash
+# Write mission report (REQUIRED):
+Write to: ./mission-report.md
+
+# Update knowledge graph (REQUIRED):
+Read from: ./knowledge-graph.json
+Write to: ./knowledge-graph.json
+
+# Additional artifacts (optional):
+Write to: ./artifacts/synthesis-summary.md
+```
+
+**IMPORTANT**: All required files must be written to session root (`.`), not subdirectories, unless specified otherwise.
+
 <output_format>
 
 **You must output a well-formatted MARKDOWN document**, not JSON. Use this structure:

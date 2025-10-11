@@ -85,21 +85,7 @@ You receive:
 
 ## Agent Handoff Protocol
 
-When passing work between agents:
-```json
-{
-  "handoff": {
-    "from_agent": "agent-name",
-    "to_agent": "agent-name",
-    "task": "Specific task description",
-    "context": "Why this agent? What should they know?",
-    "input_artifacts": ["path/to/file.json"],
-    "expected_output": "What you need from this agent"
-  }
-}
-```
-
-Store handoff in knowledge graph as relationship with metadata.
+When passing work between agents, you can use the `handoff` action type. This allows you to explicitly pass context and artifacts from one agent to another.
 
 ## Budget Management
 
@@ -110,25 +96,6 @@ Track and respect constraints:
 - Iterations performed
 
 Early exit if budget exceeded with useful partial results.
-
-## Decision Logging Format
-
-For each major decision:
-```json
-{
-  "decision": {
-    "type": "agent_selection|strategy_change|early_exit|re_invocation",
-    "timestamp": "ISO8601",
-    "iteration": N,
-    "rationale": "Why this decision?",
-    "alternatives_considered": ["option1", "option2"],
-    "expected_impact": "What will this achieve?",
-    "artifacts": ["relevant files"]
-  }
-}
-```
-
-Append to `session_dir/orchestration-log.jsonl`.
 
 ## Example: Autonomous Market Sizing Mission
 
@@ -181,7 +148,62 @@ Key: You decided the flow, identified the critical issue, and adapted (early com
 
 ## Output Requirements
 
-Generate mission report with:
+### For Each Orchestration Turn
+
+**CRITICAL**: You must return a structured JSON decision for the orchestration system to execute. Your output must be a single JSON object with one of these action types:
+
+#### 1. Invoke an Agent
+```json
+{
+  "action": "invoke",
+  "agent": "agent-name",
+  "task": "Clear, specific task description",
+  "context": "Why this agent? What should they know?",
+  "input_artifacts": ["path/to/file.json"],
+  "rationale": "Why this decision makes sense"
+}
+```
+
+#### 2. Re-invoke an Agent (for refinement)
+```json
+{
+  "action": "reinvoke",
+  "agent": "agent-name",
+  "reason": "What was incomplete or needs refinement",
+  "refinements": "Specific guidance for improvement",
+  "rationale": "Why re-invocation is needed"
+}
+```
+
+#### 3. Handoff Between Agents
+```json
+{
+  "action": "handoff",
+  "from_agent": "previous-agent",
+  "to_agent": "next-agent",
+  "task": "Task for receiving agent",
+  "input_artifacts": ["outputs from previous agent"],
+  "rationale": "Why this handoff"
+}
+```
+
+#### 4. Signal Mission Complete (Early Exit)
+```json
+{
+  "action": "early_exit",
+  "reason": "All success criteria met",
+  "confidence": 0.95,
+  "evidence": "Brief summary of what was achieved"
+}
+```
+
+**If you return ANYTHING other than valid JSON with one of these actions, the orchestration will fail.**
+
+You may include additional analysis in your response BEFORE the JSON, but the JSON decision must be present and parseable.
+
+### Final Mission Report
+
+When mission is complete, generate mission report with:
 
 1. Executive summary (objective, outcome, recommendation)
 2. Orchestration summary (agents used, sequence, key decisions)
