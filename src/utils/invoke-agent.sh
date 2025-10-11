@@ -12,10 +12,19 @@ set -euo pipefail
 
 # Source event logger for Phase 2 metrics
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 # shellcheck disable=SC1091
 source "$SCRIPT_DIR/event-logger.sh" 2>/dev/null || true
 # shellcheck disable=SC1091
 source "$SCRIPT_DIR/error-logger.sh" 2>/dev/null || true
+# shellcheck disable=SC1091
+source "$SCRIPT_DIR/verbose.sh" 2>/dev/null || true
+
+# Source knowledge graph utilities for integration
+# shellcheck disable=SC1091
+if [ -f "$PROJECT_ROOT/knowledge-graph.sh" ]; then
+    source "$PROJECT_ROOT/knowledge-graph.sh"
+fi
 
 # Check if Claude CLI is available
 check_claude_cli() {
@@ -76,6 +85,17 @@ extract_agent_metadata() {
     
     # FALLBACK: Legacy extraction for agents not yet updated to self-describing format
     case "$agent_name" in
+        mission-orchestrator)
+            # Extract reasoning from orchestrator output
+            if [ -n "$result_json" ]; then
+                local reasoning
+                reasoning=$(echo "$result_json" | jq -c '.reasoning // empty' 2>/dev/null)
+                if [ -n "$reasoning" ] && [ "$reasoning" != "null" ]; then
+                    metadata=$(jq -n --argjson reasoning "$reasoning" '{reasoning: $reasoning}')
+                fi
+            fi
+            ;;
+            
         research-planner)
             # Count tasks generated from planner output
             local tasks_count=0
@@ -92,30 +112,70 @@ extract_agent_metadata() {
             ;;
             
         academic-researcher)
-            # Count entities and claims from findings files
-            # Count searches from events.jsonl
+            # Count entities and claims from findings files with three-tier fallback
             local entities=0
             local claims=0
             local searches=0
             
-            # Extract findings files from agent output (result_json already extracted above)
+            # TIER 1: Try agent's self-reported manifest
             local findings_files
             findings_files=$(echo "$result_json" | jq -r '.findings_files[]? // empty' 2>/dev/null || echo "")
             
             if [ -n "$findings_files" ]; then
+                # Agent provided manifest - use it
                 while IFS= read -r findings_file; do
                     if [ -f "$session_dir/$findings_file" ]; then
-                        # Count entities_discovered
                         local file_entities
                         file_entities=$(jq '[.entities_discovered[]? // empty] | length' "$session_dir/$findings_file" 2>/dev/null || echo "0")
                         entities=$((entities + file_entities))
                         
-                        # Count claims
                         local file_claims
                         file_claims=$(jq '[.claims[]? // empty] | length' "$session_dir/$findings_file" 2>/dev/null || echo "0")
                         claims=$((claims + file_claims))
                     fi
                 done <<< "$findings_files"
+            else
+                # TIER 2: Filesystem fallback - look for findings files
+                # Check raw/ directory (standard location)
+                if [ -d "$session_dir/raw" ]; then
+                    for findings_file in "$session_dir/raw"/findings-*.json "$session_dir/raw"/*findings*.json; do
+                        [ -f "$findings_file" ] || continue
+                        local file_entities
+                        file_entities=$(jq '[.entities_discovered[]? // empty] | length' "$findings_file" 2>/dev/null || echo "0")
+                        entities=$((entities + file_entities))
+                        
+                        local file_claims
+                        file_claims=$(jq '[.claims[]? // empty] | length' "$findings_file" 2>/dev/null || echo "0")
+                        claims=$((claims + file_claims))
+                    done
+                fi
+                
+                # Also check session root for findings files (multiple patterns)
+                # Patterns: *-findings.json, *findings*.json (catches all variations)
+                for findings_file in "$session_dir"/*-findings.json "$session_dir"/*findings*.json; do
+                    [ -f "$findings_file" ] || continue
+                    local file_entities
+                    file_entities=$(jq '[.entities_discovered[]? // empty] | length' "$findings_file" 2>/dev/null || echo "0")
+                    entities=$((entities + file_entities))
+                    
+                    local file_claims
+                    file_claims=$(jq '[.claims[]? // empty] | length' "$findings_file" 2>/dev/null || echo "0")
+                    claims=$((claims + file_claims))
+                done
+            fi
+            
+            # TIER 3: KG validation - verify findings were actually integrated
+            # (This provides observability - we can log if numbers don't match)
+            if [ -f "$session_dir/knowledge-graph.json" ]; then
+                local kg_entities
+                kg_entities=$(jq '.entities | length' "$session_dir/knowledge-graph.json" 2>/dev/null || echo "0")
+                local kg_claims
+                kg_claims=$(jq '.claims | length' "$session_dir/knowledge-graph.json" 2>/dev/null || echo "0")
+                
+                # If we found findings but KG is still low, log warning
+                if [ "$entities" -gt 5 ] && [ "$kg_entities" -lt 5 ]; then
+                    echo "  ⚠ Warning: Found $entities entities in findings but only $kg_entities in KG - integration may have failed" >&2
+                fi
             fi
             
             # Count WebSearch tool uses from events.jsonl
@@ -130,30 +190,70 @@ extract_agent_metadata() {
             ;;
             
         web-researcher)
-            # Count entities and claims from findings files
-            # Count searches from events.jsonl
+            # Count entities and claims from findings files with three-tier fallback
             local entities=0
             local claims=0
             local searches=0
             
-            # Extract findings files from agent output (result_json already extracted above)
+            # TIER 1: Try agent's self-reported manifest
             local findings_files
             findings_files=$(echo "$result_json" | jq -r '.findings_files[]? // empty' 2>/dev/null || echo "")
             
             if [ -n "$findings_files" ]; then
+                # Agent provided manifest - use it
                 while IFS= read -r findings_file; do
                     if [ -f "$session_dir/$findings_file" ]; then
-                        # Count entities_discovered
                         local file_entities
                         file_entities=$(jq '[.entities_discovered[]? // empty] | length' "$session_dir/$findings_file" 2>/dev/null || echo "0")
                         entities=$((entities + file_entities))
                         
-                        # Count claims
                         local file_claims
                         file_claims=$(jq '[.claims[]? // empty] | length' "$session_dir/$findings_file" 2>/dev/null || echo "0")
                         claims=$((claims + file_claims))
                     fi
                 done <<< "$findings_files"
+            else
+                # TIER 2: Filesystem fallback - look for findings files
+                # Check raw/ directory (standard location)
+                if [ -d "$session_dir/raw" ]; then
+                    for findings_file in "$session_dir/raw"/findings-*.json "$session_dir/raw"/*findings*.json; do
+                        [ -f "$findings_file" ] || continue
+                        local file_entities
+                        file_entities=$(jq '[.entities_discovered[]? // empty] | length' "$findings_file" 2>/dev/null || echo "0")
+                        entities=$((entities + file_entities))
+                        
+                        local file_claims
+                        file_claims=$(jq '[.claims[]? // empty] | length' "$findings_file" 2>/dev/null || echo "0")
+                        claims=$((claims + file_claims))
+                    done
+                fi
+                
+                # Also check session root for findings files (multiple patterns)
+                # Patterns: *-findings.json, *findings*.json (catches all variations like water_composition_research_findings.json)
+                for findings_file in "$session_dir"/*-findings.json "$session_dir"/*findings*.json; do
+                    [ -f "$findings_file" ] || continue
+                    local file_entities
+                    file_entities=$(jq '[.entities_discovered[]? // empty] | length' "$findings_file" 2>/dev/null || echo "0")
+                    entities=$((entities + file_entities))
+                    
+                    local file_claims
+                    file_claims=$(jq '[.claims[]? // empty] | length' "$findings_file" 2>/dev/null || echo "0")
+                    claims=$((claims + file_claims))
+                done
+            fi
+            
+            # TIER 3: KG validation - verify findings were actually integrated
+            # (This provides observability - we can log if numbers don't match)
+            if [ -f "$session_dir/knowledge-graph.json" ]; then
+                local kg_entities
+                kg_entities=$(jq '.entities | length' "$session_dir/knowledge-graph.json" 2>/dev/null || echo "0")
+                local kg_claims
+                kg_claims=$(jq '.claims | length' "$session_dir/knowledge-graph.json" 2>/dev/null || echo "0")
+                
+                # If we found findings but KG is still low, log warning
+                if [ "$entities" -gt 5 ] && [ "$kg_entities" -lt 5 ]; then
+                    echo "  ⚠ Warning: Found $entities entities in findings but only $kg_entities in KG - integration may have failed" >&2
+                fi
             fi
             
             # Count WebSearch tool uses from events.jsonl
@@ -367,16 +467,42 @@ invoke_agent_v2() {
     # Create output directory
     mkdir -p "$(dirname "$output_file")"
 
-    # Export session directory and agent name for hooks to use
+    # Export session directory, agent name, and verbose mode for hooks to use
     export CCONDUCTOR_SESSION_DIR="$session_dir"
     export CCONDUCTOR_AGENT_NAME="$agent_name"
+    export CCONDUCTOR_VERBOSE="${CCONDUCTOR_VERBOSE:-0}"
 
     # Change to session directory for context
     local original_dir
     original_dir=$(pwd)
     cd "$session_dir" || return 1
 
-    echo "⚡ Invoking $agent_name with systemPrompt (tools: ${allowed_tools:-all})" >&2
+    # Show friendly message in verbose mode, technical in normal/debug mode
+    if is_verbose_enabled 2>/dev/null && [ "$(type -t verbose_agent_start)" = "function" ]; then
+        # Verbose mode: user-friendly
+        # Special message for orchestrator
+        if [[ "$agent_name" == "mission-orchestrator" ]]; then
+            if [ "$(type -t verbose)" = "function" ]; then
+                verbose "🎯 Coordinating next research step..."
+            else
+                echo "🎯 Coordinating next research step..." >&2
+            fi
+        else
+            # Regular agents: extract first line of input file as task description
+            local task_desc=""
+            if [ -f "$input_file" ]; then
+                task_desc=$(head -n 1 "$input_file" 2>/dev/null || echo "")
+            fi
+            verbose_agent_start "$agent_name" "$task_desc"
+        fi
+    else
+        # Normal/debug mode: technical
+        if [[ "$agent_name" == "mission-orchestrator" ]]; then
+            echo "→ Invoking mission orchestrator..." >&2
+        else
+            echo "⚡ Invoking $agent_name with systemPrompt (tools: ${allowed_tools:-all})" >&2
+        fi
+    fi
 
     # Phase 2: Track start time for metrics
     local start_time
@@ -388,6 +514,20 @@ invoke_agent_v2() {
         log_agent_invocation "$session_dir" "$agent_name" "${allowed_tools:-all}" "" || true
     fi
 
+    # Start event tailer for real-time tool display
+    # In verbose mode: shows detailed messages
+    # In non-verbose mode: shows progress dots
+    # Tailer prevents duplicates by checking if already running
+    local tailer_started=0
+    local invoke_agent_dir
+    invoke_agent_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    
+    # shellcheck disable=SC1091
+    if source "$invoke_agent_dir/event-tailer.sh" 2>/dev/null; then
+        start_event_tailer "$session_dir" || true
+        tailer_started=1
+    fi
+
     # Read task from input file
     local task
     task=$(cat "$input_file")
@@ -396,9 +536,23 @@ invoke_agent_v2() {
     # Output goes to $output_file in JSON format
     # Note: timeout command not available on macOS by default, so we run without it
     # The claude CLI has its own timeout mechanisms
-    if echo "$task" | "${claude_cmd[@]}" > "$output_file" 2>&1; then
+    # Note: Don't redirect stderr (2>&1) - let hooks write to terminal in verbose mode
+    if echo "$task" | "${claude_cmd[@]}" > "$output_file"; then
         # Return to original directory
         cd "$original_dir" || true
+
+        # Check if output file is empty (synthesis-agent may produce artifacts without JSON)
+        if [ ! -s "$output_file" ]; then
+            # For synthesis-agent, check if expected artifacts were created
+            if [[ "$agent_name" == "synthesis-agent" ]] && [ -f "$session_dir/mission-report.md" ]; then
+                # Create minimal success JSON for validation
+                echo '{"type":"result","subtype":"success","result":"Mission report generated at mission-report.md"}' > "$output_file"
+            else
+                # Empty output is a failure for other agents
+                echo "✗ Agent $agent_name produced no output" >&2
+                return 1
+            fi
+        fi
 
         # Validate JSON output
         # VALIDATED: diagnostic-json-structure.sh confirmed .result path
@@ -448,23 +602,97 @@ invoke_agent_v2() {
             log_agent_result "$session_dir" "$agent_name" "$cost" "$duration" "$metadata" || true
         fi
         
+        # Integrate findings into knowledge graph for research agents
+        if [[ "$agent_name" =~ ^(web-researcher|academic-researcher|pdf-analyzer|code-analyzer|fact-checker|market-analyzer)$ ]]; then
+            if [ -n "${session_dir:-}" ] && command -v kg_integrate_agent_output &>/dev/null; then
+                local agent_output_file="$session_dir/agent-output-${agent_name}.json"
+                if [ -f "$agent_output_file" ]; then
+                    if kg_integrate_agent_output "$session_dir" "$agent_output_file"; then
+                        echo "  ✓ Integrated findings into knowledge graph" >&2
+                    else
+                        echo "  ⚠ Warning: Could not integrate findings (knowledge graph may be incomplete)" >&2
+                    fi
+                fi
+            fi
+        fi
+        
         # Regenerate dashboard metrics after each agent completes (for live updates)
         if [ -n "${session_dir:-}" ] && command -v dashboard_update_metrics &>/dev/null; then
             dashboard_update_metrics "$session_dir" || true
         fi
 
-        echo "✓ Agent $agent_name completed successfully" >&2
+        # Show agent reasoning in verbose mode
+        if is_verbose_enabled 2>/dev/null && [ "$(type -t verbose_agent_reasoning)" = "function" ]; then
+            # Try to extract reasoning from agent output (JSON format)
+            local reasoning_json
+            reasoning_json=$(jq -r '.result' "$output_file" 2>/dev/null | \
+                            sed -n '/^```json$/,/^```$/p' | sed '1d;$d' | \
+                            jq -c '.reasoning // empty' 2>/dev/null || echo "")
+            
+            if [ -n "$reasoning_json" ] && [ "$reasoning_json" != "null" ]; then
+                verbose_agent_reasoning "$reasoning_json"
+            fi
+        fi
+
+        # Get friendly name for completion message
+        local friendly_name=""
+        if [[ -n "${session_dir:-}" ]]; then
+            local metadata_file="$session_dir/.claude/agents/${agent_name}/metadata.json"
+            if [[ -f "$metadata_file" ]]; then
+                friendly_name=$(jq -r '.display_name // empty' "$metadata_file" 2>/dev/null)
+            fi
+        fi
+        if [[ -z "$friendly_name" ]]; then
+            friendly_name="${agent_name//-/ }"
+        fi
+        
+        # In non-verbose mode, add newline before message (to end progress dots line)
+        if [[ "${CCONDUCTOR_VERBOSE:-0}" != "1" ]]; then
+            echo "" >&2
+        fi
+        echo "✓ $friendly_name completed successfully" >&2
+        
+        # Stop event tailer if it was started
+        if [[ "$tailer_started" == "1" ]] && declare -F stop_event_tailer >/dev/null 2>&1; then
+            # Give tailer time to catch up with final events
+            sleep 1
+            stop_event_tailer "$session_dir" || true
+        fi
+        
         return 0
     else
         local exit_code=$?
 
         # Return to original directory
         cd "$original_dir" || true
+        
+        # Stop event tailer if it was started
+        if [[ "$tailer_started" == "1" ]] && declare -F stop_event_tailer >/dev/null 2>&1; then
+            sleep 0.5
+            stop_event_tailer "$session_dir" || true
+        fi
 
+        # Get friendly name for error message
+        local friendly_name=""
+        if [[ -n "${session_dir:-}" ]]; then
+            local metadata_file="$session_dir/.claude/agents/${agent_name}/metadata.json"
+            if [[ -f "$metadata_file" ]]; then
+                friendly_name=$(jq -r '.display_name // empty' "$metadata_file" 2>/dev/null)
+            fi
+        fi
+        if [[ -z "$friendly_name" ]]; then
+            friendly_name="${agent_name//-/ }"
+        fi
+        
+        # In non-verbose mode, add newline before message (to end progress dots line)
+        if [[ "${CCONDUCTOR_VERBOSE:-0}" != "1" ]]; then
+            echo "" >&2
+        fi
+        
         if [ $exit_code -eq 124 ]; then
-            echo "✗ Agent $agent_name timed out after ${timeout}s" >&2
+            echo "✗ $friendly_name timed out after ${timeout}s" >&2
         else
-            echo "✗ Agent $agent_name failed with code $exit_code" >&2
+            echo "✗ $friendly_name failed with code $exit_code" >&2
         fi
         return 1
     fi
