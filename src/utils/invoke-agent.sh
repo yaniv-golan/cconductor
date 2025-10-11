@@ -264,24 +264,17 @@ extract_agent_metadata() {
             ;;
             
         synthesis-agent)
-            # Extract synthesis statistics from agent's output
+            # Extract synthesis statistics from artifact files (v0.2.1 artifact pattern)
             local claims=0
             local gaps=0
             
-            # Extract from synthesis agent's output (result_json already extracted above)
-            if [ -n "$result_json" ]; then
-                # Try to count claims synthesized
-                claims=$(echo "$result_json" | jq '[.claims_synthesized[]? // empty] | length' 2>/dev/null || echo "0")
-                # If that doesn't work, try counting from synthesis object
-                if [ "$claims" = "0" ]; then
-                    claims=$(echo "$result_json" | jq '[.synthesis.claims[]? // empty] | length' 2>/dev/null || echo "0")
-                fi
-                
-                # Count gaps found
-                gaps=$(echo "$result_json" | jq '[.gaps_identified[]? // empty] | length' 2>/dev/null || echo "0")
-                if [ "$gaps" = "0" ]; then
-                    gaps=$(echo "$result_json" | jq '[.knowledge_gaps[]? // empty] | length' 2>/dev/null || echo "0")
-                fi
+            # Read from artifact files
+            if [ -f "$session_dir/artifacts/synthesis-agent/completion.json" ]; then
+                claims=$(jq -r '.claims_analyzed // 0' "$session_dir/artifacts/synthesis-agent/completion.json" 2>/dev/null || echo "0")
+            fi
+            
+            if [ -f "$session_dir/artifacts/synthesis-agent/coverage.json" ]; then
+                gaps=$(jq -r '.aspects_not_covered // 0' "$session_dir/artifacts/synthesis-agent/coverage.json" 2>/dev/null || echo "0")
             fi
             
             metadata=$(jq -n \

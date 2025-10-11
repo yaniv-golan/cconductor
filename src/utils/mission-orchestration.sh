@@ -26,6 +26,8 @@ source "$UTILS_DIR/budget-tracker.sh"
 # shellcheck disable=SC1091
 source "$UTILS_DIR/artifact-manager.sh"
 # shellcheck disable=SC1091
+source "$UTILS_DIR/kg-artifact-processor.sh"
+# shellcheck disable=SC1091
 source "$UTILS_DIR/json-parser.sh"
 # shellcheck disable=SC1091
 source "$PROJECT_ROOT/src/knowledge-graph.sh"
@@ -374,8 +376,34 @@ EOF
     fi
 }
 
+# Process knowledge graph artifacts for agent
+# Processes artifacts if agent created a .kg.lock file
+process_agent_kg_artifacts() {
+    local session_dir="$1"
+    local agent="$2"
+    
+    # Check if agent created a KG lock file
+    local lock_file="$session_dir/${agent}.kg.lock"
+    if [ ! -f "$lock_file" ]; then
+        # No artifacts to process
+        return 0
+    fi
+    
+    verbose "Processing knowledge graph artifacts from $agent..."
+    
+    # Process artifacts using kg-artifact-processor
+    if process_kg_artifacts "$session_dir" "$agent"; then
+        verbose "  ✓ Successfully processed $agent artifacts"
+        return 0
+    else
+        echo "  ⚠️  Warning: Failed to process $agent artifacts" >&2
+        echo "  See ${agent}.retry-instructions.json for details" >&2
+        return 1
+    fi
+}
+
 # Validate synthesis agent outputs
-# Ensures mission-report.md and knowledge-graph.json are created
+# Ensures mission-report.md is created
 validate_synthesis_outputs() {
     local session_dir="$1"
     local agent="$2"
@@ -386,30 +414,10 @@ validate_synthesis_outputs() {
     fi
     
     local mission_report="$session_dir/mission-report.md"
-    local kg_file="$session_dir/knowledge-graph.json"
-    local kg_updated=false
     
     # Check mission report exists
     if [ ! -f "$mission_report" ]; then
         echo "  ⚠️  Warning: synthesis-agent did not create mission-report.md" >&2
-        return 1
-    fi
-    
-    # Check KG was updated (last_updated timestamp changed or entities added)
-    local entities_count
-    entities_count=$(jq -r '.entities | length' "$kg_file" 2>/dev/null || echo "0")
-    
-    if [ "$entities_count" -gt 0 ]; then
-        kg_updated=true
-    fi
-    
-    # Also check if file was modified after session creation
-    if [ "$kg_file" -nt "$session_dir/session.json" ]; then
-        kg_updated=true
-    fi
-    
-    if [ "$kg_updated" = false ]; then
-        echo "  ⚠️  Warning: synthesis-agent may not have updated knowledge-graph.json" >&2
         return 1
     fi
     
@@ -538,6 +546,9 @@ process_orchestrator_decisions() {
             
             # Actually invoke the agent - handle failures gracefully
             if _invoke_delegated_agent "$session_dir" "$agent_name" "$task" "$context" "$input_artifacts"; then
+                # Process KG artifacts if agent produced any
+                process_agent_kg_artifacts "$session_dir" "$agent_name"
+                
                 # Validate synthesis outputs if applicable
                 if validate_synthesis_outputs "$session_dir" "$agent_name"; then
                     log_decision "$session_dir" "agent_invocation_success" "$orchestrator_output"
@@ -565,6 +576,9 @@ process_orchestrator_decisions() {
             
             # Re-invoke with refinements - handle failures
             if _invoke_delegated_agent "$session_dir" "$agent_name" "$refinements" "$reason" "[]"; then
+                # Process KG artifacts if agent produced any
+                process_agent_kg_artifacts "$session_dir" "$agent_name"
+                
                 log_decision "$session_dir" "agent_reinvocation_success" "$orchestrator_output"
             else
                 echo "  ⚠ Agent $agent_name re-invocation failed" >&2
@@ -590,6 +604,9 @@ process_orchestrator_decisions() {
             
             # Invoke receiving agent - handle failures
             if _invoke_delegated_agent "$session_dir" "$to_agent" "$task" "$rationale" "$input_artifacts"; then
+                # Process KG artifacts if agent produced any
+                process_agent_kg_artifacts "$session_dir" "$to_agent"
+                
                 log_decision "$session_dir" "handoff_success" "$orchestrator_output"
             else
                 echo "  ⚠ Handoff failed - agent $to_agent did not complete" >&2

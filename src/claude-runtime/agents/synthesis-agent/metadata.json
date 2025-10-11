@@ -5,5 +5,12 @@
   "tools": [
     "Read"
   ],
-  "model": "claude-sonnet-4-5"
+  "model": "claude-sonnet-4-5",
+  "produces_kg_artifacts": true,
+  "artifact_files_required": [
+    "completion.json",
+    "confidence-scores.json",
+    "coverage.json",
+    "key-findings.json"
+  ]
 }

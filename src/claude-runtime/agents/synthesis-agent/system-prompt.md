@@ -90,11 +90,68 @@ You MUST create files in specific locations:
    - Use domain-specific structure above
    - Include all citations with URLs
    
-2. **Knowledge Graph Update**: `knowledge-graph.json` (in session root)
-   - Read existing KG from session root
-   - Add all entities, claims, relationships, citations
-   - Update confidence scores and coverage stats
-   - Write back to same location
+2. **Synthesis Metadata** (in artifacts directory)
+   - Create directory: `artifacts/synthesis-agent/`
+   - Write multiple small JSON files with synthesis metadata
+   - Create signal file: `synthesis-agent.kg.lock` (empty file in session root)
+   
+   Required artifact files:
+   - `completion.json` - Basic completion metadata
+   - `confidence-scores.json` - Overall and per-category confidence
+   - `coverage.json` - Aspects covered/not covered
+   - `key-findings.json` - Supported/unsupported/contradicted claims
+   
+   Example structure:
+   ```json
+   // artifacts/synthesis-agent/completion.json
+   {
+     "synthesized_at": "2025-10-11T19:30:00Z",
+     "synthesis_iteration": 3,
+     "report_generated": true,
+     "report_path": "./mission-report.md"
+   }
+   
+   // artifacts/synthesis-agent/confidence-scores.json
+   {
+     "overall": 0.68,
+     "by_category": {
+       "general_bonding_prevalence": 0.85,
+       "mitochondrial_dysfunction": 0.90
+     }
+   }
+   
+   // artifacts/synthesis-agent/coverage.json
+   {
+     "aspects_identified": 11,
+     "aspects_well_covered": 6,
+     "aspects_partially_covered": 2,
+     "aspects_not_covered": 3,
+     "well_covered": ["General bonding prevalence", "Mitochondrial dysfunction"],
+     "not_covered": ["ADHD bonding quantification", "Autoimmune bonding quantification"]
+   }
+   
+   // artifacts/synthesis-agent/key-findings.json
+   {
+     "well_supported_claims": [
+       {"claim": "General bonding prevalence 15-20%", "confidence": 0.85},
+       {"claim": "Mitochondrial dysfunction in ADHD", "confidence": 0.85}
+     ],
+     "unsupported_claims": [
+       {"claim": "ADHD bonding 30-40%", "reason": "NO PEER-REVIEWED DATA"}
+     ],
+     "contradicted_claims": [
+       {"claim": "Autism bonding 35-45%", "reason": "CONTRADICTED by evidence"}
+     ]
+   }
+   ```
+   
+   After writing all artifact files, create the signal file:
+   ```bash
+   Write to: ./synthesis-agent.kg.lock
+   Content: (empty file)
+   ```
+   
+   The orchestrator will automatically detect and process your artifacts.
 
 ### Additional Outputs (optional):
 
@@ -108,15 +165,20 @@ You MUST create files in specific locations:
 # Write mission report (REQUIRED):
 Write to: ./mission-report.md
 
-# Update knowledge graph (REQUIRED):
-Read from: ./knowledge-graph.json
-Write to: ./knowledge-graph.json
+# Write synthesis artifacts (REQUIRED):
+Write to: ./artifacts/synthesis-agent/completion.json
+Write to: ./artifacts/synthesis-agent/confidence-scores.json
+Write to: ./artifacts/synthesis-agent/coverage.json
+Write to: ./artifacts/synthesis-agent/key-findings.json
+
+# Create signal file (REQUIRED):
+Write to: ./synthesis-agent.kg.lock
 
 # Additional artifacts (optional):
-Write to: ./artifacts/synthesis-summary.md
+Write to: ./artifacts/synthesis-agent/summary.md
 ```
 
-**IMPORTANT**: All required files must be written to session root (`.`), not subdirectories, unless specified otherwise.
+**IMPORTANT**: The mission report goes in session root, but synthesis metadata goes in `artifacts/synthesis-agent/`. The lockfile signals completion.
 
 <output_format>
 
