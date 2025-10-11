@@ -118,18 +118,34 @@ initialize_session() {
     # Copy hooks for tool tracking
     copy_hooks "$session_dir"
     
-    # Create session metadata
+    # Capture Claude Code CLI version for journal metadata
+    local claude_version="unknown"
+    if command -v claude &>/dev/null; then
+        # Extract version string, handle various formats
+        claude_version=$(claude --version 2>&1 | head -1 | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' || echo "unknown")
+        # If no version number found, use the full first line
+        if [ "$claude_version" = "unknown" ]; then
+            claude_version=$(claude --version 2>&1 | head -1 | tr -d '\n' || echo "unknown")
+        fi
+    fi
+    
+    # Create session metadata with runtime information
     jq -n \
         --arg objective "$mission_objective" \
         --arg timestamp "$(date -u +"%Y-%m-%dT%H:%M:%SZ")" \
         --arg session_type "mission" \
         --arg version "0.2.0" \
+        --arg claude_ver "$claude_version" \
         '{
             session_type: $session_type,
             objective: $objective,
             research_question: $objective,
             created_at: $timestamp,
-            version: $version
+            version: $version,
+            runtime: {
+                cconductor_version: $version,
+                claude_code_version: $claude_ver
+            }
         }' > "$session_dir/session.json"
     
     echo "$session_dir"
