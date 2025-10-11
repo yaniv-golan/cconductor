@@ -194,7 +194,7 @@ export_journal() {
                     
                     # Extract metadata summary
                     local metadata_keys
-                    metadata_keys=$(echo "$line" | jq -r '.data | keys | .[] | select(. != "agent" and . != "duration_ms" and . != "cost_usd")' 2>/dev/null)
+                    metadata_keys=$(echo "$line" | jq -r '.data | keys | .[] | select(. != "agent" and . != "duration_ms" and . != "cost_usd" and . != "reasoning")' 2>/dev/null)
                     
                     if [ -n "$metadata_keys" ]; then
                         echo "**Summary:**"
@@ -208,6 +208,48 @@ export_journal() {
                             echo "- **$formatted_key:** $value"
                         done <<< "$metadata_keys"
                         echo ""
+                    fi
+                    
+                    # Special handling for mission-orchestrator reasoning
+                    if [ "$agent" = "mission-orchestrator" ]; then
+                        local reasoning
+                        reasoning=$(echo "$line" | jq -c '.data.reasoning // empty' 2>/dev/null)
+                        
+                        if [ -n "$reasoning" ] && [ "$reasoning" != "null" ]; then
+                            echo "> [!NOTE]"
+                            echo "> **🧠 Research Reasoning**"
+                            echo ">"
+                            
+                            local synthesis_approach
+                            synthesis_approach=$(echo "$reasoning" | jq -r '.synthesis_approach // empty' 2>/dev/null)
+                            if [ -n "$synthesis_approach" ]; then
+                                echo "> *Approach:* $synthesis_approach"
+                                echo ">"
+                            fi
+                            
+                            local gap_prioritization
+                            gap_prioritization=$(echo "$reasoning" | jq -r '.gap_prioritization // empty' 2>/dev/null)
+                            if [ -n "$gap_prioritization" ]; then
+                                echo "> *Priority:* $gap_prioritization"
+                                echo ">"
+                            fi
+                            
+                            local key_insights_count
+                            key_insights_count=$(echo "$reasoning" | jq '.key_insights // [] | length' 2>/dev/null)
+                            if [ "$key_insights_count" -gt 0 ]; then
+                                echo "> *Key Insights:*"
+                                echo "$reasoning" | jq -r '.key_insights // [] | .[] | "> - \(.)"' 2>/dev/null
+                                echo ">"
+                            fi
+                            
+                            local strategic_decisions_count
+                            strategic_decisions_count=$(echo "$reasoning" | jq '.strategic_decisions // [] | length' 2>/dev/null)
+                            if [ "$strategic_decisions_count" -gt 0 ]; then
+                                echo "> *Strategic Decisions:*"
+                                echo "$reasoning" | jq -r '.strategic_decisions // [] | .[] | "> - \(.)"' 2>/dev/null
+                                echo ""
+                            fi
+                        fi
                     fi
                     
                     # Find and include detailed findings
@@ -640,11 +682,51 @@ export_journal() {
                     local input_summary
                     input_summary=$(echo "$line" | jq -r '.data.input_summary // ""')
                     
-                    # Only show interesting tool starts (searches, etc)
-                    if [[ "$tool" == "WebSearch" ]] && [ -n "$input_summary" ]; then
-                        echo "  🔍 **Web Search**: \"$input_summary\""
-                        echo ""
-                    fi
+                    # Show user-facing tool activity (hide internal operations)
+                    case "$tool" in
+                        WebSearch)
+                            if [ -n "$input_summary" ]; then
+                                echo "  🔍 **Web Search**: \"$input_summary\""
+                                echo ""
+                            fi
+                            ;;
+                        WebFetch)
+                            if [ -n "$input_summary" ]; then
+                                local domain
+                                domain=$(echo "$input_summary" | sed -E 's|^https?://([^/]+).*|\1|')
+                                echo "  📄 **Fetching**: $domain"
+                                echo ""
+                            fi
+                            ;;
+                        TodoWrite)
+                            if [ -n "$input_summary" ] && [[ "$input_summary" != "tasks" ]]; then
+                                echo "  📋 **Planning**: $input_summary"
+                                echo ""
+                            fi
+                            ;;
+                        Write|Edit|MultiEdit)
+                            # Only show research-facing file writes
+                            if [[ "$input_summary" =~ findings-|mission-report|research-|synthesis- ]]; then
+                                echo "  💾 **Saving**: $input_summary"
+                                echo ""
+                            fi
+                            ;;
+                        Grep)
+                            if [ -n "$input_summary" ]; then
+                                echo "  🔎 **Searching for**: $input_summary"
+                                echo ""
+                            fi
+                            ;;
+                        Glob)
+                            if [ -n "$input_summary" ]; then
+                                echo "  📁 **Finding files**: $input_summary"
+                                echo ""
+                            fi
+                            ;;
+                        Bash|TodoRead)
+                            # Hide internal operations
+                            ;;
+                    esac
                     ;;
                     
                 tool_use_complete)
