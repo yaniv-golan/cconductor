@@ -102,6 +102,15 @@ initialize_session() {
     
     local session_dir="$PROJECT_ROOT/research-sessions/mission_${timestamp}"
     
+    # Prevent collision: if directory already exists (rare race condition), add suffix
+    if [[ -d "$session_dir" ]]; then
+        session_dir="${session_dir}_${RANDOM}"
+        # Double-check the suffixed name doesn't exist either
+        while [[ -d "$session_dir" ]]; do
+            session_dir="${session_dir%_*}_${RANDOM}"
+        done
+    fi
+    
     # Create directory structure
     mkdir -p "$session_dir/artifacts"
     mkdir -p "$session_dir/raw"  # For agent findings files

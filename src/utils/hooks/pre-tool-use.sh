@@ -57,6 +57,10 @@ case "$tool_name" in
     Glob)
         tool_input_summary=$(echo "$hook_data" | jq -r '.tool_input.pattern // "no pattern"')
         ;;
+    Grep)
+        # Show search pattern (most relevant info for grep)
+        tool_input_summary=$(echo "$hook_data" | jq -r '.tool_input.pattern // "pattern"')
+        ;;
     TodoWrite)
         # Extract high-priority or in-progress todos (most relevant)
         # Format: "content (status)" for up to 3 most important tasks

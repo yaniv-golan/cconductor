@@ -274,6 +274,26 @@ _invoke_delegated_agent() {
     # Note: verbose_agent_start is called by invoke_agent_v2, no need to call here
     
     # Build agent input message
+    # Process input_artifacts JSON array into readable format
+    local artifacts_section
+    if [[ "$input_artifacts" == "[]" || -z "$input_artifacts" ]]; then
+        artifacts_section="None"
+    else
+        # Parse JSON array and format as list
+        artifacts_section=$(echo "$input_artifacts" | jq -r '.[]' 2>/dev/null | while IFS= read -r artifact_path; do
+            if [[ -f "$session_dir/$artifact_path" ]]; then
+                echo "- $artifact_path (available - use Read tool to access)"
+            else
+                echo "- $artifact_path (ERROR: file not found)"
+            fi
+        done)
+        
+        # If parsing failed, show the raw value
+        if [[ -z "$artifacts_section" ]]; then
+            artifacts_section="$input_artifacts (format error - expected JSON array)"
+        fi
+    fi
+    
     local agent_input
     agent_input=$(cat <<EOF
 $task
@@ -282,7 +302,7 @@ $task
 $context
 
 ## Input Artifacts
-$input_artifacts
+$artifacts_section
 
 ## Instructions
 Please complete this task and provide your findings in a structured format.
@@ -924,6 +944,32 @@ run_mission_orchestration() {
             status: "success"
         }')"
     
+    # Generate mission metrics file for easy analysis
+    local started_at
+    started_at=$(jq -r '.created_at' "$session_dir/session.json")
+    local total_cost
+    total_cost=$(grep '"type":"agent_result"' "$session_dir/events.jsonl" 2>/dev/null | \
+                 jq -s 'map(.data.cost_usd) | add' 2>/dev/null || echo "0")
+    
+    jq -n \
+        --arg status "completed" \
+        --arg start "$started_at" \
+        --arg end "$completed_at" \
+        --arg cost "$total_cost" \
+        '{
+            status: $status,
+            started_at: $start,
+            completed_at: $end,
+            duration_seconds: (($end | fromdateiso8601) - ($start | fromdateiso8601)),
+            total_cost_usd: ($cost | tonumber)
+        }' > "$session_dir/mission-metrics.json"
+    
+    # Stop event tailer if running
+    # shellcheck disable=SC1091
+    if command -v stop_event_tailer &>/dev/null || source "$UTILS_DIR/event-tailer.sh" 2>/dev/null; then
+        stop_event_tailer "$session_dir" 2>/dev/null || true
+    fi
+    
     echo ""
     echo "Session saved at: $session_dir"
 }
@@ -1075,6 +1121,32 @@ run_mission_orchestration_resume() {
             report_file: $report,
             status: "success"
         }')"
+    
+    # Generate mission metrics file for easy analysis
+    local started_at
+    started_at=$(jq -r '.created_at' "$session_dir/session.json")
+    local total_cost
+    total_cost=$(grep '"type":"agent_result"' "$session_dir/events.jsonl" 2>/dev/null | \
+                 jq -s 'map(.data.cost_usd) | add' 2>/dev/null || echo "0")
+    
+    jq -n \
+        --arg status "completed" \
+        --arg start "$started_at" \
+        --arg end "$completed_at" \
+        --arg cost "$total_cost" \
+        '{
+            status: $status,
+            started_at: $start,
+            completed_at: $end,
+            duration_seconds: (($end | fromdateiso8601) - ($start | fromdateiso8601)),
+            total_cost_usd: ($cost | tonumber)
+        }' > "$session_dir/mission-metrics.json"
+    
+    # Stop event tailer if running
+    # shellcheck disable=SC1091
+    if command -v stop_event_tailer &>/dev/null || source "$UTILS_DIR/event-tailer.sh" 2>/dev/null; then
+        stop_event_tailer "$session_dir" 2>/dev/null || true
+    fi
     
     echo ""
     echo "Session saved at: $session_dir"
