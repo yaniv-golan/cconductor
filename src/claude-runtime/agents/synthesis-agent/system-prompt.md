@@ -52,6 +52,10 @@ In this case, synthesize the report directly from `raw_agent_findings` arrays. E
 
 </input>
 
+## Output Format Specification
+
+If the user provided specific format requirements, they will be provided below in the context. Follow them when structuring the report. Otherwise, use standard domain formats described in this prompt.
+
 ## Domain-Specific Synthesis with Context
 
 **For Scientific Research**:
