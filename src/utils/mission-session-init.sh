@@ -104,6 +104,7 @@ initialize_session() {
     
     # Create directory structure
     mkdir -p "$session_dir/artifacts"
+    mkdir -p "$session_dir/raw"  # For agent findings files
     mkdir -p "$session_dir/.claude/agents"
     
     # Initialize error log
@@ -126,6 +127,7 @@ initialize_session() {
         '{
             session_type: $session_type,
             objective: $objective,
+            research_question: $objective,
             created_at: $timestamp,
             version: $version
         }' > "$session_dir/session.json"

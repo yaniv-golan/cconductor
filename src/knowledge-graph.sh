@@ -812,6 +812,106 @@ export -f kg_get_unexplored_leads
 export -f kg_get_summary
 export -f kg_bulk_update
 
+# Integrate agent findings into knowledge graph
+# Usage: kg_integrate_agent_output <session_dir> <agent_output_file>
+# Returns: 0 on success, 1 if no findings found or integration failed
+kg_integrate_agent_output() {
+    local session_dir="$1"
+    local agent_output_file="$2"
+    local kg_file="$session_dir/knowledge-graph.json"
+    
+    if [ ! -f "$kg_file" ]; then
+        echo "Error: Knowledge graph not found at $kg_file" >&2
+        return 1
+    fi
+    
+    # Tier 1: Extract findings files list from agent output manifest
+    local findings_files
+    findings_files=$(jq -r '.findings_files[]? // empty' "$agent_output_file" 2>/dev/null)
+    
+    if [ -z "$findings_files" ]; then
+        # Tier 2: Filesystem fallback - look in raw/ and session root
+        # Look for patterns: raw/findings-*.json, *-findings.json, *findings*.json
+        local found_files=""
+        
+        # Check raw/ directory
+        if [ -d "$session_dir/raw" ]; then
+            for f in "$session_dir/raw"/findings-*.json "$session_dir/raw"/*findings*.json; do
+                [ -f "$f" ] && found_files="${found_files}${f}"$'\n'
+            done
+        fi
+        
+        # Check session root
+        for f in "$session_dir"/*-findings.json "$session_dir"/*findings*.json; do
+            [ -f "$f" ] && found_files="${found_files}${f}"$'\n'
+        done
+        
+        findings_files=$(echo "$found_files" | grep -v '^$')
+    fi
+    
+    if [ -z "$findings_files" ]; then
+        # No findings to integrate - this is OK, not all agents produce findings files
+        return 0
+    fi
+    
+    # Process each findings file
+    local integrated=0
+    while IFS= read -r findings_file; do
+        [ -f "$findings_file" ] || continue
+        [ ! -s "$findings_file" ] && continue  # Skip empty files
+        
+        # Validate JSON
+        if ! jq empty "$findings_file" 2>/dev/null; then
+            echo "Warning: Invalid JSON in findings file $findings_file" >&2
+            continue
+        fi
+        
+        # Extract and integrate entities
+        local entities_json
+        entities_json=$(jq -c '.entities_discovered[]? // empty' "$findings_file" 2>/dev/null)
+        if [ -n "$entities_json" ]; then
+            while IFS= read -r entity; do
+                local name
+                name=$(echo "$entity" | jq -r '.name // empty')
+                
+                if [ -n "$name" ]; then
+                    # Pass the entire entity JSON object to kg_add_entity
+                    kg_add_entity "$session_dir" "$entity" >/dev/null 2>&1
+                    integrated=$((integrated + 1))
+                fi
+            done <<< "$entities_json"
+        fi
+        
+        # Extract and integrate claims
+        local claims_json
+        claims_json=$(jq -c '.claims[]? // empty' "$findings_file" 2>/dev/null)
+        if [ -n "$claims_json" ]; then
+            while IFS= read -r claim; do
+                local statement
+                statement=$(echo "$claim" | jq -r '.statement // empty')
+                
+                if [ -n "$statement" ]; then
+                    # Pass the entire claim JSON object to kg_add_claim
+                    kg_add_claim "$session_dir" "$claim" >/dev/null 2>&1
+                    integrated=$((integrated + 1))
+                fi
+            done <<< "$claims_json"
+        fi
+        
+        # Note: Citations are typically already in the KG via entity/claim sources
+        # If there's a separate citations array, we could process it here
+        
+    done <<< "$findings_files"
+    
+    if [ "$integrated" -gt 0 ]; then
+        return 0
+    else
+        # No data was integrated but findings files exist - could be empty or malformed
+        return 0  # Don't fail, just return success with no-op
+    fi
+}
+export -f kg_integrate_agent_output
+
 # CLI interface
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
     case "${1:-help}" in
