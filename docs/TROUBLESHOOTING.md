@@ -1673,6 +1673,127 @@ claude --print --settings .claude/settings.json "list files" 2>&1 | grep "HOOK"
 
 ---
 
+## Debug Mode
+
+**New in v0.2.0**: Enable verbose logging for troubleshooting.
+
+### Enabling Debug Mode
+
+```bash
+# Set environment variable
+export CCONDUCTOR_DEBUG=1
+./cconductor "research question"
+
+# Or inline for single run
+CCONDUCTOR_DEBUG=1 ./cconductor "research question"
+
+# Resume with debug mode
+CCONDUCTOR_DEBUG=1 ./cconductor resume session_XXX
+```
+
+### What Debug Mode Does
+
+1. **Enables bash trace mode** (`set -x`)
+   - Shows every command as it executes
+   - Displays variable expansions
+   - Reveals execution flow
+
+2. **Shows all errors immediately**
+   - Removes `2>/dev/null` suppression
+   - Prints errors to stderr in real-time
+   - Includes timing information
+
+3. **Logs everything to system-errors.log**
+   - All errors and warnings captured
+   - Available for post-mortem analysis
+   - Includes full context
+
+### Debug Output Example
+
+```bash
+$ CCONDUCTOR_DEBUG=1 ./cconductor "test query"
+🐛 Debug mode enabled
+   All errors will be logged and displayed
+   Check system-errors.log in session directory for details
+
++ CCONDUCTOR_ROOT=/path/to/cconductor
++ source /path/to/cconductor/src/utils/cli-parser.sh
++ parse_cli_args test query
++ echo '→ Initializing session...'
+→ Initializing session...
++ mkdir -p research-sessions/mission_1234567890
+...
+```
+
+### Checking Error Log
+
+After running with debug mode (or without), check the error log:
+
+```bash
+# View all errors
+cat research-sessions/mission_XXX/system-errors.log
+
+# View recent errors (skip header comments)
+tail -20 research-sessions/mission_XXX/system-errors.log | grep -v '^#' | jq .
+
+# Count errors by type
+grep '"severity": "error"' research-sessions/mission_XXX/system-errors.log | \
+    jq -r '.operation' | sort | uniq -c
+
+# Watch errors in real-time
+tail -f research-sessions/mission_XXX/system-errors.log | grep -v '^#' | jq .
+```
+
+### Common Debug Scenarios
+
+**Scenario 1: Dashboard won't launch**
+
+```bash
+CCONDUCTOR_DEBUG=1 ./cconductor "test"
+# Look for dashboard_launch errors in output
+# Check system-errors.log for details
+```
+
+**Scenario 2: Agent returning invalid JSON**
+
+```bash
+CCONDUCTOR_DEBUG=1 ./cconductor resume session_XXX
+# Trace shows agent invocation
+# Error log shows JSON sample that failed
+```
+
+**Scenario 3: Silent failures**
+
+```bash
+# Without debug mode, some errors are suppressed
+./cconductor "query"  # Fails silently
+
+# With debug mode, all errors visible
+CCONDUCTOR_DEBUG=1 ./cconductor "query"  # Shows what failed
+```
+
+### Performance Impact
+
+Debug mode has minimal performance impact:
+- Bash trace adds ~2-5% overhead
+- Error logging is asynchronous
+- No impact on Claude API calls
+
+### Disabling Debug Mode
+
+```bash
+unset CCONDUCTOR_DEBUG
+./cconductor "research question"
+```
+
+### See Also
+
+- [Error Log Format](ERROR_LOG_FORMAT.md) - Error log structure and patterns
+- [Dashboard Guide](DASHBOARD_GUIDE.md) - Dashboard shows error counts
+- Configuration Reference - Configure error logging behavior
+
+---
+
 ## Getting Help
 
 ### Collecting Diagnostic Information

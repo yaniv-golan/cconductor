@@ -65,7 +65,7 @@ clean_sessions() {
     # Count sessions
     local session_count=0
     if [ -d "research-sessions" ]; then
-        session_count=$(find research-sessions -maxdepth 1 -type d -name "session_*" 2>/dev/null | wc -l | tr -d ' ')
+        session_count=$(find research-sessions -maxdepth 1 -type d -name "mission_*" 2>/dev/null | wc -l | tr -d ' ')
     fi
     
     # Calculate size
@@ -80,7 +80,7 @@ clean_sessions() {
         echo "  → Found $session_count session(s) (Total: $session_size)"
         read -r -p "  → Delete all sessions? [y/N] " response
         if [[ "$response" =~ ^[Yy]$ ]]; then
-            rm -rf research-sessions/session_* 2>/dev/null || true
+            rm -rf research-sessions/mission_* 2>/dev/null || true
             rm -f research-sessions/.latest 2>/dev/null || true
             echo "  ✓ Deleted $session_count session(s)"
         else
@@ -156,7 +156,7 @@ show_summary() {
     # Check remaining sessions
     local remaining_sessions=0
     if [ -d "$PROJECT_ROOT/research-sessions" ]; then
-        remaining_sessions=$(find "$PROJECT_ROOT/research-sessions" -maxdepth 1 -type d -name "session_*" 2>/dev/null | wc -l | tr -d ' ')
+        remaining_sessions=$(find "$PROJECT_ROOT/research-sessions" -maxdepth 1 -type d -name "mission_*" 2>/dev/null | wc -l | tr -d ' ')
     fi
     
     # Check remaining processes
