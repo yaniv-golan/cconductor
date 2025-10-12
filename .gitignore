@@ -79,3 +79,28 @@ TODO_AUDIT.txt
 research-journal-*.plan.md
 test-*.sh
 obsidian/
+
+# Additional development notes patterns
+/*_RESTORED.md
+/*_APPLIED*.md
+/*_ACTION_PLAN.md
+/*_PROGRESS.md
+/*_ISSUES*.md
+/*_WRAPPER*.md
+/*_VALIDATED.md
+/*_CONVERSION.md
+/*_ORCHESTRATION*.md
+/*_VERIFICATION.md
+/*_PROCESSOR.md
+/*_COMPREHENSIVE.md
+/*_USAGE*.md
+
+# More development notes patterns
+/*_SUCCESS.md
+/*_EXPANSION.md
+FIXES_COMPLETE*.md
+/*_COMPATIBILITY.md
+/*_CHECKLIST.md
+PROMPT_PARSER*.md
+ARTIFACT_PATTERN*.md
+tests/*_USAGE_TESTING.md
