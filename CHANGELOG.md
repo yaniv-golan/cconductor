@@ -5,6 +5,13 @@ All notable changes to CConductor will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.1] - 2025-10-12
+
+### Fixed
+
+- Documentation: Fixed 24 issues across README and docs/ (invalid commands, outdated versions, wrong file references)
+- Export: Converted journal export to Obsidian foldable callout syntax for better compatibility
+
 ## [0.2.0] - 2025-10-12
 
 ### Mission-Based Orchestration

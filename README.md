@@ -787,7 +787,7 @@ cconductor/
 
 ## Development Status
 
-**Current Version**: 0.2.0  
+**Current Version**: 0.2.1  
 **Status**: Stable Release  
 **Last Updated**: October 2025
 
