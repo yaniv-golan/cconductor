@@ -2,7 +2,6 @@
 
 **Understanding and improving research quality**
 
-**Version**: 0.1.0  
 **Last Updated**: October 2025  
 **For**: All users who want to understand and improve research quality
 

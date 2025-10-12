@@ -2,7 +2,6 @@
 
 **Solve common issues and get research back on track**
 
-**Version**: 0.1.0  
 **Last Updated**: October 2025  
 **For**: All users
 
@@ -47,7 +46,7 @@ df -h
 ./cconductor sessions
 
 # 5. Check latest session status
-./cconductor latest
+./cconductor sessions latest
 
 # 6. Check for errors in logs (use your OS-appropriate log path)
 # macOS: tail -50 ~/Library/Logs/CConductor/research.log
@@ -69,7 +68,7 @@ flowchart TD
     B -->|No| D{Installation Issue?}
     D -->|Yes<br/>Check: ./cconductor --version| E[Reinstall or check dependencies]
     D -->|No| F{Research Issue?}
-    F -->|Yes<br/>Check: ./cconductor latest| G[Check session status and logs]
+    F -->|Yes<br/>Check: ./cconductor sessions latest| G[Check session status and logs]
     F -->|No| H{Configuration Issue?}
     H -->|Yes<br/>Check: config files| I[Validate and recreate configs]
     H -->|No| J{Performance Issue?}
@@ -618,7 +617,7 @@ find research-sessions -name "*.lock" -exec rm -rf {} +
 
 # Or for specific session
 rm -rf research-sessions/session_*/knowledge-graph.json.lock
-rm -rf research-sessions/session_*/task-queue.json.lock
+rm -rf research-sessions/session_*/task-queue.json.lock  # v0.1.x only (legacy)
 ```
 
 **Step 4: Resume research**:
@@ -818,7 +817,7 @@ Look at bibliography - when were sources published?
 **4. Check quality score**:
 
 ```bash
-./cconductor latest
+./cconductor sessions latest
 # Scroll to quality assessment
 # If below 75, consider restarting with better question
 ```
@@ -1325,7 +1324,7 @@ unset CCONDUCTOR_SECURITY_PROFILE
 **1. Find latest session**:
 
 ```bash
-./cconductor latest
+./cconductor sessions latest
 # Shows info about most recent research
 ```
 
@@ -1449,7 +1448,7 @@ jq parse error
 ```bash
 # Check which file is corrupted
 jq empty research-sessions/session_*/knowledge-graph.json
-jq empty research-sessions/session_*/task-queue.json
+jq empty research-sessions/session_*/task-queue.json  # v0.1.x only (legacy)
 
 # Check file sizes (0 bytes = corrupted)
 ls -lh research-sessions/session_*/*.json
@@ -1975,7 +1974,7 @@ grep ERROR logs/*.log
 ./cconductor sessions
 
 # Get latest session
-./cconductor latest
+./cconductor sessions latest
 
 # Resume research
 ./cconductor resume session_name
@@ -2032,8 +2031,7 @@ grep ERROR logs/research.log | tail -10
 
 ---
 
-**Last Updated**: October 2025  
-**Version**: 0.1.0
+**Last Updated**: October 2025
 
 **For more help**, see [User Guide](USER_GUIDE.md) or visit the documentation.
 

@@ -2,7 +2,6 @@
 
 **Teach CConductor about your domain without coding**
 
-**Version**: 0.1.0  
 **Last Updated**: October 2025  
 **For**: Everyone - no coding required!
 
@@ -835,7 +834,7 @@ nano ~/Library/Application\ Support/CConductor/knowledge-base-custom/test-domain
 ./cconductor "question about your domain"
 
 # 3. Check if knowledge was used
-./cconductor latest
+./cconductor sessions latest
 ```
 
 ### What to Look For

@@ -2,7 +2,6 @@
 
 **Understanding and using CConductor's automatic citation system**
 
-**Version**: 0.1.0  
 **Last Updated**: October 2025  
 **For**: Academic users, students, researchers
 
@@ -306,7 +305,7 @@ Keywords like "peer-reviewed", "systematic review", "meta-analysis", "published 
 
 ### Export Formats
 
-**Current (v0.1)**:
+**Current Features**:
 
 - Markdown with inline citations
 - Plain text bibliography
@@ -509,7 +508,7 @@ More specific questions get better-sourced results:
 1. **Check report completion**:
 
    ```bash
-   ./cconductor latest
+   ./cconductor sessions latest
    # Look for "Research Complete!" message
    ```
 

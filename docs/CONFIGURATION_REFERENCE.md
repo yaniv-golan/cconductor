@@ -2,7 +2,6 @@
 
 **Complete reference for all configuration options**
 
-**Version**: 0.1.0  
 **Last Updated**: October 2025  
 **For**: Advanced users and administrators
 

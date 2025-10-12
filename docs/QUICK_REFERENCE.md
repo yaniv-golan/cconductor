@@ -138,7 +138,7 @@ bash src/utils/export-journal.sh research-sessions/session_123
 
 ```bash
 # Latest report (use cconductor command)
-./cconductor latest
+./cconductor sessions latest
 
 # View latest report directly
 SESSION_DIR=$(./src/utils/path-resolver.sh resolve session_dir)
@@ -274,14 +274,14 @@ rm ~/.config/cconductor/security-config.json
 ### Quick Research + View
 
 ```bash
-./cconductor "question" && ./cconductor latest
+./cconductor "question" && ./cconductor sessions latest
 ```
 
 ### Continue Previous
 
 ```bash
 # Resume most recent session
-./cconductor latest  # Shows session ID
+./cconductor sessions latest  # Shows session ID
 ./cconductor resume <session_id_from_above>
 ```
 
@@ -289,7 +289,7 @@ rm ~/.config/cconductor/security-config.json
 
 ```bash
 # Use cconductor latest to get the path, then copy
-./cconductor latest  # Shows the path
+./cconductor sessions latest  # Shows the path
 # Or use path-resolver
 SESSION_DIR=$(./src/utils/path-resolver.sh resolve session_dir)
 cp "$SESSION_DIR"/$(cat "$SESSION_DIR"/.latest)/research-report.md ~/Documents/
@@ -363,7 +363,7 @@ Edit `config/security-config.json`:
 ### Find Latest
 
 ```bash
-./cconductor latest
+./cconductor sessions latest
 ```
 
 ### Resume Research
@@ -436,7 +436,7 @@ dlr session_123                # Resume
 2. **Check the result**:
 
    ```bash
-   ./cconductor latest
+   ./cconductor sessions latest
    ```
 
 3. **Try different topics**:
@@ -497,6 +497,6 @@ See CHANGELOG.md for complete roadmap.
 
 ---
 
-**Quick Start**: `./cconductor "your question"` → `./cconductor latest`
+**Quick Start**: `./cconductor "your question"` → `./cconductor sessions latest`
 
 That's it! 🔍

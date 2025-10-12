@@ -107,7 +107,7 @@ To disable update checks:
 
 ## Security Features
 
-### Current (v0.1.0)
+### Current Features
 
 - ✅ SHA256 checksums for all releases
 - ✅ HTTPS-only downloads
@@ -135,5 +135,4 @@ Last audit: Not yet conducted
 
 ---
 
-**Last Updated:** October 3, 2025  
-**Version:** 0.1.0
+**Last Updated:** October 3, 2025

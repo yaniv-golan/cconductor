@@ -699,7 +699,7 @@ jq '.pdfs[] | {title: .title, url: .url, cached_at: .cached_at}' \
 ### Use with Zotero/Mendeley
 
 1. Run research with literature_review mode
-2. Use `./cconductor latest` to find and view your report
+2. Use `./cconductor sessions latest` to find and view your report
 3. References section includes full citations
 4. Import PDFs from cache:
    - **macOS**: `~/Library/Caches/CConductor/pdfs/*.pdf`

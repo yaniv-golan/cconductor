@@ -26,7 +26,7 @@ Each research session creates a directory with complete state in your OS-appropr
 session_1234567890/
 ├── session.json              # Metadata (question, timestamps, version, status)
 ├── knowledge-graph.json      # All findings (entities, claims, citations, gaps)
-├── task-queue.json           # Tasks (pending, in-progress, completed, failed)
+├── task-queue.json           # Tasks (v0.1.x only - replaced by orchestration in v0.2.0)
 ├── raw/                      # Raw research data from agents
 ├── intermediate/             # Processing artifacts
 └── research-report.md        # Final report (when complete)
@@ -79,7 +79,7 @@ session_1234567892        Market size for AI coding assistants               res
 Find your latest session:
 
 ```bash
-./cconductor latest
+./cconductor sessions latest
 ```
 
 ### When to Resume
@@ -132,7 +132,7 @@ Find your latest session:
 The system:
 
 1. **Locates session** - Searches your OS-appropriate sessions directory
-2. **Validates structure** - Checks for required files (session.json, knowledge-graph.json, task-queue.json)
+2. **Validates structure** - Checks for required files (session.json, knowledge-graph.json)
 3. **Checks compatibility** - Verifies engine version matches session version
 4. **Updates metadata** - Sets `last_opened` timestamp and status to `resumed`
 
@@ -424,7 +424,7 @@ jq '{
 }' "$SESSION_DIR/session_1234567890/knowledge-graph.json"
 
 # Get task statistics
-jq '.stats' "$SESSION_DIR/session_1234567890/task-queue.json"
+jq '.stats' "$SESSION_DIR/session_1234567890/task-queue.json"  # v0.1.x only (legacy)
 ```
 
 ### Session Migration (Future)

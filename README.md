@@ -16,7 +16,7 @@ CConductor is a multi-agent AI research system that conducts comprehensive, adap
 - 🎯 **Adaptive Research** - Identifies gaps, explores leads, and improves iteratively until high confidence
 - 📊 **Quality Scores** - Know exactly how reliable your research is (0-100 with detailed breakdown)
 - 🔒 **Configurable Security** - Control which domains to trust with flexible security profiles
-- 🌍 **Cross-Platform** - Works on macOS, Linux, and Windows (WSL/Git Bash)
+- 🌍 **Cross-Platform** - Works on macOS, Linux, and Windows (WSL2)
 
 ---
 
@@ -322,8 +322,8 @@ bash install.sh
 ### Specific Version
 
 ```bash
-export CCONDUCTOR_VERSION=v0.1.0
-curl -fsSL https://github.com/yaniv-golan/cconductor/releases/download/v0.1.0/install.sh | bash
+export CCONDUCTOR_VERSION=v0.2.0
+curl -fsSL https://github.com/yaniv-golan/cconductor/releases/download/v0.2.0/install.sh | bash
 ```
 
 ### Manual Install (Development)
@@ -438,7 +438,7 @@ curl -fsSL https://raw.githubusercontent.com/yaniv-golan/cconductor/main/install
 ./cconductor "your research question"
 
 # View latest results
-./cconductor latest
+./cconductor sessions latest
 
 # View research dashboard (auto-launched during research)
 ./cconductor view-dashboard              # Latest session
@@ -558,6 +558,14 @@ Control which domains CConductor can access:
 
 **Location**: `~/.config/cconductor/security-config.json` (create with `./src/utils/config-loader.sh init security-config`)
 
+**Default configuration** (`config/security-config.default.json`):
+```json
+{
+  "security_profile": "strict"
+}
+```
+
+**Available profiles**:
 ```json
 {
   "security_profile": "strict"       // Maximum safety (default)
@@ -584,6 +592,8 @@ Teach CConductor about your domain:
 
 - macOS: `~/Library/Application Support/CConductor/knowledge-base-custom/my-domain.md`
 - Linux: `~/.local/share/cconductor/knowledge-base-custom/my-domain.md`
+
+**Note**: Capitalization follows platform conventions: macOS uses `CConductor` (Title Case) while Linux/Windows use `cconductor` (lowercase).
 
 ```markdown
 ## Overview
@@ -663,7 +673,7 @@ graph TD
         B[User Data<br/>OS-Specific]
         C[Configuration<br/>Overlay Pattern]
 
-        A --> D[Core Engine<br/>src/cconductor-adaptive.sh]
+        A --> D[Core Engine<br/>src/cconductor-mission.sh]
         A --> E[Utilities<br/>src/utils/]
         A --> F[Formatters<br/>src/formatters/]
         A --> G[Documentation<br/>docs/]
@@ -707,7 +717,7 @@ graph TD
 cconductor/
 ├── cconductor                      # Main CLI entry point
 ├── src/
-│   ├── cconductor-adaptive.sh     # Adaptive research engine
+│   ├── cconductor-mission.sh      # Mission-based research engine
 │   ├── knowledge-graph.sh         # Knowledge state tracking
 │   ├── task-queue.sh             # Dynamic task management
 │   ├── shared-state.sh           # Concurrent access control
@@ -777,14 +787,16 @@ cconductor/
 
 ## Development Status
 
-**Current Version**: 0.1.0  
-**Status**: Beta Release  
+**Current Version**: 0.2.0  
+**Status**: Stable Release  
 **Last Updated**: October 2025
 
-### What's Working (v0.1.0)
+### What's Working (v0.2.0)
 
-- ✅ Multi-agent research system
-- ✅ Adaptive research with dynamic task generation
+- ✅ Mission-based orchestration with autonomous agent coordination
+- ✅ Multi-agent research system with specialized agents
+- ✅ Knowledge graph integration (production-ready)
+- ✅ Interactive research wizard and verbose progress mode
 - ✅ Citation tracking and bibliography
 - ✅ Security configuration system
 - ✅ Quality validation gates
@@ -792,9 +804,9 @@ cconductor/
 - ✅ Cross-platform support
 - ✅ Comprehensive documentation
 
-### Coming in v0.2.0
+### Roadmap
 
-- 🚧 HTML and JSON output formats
+- 🚧 Mission resume/refinement capabilities
 - 🚧 Enhanced PDF extraction
 - 🚧 Multi-language support
 - 🚧 Progress indicators
@@ -819,7 +831,7 @@ For technical documentation:
 
 ## License
 
-[Your License Here - e.g., MIT]
+MIT License - See [LICENSE](LICENSE) file for details
 
 ---
 

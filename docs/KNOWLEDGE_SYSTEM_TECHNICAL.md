@@ -1,7 +1,6 @@
 # Knowledge System Technical Deep Dive
 
 **For**: Developers, System Integrators, Advanced Users  
-**Version**: 0.1.0  
 **Last Updated**: October 2025
 
 ---
@@ -194,7 +193,7 @@ The system identifies the agent-knowledge mapping:
 When research begins, CConductor creates a session:
 
 ```bash
-# In src/cconductor-adaptive.sh
+# In src/cconductor-mission.sh
 local session_dir="$PROJECT_ROOT/research-sessions/session_${timestamp}"
 mkdir -p "$session_dir"
 ```
@@ -204,7 +203,7 @@ mkdir -p "$session_dir"
 Agent templates are copied to the session:
 
 ```bash
-# In src/cconductor-adaptive.sh
+# In src/cconductor-mission.sh
 if [ -d "$PROJECT_ROOT/src/claude-runtime" ]; then
     cp -r "$PROJECT_ROOT/src/claude-runtime" "$session_dir/.claude"
 

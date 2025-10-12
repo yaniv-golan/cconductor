@@ -116,8 +116,7 @@ sudo apt-get install jq curl bash bc
 
 **Windows**:
 
-- Install [WSL (Windows Subsystem for Linux)](https://docs.microsoft.com/en-us/windows/wsl/install)
-- Or use [Git Bash](https://git-scm.com/downloads)
+- Install [WSL2 (Windows Subsystem for Linux)](https://docs.microsoft.com/en-us/windows/wsl/install)
 - Then follow Linux instructions above
 
 #### Claude Code Requirement
@@ -520,7 +519,7 @@ research-sessions/
 **Quick access**:
 
 ```bash
-./cconductor latest
+./cconductor sessions latest
 ```
 
 ### Understanding Output
@@ -599,10 +598,10 @@ session_1759420487  ← Timestamp-based ID
 
 ### Finding Your Research
 
-#### Method 1: Use `./cconductor latest`
+#### Method 1: Use `./cconductor sessions latest`
 
 ```bash
-./cconductor latest
+./cconductor sessions latest
 ```
 
 **Output**:
@@ -654,7 +653,7 @@ cd research-sessions/$(cat research-sessions/.latest)/
 cat research-sessions/$(cat research-sessions/.latest)/research-report.md
 
 # Or just use
-./cconductor latest  # Simpler!
+./cconductor sessions latest  # Simpler!
 ```
 
 ---
@@ -729,7 +728,7 @@ CConductor supports different approaches (configured in `config/cconductor-modes
 #### Quick Method
 
 ```bash
-./cconductor latest
+./cconductor sessions latest
 ```
 
 #### Manual Method
@@ -904,7 +903,7 @@ See if research is running:
 **Possible outputs**:
 
 - "No active sessions" - Nothing running
-- "Active: cconductor-adaptive.sh..." - Research in progress
+- "Active: cconductor-mission.sh..." - Research in progress
 
 ### Organizing Sessions
 
