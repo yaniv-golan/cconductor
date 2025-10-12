@@ -162,12 +162,14 @@
             "Read",
             "Write",
             "Grep",
-            "Glob"
+            "Glob",
+            "Bash(src/utils/calculate.sh)",
+            "Bash(src/utils/kg-utils.sh)",
+            "Bash(src/utils/data-utils.sh)"
         ],
         "disallowed": [
             "WebSearch",
             "WebFetch",
-            "Bash",
             "Edit",
             "NotebookEdit"
         ]

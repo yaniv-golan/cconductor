@@ -867,16 +867,29 @@ export_journal() {
         echo "## Comprehensive Research Findings"
         echo ""
         
-        local findings_files
-        findings_files=$(find "$session_dir/raw" -name "findings-*.json" -type f 2>/dev/null)
+        # Find findings files (use find -print0 for paths with spaces)
+        local total_entities=0 total_claims=0 total_sources=0 total_gaps=0
         
-        if [ -n "$findings_files" ]; then
-            # Count totals
-            local total_entities total_claims total_sources total_gaps
-            total_entities=$(echo "$findings_files" | xargs jq -r '[.entities_discovered // [] | .[]] | length' 2>/dev/null | awk '{sum+=$1} END {print sum+0}')
-            total_claims=$(echo "$findings_files" | xargs jq -r '[.claims // [] | .[]] | length' 2>/dev/null | awk '{sum+=$1} END {print sum+0}')
-            total_sources=$(echo "$findings_files" | xargs jq -r '.claims[]?.sources[]?.url // empty' 2>/dev/null | sort -u | wc -l | tr -d ' ')
-            total_gaps=$(echo "$findings_files" | xargs jq -r '[.gaps_identified // [] | .[]] | length' 2>/dev/null | awk '{sum+=$1} END {print sum+0}')
+        if [ -d "$session_dir/raw" ]; then
+            # Count entities
+            total_entities=$(find "$session_dir/raw" -name "findings-*.json" -type f -print0 2>/dev/null | \
+                xargs -0 jq -r '[.entities_discovered // [] | .[]] | length' 2>/dev/null | \
+                awk '{sum+=$1} END {print sum+0}')
+            
+            # Count claims
+            total_claims=$(find "$session_dir/raw" -name "findings-*.json" -type f -print0 2>/dev/null | \
+                xargs -0 jq -r '[.claims // [] | .[]] | length' 2>/dev/null | \
+                awk '{sum+=$1} END {print sum+0}')
+            
+            # Count unique sources
+            total_sources=$(find "$session_dir/raw" -name "findings-*.json" -type f -print0 2>/dev/null | \
+                xargs -0 jq -r '.claims[]?.sources[]?.url // empty' 2>/dev/null | \
+                sort -u | wc -l | tr -d ' ')
+            
+            # Count gaps
+            total_gaps=$(find "$session_dir/raw" -name "findings-*.json" -type f -print0 2>/dev/null | \
+                xargs -0 jq -r '[.gaps_identified // [] | .[]] | length' 2>/dev/null | \
+                awk '{sum+=$1} END {print sum+0}')
             
             # Ensure variables are numeric (default to 0 if empty)
             total_entities=${total_entities:-0}
@@ -894,7 +907,7 @@ export_journal() {
             if [ "$total_entities" -gt 0 ]; then
                 echo "### Entities Discovered"
                 echo ""
-                echo "$findings_files" | xargs jq -r '
+                find "$session_dir/raw" -name "findings-*.json" -type f -print0 2>/dev/null | xargs -0 jq -r '
                     .entities_discovered // [] | .[] | 
                     "- **\(.name)** (\(.type)): \(.description)\n  _Confidence: \((.confidence // 0) * 100 | floor)%_\n"
                 ' 2>/dev/null
@@ -905,7 +918,7 @@ export_journal() {
             if [ "$total_claims" -gt 0 ]; then
                 echo "### Claims Validated"
                 echo ""
-                echo "$findings_files" | xargs jq -r '
+                find "$session_dir/raw" -name "findings-*.json" -type f -print0 2>/dev/null | xargs -0 jq -r '
                     .claims // [] | .[] | 
                     "- \(.statement)\n  - Confidence: \((.confidence // 0) * 100 | floor)%, Evidence Quality: \(.evidence_quality // "unknown")\n  - Sources: \((.sources // [] | length))\n"
                 ' 2>/dev/null
@@ -916,13 +929,26 @@ export_journal() {
             if [ "$total_sources" -gt 0 ]; then
                 echo "### Key Sources"
                 echo ""
+                # Consolidate sources first to a temp file for faster processing
+                local temp_sources="/tmp/sources-$$.json"
+                find "$session_dir/raw" -name "findings-*.json" -type f -print0 2>/dev/null | \
+                    xargs -0 jq -s '[.[] | .claims // [] | .[].sources // [] | .[]] | unique_by(.title)' > "$temp_sources" 2>/dev/null
+                
                 # shellcheck disable=SC2016
-                echo "$findings_files" | xargs jq -r '
+                jq -r '
                     def format_credibility:
                         gsub("_"; " ") | split(" ") | map(.[0:1] as $first | .[1:] as $rest | ($first | ascii_upcase) + $rest) | join(" ");
-                    [.claims // [] | .[].sources // [] | .[]] | unique_by(.url) | .[] | 
-                    "- [\(.title)](\(.url))\n  - Credibility: \((.credibility // "unknown") | format_credibility)\n"
-                ' 2>/dev/null | head -50
+                    def construct_url:
+                        if .url and .url != null and .url != "" then .url
+                        elif .pmid and .pmid != null and .pmid != "" then "https://pubmed.ncbi.nlm.nih.gov/\(.pmid)/"
+                        elif .doi and .doi != null and .doi != "" then "https://doi.org/\(.doi)"
+                        else null
+                        end;
+                    .[] | select(construct_url != null) | 
+                    "- [\(.title)](\(construct_url))\n  - Credibility: \((.credibility // "unknown") | format_credibility)\n"
+                ' "$temp_sources" 2>/dev/null | head -50
+                
+                rm -f "$temp_sources"
                 echo ""
             fi
             
@@ -930,7 +956,7 @@ export_journal() {
             if [ "$total_gaps" -gt 0 ]; then
                 echo "### Research Gaps Identified"
                 echo ""
-                echo "$findings_files" | xargs jq -r '
+                find "$session_dir/raw" -name "findings-*.json" -type f -print0 2>/dev/null | xargs -0 jq -r '
                     .gaps_identified // [] | .[] | 
                     "- **\(.question)**\n  - Priority: \(.priority // 0), Reason: \(.reason // "Not specified")\n"
                 ' 2>/dev/null
@@ -980,10 +1006,9 @@ export_journal() {
         
         # Count unique sources from findings files
         sources=0
-        local findings_files
-        findings_files=$(find "$session_dir/raw" -name "findings-*.json" -type f 2>/dev/null)
-        if [ -n "$findings_files" ]; then
-            sources=$(echo "$findings_files" | xargs jq -r '.claims[]?.sources[]?.url // empty' 2>/dev/null | sort -u | wc -l | tr -d ' ')
+        if [ -d "$session_dir/raw" ]; then
+            sources=$(find "$session_dir/raw" -name "findings-*.json" -type f -print0 2>/dev/null | \
+                xargs -0 jq -r '.claims[]?.sources[]?.url // empty' 2>/dev/null | sort -u | wc -l | tr -d ' ')
         fi
         
         # Build narrative summary
@@ -1016,9 +1041,10 @@ export_journal() {
         echo ""
         
         # Quality assessment from findings
-        if [ -n "$findings_files" ]; then
+        if [ -d "$session_dir/raw" ]; then
             local avg_confidence
-            avg_confidence=$(echo "$findings_files" | xargs jq -r '[.claims[]?.confidence // 0] | add / length * 100 | floor' 2>/dev/null | head -1)
+            avg_confidence=$(find "$session_dir/raw" -name "findings-*.json" -type f -print0 2>/dev/null | \
+                xargs -0 jq -r '[.claims[]?.confidence // 0] | add / length * 100 | floor' 2>/dev/null | head -1)
             
             if [ -n "$avg_confidence" ] && [ "$avg_confidence" -gt 0 ]; then
                 echo "**Quality Assessment:**"
@@ -1026,15 +1052,18 @@ export_journal() {
                 
                 # Check evidence quality
                 local high_quality_count
-                high_quality_count=$(echo "$findings_files" | xargs jq -r '[.claims[]? | select(.evidence_quality == "high")] | length' 2>/dev/null | head -1)
+                high_quality_count=$(find "$session_dir/raw" -name "findings-*.json" -type f -print0 2>/dev/null | \
+                    xargs -0 jq -r '[.claims[]? | select(.evidence_quality == "high")] | length' 2>/dev/null | head -1)
                 if [ -n "$high_quality_count" ] && [ "$high_quality_count" -gt 0 ]; then
                     echo "- Evidence quality: High"
                 fi
                 
                 # List source types
                 local has_official has_academic
-                has_official=$(echo "$findings_files" | xargs jq -r '.claims[]?.sources[]? | select(.credibility == "official") | .credibility' 2>/dev/null | head -1)
-                has_academic=$(echo "$findings_files" | xargs jq -r '.claims[]?.sources[]? | select(.credibility == "academic") | .credibility' 2>/dev/null | head -1)
+                has_official=$(find "$session_dir/raw" -name "findings-*.json" -type f -print0 2>/dev/null | \
+                    xargs -0 jq -r '.claims[]?.sources[]? | select(.credibility == "official") | .credibility' 2>/dev/null | head -1)
+                has_academic=$(find "$session_dir/raw" -name "findings-*.json" -type f -print0 2>/dev/null | \
+                    xargs -0 jq -r '.claims[]?.sources[]? | select(.credibility == "academic") | .credibility' 2>/dev/null | head -1)
                 
                 if [ -n "$has_official" ] || [ -n "$has_academic" ]; then
                     echo -n "- Sources: "

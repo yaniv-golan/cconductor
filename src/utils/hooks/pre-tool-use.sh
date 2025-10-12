@@ -36,7 +36,7 @@ tool_name=$(echo "$hook_data" | jq -r '.tool_name // "unknown"')
 # Get agent name from environment (set by invoke-agent.sh)
 agent_name="${CCONDUCTOR_AGENT_NAME:-unknown}"
 
-# Validate file access for orchestrator (session-only restriction)
+# Validate file access and tool usage for orchestrator
 if [[ "$agent_name" == "mission-orchestrator" ]]; then
     case "$tool_name" in
         Read|Write|Edit|MultiEdit)
@@ -59,6 +59,25 @@ if [[ "$agent_name" == "mission-orchestrator" ]]; then
                         exit 1
                     fi
                 fi
+            fi
+            ;;
+        Bash)
+            # Only allow whitelisted utility scripts
+            command=$(echo "$hook_data" | jq -r '.tool_input.command // ""')
+            
+            # Whitelist of safe utility scripts
+            if [[ "$command" =~ ^(src/utils/calculate\.sh|src/utils/kg-utils\.sh|src/utils/data-utils\.sh) ]]; then
+                # Allow whitelisted utilities
+                exit 0
+            else
+                echo "ERROR: Orchestrator can only use whitelisted utility scripts" >&2
+                echo "  Blocked command: $command" >&2
+                echo "" >&2
+                echo "  Allowed utilities:" >&2
+                echo "    - src/utils/calculate.sh (math operations)" >&2
+                echo "    - src/utils/kg-utils.sh (knowledge graph queries)" >&2
+                echo "    - src/utils/data-utils.sh (data transformation)" >&2
+                exit 1
             fi
             ;;
     esac

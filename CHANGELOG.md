@@ -35,7 +35,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Session Viewer**: View research journal with `cconductor sessions viewer`
 - **Better Organization**: Improved session listing and status display
 
-### Prompt Parser & Output Formatting (October 12, 2025)
+### Prompt Parser & Output Formatting 
 
 - **Automatic Prompt Separation**: New prompt-parser agent separates research objectives from formatting instructions
 - **Custom Output Formats**: Specify how results should be formatted without confusing research agents

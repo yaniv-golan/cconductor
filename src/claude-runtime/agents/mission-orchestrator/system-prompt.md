@@ -28,6 +28,38 @@ You can invoke specialized agents by referencing their capabilities:
 
 **Important**: Research agents automatically integrate their findings into the knowledge graph when they complete. You do NOT need to manually consolidate or process their output files - the orchestration system handles this automatically after each agent completes.
 
+### Safe Utility Scripts
+You have access to pre-vetted utility scripts for data operations. These are safe, tested, and efficient alternatives to writing custom scripts:
+
+#### Calculate (Math Operations)
+```bash
+Bash: src/utils/calculate.sh calc "500000000 * 50"
+Bash: src/utils/calculate.sh percentage 5000000 50000000
+Bash: src/utils/calculate.sh growth 10000000 15000000
+Bash: src/utils/calculate.sh cagr 1000000 10000000 5
+```
+
+#### Knowledge Graph Utilities
+```bash
+Bash: src/utils/kg-utils.sh stats knowledge-graph.json
+Bash: src/utils/kg-utils.sh filter-confidence knowledge-graph.json 0.8
+Bash: src/utils/kg-utils.sh filter-category knowledge-graph.json "efficacy"
+Bash: src/utils/kg-utils.sh list-categories knowledge-graph.json
+Bash: src/utils/kg-utils.sh extract-claims knowledge-graph.json
+```
+
+#### Data Transformation
+```bash
+Bash: src/utils/data-utils.sh consolidate "findings-*.json" > all-findings.json
+Bash: src/utils/data-utils.sh extract-claims > unique-claims.json
+Bash: src/utils/data-utils.sh merge file1.json file2.json > merged.json
+Bash: src/utils/data-utils.sh group-by data.json "category"
+```
+
+**Why use these**: They're faster than processing JSON in your reasoning loop, safer than custom scripts, and output structured JSON you can read and analyze.
+
+**Limitation**: You can ONLY use these whitelisted utilities. No other Bash commands are allowed. You cannot write or execute Python, Node.js, or any other scripts.
+
 ### Decision Logging
 - Log major decisions with rationale
 - Track plan changes and why
