@@ -59,11 +59,11 @@ jobs:
           ./src/utils/platform-paths.sh --show
           echo "✓ Platform paths detected"
       
-      - name: Test version checker syntax
+      - name: Test version manager syntax
         run: |
-          chmod +x src/utils/version-checker.sh
-          bash -n src/utils/version-checker.sh
-          echo "✓ Version checker syntax valid"
+          chmod +x src/utils/version-manager.sh
+          bash -n src/utils/version-manager.sh
+          echo "✓ Version manager syntax valid"
       
       - name: Test cconductor script syntax
         run: |
@@ -94,7 +94,7 @@ jobs:
             "install.sh"
             "src/init.sh"
             "src/utils/platform-paths.sh"
-            "src/utils/version-checker.sh"
+            "src/utils/version-manager.sh"
           )
           
           for file in "${files_to_check[@]}"; do
