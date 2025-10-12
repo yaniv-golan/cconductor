@@ -11,10 +11,15 @@ WRAPPER_ROOT="$(cd "$WRAPPER_DIR/.." && pwd)"
 
 # Source dependencies in correct order with explicit error handling
 # Use saved paths to avoid conflicts with sourced scripts that set SCRIPT_DIR
+# shellcheck disable=SC1091
 source "$WRAPPER_DIR/debug.sh" || exit 1
+# shellcheck disable=SC1091
 source "$WRAPPER_ROOT/shared-state.sh" || exit 1
+# shellcheck disable=SC1091
 source "$WRAPPER_DIR/validation.sh" || exit 1
+# shellcheck disable=SC1091
 source "$WRAPPER_DIR/event-logger.sh" || true  # Optional
+# shellcheck disable=SC1091
 source "$WRAPPER_ROOT/knowledge-graph.sh" || exit 1
 
 # Main integration function

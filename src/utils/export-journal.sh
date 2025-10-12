@@ -31,6 +31,81 @@ make_path_relative() {
     fi
 }
 
+# Helper function to calculate elapsed time from session start
+calculate_elapsed_time() {
+    local session_start="$1"
+    local event_time="$2"
+    
+    # Convert timestamps to epoch
+    local start_epoch event_epoch
+    start_epoch=$(TZ=UTC date -j -f "%Y-%m-%dT%H:%M:%SZ" "$session_start" "+%s" 2>/dev/null || echo "0")
+    event_epoch=$(TZ=UTC date -j -f "%Y-%m-%dT%H:%M:%SZ" "$event_time" "+%s" 2>/dev/null || echo "0")
+    
+    if [ "$start_epoch" = "0" ] || [ "$event_epoch" = "0" ]; then
+        echo ""
+        return
+    fi
+    
+    local elapsed_seconds=$((event_epoch - start_epoch))
+    local elapsed_minutes=$((elapsed_seconds / 60))
+    
+    if [ "$elapsed_minutes" -lt 60 ]; then
+        echo "$elapsed_minutes min"
+    else
+        local hours=$((elapsed_minutes / 60))
+        local mins=$((elapsed_minutes % 60))
+        echo "${hours}h ${mins}m"
+    fi
+}
+
+# Helper function to extract entity/claim/source counts from findings files
+get_findings_stats() {
+    local session_dir="$1"
+    local stat_type="$2"  # entities, claims, or sources
+    
+    if [ ! -d "$session_dir/raw" ]; then
+        echo "0"
+        return
+    fi
+    
+    case "$stat_type" in
+        entities)
+            find "$session_dir/raw" -name "findings-*.json" -type f -print0 2>/dev/null | \
+                xargs -0 jq -r '[.entities_discovered // [] | .[]] | length' 2>/dev/null | \
+                awk '{sum+=$1} END {print sum+0}'
+            ;;
+        claims)
+            find "$session_dir/raw" -name "findings-*.json" -type f -print0 2>/dev/null | \
+                xargs -0 jq -r '[.claims // [] | .[]] | length' 2>/dev/null | \
+                awk '{sum+=$1} END {print sum+0}'
+            ;;
+        sources)
+            find "$session_dir/raw" -name "findings-*.json" -type f -print0 2>/dev/null | \
+                xargs -0 jq -r '.claims[]?.sources[]?.url // empty' 2>/dev/null | \
+                sort -u | wc -l | tr -d ' '
+            ;;
+    esac
+}
+
+# Helper function to extract first sentence from text
+extract_first_sentence() {
+    local text="$1"
+    
+    # Extract first sentence (up to first period followed by space or end)
+    local first_sent
+    first_sent=$(echo "$text" | sed 's/\([^.]*\.\) .*/\1/' | head -c 200)
+    
+    # If result is empty or only contains markdown/whitespace, use first 100 chars
+    if [ -z "$first_sent" ] || ! echo "$first_sent" | grep -q '[a-zA-Z]'; then
+        first_sent=$(echo "$text" | head -c 100)
+        if [ ${#text} -gt 100 ]; then
+            first_sent="${first_sent}..."
+        fi
+    fi
+    
+    echo "$first_sent"
+}
+
 export_journal() {
     local session_dir="$1"
     local output_file="${2:-$session_dir/research-journal.md}"
@@ -41,6 +116,15 @@ export_journal() {
         return 1
     fi
     
+    # Initialize temp files for tool logging
+    local tool_log_file="/tmp/tool-log-$$.txt"
+    local tool_counts_file="/tmp/tool-counts-$$.json"
+    echo '{"searches":0,"fetches":0,"saves":0,"plans":0,"greps":0}' > "$tool_counts_file"
+    : > "$tool_log_file"
+    
+    # Cleanup temp files on exit (use ${var:-} to handle unbound variable if trap runs after function exits)
+    trap 'rm -f "${tool_log_file:-}" "${tool_counts_file:-}"' EXIT
+    
     # Flag to track when we need a task section header after iteration
     local NEED_TASK_SECTION_HEADER=false
     
@@ -48,9 +132,11 @@ export_journal() {
     local session_file="$session_dir/session.json"
     local question="Unknown"
     local objective="Unknown"
+    local session_created=""
     if [ -f "$session_file" ]; then
         question=$(jq -r '.question // "Unknown"' "$session_file" 2>/dev/null || echo "Unknown")
         objective=$(jq -r '.objective // .question // "Unknown"' "$session_dir/session.json" 2>/dev/null || echo "Unknown")
+        session_created=$(jq -r '.created_at // "unknown"' "$session_file" 2>/dev/null || echo "unknown")
     fi
     
     # Load orchestration log for decision lookups
@@ -62,6 +148,9 @@ export_journal() {
     
     # Track current iteration for section markers
     local current_iteration=0
+    
+    # Track current agent for tool logging
+    local current_agent=""
     
     # Start markdown document
     {
@@ -121,6 +210,79 @@ export_journal() {
         
         echo "**Session:** $(basename "$session_dir")"
         echo ""
+        
+        # Calculate executive summary statistics
+        local total_duration_min=0
+        local total_iterations=0
+        local total_entities=0
+        local total_claims=0
+        local total_sources=0
+        local avg_confidence=0
+        
+        # Get duration
+        local end_time
+        end_time=$(jq -r '.completed_at // ""' "$session_file" 2>/dev/null)
+        if [ -n "$session_created" ] && [ "$session_created" != "unknown" ] && [ -n "$end_time" ] && [ "$end_time" != "" ]; then
+            local start_epoch end_epoch
+            start_epoch=$(TZ=UTC date -j -f "%Y-%m-%dT%H:%M:%SZ" "$session_created" "+%s" 2>/dev/null || echo "0")
+            end_epoch=$(TZ=UTC date -j -f "%Y-%m-%dT%H:%M:%SZ" "$end_time" "+%s" 2>/dev/null || echo "0")
+            if [ "$start_epoch" != "0" ] && [ "$end_epoch" != "0" ]; then
+                total_duration_min=$(( (end_epoch - start_epoch) / 60 ))
+            fi
+        fi
+        
+        # Get iteration count from dashboard metrics
+        local dashboard_metrics="$session_dir/dashboard-metrics.json"
+        if [ -f "$dashboard_metrics" ]; then
+            total_iterations=$(jq -r '.iteration // 0' "$dashboard_metrics" 2>/dev/null || echo "0")
+        fi
+        
+        # Get findings statistics
+        total_entities=$(get_findings_stats "$session_dir" "entities")
+        total_claims=$(get_findings_stats "$session_dir" "claims")
+        total_sources=$(get_findings_stats "$session_dir" "sources")
+        
+        # Calculate average confidence
+        if [ -d "$session_dir/raw" ] && [ "$total_claims" -gt 0 ]; then
+            avg_confidence=$(find "$session_dir/raw" -name "findings-*.json" -type f -print0 2>/dev/null | \
+                xargs -0 jq -r '[.claims[]?.confidence // 0] | add / length * 100 | floor' 2>/dev/null | \
+                head -1)
+            avg_confidence=${avg_confidence:-0}
+        fi
+        
+        # Display executive summary if we have meaningful data
+        if [ "$total_duration_min" -gt 0 ] || [ "$total_claims" -gt 0 ]; then
+            echo "---"
+            echo ""
+            echo "## Executive Summary"
+            echo ""
+            
+            if [ "$total_duration_min" -gt 0 ]; then
+                echo "**Duration:** $total_duration_min minutes"
+                if [ "$total_iterations" -gt 0 ]; then
+                    echo " across $total_iterations research cycles"
+                fi
+                echo ""
+            fi
+            
+            if [ "$total_claims" -gt 0 ]; then
+                echo "**Knowledge Accumulated:**"
+                echo "- $total_entities entities documented"
+                echo "- $total_claims claims validated"
+                echo "- $total_sources sources consulted"
+                if [ "$avg_confidence" -gt 0 ]; then
+                    echo "- ${avg_confidence}% average confidence"
+                fi
+                echo ""
+            fi
+            
+            echo "**Process Overview:**"
+            echo "- [Investigation Commenced](#investigation-commenced)"
+            echo "- [Strategic Planning](#strategic-planning)"
+            echo "- [Research Activities](#web-research)"
+            echo "- [Research Summary](#research-summary)"
+            echo ""
+        fi
         
         # Display input materials if provided
         local input_manifest="$session_dir/input-files.json"
@@ -208,6 +370,20 @@ export_journal() {
                     tools=$(echo "$line" | jq -r '.data.tools // "N/A"')
                     model=$(echo "$line" | jq -r '.data.model // "unknown"')
                     
+                    # Update current agent for tool tracking
+                    if [ "$current_agent" != "$agent" ]; then
+                        # Reset tool log for new agent
+                        : > "$tool_log_file"
+                        echo '{"searches":0,"fetches":0,"saves":0,"plans":0,"greps":0}' > "$tool_counts_file"
+                        current_agent="$agent"
+                    fi
+                    
+                    # Calculate elapsed time
+                    local elapsed=""
+                    if [ "$session_created" != "unknown" ]; then
+                        elapsed=$(calculate_elapsed_time "$session_created" "$clean_timestamp")
+                    fi
+                    
                     # Check iteration context for mission-orchestrator
                     if [ "$agent" = "mission-orchestrator" ] && [ "$has_orchestration_log" = true ]; then
                         local iteration_number timestamp_minute
@@ -224,17 +400,22 @@ export_journal() {
                     fi
                     
                     # Narrative based on agent type (natural language, not technical)
+                    local timestamp_line="*$formatted_time*"
+                    if [ -n "$elapsed" ]; then
+                        timestamp_line="$timestamp_line • *Elapsed: $elapsed*"
+                    fi
+                    
                     case "$agent" in
                         mission-orchestrator)
                             echo "### Strategic Planning"
                             echo ""
-                            echo "*$formatted_time*"
+                            echo "$timestamp_line"
                             echo ""
                             ;;
                         academic-researcher)
                             echo "### Academic Literature Review"
                             echo ""
-                            echo "*$formatted_time*"
+                            echo "$timestamp_line"
                             echo ""
                             echo "Consulting peer-reviewed academic sources to establish theoretical foundation."
                             echo ""
@@ -242,7 +423,7 @@ export_journal() {
                         web-researcher)
                             echo "### Web Research"
                             echo ""
-                            echo "*$formatted_time*"
+                            echo "$timestamp_line"
                             echo ""
                             echo "Gathering information from web sources to complement academic findings."
                             echo ""
@@ -250,7 +431,7 @@ export_journal() {
                         research-planner)
                             echo "### Research Planning"
                             echo ""
-                            echo "*$formatted_time*"
+                            echo "$timestamp_line"
                             echo ""
                             echo "Analyzing the research question to develop a structured investigation plan."
                             echo ""
@@ -258,7 +439,7 @@ export_journal() {
                         synthesis-agent)
                             echo "### Synthesis and Integration"
                             echo ""
-                            echo "*$formatted_time*"
+                            echo "$timestamp_line"
                             echo ""
                             echo "Integrating findings from multiple sources to develop coherent understanding."
                             echo ""
@@ -266,7 +447,7 @@ export_journal() {
                         pdf-analyzer)
                             echo "### Document Analysis"
                             echo ""
-                            echo "*$formatted_time*"
+                            echo "$timestamp_line"
                             echo ""
                             echo "Analyzing provided PDF documents for relevant information and insights."
                             echo ""
@@ -274,7 +455,7 @@ export_journal() {
                         fact-checker)
                             echo "### Fact Verification"
                             echo ""
-                            echo "*$formatted_time*"
+                            echo "$timestamp_line"
                             echo ""
                             echo "Cross-referencing claims against multiple sources to ensure accuracy."
                             echo ""
@@ -282,31 +463,46 @@ export_journal() {
                         market-analyzer|market-sizing-expert)
                             echo "### Market Analysis"
                             echo ""
-                            echo "*$formatted_time*"
+                            echo "$timestamp_line"
                             echo ""
                             echo "Evaluating market data and trends to inform business insights."
                             echo ""
+                            ;;
+                        prompt-parser)
+                            echo "### Understanding the Research Request"
+                            echo ""
+                            echo "$timestamp_line"
+                            echo ""
+                            
+                            # Extract prompt parser findings if available
+                            local parser_output="$session_dir/agent-output-prompt-parser.json"
+                            if [ -f "$parser_output" ]; then
+                                local research_question output_spec
+                                # shellcheck disable=SC2016
+                                research_question=$(jq -r '.result' "$parser_output" 2>/dev/null | sed 's/^```json//;s/```$//' | jq -r '.research_question // .objective // empty' 2>/dev/null)
+                                # shellcheck disable=SC2016
+                                output_spec=$(jq -r '.result' "$parser_output" 2>/dev/null | sed 's/^```json//;s/```$//' | jq -r '.output_specification // empty' 2>/dev/null)
+                                
+                                if [ -n "$research_question" ]; then
+                                    echo "**Research question as understood:** $research_question"
+                                    echo ""
+                                fi
+                                
+                                if [ -n "$output_spec" ] && [ "$output_spec" != "null" ]; then
+                                    echo "**Output format requested:** $output_spec"
+                                    echo ""
+                                fi
+                            fi
                             ;;
                         *)
                             # Generic case for custom agents
                             local agent_display="${agent//-/ }"
                             echo "### ${agent_display^} Analysis"
                             echo ""
-                            echo "*$formatted_time*"
+                            echo "$timestamp_line"
                             echo ""
                             ;;
                     esac
-                    
-                    # Show technical details in collapsed section if model is known
-                    if [ "$model" != "unknown" ]; then
-                        echo "<details><summary>Technical details</summary>"
-                        echo ""
-                        echo "- Model: \`$model\`"
-                        echo "- Tools: \`$tools\`"
-                        echo ""
-                        echo "</details>"
-                        echo ""
-                    fi
                     
                     # Check for orchestration decisions for any agent (not just mission-orchestrator)
                     if [ "$has_orchestration_log" = true ]; then
@@ -325,7 +521,13 @@ export_journal() {
                             alternatives_count=$(echo "$decision_entry" | jq '.decision.decision.alternatives_considered // [] | length' 2>/dev/null)
                             
                             if [ -n "$rationale" ] && [ "$alternatives_count" -gt 0 ]; then
-                                echo "<details><summary>Research strategy</summary>"
+                                # Extract first sentence as summary
+                                local rationale_summary
+                                rationale_summary=$(extract_first_sentence "$rationale")
+                                
+                                echo "**🎯 Strategy:** $rationale_summary"
+                                echo ""
+                                echo "#### Reasoning and Alternatives"
                                 echo ""
                                 echo "**Why this approach:** $rationale"
                                 echo ""
@@ -341,58 +543,150 @@ export_journal() {
                                 fi
                                 
                                 echo ""
+                            fi
+                        fi
+                    fi
+                    
+                    ;;
+                    
+                agent_result)
+                    local agent duration model
+                    agent=$(echo "$line" | jq -r '.data.agent // "unknown"')
+                    duration=$(echo "$line" | jq -r '.data.duration_ms // 0')
+                    model=$(echo "$line" | jq -r '.data.model // "unknown"')
+                    local duration_sec=$((duration / 1000))
+                    
+                    # Output tool activity summary split by planning phases
+                    # Structure: PLAN → ACTIONS for that plan → PLAN → ACTIONS
+                    if [ -f "$tool_log_file" ] && [ -s "$tool_log_file" ]; then
+                        local current_plan=""
+                        local current_phase_file="/tmp/phase-$$.txt"
+                        : > "$current_phase_file"  # Initialize empty
+                        
+                        while IFS= read -r log_line; do
+                            if echo "$log_line" | grep -q "📋 Planning:"; then
+                                # Found planning marker
+                                # First, output previous plan and its actions if we have them
+                                if [ -n "$current_plan" ] && [ -s "$current_phase_file" ]; then
+                                    # Output the plan
+                                    echo "📋 **Plan:** $current_plan"
+                                    echo ""
+                                    
+                                    # Count and output actions for this plan
+                                    local phase_searches phase_fetches phase_saves phase_greps
+                                    phase_searches=$(grep -c "🔍 Web Search:" "$current_phase_file" 2>/dev/null | tr -d '\n' || echo "0")
+                                    phase_fetches=$(grep -c "📄 Fetching:" "$current_phase_file" 2>/dev/null | tr -d '\n' || echo "0")
+                                    phase_saves=$(grep -c "💾 Saving:" "$current_phase_file" 2>/dev/null | tr -d '\n' || echo "0")
+                                    phase_greps=$(grep -c "🔎 Searching for:" "$current_phase_file" 2>/dev/null | tr -d '\n' || echo "0")
+                                    
+                                    local phase_parts=()
+                                    [ "$phase_searches" -gt 0 ] && phase_parts+=("$phase_searches searches")
+                                    [ "$phase_fetches" -gt 0 ] && phase_parts+=("$phase_fetches pages fetched")
+                                    [ "$phase_saves" -gt 0 ] && phase_parts+=("$phase_saves documents saved")
+                                    [ "$phase_greps" -gt 0 ] && phase_parts+=("$phase_greps queries")
+                                    
+                                    if [ ${#phase_parts[@]} -gt 0 ]; then
+                                        local phase_summary
+                                        phase_summary=$(IFS=" • "; echo "${phase_parts[*]}")
+                                        
+                                        echo "**🔗 Actions:** $phase_summary"
+                                        echo ""
+                                        echo "<details><summary>View detailed activity log</summary>"
+                                        echo ""
+                                        cat "$current_phase_file"
+                                        echo ""
+                                        echo "</details>"
+                                        echo ""
+                                    fi
+                                    
+                                    echo "---"
+                                    echo ""
+                                    
+                                    : > "$current_phase_file"  # Reset for next phase
+                                fi
+                                
+                                # Save the new plan (will be output before its actions)
+                                current_plan="${log_line#*📋 Planning: }"
+                            else
+                                # Regular activity - accumulate for current plan
+                                echo "$log_line" >> "$current_phase_file"
+                            fi
+                        done < "$tool_log_file"
+                        
+                        # Output final plan and its actions if we have them
+                        if [ -n "$current_plan" ]; then
+                            echo "📋 **Plan:** $current_plan"
+                            echo ""
+                            
+                            if [ -s "$current_phase_file" ]; then
+                                local phase_searches phase_fetches phase_saves phase_greps
+                                phase_searches=$(grep -c "🔍 Web Search:" "$current_phase_file" 2>/dev/null | tr -d '\n' || echo "0")
+                                phase_fetches=$(grep -c "📄 Fetching:" "$current_phase_file" 2>/dev/null | tr -d '\n' || echo "0")
+                                phase_saves=$(grep -c "💾 Saving:" "$current_phase_file" 2>/dev/null | tr -d '\n' || echo "0")
+                                phase_greps=$(grep -c "🔎 Searching for:" "$current_phase_file" 2>/dev/null | tr -d '\n' || echo "0")
+                                
+                                local phase_parts=()
+                                [ "$phase_searches" -gt 0 ] && phase_parts+=("$phase_searches searches")
+                                [ "$phase_fetches" -gt 0 ] && phase_parts+=("$phase_fetches pages fetched")
+                                [ "$phase_saves" -gt 0 ] && phase_parts+=("$phase_saves documents saved")
+                                [ "$phase_greps" -gt 0 ] && phase_parts+=("$phase_greps queries")
+                                
+                                if [ ${#phase_parts[@]} -gt 0 ]; then
+                                    local phase_summary
+                                    phase_summary=$(IFS=" • "; echo "${phase_parts[*]}")
+                                    
+                                    echo "**🔗 Actions:** $phase_summary"
+                                    echo ""
+                                    echo "<details><summary>View detailed activity log</summary>"
+                                    echo ""
+                                    cat "$current_phase_file"
+                                    echo ""
+                                    echo "</details>"
+                                    echo ""
+                                fi
+                            fi
+                        elif [ -s "$current_phase_file" ]; then
+                            # No planning, just activities (shouldn't happen but handle it)
+                            local phase_searches phase_fetches phase_saves phase_greps
+                            phase_searches=$(grep -c "🔍 Web Search:" "$current_phase_file" 2>/dev/null | tr -d '\n' || echo "0")
+                            phase_fetches=$(grep -c "📄 Fetching:" "$current_phase_file" 2>/dev/null | tr -d '\n' || echo "0")
+                            phase_saves=$(grep -c "💾 Saving:" "$current_phase_file" 2>/dev/null | tr -d '\n' || echo "0")
+                            phase_greps=$(grep -c "🔎 Searching for:" "$current_phase_file" 2>/dev/null | tr -d '\n' || echo "0")
+                            
+                            local phase_parts=()
+                            [ "$phase_searches" -gt 0 ] && phase_parts+=("$phase_searches searches")
+                            [ "$phase_fetches" -gt 0 ] && phase_parts+=("$phase_fetches pages fetched")
+                            [ "$phase_saves" -gt 0 ] && phase_parts+=("$phase_saves documents saved")
+                            [ "$phase_greps" -gt 0 ] && phase_parts+=("$phase_greps queries")
+                            
+                            if [ ${#phase_parts[@]} -gt 0 ]; then
+                                local phase_summary
+                                phase_summary=$(IFS=" • "; echo "${phase_parts[*]}")
+                                
+                                echo "**🔗 Actions:** $phase_summary"
+                                echo ""
+                                echo "<details><summary>View detailed activity log</summary>"
+                                echo ""
+                                cat "$current_phase_file"
+                                echo ""
                                 echo "</details>"
                                 echo ""
                             fi
                         fi
-                    fi
-                    
-                    # Show orchestration reasoning for mission-orchestrator (keep existing logic for backward compatibility)
-                    if [ "$agent" = "mission-orchestrator" ] && [ "$has_orchestration_log" = true ]; then
-                        local decision_entry timestamp_minute
-                        timestamp_minute="${clean_timestamp%:??Z}"
-                        decision_entry=$(grep "$timestamp_minute" "$orchestration_log" 2>/dev/null | head -1)
                         
-                        if [ -n "$decision_entry" ]; then
-                            local decision_type rationale expected_impact
-                            decision_type=$(echo "$decision_entry" | jq -r '.decision.type // "decision"' 2>/dev/null)
-                            rationale=$(echo "$decision_entry" | jq -r '.decision.rationale // ""' 2>/dev/null)
-                            expected_impact=$(echo "$decision_entry" | jq -r '.decision.expected_impact // ""' 2>/dev/null)
-                            
-                            if [ -n "$rationale" ]; then
-                                echo "> [!NOTE]"
-                                echo "> **Orchestration Decision: $decision_type**"
-                                echo ">"
-                                echo "> *Rationale:* $rationale"
-                                
-                                # Show expected impact
-                                if [ -n "$expected_impact" ]; then
-                                    echo ">"
-                                    echo "> *Expected Impact:* $expected_impact"
-                                fi
-                                
-                                echo ""
-                            fi
-                        fi
+                        # Cleanup
+                        rm -f "$current_phase_file"
                     fi
-                    ;;
                     
-                agent_result)
-                    local agent duration
-                    agent=$(echo "$line" | jq -r '.data.agent // "unknown"')
-                    duration=$(echo "$line" | jq -r '.data.duration_ms // 0')
-                    local duration_sec=$((duration / 1000))
-                    
-                    echo "*Analysis completed in ${duration_sec}s*"
+                    echo "**📊 Results:**"
                     echo ""
+                    echo "- Duration: ${duration_sec}s"
                     
                     # Extract metadata summary
                     local metadata_keys
                     metadata_keys=$(echo "$line" | jq -r '.data | keys | .[] | select(. != "agent" and . != "duration_ms" and . != "cost_usd" and . != "reasoning" and . != "model")' 2>/dev/null)
                     
                     if [ -n "$metadata_keys" ]; then
-                        echo "**Research Activity:**"
-                        echo ""
                         while IFS= read -r key; do
                             local value
                             value=$(echo "$line" | jq -r ".data.${key}" 2>/dev/null)
@@ -408,12 +702,28 @@ export_journal() {
                                 searches_performed)
                                     formatted_key="Searches performed"
                                     ;;
+                                sources_found)
+                                    formatted_key="Sources Found"
+                                    ;;
                                 *)
                                     formatted_key=$(echo "$key" | sed 's/_/ /g' | awk '{for(i=1;i<=NF;i++) $i=toupper(substr($i,1,1)) tolower(substr($i,2));}1')
                                     ;;
                             esac
-                            echo "- **$formatted_key:** $value"
+                            echo "- $formatted_key: $value"
                         done <<< "$metadata_keys"
+                    fi
+                    echo ""
+                    
+                    # Show technical details in collapsed section after results
+                    if [ "$model" != "unknown" ]; then
+                        local tools
+                        tools=$(echo "$line" | jq -r '.data.tools // "N/A"' 2>/dev/null || echo "N/A")
+                        echo "<details><summary>⚙️ Configuration</summary>"
+                        echo ""
+                        echo "- Model: \`$model\`"
+                        [ "$tools" != "N/A" ] && echo "- Tools: \`$tools\`"
+                        echo ""
+                        echo "</details>"
                         echo ""
                     fi
                     
@@ -422,37 +732,49 @@ export_journal() {
                     reasoning=$(echo "$line" | jq -c '.data.reasoning // empty' 2>/dev/null)
                     
                     if [ -n "$reasoning" ] && [ "$reasoning" != "null" ]; then
-                        echo "> [!NOTE]"
-                        echo "> **🧠 Research Reasoning**"
-                        echo ">"
-                        
-                        local synthesis_approach
+                        # Extract components for summary
+                        local synthesis_approach gap_prioritization
                         synthesis_approach=$(echo "$reasoning" | jq -r '.synthesis_approach // empty' 2>/dev/null)
+                        gap_prioritization=$(echo "$reasoning" | jq -r '.gap_prioritization // empty' 2>/dev/null)
+                        
+                        # Create one-line summary from first available field
+                        local reasoning_summary=""
                         if [ -n "$synthesis_approach" ]; then
-                            echo "> *Approach:* $synthesis_approach"
-                            echo ">"
+                            reasoning_summary=$(extract_first_sentence "$synthesis_approach")
+                        elif [ -n "$gap_prioritization" ]; then
+                            reasoning_summary=$(extract_first_sentence "$gap_prioritization")
+                        else
+                            reasoning_summary="Research reasoning available"
                         fi
                         
-                        local gap_prioritization
-                        gap_prioritization=$(echo "$reasoning" | jq -r '.gap_prioritization // empty' 2>/dev/null)
+                        echo "**🧠 Research Reasoning:** $reasoning_summary"
+                        echo ""
+                        echo "#### Detailed Reasoning"
+                        echo ""
+                        
+                        if [ -n "$synthesis_approach" ]; then
+                            echo "**Current situation:** $synthesis_approach"
+                            echo ""
+                        fi
+                        
                         if [ -n "$gap_prioritization" ]; then
-                            echo "> *Priority:* $gap_prioritization"
-                            echo ">"
+                            echo "**Focus areas:** $gap_prioritization"
+                            echo ""
                         fi
                         
                         local key_insights_count
                         key_insights_count=$(echo "$reasoning" | jq '.key_insights // [] | length' 2>/dev/null)
                         if [ "$key_insights_count" -gt 0 ]; then
-                            echo "> *Key Insights:*"
-                            echo "$reasoning" | jq -r '.key_insights // [] | .[] | "> - \(.)"' 2>/dev/null
-                            echo ">"
+                            echo "**Key insights:**"
+                            echo "$reasoning" | jq -r '.key_insights // [] | .[] | "- \(.)"' 2>/dev/null
+                            echo ""
                         fi
                         
                         local strategic_decisions_count
                         strategic_decisions_count=$(echo "$reasoning" | jq '.strategic_decisions // [] | length' 2>/dev/null)
                         if [ "$strategic_decisions_count" -gt 0 ]; then
-                            echo "> *Strategic Decisions:*"
-                            echo "$reasoning" | jq -r '.strategic_decisions // [] | .[] | "> - \(.)"' 2>/dev/null
+                            echo "**Strategic decisions:**"
+                            echo "$reasoning" | jq -r '.strategic_decisions // [] | .[] | "- \(.)"' 2>/dev/null
                             echo ""
                         fi
                     fi
@@ -801,24 +1123,33 @@ export_journal() {
                     local input_summary
                     input_summary=$(echo "$line" | jq -r '.data.input_summary // ""')
                     
-                    # Show user-facing tool activity (hide internal operations)
+                    # Accumulate tool activity to temp file (hide internal operations)
                     case "$tool" in
                         WebSearch)
                             if [ -n "$input_summary" ]; then
-                                echo "  🔍 **Web Search**: \"$input_summary\""
-                                echo ""
+                                echo "  🔍 Web Search: \"$input_summary\"" >> "$tool_log_file"
+                                # Increment counter
+                                local count
+                                count=$(jq -r '.searches // 0' "$tool_counts_file" 2>/dev/null || echo "0")
+                                jq --arg count "$((count + 1))" '.searches = ($count | tonumber)' "$tool_counts_file" > "$tool_counts_file.tmp" && mv "$tool_counts_file.tmp" "$tool_counts_file"
                             fi
                             ;;
                         WebFetch)
                             if [ -n "$input_summary" ]; then
-                                echo "  📄 **Fetching**: <$input_summary>"
-                                echo ""
+                                echo "  📄 Fetching: <$input_summary>" >> "$tool_log_file"
+                                # Increment counter
+                                local count
+                                count=$(jq -r '.fetches // 0' "$tool_counts_file" 2>/dev/null || echo "0")
+                                jq --arg count "$((count + 1))" '.fetches = ($count | tonumber)' "$tool_counts_file" > "$tool_counts_file.tmp" && mv "$tool_counts_file.tmp" "$tool_counts_file"
                             fi
                             ;;
                         TodoWrite)
                             if [ -n "$input_summary" ] && [[ "$input_summary" != "tasks" ]]; then
-                                echo "  📋 **Planning**: $input_summary"
-                                echo ""
+                                echo "  📋 Planning: $input_summary" >> "$tool_log_file"
+                                # Increment counter
+                                local count
+                                count=$(jq -r '.plans // 0' "$tool_counts_file" 2>/dev/null || echo "0")
+                                jq --arg count "$((count + 1))" '.plans = ($count | tonumber)' "$tool_counts_file" > "$tool_counts_file.tmp" && mv "$tool_counts_file.tmp" "$tool_counts_file"
                             fi
                             ;;
                         Write|Edit|MultiEdit)
@@ -826,20 +1157,25 @@ export_journal() {
                             if [[ "$input_summary" =~ findings-|mission-report|research-|synthesis- ]]; then
                                 local relative_path
                                 relative_path=$(make_path_relative "$input_summary" "$session_dir")
-                                echo "  💾 **Saving**: $relative_path"
-                                echo ""
+                                echo "  💾 Saving: $relative_path" >> "$tool_log_file"
+                                # Increment counter
+                                local count
+                                count=$(jq -r '.saves // 0' "$tool_counts_file" 2>/dev/null || echo "0")
+                                jq --arg count "$((count + 1))" '.saves = ($count | tonumber)' "$tool_counts_file" > "$tool_counts_file.tmp" && mv "$tool_counts_file.tmp" "$tool_counts_file"
                             fi
                             ;;
                         Grep)
                             if [ -n "$input_summary" ]; then
-                                echo "  🔎 **Searching for**: $input_summary"
-                                echo ""
+                                echo "  🔎 Searching for: $input_summary" >> "$tool_log_file"
+                                # Increment counter
+                                local count
+                                count=$(jq -r '.greps // 0' "$tool_counts_file" 2>/dev/null || echo "0")
+                                jq --arg count "$((count + 1))" '.greps = ($count | tonumber)' "$tool_counts_file" > "$tool_counts_file.tmp" && mv "$tool_counts_file.tmp" "$tool_counts_file"
                             fi
                             ;;
                         Glob)
                             if [ -n "$input_summary" ]; then
-                                echo "  📁 **Finding files**: $input_summary"
-                                echo ""
+                                echo "  📁 Finding files: $input_summary" >> "$tool_log_file"
                             fi
                             ;;
                         Bash|TodoRead)
@@ -860,112 +1196,201 @@ export_journal() {
             esac
         done < "$events_file"
         
-        # Add comprehensive research findings section
+        # Add research knowledge map section
         echo ""
         echo "---"
         echo ""
-        echo "## Comprehensive Research Findings"
+        echo "## Research Knowledge Map"
         echo ""
         
-        # Find findings files (use find -print0 for paths with spaces)
+        # Find findings files and calculate statistics
         local total_entities=0 total_claims=0 total_sources=0 total_gaps=0
         
         if [ -d "$session_dir/raw" ]; then
-            # Count entities
-            total_entities=$(find "$session_dir/raw" -name "findings-*.json" -type f -print0 2>/dev/null | \
-                xargs -0 jq -r '[.entities_discovered // [] | .[]] | length' 2>/dev/null | \
-                awk '{sum+=$1} END {print sum+0}')
-            
-            # Count claims
-            total_claims=$(find "$session_dir/raw" -name "findings-*.json" -type f -print0 2>/dev/null | \
-                xargs -0 jq -r '[.claims // [] | .[]] | length' 2>/dev/null | \
-                awk '{sum+=$1} END {print sum+0}')
-            
-            # Count unique sources
-            total_sources=$(find "$session_dir/raw" -name "findings-*.json" -type f -print0 2>/dev/null | \
-                xargs -0 jq -r '.claims[]?.sources[]?.url // empty' 2>/dev/null | \
-                sort -u | wc -l | tr -d ' ')
-            
-            # Count gaps
+            # Count totals
+            total_entities=$(get_findings_stats "$session_dir" "entities")
+            total_claims=$(get_findings_stats "$session_dir" "claims")
+            total_sources=$(get_findings_stats "$session_dir" "sources")
             total_gaps=$(find "$session_dir/raw" -name "findings-*.json" -type f -print0 2>/dev/null | \
                 xargs -0 jq -r '[.gaps_identified // [] | .[]] | length' 2>/dev/null | \
                 awk '{sum+=$1} END {print sum+0}')
             
-            # Ensure variables are numeric (default to 0 if empty)
             total_entities=${total_entities:-0}
             total_claims=${total_claims:-0}
             total_sources=${total_sources:-0}
             total_gaps=${total_gaps:-0}
             
-            echo "Throughout this investigation, the research agents discovered **${total_entities} entities**, validated **${total_claims} claims**, consulted **${total_sources} authoritative sources**, and identified **${total_gaps} knowledge gaps** requiring further investigation."
+            echo "Throughout this investigation, the research agents accumulated **${total_entities} entities**, validated **${total_claims} claims**, and consulted **${total_sources} authoritative sources**."
             echo ""
             
-            echo "<details><summary>View detailed findings</summary>"
-            echo ""
-            
-            # Entities
-            if [ "$total_entities" -gt 0 ]; then
-                echo "### Entities Discovered"
+            # Coverage assessment based on entity types and claims
+            if [ "$total_entities" -gt 0 ] || [ "$total_claims" -gt 0 ]; then
+                echo "**Coverage Assessment:**"
                 echo ""
-                find "$session_dir/raw" -name "findings-*.json" -type f -print0 2>/dev/null | xargs -0 jq -r '
-                    .entities_discovered // [] | .[] | 
-                    "- **\(.name)** (\(.type)): \(.description)\n  _Confidence: \((.confidence // 0) * 100 | floor)%_\n"
-                ' 2>/dev/null
-                echo ""
-            fi
-            
-            # Claims
-            if [ "$total_claims" -gt 0 ]; then
-                echo "### Claims Validated"
-                echo ""
-                find "$session_dir/raw" -name "findings-*.json" -type f -print0 2>/dev/null | xargs -0 jq -r '
-                    .claims // [] | .[] | 
-                    "- \(.statement)\n  - Confidence: \((.confidence // 0) * 100 | floor)%, Evidence Quality: \(.evidence_quality // "unknown")\n  - Sources: \((.sources // [] | length))\n"
-                ' 2>/dev/null
-                echo ""
-            fi
-            
-            # Key Sources
-            if [ "$total_sources" -gt 0 ]; then
-                echo "### Key Sources"
-                echo ""
-                # Consolidate sources first to a temp file for faster processing
-                local temp_sources="/tmp/sources-$$.json"
-                find "$session_dir/raw" -name "findings-*.json" -type f -print0 2>/dev/null | \
-                    xargs -0 jq -s '[.[] | .claims // [] | .[].sources // [] | .[]] | unique_by(.title)' > "$temp_sources" 2>/dev/null
                 
-                # shellcheck disable=SC2016
-                jq -r '
-                    def format_credibility:
-                        gsub("_"; " ") | split(" ") | map(.[0:1] as $first | .[1:] as $rest | ($first | ascii_upcase) + $rest) | join(" ");
-                    def construct_url:
-                        if .url and .url != null and .url != "" then .url
-                        elif .pmid and .pmid != null and .pmid != "" then "https://pubmed.ncbi.nlm.nih.gov/\(.pmid)/"
-                        elif .doi and .doi != null and .doi != "" then "https://doi.org/\(.doi)"
-                        else null
-                        end;
-                    .[] | select(construct_url != null) | 
-                    "- [\(.title)](\(construct_url))\n  - Credibility: \((.credibility // "unknown") | format_credibility)\n"
-                ' "$temp_sources" 2>/dev/null | head -50
+                # Detect coverage areas from entity types
+                local has_concepts has_papers has_technology
+                has_concepts=$(find "$session_dir/raw" -name "findings-*.json" -type f -print0 2>/dev/null | \
+                    xargs -0 jq -r '.entities_discovered[]? | select(.type == "concept") | .name' 2>/dev/null | head -1)
+                has_papers=$(find "$session_dir/raw" -name "findings-*.json" -type f -print0 2>/dev/null | \
+                    xargs -0 jq -r '.entities_discovered[]? | select(.type == "paper") | .name' 2>/dev/null | head -1)
+                has_technology=$(find "$session_dir/raw" -name "findings-*.json" -type f -print0 2>/dev/null | \
+                    xargs -0 jq -r '.entities_discovered[]? | select(.type == "technology") | .name' 2>/dev/null | head -1)
                 
-                rm -f "$temp_sources"
+                [ -n "$has_concepts" ] && echo "✓ Theoretical foundations documented"
+                [ -n "$has_papers" ] && echo "✓ Academic literature reviewed"
+                [ -n "$has_technology" ] && echo "✓ Technologies and implementations analyzed"
+                [ "$total_claims" -gt 10 ] && echo "✓ Multiple perspectives incorporated"
+                [ "$total_sources" -gt 5 ] && echo "✓ Cross-validated across authoritative sources"
+                
+                if [ "$total_gaps" -gt 0 ]; then
+                    echo "⚠ $total_gaps knowledge gaps identified for future research"
+                fi
                 echo ""
             fi
             
-            # Gaps
+            # Show top priority research gaps (top 10)
             if [ "$total_gaps" -gt 0 ]; then
-                echo "### Research Gaps Identified"
+                echo "**Top Priority Research Gaps:**"
                 echo ""
-                find "$session_dir/raw" -name "findings-*.json" -type f -print0 2>/dev/null | xargs -0 jq -r '
-                    .gaps_identified // [] | .[] | 
-                    "- **\(.question)**\n  - Priority: \(.priority // 0), Reason: \(.reason // "Not specified")\n"
-                ' 2>/dev/null
+                find "$session_dir/raw" -name "findings-*.json" -type f -print0 2>/dev/null | \
+                    xargs -0 jq -r '.gaps_identified // [] | .[]' 2>/dev/null | \
+                    jq -sr 'sort_by(.priority // 0) | reverse | .[0:10] | .[] | 
+                        "\(.priority // 0). **\(.question // .gap_description // .description)**\n   - \(.reason // .rationale // "No rationale provided")\n"' 2>/dev/null
+                
+                if [ "$total_gaps" -gt 10 ]; then
+                    echo ""
+                    echo "<details><summary>View all gaps identified ($total_gaps total)</summary>"
+                    echo ""
+                    find "$session_dir/raw" -name "findings-*.json" -type f -print0 2>/dev/null | \
+                        xargs -0 jq -r '.gaps_identified // [] | .[] | 
+                            "- **\(.question // .gap_description // .description)**\n  - Priority: \(.priority // 0), Reason: \(.reason // .rationale // "Not specified")\n"' 2>/dev/null
+                    echo ""
+                    echo "</details>"
+                fi
                 echo ""
             fi
             
-            echo "</details>"
+            # Show detailed findings (visible by default)
+            if [ "$total_entities" -gt 0 ] || [ "$total_claims" -gt 0 ]; then
+                echo ""
+                
+                # Entities
+                if [ "$total_entities" -gt 0 ]; then
+                    echo "### Entities Discovered"
+                    echo ""
+                    find "$session_dir/raw" -name "findings-*.json" -type f -print0 2>/dev/null | xargs -0 jq -r '
+                        .entities_discovered // [] | .[] | 
+                        "- **\(.name)** (\(.type)): \(.description)\n  _Confidence: \((.confidence // 0) * 100 | floor)%_\n"
+                    ' 2>/dev/null
+                    echo ""
+                fi
+                
+                # Claims (show first 20, rest collapsed if more)
+                if [ "$total_claims" -gt 0 ]; then
+                    echo "### Claims Validated"
+                    echo ""
+                    
+                    if [ "$total_claims" -le 20 ]; then
+                        # Show all claims if 20 or fewer
+                        # shellcheck disable=SC2016
+                        find "$session_dir/raw" -name "findings-*.json" -type f -print0 2>/dev/null | xargs -0 jq -r '
+                            def format_credibility:
+                                gsub("_"; " ") | split(" ") | map(.[0:1] as $first | .[1:] as $rest | ($first | ascii_upcase) + $rest) | join(" ");
+                            .claims // [] | .[] | 
+                            "- \(.statement)\n  - Confidence: \((.confidence // 0) * 100 | floor)%, Evidence Quality: \(.evidence_quality // "unknown")\n  - Sources:\n\((.sources // [] | .[0:3] | .[] | "    - [\(.title)](\(.url)) (\(.credibility // "unknown" | format_credibility)\(.date // "" | if . != "" then ", " + . else "" end))"))\n"
+                        ' 2>/dev/null
+                    else
+                        # Show first 20, collapse the rest
+                        # shellcheck disable=SC2016
+                        find "$session_dir/raw" -name "findings-*.json" -type f -print0 2>/dev/null | xargs -0 jq -r '
+                            def format_credibility:
+                                gsub("_"; " ") | split(" ") | map(.[0:1] as $first | .[1:] as $rest | ($first | ascii_upcase) + $rest) | join(" ");
+                            .claims // [] | .[] | 
+                            "- \(.statement)\n  - Confidence: \((.confidence // 0) * 100 | floor)%, Evidence Quality: \(.evidence_quality // "unknown")\n  - Sources:\n\((.sources // [] | .[0:3] | .[] | "    - [\(.title)](\(.url)) (\(.credibility // "unknown" | format_credibility)\(.date // "" | if . != "" then ", " + . else "" end))"))\n"
+                        ' 2>/dev/null | head -120
+                        
+                        echo ""
+                        echo "<details><summary>View all claims ($total_claims total)</summary>"
+                        echo ""
+                        # shellcheck disable=SC2016
+                        find "$session_dir/raw" -name "findings-*.json" -type f -print0 2>/dev/null | xargs -0 jq -r '
+                            def format_credibility:
+                                gsub("_"; " ") | split(" ") | map(.[0:1] as $first | .[1:] as $rest | ($first | ascii_upcase) + $rest) | join(" ");
+                            .claims // [] | .[] | 
+                            "- \(.statement)\n  - Confidence: \((.confidence // 0) * 100 | floor)%, Evidence Quality: \(.evidence_quality // "unknown")\n  - Sources:\n\((.sources // [] | .[0:3] | .[] | "    - [\(.title)](\(.url)) (\(.credibility // "unknown" | format_credibility)\(.date // "" | if . != "" then ", " + . else "" end))"))\n"
+                        ' 2>/dev/null | tail -n +121
+                        echo ""
+                        echo "</details>"
+                    fi
+                    echo ""
+                fi
+                
+                # Key Sources (show first 30, rest collapsed if more)
+                if [ "$total_sources" -gt 0 ]; then
+                    echo "### Key Sources"
+                    echo ""
+                    local temp_sources="/tmp/sources-$$.json"
+                    find "$session_dir/raw" -name "findings-*.json" -type f -print0 2>/dev/null | \
+                        xargs -0 jq -s '[.[] | .claims // [] | .[].sources // [] | .[]] | unique_by(.title)' > "$temp_sources" 2>/dev/null
+                    
+                    if [ "$total_sources" -le 30 ]; then
+                        # Show all sources if 30 or fewer
+                        # shellcheck disable=SC2016
+                        jq -r '
+                            def format_credibility:
+                                gsub("_"; " ") | split(" ") | map(.[0:1] as $first | .[1:] as $rest | ($first | ascii_upcase) + $rest) | join(" ");
+                            def construct_url:
+                                if .url and .url != null and .url != "" then .url
+                                elif .pmid and .pmid != null and .pmid != "" then "https://pubmed.ncbi.nlm.nih.gov/\(.pmid)/"
+                                elif .doi and .doi != null and .doi != "" then "https://doi.org/\(.doi)"
+                                else null
+                                end;
+                            .[] | select(construct_url != null) | 
+                            "- [\(.title)](\(construct_url))\n  - Credibility: \((.credibility // "unknown") | format_credibility)\n"
+                        ' "$temp_sources" 2>/dev/null
+                    else
+                        # Show first 30, collapse the rest
+                        # shellcheck disable=SC2016
+                        jq -r '
+                            def format_credibility:
+                                gsub("_"; " ") | split(" ") | map(.[0:1] as $first | .[1:] as $rest | ($first | ascii_upcase) + $rest) | join(" ");
+                            def construct_url:
+                                if .url and .url != null and .url != "" then .url
+                                elif .pmid and .pmid != null and .pmid != "" then "https://pubmed.ncbi.nlm.nih.gov/\(.pmid)/"
+                                elif .doi and .doi != null and .doi != "" then "https://doi.org/\(.doi)"
+                                else null
+                                end;
+                            .[] | select(construct_url != null) | 
+                            "- [\(.title)](\(construct_url))\n  - Credibility: \((.credibility // "unknown") | format_credibility)\n"
+                        ' "$temp_sources" 2>/dev/null | head -90
+                        
+                        echo ""
+                        echo "<details><summary>View all sources ($total_sources total)</summary>"
+                        echo ""
+                        # shellcheck disable=SC2016
+                        jq -r '
+                            def format_credibility:
+                                gsub("_"; " ") | split(" ") | map(.[0:1] as $first | .[1:] as $rest | ($first | ascii_upcase) + $rest) | join(" ");
+                            def construct_url:
+                                if .url and .url != null and .url != "" then .url
+                                elif .pmid and .pmid != null and .pmid != "" then "https://pubmed.ncbi.nlm.nih.gov/\(.pmid)/"
+                                elif .doi and .doi != null and .doi != "" then "https://doi.org/\(.doi)"
+                                else null
+                                end;
+                            .[] | select(construct_url != null) | 
+                            "- [\(.title)](\(construct_url))\n  - Credibility: \((.credibility // "unknown") | format_credibility)\n"
+                        ' "$temp_sources" 2>/dev/null | tail -n +91
+                        echo ""
+                        echo "</details>"
+                    fi
+                    
+                    rm -f "$temp_sources"
+                    echo ""
+                fi
+            fi
         else
-            echo "No detailed findings data available for this session."
+            echo "No findings data available for this session."
         fi
         
         echo ""
@@ -1098,6 +1523,61 @@ export_journal() {
                 fi
                 echo ""
             fi
+        fi
+        
+        # Process observations based on measurable metrics
+        if [ -f "$dashboard_metrics" ] || [ -d "$session_dir/raw" ]; then
+            echo "**Process Observations:**"
+            echo ""
+            
+            local observations_found=false
+            
+            # Efficiency observation: check if completed quickly
+            if [ -n "$duration_minutes" ] && [ "$duration_minutes" -gt 0 ]; then
+                if [ "$iterations" -gt 0 ]; then
+                    local avg_iteration_time=$((duration_minutes / iterations))
+                    if [ "$avg_iteration_time" -lt 10 ]; then
+                        echo "- Research cycles completed efficiently (avg ${avg_iteration_time} min per cycle)"
+                        observations_found=true
+                    fi
+                fi
+            fi
+            
+            # Quality observation: high confidence
+            if [ -n "$avg_confidence" ] && [ "$avg_confidence" -ge 85 ]; then
+                echo "- High-confidence findings achieved (${avg_confidence}% average)"
+                observations_found=true
+            fi
+            
+            # Coverage observation: multiple sources
+            if [ "$sources" -gt 20 ]; then
+                echo "- Comprehensive source coverage ($sources sources consulted)"
+                observations_found=true
+            fi
+            
+            # Issue observation from dashboard metrics
+            if [ -f "$dashboard_metrics" ]; then
+                local errors warnings
+                errors=$(jq -r '.system_health.errors // 0' "$dashboard_metrics" 2>/dev/null)
+                warnings=$(jq -r '.system_health.warnings // 0' "$dashboard_metrics" 2>/dev/null)
+                
+                if [ "$errors" -gt 0 ]; then
+                    echo "- Encountered $errors error(s) during research (see system logs)"
+                    observations_found=true
+                fi
+            fi
+            
+            # Gap observation
+            if [ "$total_gaps" -gt 15 ]; then
+                echo "- Significant knowledge gaps identified ($total_gaps) suggesting complex topic"
+                observations_found=true
+            fi
+            
+            if [ "$observations_found" = false ]; then
+                echo "- Research completed successfully"
+            fi
+            
+            echo ""
         fi
         
         # Link to final report

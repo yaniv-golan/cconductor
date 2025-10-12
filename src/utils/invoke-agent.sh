@@ -12,7 +12,6 @@ set -euo pipefail
 
 # Source event logger for Phase 2 metrics
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 # shellcheck disable=SC1091
 source "$SCRIPT_DIR/event-logger.sh" 2>/dev/null || true
 # shellcheck disable=SC1091

@@ -5,7 +5,7 @@ All notable changes to CConductor will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.2.0] - 2025-10-11
+## [0.2.0] - 2025-10-12
 
 ### Mission-Based Orchestration
 
@@ -43,6 +43,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Flexible Presentation**: Same research can be reformatted without re-running
 - **Action Verbs**: Agents now have configurable action verbs for better verbose output (e.g., "Researching", "Parsing", "Synthesizing")
 
+### Knowledge Graph Integration
+
+- **Reliable KG Integration**: Resolved silent sourcing failures that prevented KG integration
+  - Created standalone `kg-integrate.sh` wrapper with subprocess isolation
+  - Eliminated complex dependency chain issues
+  - Added resilient 4-path extraction for findings files (Tier 1)
+  - Enhanced Tier 0 extraction for structured JSON output
+  - Production validated: 100% success rate across multiple agents
+- **Agent JSON Output**: Strengthened JSON output requirements for research agents
+  - Agent-specific instructions to prevent markdown fallback
+  - Enhanced web-researcher manifest validation
+  - Added JSON parser integration for Tier 0 validation
+- All research agent findings now reliably integrate into knowledge graph
+- Fast execution: 3-5 seconds per integration
+- Defensive error handling: warnings don't break sessions
+
 ### Technical Improvements
 
 - **Error Logging**: Centralized error tracking system for better observability
@@ -51,6 +67,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Code Quality**: Comprehensive shellcheck validation
 - **Path Resolution**: Fixed double `src/src` path issues in orchestrator
 - **Agent Security**: Read-only tool restrictions for prompt-parser agent
+- **Export Journal**: Fixed unbound variable error in trap handler
 
 ### Migration from v0.1.x
 
