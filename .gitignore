@@ -60,3 +60,22 @@ test-phase0-simple.sh
 *.backup-*
 *.backup
 *.bak*
+
+# Development session notes (AI assistant generated, not for repo)
+/*_COMPLETE.md
+/*_SUMMARY*.md
+/*_REPORT*.md
+/*_FIXES*.md
+/*_FIX*.md
+/*_ANALYSIS.md
+/*_REVIEW*.md
+/*_IMPLEMENTATION*.md
+/*_VALIDATION*.md
+/*_MONITORING*.md
+/*_HEALTH*.md
+/*_TESTING*.md
+RELEASE_NOTES_v*.md
+TODO_AUDIT.txt
+research-journal-*.plan.md
+test-*.sh
+obsidian/
