@@ -60,6 +60,15 @@ Agent metadata defines an agent's capabilities, tools, inputs/outputs, and other
 - **Example**: `"Market Sizing Expert"`
 - **Fallback**: If not provided, the `name` field is converted (hyphens → spaces)
 
+### action_verb
+- **Type**: string
+- **Description**: Action verb displayed in verbose mode to describe what the agent is doing
+- **Purpose**: Provides context-appropriate labels in verbose output (e.g., "Researching", "Parsing", "Synthesizing")
+- **Format**: Present continuous tense (e.g., "Analyzing", "Verifying", "Planning")
+- **Example**: `"Researching"`, `"Parsing"`, `"Synthesizing"`
+- **Fallback**: If not provided, defaults to generic "Looking for"
+- **Display**: Used in verbose output as `"action_verb: task description"`
+
 ### capabilities
 - **Type**: array of strings
 - **Description**: Capability IDs from `config/capabilities.json`

@@ -1379,6 +1379,50 @@ correction as of 2024, including current solutions?"
 **Before**: "CRISPR research"  
 **After**: "What are the latest advances in CRISPR gene editing for therapeutic applications, 2023-2024?"
 
+### Custom Output Formatting
+
+CConductor automatically separates your research objective from formatting instructions, allowing you to specify how you want results presented.
+
+**How it works**:
+
+1. **Prompt Parser**: Automatically extracts research goal and format specifications
+2. **Research Agents**: Focus on gathering evidence using clean objective
+3. **Synthesis Agent**: Applies your custom formatting to results
+
+**Example with Custom Format**:
+
+```bash
+cconductor "Research the effectiveness of SSRIs for depression.
+
+Output format:
+- Executive summary (2-3 paragraphs)
+- Key findings with confidence levels
+- Leading studies with full citations
+- Limitations and caveats"
+```
+
+**Format Specifications**:
+
+You can include formatting instructions like:
+- Structure (sections, bullet points, tables)
+- Detail level (brief vs. comprehensive)
+- Citation style (APA, MLA, inline links)
+- Special requirements (numerical data emphasis, visual recommendations)
+
+**What Happens**:
+
+- **Research objective**: "Research the effectiveness of SSRIs for depression"  
+  → Sent to research agents
+- **Format specification**: "Executive summary (2-3 paragraphs)..."  
+  → Applied during synthesis
+- **Result**: Research focused on evidence, formatted as requested
+
+**Benefits**:
+
+- Research agents aren't confused by formatting instructions
+- Same research can be reformatted without re-running
+- Clean knowledge graph without format pollution
+
 ---
 
 ## Organizing Research
