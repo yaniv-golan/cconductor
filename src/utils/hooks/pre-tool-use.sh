@@ -36,6 +36,34 @@ tool_name=$(echo "$hook_data" | jq -r '.tool_name // "unknown"')
 # Get agent name from environment (set by invoke-agent.sh)
 agent_name="${CCONDUCTOR_AGENT_NAME:-unknown}"
 
+# Validate file access for orchestrator (session-only restriction)
+if [[ "$agent_name" == "mission-orchestrator" ]]; then
+    case "$tool_name" in
+        Read|Write|Edit|MultiEdit)
+            file_path=$(echo "$hook_data" | jq -r '.tool_input.file_path // ""')
+            if [[ -n "$file_path" ]]; then
+                # Get absolute path
+                abs_path=$(cd "$(dirname "$file_path")" 2>/dev/null && pwd)/$(basename "$file_path") || abs_path="$file_path"
+                
+                # Check if path is within session directory
+                if [[ -n "$session_dir" ]]; then
+                    abs_session=$(cd "$session_dir" 2>/dev/null && pwd)
+                    # Allow session directory, config directory, and knowledge-base
+                    if [[ "$abs_path" != "$abs_session"* ]] && \
+                       [[ "$abs_path" != *"/config/"* ]] && \
+                       [[ "$abs_path" != *"/knowledge-base/"* ]] && \
+                       [[ "$abs_path" != *"/knowledge-base-custom/"* ]]; then
+                        echo "ERROR: Orchestrator cannot access files outside session directory" >&2
+                        echo "  Blocked: $file_path" >&2
+                        echo "  Session: $session_dir" >&2
+                        exit 1
+                    fi
+                fi
+            fi
+            ;;
+    esac
+fi
+
 # Extract tool input (summary only, full data in events.jsonl)
 tool_input_summary=""
 case "$tool_name" in

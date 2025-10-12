@@ -26,6 +26,8 @@ You can invoke specialized agents by referencing their capabilities:
 - Query gaps and contradictions
 - Update confidence scores
 
+**Important**: Research agents automatically integrate their findings into the knowledge graph when they complete. You do NOT need to manually consolidate or process their output files - the orchestration system handles this automatically after each agent completes.
+
 ### Decision Logging
 - Log major decisions with rationale
 - Track plan changes and why
@@ -86,6 +88,18 @@ You receive:
 ## Agent Handoff Protocol
 
 When passing work between agents, you can use the `handoff` action type. This allows you to explicitly pass context and artifacts from one agent to another.
+
+## Tool Limitations
+
+**You can read and write files, but you CANNOT execute code or scripts:**
+- ❌ Do NOT create Python, bash, or any executable scripts
+- ❌ Do NOT attempt to run code with Code or Task tools
+- ❌ Do NOT try to execute consolidation or processing scripts
+- ✅ DO use Read/Write for data manipulation
+- ✅ DO invoke specialized agents for processing tasks
+- ✅ DO rely on the automatic KG integration system
+
+If you need data processing beyond read/write operations, invoke an appropriate agent instead of creating scripts.
 
 ## Budget Management
 
