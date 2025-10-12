@@ -20,11 +20,6 @@ source "$SCRIPT_DIR/error-logger.sh" 2>/dev/null || true
 # shellcheck disable=SC1091
 source "$SCRIPT_DIR/verbose.sh" 2>/dev/null || true
 
-# Source knowledge graph utilities for integration
-# shellcheck disable=SC1091
-if [ -f "$PROJECT_ROOT/knowledge-graph.sh" ]; then
-    source "$PROJECT_ROOT/knowledge-graph.sh"
-fi
 
 # Check if Claude CLI is available
 check_claude_cli() {
@@ -574,6 +569,51 @@ invoke_agent_v2() {
             jq 'keys' "$output_file" >&2
             return 1
         fi
+        
+        # NEW: Validate .result field is extractable JSON for research agents (Tier 0 requirement)
+        if [[ "$agent_name" =~ ^(web-researcher|academic-researcher|pdf-analyzer|code-analyzer|fact-checker|market-analyzer)$ ]]; then
+            # Source the battle-tested JSON parser
+            local parser_script="$cconductor_root/src/utils/json-parser.sh"
+            if [[ -f "$parser_script" ]]; then
+                # shellcheck disable=SC1090
+                source "$parser_script"
+                
+                # Attempt to extract JSON from agent output
+                local extracted_json
+                if extracted_json=$(extract_json_from_agent_output "$output_file" false 2>/dev/null); then
+                    # Success - validate it's not empty
+                    if [[ -n "$extracted_json" ]] && echo "$extracted_json" | jq empty 2>/dev/null; then
+                        echo "  ✓ Agent $agent_name output validated as JSON" >&2
+                        
+                        # For web-researcher, verify manifest structure
+                        if [[ "$agent_name" == "web-researcher" ]]; then
+                            if echo "$extracted_json" | jq -e 'has("status") and has("findings_files")' >/dev/null 2>&1; then
+                                echo "  ✓ Manifest structure valid" >&2
+                            else
+                                echo "  ⚠️  Warning: Manifest missing required fields (status, findings_files)" >&2
+                            fi
+                        fi
+                    else
+                        echo "⚠️  Warning: Agent $agent_name extracted JSON is empty or invalid" >&2
+                        echo "   Tier 0 extraction will fail. Falling back to Tier 1/2." >&2
+                    fi
+                else
+                    echo "⚠️  Warning: Agent $agent_name output could not be parsed as JSON" >&2
+                    echo "   Tier 0 extraction will fail. Falling back to Tier 1/2." >&2
+                    
+                    # Log for monitoring
+                    if command -v log_event &>/dev/null; then
+                        local result_preview
+                        result_preview=$(jq -r '.result // "no result"' "$output_file" 2>/dev/null | head -c 100)
+                        log_event "$session_dir" "tier0_format_mismatch" \
+                            "Agent $agent_name returned non-parseable result" \
+                            "{\"agent\": \"$agent_name\", \"result_preview\": \"$result_preview\"}" || true
+                    fi
+                fi
+            else
+                echo "⚠️  Warning: json-parser.sh not found, skipping enhanced validation" >&2
+            fi
+        fi
 
         # Phase 2: Extract metrics and log result
         local end_time
@@ -598,13 +638,20 @@ invoke_agent_v2() {
         
         # Integrate findings into knowledge graph for research agents
         if [[ "$agent_name" =~ ^(web-researcher|academic-researcher|pdf-analyzer|code-analyzer|fact-checker|market-analyzer)$ ]]; then
-            if [ -n "${session_dir:-}" ] && command -v kg_integrate_agent_output &>/dev/null; then
+            if [ -n "${session_dir:-}" ]; then
                 local agent_output_file="$session_dir/agent-output-${agent_name}.json"
                 if [ -f "$agent_output_file" ]; then
-                    if kg_integrate_agent_output "$session_dir" "$agent_output_file"; then
-                        echo "  ✓ Integrated findings into knowledge graph" >&2
+                    # Call standalone wrapper via subprocess (handles all dependencies internally)
+                    # Use cconductor_root (not PROJECT_ROOT) - it's the reliable variable discovered earlier
+                    local wrapper_script="$cconductor_root/src/utils/kg-integrate.sh"
+                    if [ -f "$wrapper_script" ]; then
+                        if bash "$wrapper_script" "$session_dir" "$agent_output_file" 2>&1; then
+                            echo "  ✓ Integrated findings into knowledge graph" >&2
+                        else
+                            echo "  ⚠ Warning: Could not integrate findings (knowledge graph may be incomplete)" >&2
+                        fi
                     else
-                        echo "  ⚠ Warning: Could not integrate findings (knowledge graph may be incomplete)" >&2
+                        echo "  ⚠ Warning: KG integration wrapper not found at $wrapper_script" >&2
                     fi
                 fi
             fi
