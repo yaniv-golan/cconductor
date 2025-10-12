@@ -35,12 +35,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Session Viewer**: View research journal with `cconductor sessions viewer`
 - **Better Organization**: Improved session listing and status display
 
+### Prompt Parser & Output Formatting (October 12, 2025)
+
+- **Automatic Prompt Separation**: New prompt-parser agent separates research objectives from formatting instructions
+- **Custom Output Formats**: Specify how results should be formatted without confusing research agents
+- **Clean Knowledge Graph**: Research objectives stored without format pollution or JSON corruption
+- **Flexible Presentation**: Same research can be reformatted without re-running
+- **Action Verbs**: Agents now have configurable action verbs for better verbose output (e.g., "Researching", "Parsing", "Synthesizing")
+
 ### Technical Improvements
 
 - **Error Logging**: Centralized error tracking system for better observability
 - **Platform Compatibility**: Improved macOS and Linux compatibility
 - **Display Names**: Agents now have user-friendly display names in UI
 - **Code Quality**: Comprehensive shellcheck validation
+- **Path Resolution**: Fixed double `src/src` path issues in orchestrator
+- **Agent Security**: Read-only tool restrictions for prompt-parser agent
 
 ### Migration from v0.1.x
 
