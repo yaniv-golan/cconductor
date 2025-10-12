@@ -66,11 +66,15 @@ calculate_growth_rate() {
         return 1
     fi
 
-    local gr mult
-    if ! read -r gr mult < <(awk -v o="$old_value" -v n="$new_value" 'BEGIN{ if (o==0) exit 2; printf "%.2f %.2f", ((n-o)/o)*100, (n/o) }'); then
+    # Compute with awk
+    local output
+    if ! output=$(awk -v o="$old_value" -v n="$new_value" 'BEGIN{ if (o==0) exit 2; printf "%.2f %.2f", ((n-o)/o)*100, (n/o) }'); then
         jq -n --arg err "Old value is zero" '{growth_rate: null, multiplier: null, error: $err}' >&2
         return 1
     fi
+    
+    local gr mult
+    read -r gr mult <<< "$output"
     jq -n --arg gr "$gr" --arg m "$mult" '{growth_rate: ($gr|tonumber), multiplier: ($m|tonumber), error: null}'
 }
 
