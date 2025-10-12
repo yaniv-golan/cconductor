@@ -312,6 +312,81 @@ SPEC_EOF
         fi
     fi
     
+    # Build instructions based on agent type
+    local instructions_section
+    
+    if [[ "$agent_name" == "web-researcher" ]]; then
+        # Web-researcher: Manifest-only output (findings go to files)
+        instructions_section=$(cat <<'INSTRUCTIONS_EOF'
+## Instructions
+Complete this task and write findings to separate JSON files in raw/ directory.
+
+Return ONLY this JSON manifest (no markdown, no explanations):
+
+{
+  "status": "completed",
+  "tasks_completed": <number>,
+  "findings_files": [
+    "raw/findings-<task_id>.json",
+    ...
+  ]
+}
+
+CRITICAL REQUIREMENTS:
+- Response must be ONLY the JSON manifest above
+- Start with { and end with }
+- NO markdown formatting (no ```json blocks)
+- NO explanatory text
+- If any task failed, set status to "partial" and add "errors" array
+
+Example CORRECT: {"status":"completed","tasks_completed":2,"findings_files":["raw/findings-t0.json","raw/findings-t1.json"]}
+Example WRONG: Here's the manifest: ```json {"status":"completed"} ```
+INSTRUCTIONS_EOF
+)
+    elif [[ "$agent_name" =~ ^(academic-researcher|pdf-analyzer|code-analyzer|fact-checker|market-analyzer)$ ]]; then
+        # Other research agents: Full JSON schema output
+        instructions_section=$(cat <<'INSTRUCTIONS_EOF'
+## Instructions
+Return ONLY valid JSON matching this exact schema:
+
+{
+  "task_id": "string",
+  "status": "completed|failed",
+  "entities_discovered": [
+    {"name": "string", "type": "string", "description": "string", 
+     "confidence": 0.0-1.0, "sources": ["url"]}
+  ],
+  "claims": [
+    {"statement": "string", "confidence": 0.0-1.0, "evidence_quality": "high|medium|low",
+     "sources": [{"url": "string", "title": "string", "relevant_quote": "string"}]}
+  ],
+  "relationships_discovered": [...],
+  "gaps_identified": [{"question": "string", "priority": 1-10}]
+}
+
+CRITICAL REQUIREMENTS:
+- Return ONLY the JSON object above
+- Start with { and end with }
+- NO markdown formatting (no ```json blocks)
+- NO explanatory text before or after
+- Validate all JSON is properly escaped
+
+Example CORRECT: {"task_id":"t0","status":"completed","entities_discovered":[...],"claims":[...]}
+Example WRONG: Here are my findings: ```json {"entities_discovered": [...]} ```
+
+If you must explain something, put it in a "notes" field within the JSON.
+INSTRUCTIONS_EOF
+)
+    else
+        # Non-research agents: generic instructions
+        instructions_section=$(cat <<'INSTRUCTIONS_EOF'
+## Instructions
+Please complete this task and provide your findings in a structured format.
+Include any artifacts you create and cite all sources.
+INSTRUCTIONS_EOF
+)
+    fi
+    
     local agent_input
     agent_input=$(cat <<EOF
 $task
@@ -322,9 +397,7 @@ $context
 ## Input Artifacts
 $artifacts_section${output_spec_section}
 
-## Instructions
-Please complete this task and provide your findings in a structured format.
-Include any artifacts you create and cite all sources.
+$instructions_section
 EOF
 )
     

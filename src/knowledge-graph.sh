@@ -830,9 +830,106 @@ kg_integrate_agent_output() {
         cp "$kg_file" "${kg_file}.backup" 2>/dev/null || true
     fi
     
+    # Tier 0: Extract structured JSON directly from agent output (NEW)
+    # This handles agents that output {entities_discovered, claims, ...} directly
+    # in their JSON output, whether at root or wrapped in 'result' field
+    local agent_data
+    if agent_data=$(jq -e . "$agent_output_file" 2>/dev/null); then
+        # Check if data has entities_discovered/claims at root
+        local has_structured_data
+        has_structured_data=$(echo "$agent_data" | jq 'has("entities_discovered") or has("claims")' 2>/dev/null)
+        
+        # If not at root, check if wrapped in .result field (common pattern)
+        if [[ "$has_structured_data" != "true" ]]; then
+            local result_content
+            result_content=$(echo "$agent_data" | jq -r '.result // empty' 2>/dev/null)
+            
+            # Try to parse .result as JSON
+            if [[ -n "$result_content" ]]; then
+                if echo "$result_content" | jq -e 'has("entities_discovered") or has("claims")' >/dev/null 2>&1; then
+                    # Found structured data in .result - use it
+                    agent_data=$(echo "$result_content" | jq -e . 2>/dev/null)
+                    has_structured_data="true"
+                fi
+            fi
+        fi
+        
+        # If we found structured data, integrate it
+        if [[ "$has_structured_data" == "true" ]]; then
+            local entity_count=0
+            local claim_count=0
+            
+            # Extract entities
+            local entities
+            entities=$(echo "$agent_data" | jq -c '.entities_discovered // []' 2>/dev/null)
+            entity_count=$(echo "$entities" | jq 'length' 2>/dev/null || echo "0")
+            
+            # Extract claims
+            local claims
+            claims=$(echo "$agent_data" | jq -c '.claims // []' 2>/dev/null)
+            claim_count=$(echo "$claims" | jq 'length' 2>/dev/null || echo "0")
+            
+            # If we have data, integrate it
+            if [[ "$entity_count" -gt 0 ]] || [[ "$claim_count" -gt 0 ]]; then
+                echo "  Found $entity_count entities, $claim_count claims in agent output" >&2
+                
+                local integrated=0
+                
+                # Add entities to KG
+                if [[ "$entity_count" -gt 0 ]]; then
+                    echo "$entities" | jq -c '.[]' | while IFS= read -r entity; do
+                        local entity_name
+                        entity_name=$(echo "$entity" | jq -r '.name // empty')
+                        if [[ -n "$entity_name" ]]; then
+                            kg_add_entity "$session_dir" "$entity" >/dev/null 2>&1 && integrated=$((integrated + 1))
+                        fi
+                    done
+                fi
+                
+                # Add claims to KG
+                if [[ "$claim_count" -gt 0 ]]; then
+                    echo "$claims" | jq -c '.[]' | while IFS= read -r claim; do
+                        local claim_text
+                        claim_text=$(echo "$claim" | jq -r '.statement // .claim // empty')
+                        if [[ -n "$claim_text" ]]; then
+                            kg_add_claim "$session_dir" "$claim" >/dev/null 2>&1 && integrated=$((integrated + 1))
+                        fi
+                    done
+                fi
+                
+                echo "  ✓ Integrated structured findings into knowledge graph" >&2
+                return 0
+            fi
+        fi
+    fi
+    
     # Tier 1: Extract findings files list from agent output manifest
-    local findings_files
+    # Try multiple extraction paths to be resilient to output variations
+    local findings_files=""
+    
+    # Tier 1a: Try root level .findings_files[] (legacy/direct format)
     findings_files=$(jq -r '.findings_files[]? // empty' "$agent_output_file" 2>/dev/null)
+    
+    # Tier 1b: Try parsing .result as JSON string, then extract findings_files
+    if [ -z "$findings_files" ]; then
+        findings_files=$(jq -r '.result // empty' "$agent_output_file" 2>/dev/null | \
+                        jq -r '.findings_files[]? // empty' 2>/dev/null)
+    fi
+    
+    # Tier 1c: Try parsing .result as JSON string (if it's a string), then extract
+    if [ -z "$findings_files" ]; then
+        local result_content
+        result_content=$(jq -r '.result // empty' "$agent_output_file" 2>/dev/null)
+        if [[ -n "$result_content" ]]; then
+            # Try to parse result_content as JSON
+            findings_files=$(echo "$result_content" | jq -r '.findings_files[]? // empty' 2>/dev/null)
+        fi
+    fi
+    
+    # Tier 1d: Try .result.findings_files[] if .result is already an object
+    if [ -z "$findings_files" ]; then
+        findings_files=$(jq -r '.result.findings_files[]? // empty' "$agent_output_file" 2>/dev/null)
+    fi
     
     if [ -z "$findings_files" ]; then
         # Tier 2: Filesystem fallback - look in raw/ and session root
@@ -862,6 +959,12 @@ kg_integrate_agent_output() {
     # Process each findings file
     local integrated=0
     while IFS= read -r findings_file; do
+        # Resolve path: handle both absolute and relative paths
+        # Relative paths are resolved relative to session_dir
+        if [[ "$findings_file" != /* ]]; then
+            findings_file="$session_dir/$findings_file"
+        fi
+        
         [ -f "$findings_file" ] || continue
         [ ! -s "$findings_file" ] && continue  # Skip empty files
         

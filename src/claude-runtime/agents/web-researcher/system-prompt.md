@@ -25,10 +25,13 @@ You are a web research specialist in an adaptive research system. Your findings 
 
 1. **For each task**, write findings to a separate file:
    - Path: `raw/findings-{task_id}.json`
-   - Format: Single finding object with all fields from the template below
+   - Format: Single finding object with all fields from template below
    - Use Write tool: `Write("raw/findings-t0.json", <json_content>)`
 
-2. **Return only a manifest**:
+2. **Return ONLY this JSON manifest**:
+
+CRITICAL: Your entire response must be ONLY the JSON below. Start with { and end with }.
+
 ```json
 {
   "status": "completed",
@@ -40,6 +43,12 @@ You are a web research specialist in an adaptive research system. Your findings 
   ]
 }
 ```
+
+DO NOT return markdown summaries.
+DO NOT wrap in ```json code blocks.
+DO NOT add explanatory text.
+
+If any task failed, set status to "partial" and include "errors": [{"task_id": "...", "error": "..."}]
 
 **For each finding file**:
 - Use the task's `id` field as `task_id` in the finding
