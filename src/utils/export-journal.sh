@@ -591,11 +591,11 @@ export_journal() {
                                         
                                         echo "**🔗 Actions:** $phase_summary"
                                         echo ""
-                                        echo "<details><summary>View detailed activity log</summary>"
-                                        echo ""
-                                        cat "$current_phase_file"
-                                        echo ""
-                                        echo "</details>"
+                                        echo "> [!note]- View detailed activity log"
+                                        echo ">"
+                                        while IFS= read -r log_line; do
+                                            echo "> $log_line"
+                                        done < "$current_phase_file"
                                         echo ""
                                     fi
                                     
@@ -637,11 +637,11 @@ export_journal() {
                                     
                                     echo "**🔗 Actions:** $phase_summary"
                                     echo ""
-                                    echo "<details><summary>View detailed activity log</summary>"
-                                    echo ""
-                                    cat "$current_phase_file"
-                                    echo ""
-                                    echo "</details>"
+                                    echo "> [!note]- View detailed activity log"
+                                    echo ">"
+                                    while IFS= read -r log_line; do
+                                        echo "> $log_line"
+                                    done < "$current_phase_file"
                                     echo ""
                                 fi
                             fi
@@ -665,11 +665,11 @@ export_journal() {
                                 
                                 echo "**🔗 Actions:** $phase_summary"
                                 echo ""
-                                echo "<details><summary>View detailed activity log</summary>"
-                                echo ""
-                                cat "$current_phase_file"
-                                echo ""
-                                echo "</details>"
+                                echo "> [!note]- View detailed activity log"
+                                echo ">"
+                                while IFS= read -r log_line; do
+                                    echo "> $log_line"
+                                done < "$current_phase_file"
                                 echo ""
                             fi
                         fi
@@ -718,12 +718,10 @@ export_journal() {
                     if [ "$model" != "unknown" ]; then
                         local tools
                         tools=$(echo "$line" | jq -r '.data.tools // "N/A"' 2>/dev/null || echo "N/A")
-                        echo "<details><summary>⚙️ Configuration</summary>"
-                        echo ""
-                        echo "- Model: \`$model\`"
-                        [ "$tools" != "N/A" ] && echo "- Tools: \`$tools\`"
-                        echo ""
-                        echo "</details>"
+                        echo "> [!note]- ⚙️ Configuration"
+                        echo ">"
+                        echo "> - Model: \`$model\`"
+                        [ "$tools" != "N/A" ] && echo "> - Tools: \`$tools\`"
                         echo ""
                     fi
                     
@@ -1260,13 +1258,11 @@ export_journal() {
                 
                 if [ "$total_gaps" -gt 10 ]; then
                     echo ""
-                    echo "<details><summary>View all gaps identified ($total_gaps total)</summary>"
-                    echo ""
+                    echo "> [!note]- View all gaps identified ($total_gaps total)"
+                    echo ">"
                     find "$session_dir/raw" -name "findings-*.json" -type f -print0 2>/dev/null | \
                         xargs -0 jq -r '.gaps_identified // [] | .[] | 
-                            "- **\(.question // .gap_description // .description)**\n  - Priority: \(.priority // 0), Reason: \(.reason // .rationale // "Not specified")\n"' 2>/dev/null
-                    echo ""
-                    echo "</details>"
+                            "> - **\(.question // .gap_description // .description)**\n>   - Priority: \(.priority // 0), Reason: \(.reason // .rationale // \"Not specified\")\n>"' 2>/dev/null
                 fi
                 echo ""
             fi
@@ -1311,17 +1307,15 @@ export_journal() {
                         ' 2>/dev/null | head -120
                         
                         echo ""
-                        echo "<details><summary>View all claims ($total_claims total)</summary>"
-                        echo ""
+                        echo "> [!note]- View all claims ($total_claims total)"
+                        echo ">"
                         # shellcheck disable=SC2016
                         find "$session_dir/raw" -name "findings-*.json" -type f -print0 2>/dev/null | xargs -0 jq -r '
                             def format_credibility:
                                 gsub("_"; " ") | split(" ") | map(.[0:1] as $first | .[1:] as $rest | ($first | ascii_upcase) + $rest) | join(" ");
                             .claims // [] | .[] | 
-                            "- \(.statement)\n  - Confidence: \((.confidence // 0) * 100 | floor)%, Evidence Quality: \(.evidence_quality // "unknown")\n  - Sources:\n\((.sources // [] | .[0:3] | .[] | "    - [\(.title)](\(.url)) (\(.credibility // "unknown" | format_credibility)\(.date // "" | if . != "" then ", " + . else "" end))"))\n"
+                            "> - \(.statement)\n>   - Confidence: \((.confidence // 0) * 100 | floor)%, Evidence Quality: \(.evidence_quality // \"unknown\")\n>   - Sources:\n\((.sources // [] | .[0:3] | .[] | \">     - [\(.title)](\(.url)) (\(.credibility // \"unknown\" | format_credibility)\(.date // \"\" | if . != \"\" then \", \" + . else \"\" end))\"))\n>"
                         ' 2>/dev/null | tail -n +121
-                        echo ""
-                        echo "</details>"
                     fi
                     echo ""
                 fi
@@ -1366,8 +1360,8 @@ export_journal() {
                         ' "$temp_sources" 2>/dev/null | head -90
                         
                         echo ""
-                        echo "<details><summary>View all sources ($total_sources total)</summary>"
-                        echo ""
+                        echo "> [!note]- View all sources ($total_sources total)"
+                        echo ">"
                         # shellcheck disable=SC2016
                         jq -r '
                             def format_credibility:
@@ -1379,10 +1373,8 @@ export_journal() {
                                 else null
                                 end;
                             .[] | select(construct_url != null) | 
-                            "- [\(.title)](\(construct_url))\n  - Credibility: \((.credibility // "unknown") | format_credibility)\n"
+                            "> - [\(.title)](\(construct_url))\n>   - Credibility: \((.credibility // \"unknown\") | format_credibility)\n>"
                         ' "$temp_sources" 2>/dev/null | tail -n +91
-                        echo ""
-                        echo "</details>"
                     fi
                     
                     rm -f "$temp_sources"
