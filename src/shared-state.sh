@@ -125,8 +125,10 @@ atomic_write() {
 
     # Add trap to ensure cleanup on error
     trap 'lock_release "$file"' RETURN ERR
-    echo "$content" > "$file"
-    local result=$?
+    local result=0
+    if ! echo "$content" > "$file"; then
+        result=$?
+    fi
     lock_release "$file"
     trap - RETURN ERR
     return $result
