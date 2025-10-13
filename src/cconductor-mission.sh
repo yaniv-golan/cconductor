@@ -167,7 +167,7 @@ cmd_resume() {
         local temp_file
         temp_file=$(mktemp)
         jq --arg ref "$refinement" \
-           --arg time "$(date -u +"%Y-%m-%dT%H:%M:%SZ")" \
+           --arg time "$(get_timestamp)" \
            '.refinements = (.refinements // []) | .refinements += [{refinement: $ref, added_at: $time}]' \
            "$session_dir/session.json" > "$temp_file"
         mv "$temp_file" "$session_dir/session.json"

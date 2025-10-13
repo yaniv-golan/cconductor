@@ -5,6 +5,47 @@ All notable changes to CConductor will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.3] - 2025-10-13
+
+### Added
+
+- **Security Enhancements**: Comprehensive security fixes for shell scripting vulnerabilities (see `docs/SECURITY_FIXES_2025-10-13.md`)
+  - Fixed command injection vulnerability in `with_lock` function (replaced `eval` with safe `"$@"`)
+  - Added trap handlers to prevent stale locks on error conditions
+  - Implemented checksum verification for self-update downloads (prevents RCE)
+  - Separated curl stderr from status output to prevent corruption
+  - Changed to safer `rmdir` for lock directory removal
+  - Made `debug.sh` and `error-messages.sh` safe for sourcing (conditional `set -e`)
+  - Improved `setup-hooks.sh` idempotency with deep merge
+  - Enhanced error handling in `kg-integrate.sh` with optional dependencies
+  - Added semver validation to `verify-version.sh`
+  - Fixed JSON array initialization in `artifact-manager.sh`
+  - Broadened function search in `code-health.sh`
+  - Fixed `max_length` parameter usage in `summarizer.sh`
+
+- **Configurable Security Policies**: Safe-fetch security restrictions now configurable
+  - New configuration file: `config/safe-fetch-policy.default.json`
+  - Control URL restrictions (localhost, IP addresses)
+  - Control content restrictions (executables, archives, compressed files)
+  - All policies default to secure settings (blocking enabled)
+
+- **Documentation**: Root cause analysis and security fixes documentation
+  - `ROOT_CAUSE_ANALYSIS_2025-10-13.md` - Detailed analysis of WebFetch bug
+  - `BUG_FIX_CONFIG_NAMING.md` - Quick reference for the critical fix
+  - `docs/SECURITY_FIXES_2025-10-13.md` - Complete security fixes documentation
+
+### Changed
+
+- **Timestamp Refactoring**: Standardized timestamp generation across all modules
+  - All modules now use centralized `get_timestamp()` function from `src/shared-state.sh`
+  - Ensures consistent UTC ISO 8601 format throughout the system
+  - Updated 6 files: `cconductor-mission.sh`, `mission-orchestration.sh`, `mission-session-init.sh`, `kg-artifact-processor.sh`, and two hook scripts
+
+### Removed
+
+- Deleted one-time migration script `scripts/refactor-timestamps.sh` after manual verification and application
+- Updated `scripts/README.md` to reflect script cleanup
+
 ## [0.2.2] - 2025-10-13
 
 ### Removed

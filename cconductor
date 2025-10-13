@@ -5,8 +5,8 @@
 
 set -euo pipefail
 
-VERSION="0.2.2"
 CCONDUCTOR_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+VERSION="$(cat "$CCONDUCTOR_ROOT/VERSION" 2>/dev/null | tr -d '\n' || echo "unknown")"
 
 # Debug mode support
 if [ "${CCONDUCTOR_DEBUG:-0}" = "1" ]; then
@@ -54,9 +54,7 @@ source "$CCONDUCTOR_ROOT/src/utils/init-and-update.sh"
 
 # Version management
 show_version() {
-    local version
-    version=$(cat "$CCONDUCTOR_ROOT/VERSION" 2>/dev/null || echo "$VERSION")
-    echo "CConductor v$version"
+    echo "CConductor v$VERSION"
     
     # Trigger async update check
     if [ -f "$CCONDUCTOR_ROOT/src/utils/version-manager.sh" ]; then

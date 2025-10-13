@@ -63,7 +63,9 @@ lock_release() {
     local lock_file="${file}.lock"
 
     if [ -d "$lock_file" ]; then
-        rm -rf "$lock_file"
+        # Use rmdir instead of rm -rf (safer for directory locks)
+        rm -f "$lock_file/pid" 2>/dev/null || true
+        rmdir "$lock_file" 2>/dev/null || true
     fi
 }
 
@@ -75,14 +77,15 @@ get_timestamp() {
 
 # Execute with lock (automatic acquire and release)
 # Note: Uses explicit lock release instead of trap to avoid interfering with caller's traps
+# Usage: with_lock FILE COMMAND [ARGS...]
 with_lock() {
     local file="$1"
     shift
-    local command="$*"
+    # Now "$@" preserves argument boundaries (safe from injection)
 
     if lock_acquire "$file"; then
-        # Run command and capture result
-        eval "$command"
+        # Run command safely without eval
+        "$@"
         local result=$?
 
         # Always release lock, even if command failed
@@ -98,9 +101,17 @@ with_lock() {
 atomic_read() {
     local file="$1"
 
-    lock_acquire "$file" || return 1
+    if ! lock_acquire "$file"; then
+        return 1
+    fi
+
+    # Add trap to ensure cleanup on error
+    trap 'lock_release "$file"' RETURN ERR
     cat "$file"
+    local result=$?
     lock_release "$file"
+    trap - RETURN ERR
+    return $result
 }
 
 # Atomic write (with lock)
@@ -108,9 +119,17 @@ atomic_write() {
     local file="$1"
     local content="$2"
 
-    lock_acquire "$file" || return 1
+    if ! lock_acquire "$file"; then
+        return 1
+    fi
+
+    # Add trap to ensure cleanup on error
+    trap 'lock_release "$file"' RETURN ERR
     echo "$content" > "$file"
+    local result=$?
     lock_release "$file"
+    trap - RETURN ERR
+    return $result
 }
 
 # Atomic JSON update (read, modify, write)

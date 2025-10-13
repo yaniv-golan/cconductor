@@ -89,7 +89,7 @@ create_retry_instructions() {
     local instructions_file="$session_dir/${agent_name}.retry-instructions.json"
     
     local timestamp
-    timestamp=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+    timestamp=$(get_timestamp)
     
     cat > "$instructions_file" <<EOF
 {

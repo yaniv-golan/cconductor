@@ -2,8 +2,11 @@
 # Debug Utility - Conditional debug logging
 # Usage: Set CCONDUCTOR_DEBUG=1 to enable debug output
 
-# Don't use pipefail here - this is a utility that should be safe to source
-set -euo pipefail 2>/dev/null || set -eu
+# Only set shell options if running directly, not when sourced
+# This prevents mutating the caller's shell state
+if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
+    set -euo pipefail 2>/dev/null || set -eu
+fi
 
 # Check if debug mode is enabled
 is_debug_enabled() {

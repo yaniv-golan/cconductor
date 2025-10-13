@@ -14,10 +14,34 @@ source "$SCRIPT_DIR/config-loader.sh"
 URL="$1"
 OUTPUT_FILE="${2:-/dev/stdout}"
 
+# Load URL policy from configuration
+ALLOW_LOCALHOST=$(get_config_value "safe-fetch-policy" ".url_restrictions.allow_localhost" "false")
+ALLOW_IPS=$(get_config_value "safe-fetch-policy" ".url_restrictions.allow_ip_addresses" "false")
+
+# Build URL validation regex based on policy
+if [[ "$ALLOW_LOCALHOST" == "true" ]]; then
+    # Allow localhost and standard domains
+    URL_PATTERN='^https?://(localhost|127\.0\.0\.1|[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})(:[0-9]+)?(/.*)?$'
+elif [[ "$ALLOW_IPS" == "true" ]]; then
+    # Allow IP addresses and standard domains
+    URL_PATTERN='^https?://([0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}|[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})(:[0-9]+)?(/.*)?$'
+else
+    # Strict: domain names only (default secure behavior)
+    URL_PATTERN='^https?://[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}(/.*)?$'
+fi
+
 # Validate URL format
-if ! echo "$URL" | grep -qE '^https?://[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}(/.*)?$'; then
+if ! echo "$URL" | grep -qE "$URL_PATTERN"; then
     echo "Error: Invalid URL format: $URL" >&2
-    echo "URL must be http:// or https:// with valid domain" >&2
+    if [[ "$ALLOW_LOCALHOST" != "true" ]] && echo "$URL" | grep -qE 'localhost|127\.0\.0\.1'; then
+        echo "Note: localhost URLs are blocked by policy. To enable, set:" >&2
+        echo "  config/safe-fetch-policy.default.json -> url_restrictions.allow_localhost = true" >&2
+    elif [[ "$ALLOW_IPS" != "true" ]] && echo "$URL" | grep -qE '^https?://[0-9]{1,3}\.[0-9]'; then
+        echo "Note: IP addresses are blocked by policy. To enable, set:" >&2
+        echo "  config/safe-fetch-policy.default.json -> url_restrictions.allow_ip_addresses = true" >&2
+    else
+        echo "URL must be http:// or https:// with valid domain" >&2
+    fi
     exit 1
 fi
 
@@ -29,9 +53,11 @@ TIMEOUT_SEC=$(get_config_value "security-config" ".profiles.${PROFILE}.fetch_tim
 # Convert MB to bytes for curl
 MAX_SIZE_BYTES=$((MAX_SIZE_MB * 1024 * 1024))
 
-# Create temporary file for fetch
+# Create temporary files for fetch
 TEMP_FILE=$(mktemp)
-trap 'rm -f "$TEMP_FILE"' EXIT
+TEMP_STATUS=$(mktemp)
+TEMP_STDERR=$(mktemp)
+trap 'rm -f "$TEMP_FILE" "$TEMP_STATUS" "$TEMP_STDERR"' EXIT
 
 # Perform fetch with security limits
 if ! curl -L \
@@ -41,17 +67,22 @@ if ! curl -L \
     -A "ResearchEngine/1.0 (Academic Research)" \
     --proto =https,http \
     -s \
-    -w "HTTP_CODE:%{http_code}\n" \
-    "$URL" > "$TEMP_FILE" 2>&1; then
+    -w "%{http_code}" \
+    -o "$TEMP_FILE" \
+    "$URL" > "$TEMP_STATUS" 2> "$TEMP_STDERR"; then
 
     echo "Error: Failed to fetch $URL" >&2
-    echo "Check network connection and URL validity" >&2
+    # Show actual error message from curl
+    if [ -s "$TEMP_STDERR" ]; then
+        cat "$TEMP_STDERR" >&2
+    else
+        echo "Check network connection and URL validity" >&2
+    fi
     exit 1
 fi
 
 # Extract HTTP code from curl output
-HTTP_CODE=$(grep "HTTP_CODE:" "$TEMP_FILE" | cut -d: -f2 || echo "000")
-sed -i.bak '/HTTP_CODE:/d' "$TEMP_FILE" 2>/dev/null || sed -i '' '/HTTP_CODE:/d' "$TEMP_FILE" 2>/dev/null || true
+HTTP_CODE=$(cat "$TEMP_STATUS" 2>/dev/null || echo "000")
 
 # Check HTTP status
 if [ "$HTTP_CODE" -ge 400 ]; then
@@ -59,13 +90,28 @@ if [ "$HTTP_CODE" -ge 400 ]; then
     exit 1
 fi
 
-# Validate content isn't binary malware
+# Load content policy from configuration
+BLOCK_EXECUTABLES=$(get_config_value "safe-fetch-policy" ".content_restrictions.block_executables" "true")
+BLOCK_ARCHIVES=$(get_config_value "safe-fetch-policy" ".content_restrictions.block_archives" "true")
+BLOCK_COMPRESSED=$(get_config_value "safe-fetch-policy" ".content_restrictions.block_compressed" "false")
+
+# Validate content based on policy
 if command -v file >/dev/null 2>&1; then
     FILE_TYPE=$(file -b "$TEMP_FILE")
-    if echo "$FILE_TYPE" | grep -qiE "(executable|archive|compressed data)"; then
-        echo "Warning: Binary/executable content detected, skipping" >&2
-        echo "File type: $FILE_TYPE" >&2
-        exit 1
+    
+    # Build blocked pattern from configuration
+    BLOCKED_PATTERNS=()
+    [[ "$BLOCK_EXECUTABLES" == "true" ]] && BLOCKED_PATTERNS+=("executable")
+    [[ "$BLOCK_ARCHIVES" == "true" ]] && BLOCKED_PATTERNS+=("archive")
+    [[ "$BLOCK_COMPRESSED" == "true" ]] && BLOCKED_PATTERNS+=("compressed data")
+    
+    if [[ ${#BLOCKED_PATTERNS[@]} -gt 0 ]]; then
+        PATTERN=$(IFS="|"; echo "${BLOCKED_PATTERNS[*]}")
+        if echo "$FILE_TYPE" | grep -qiE "($PATTERN)"; then
+            echo "Error: Blocked content type detected: $FILE_TYPE" >&2
+            echo "Content policy blocks this type. To adjust, edit config/safe-fetch-policy.default.json" >&2
+            exit 1
+        fi
     fi
 fi
 

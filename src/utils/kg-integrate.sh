@@ -18,7 +18,10 @@ source "$WRAPPER_ROOT/shared-state.sh" || exit 1
 # shellcheck disable=SC1091
 source "$WRAPPER_DIR/validation.sh" || exit 1
 # shellcheck disable=SC1091
-source "$WRAPPER_DIR/event-logger.sh" || true  # Optional
+source "$WRAPPER_DIR/event-logger.sh" || {
+    # Provide stub functions if event-logger unavailable (truly optional)
+    log_event() { :; }
+}
 # shellcheck disable=SC1091
 source "$WRAPPER_ROOT/knowledge-graph.sh" || exit 1
 

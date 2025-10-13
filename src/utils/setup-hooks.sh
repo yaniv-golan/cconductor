@@ -36,6 +36,12 @@ setup_tool_hooks() {
         echo '{}' > "$settings_file"
     fi
     
+    # Check if hooks already configured (idempotent)
+    if jq -e '.hooks.PostToolUse[0].hooks[0].command == ".claude/hooks/post-tool-use.sh"' "$settings_file" >/dev/null 2>&1; then
+        echo "✓ Tool observability hooks already configured" >&2
+        return 0
+    fi
+    
     # Create hooks configuration using RELATIVE paths
     # This ensures hooks work regardless of spaces in repo path
     local hooks_config
@@ -58,8 +64,11 @@ setup_tool_hooks() {
         }
     }')
     
-    # Merge with existing settings
-    jq --argjson hooks "$hooks_config" '. + $hooks' "$settings_file" > "${settings_file}.tmp"
+    # Merge with existing settings (using deep merge to avoid duplicates)
+    jq --argjson hooks "$hooks_config" '
+        .hooks.PreToolUse = ($hooks.hooks.PreToolUse // .hooks.PreToolUse // []) |
+        .hooks.PostToolUse = ($hooks.hooks.PostToolUse // .hooks.PostToolUse // [])
+    ' "$settings_file" > "${settings_file}.tmp"
     mv "${settings_file}.tmp" "$settings_file"
     
     echo "✓ Tool observability hooks configured (copied to session)" >&2

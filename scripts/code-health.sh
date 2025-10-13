@@ -13,7 +13,7 @@ echo ""
 
 # Function count
 echo "Top 20 files by function count:"
-grep -rh "^[a-z_][a-z_0-9]*() {" src/*.sh src/utils/*.sh 2>/dev/null | \
+grep -rh "^[a-z_][a-z_0-9]*() {" src/ 2>/dev/null | \
     sed 's/^.*\///' | cut -d: -f1 | sort | uniq -c | sort -rn | head -20
 
 echo ""

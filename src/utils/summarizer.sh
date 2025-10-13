@@ -6,9 +6,12 @@
 create_summary() {
     local input_file="$1"
     local max_length="${2:-2000}"  # Max tokens
+    
+    # Convert max_length to integer for jq
+    local max_int=$max_length
 
     # Extract key information and create concise summary
-    jq --arg max "$max_length" '
+    jq --argjson max_int "$max_int" '
     {
         total_sources: ([.[] | .source] | unique | length),
         total_facts: ([.[] | .key_facts[]] | length),
@@ -17,7 +20,7 @@ create_summary() {
             map({(.[0].credibility): length}) |
             add
         ),
-        top_facts: ([.[] | .key_facts[]] | .[0:20]),
+        top_facts: ([.[] | .key_facts[]] | .[0:($max_int / 100 | floor)]),
         sources: ([.[] | {
             url: .source,
             title: .source_title,

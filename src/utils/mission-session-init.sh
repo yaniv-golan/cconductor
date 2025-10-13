@@ -146,7 +146,7 @@ initialize_session() {
     jq -n \
         --arg objective "$mission_objective" \
         --arg question "$mission_objective" \
-        --arg timestamp "$(date -u +"%Y-%m-%dT%H:%M:%SZ")" \
+        --arg timestamp "$(get_timestamp)" \
         --arg session_type "mission" \
         --arg version "0.2.0" \
         --arg claude_ver "$claude_version" \

@@ -4,6 +4,8 @@ Utility scripts for maintenance and development.
 
 ## Available Scripts
 
+### Development Scripts
+
 ### `cleanup.sh`
 
 Comprehensive cleanup script for CConductor development and testing.
@@ -70,27 +72,59 @@ Comprehensive cleanup script for CConductor development and testing.
 
 ---
 
-### `generate-checksums.sh`
+### `code-health.sh`
 
-Generates SHA256 checksums for distribution files.
+Reports code quality metrics (function counts, LOC, TODOs, manual locking usage).
 
 **Usage:**
 
 ```bash
-./scripts/generate-checksums.sh
+./scripts/code-health.sh
 ```
+
+---
+
+### `check-locking.sh`
+
+Checks for manual `lock_acquire`/`lock_release` usage vs atomic operations.
+
+**Usage:**
+
+```bash
+./scripts/check-locking.sh
+```
+
+Helps track refactoring progress toward using `atomic_json_update` consistently.
+
+---
+
+### Release Management Scripts
+
+### `generate-checksums.sh`
+
+Generates SHA256 checksums for distribution files (used in releases).
+
+**Usage:**
+
+```bash
+./scripts/generate-checksums.sh [version]
+```
+
+**Note:** Critical for secure self-updates (Issue #4 fix).
 
 ---
 
 ### `verify-version.sh`
 
-Verifies version consistency across files.
+Validates VERSION file matches git tag with semver format validation.
 
 **Usage:**
 
 ```bash
-./scripts/verify-version.sh
+./scripts/verify-version.sh v0.1.0
 ```
+
+**Note:** Recently improved to validate semver format (Issue #27 fix).
 
 ---
 

@@ -135,7 +135,7 @@ artifact_link_handoff() {
   jq \
     --arg id "$artifact_id" \
     --arg handoff "$handoff_id" \
-    '(.artifacts[] | select(.id == $id) | .handoffs) += [$handoff]' \
+    '(.artifacts[] | select(.id == $id) | .handoffs) |= (. // []) + [$handoff]' \
     "$manifest_file" > "$manifest_file.tmp"
   
   mv "$manifest_file.tmp" "$manifest_file"

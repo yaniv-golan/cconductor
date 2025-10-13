@@ -2,6 +2,15 @@
 # Research Logger Hook
 # Logs all research activities for audit trail and reproducibility
 
+# Source shared-state.sh for get_timestamp function
+HOOK_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(cd "$HOOK_DIR/../../.." && pwd)"
+# shellcheck disable=SC1091
+source "$PROJECT_ROOT/src/shared-state.sh" 2>/dev/null || {
+    # Fallback: inline get_timestamp if shared-state.sh not found
+    get_timestamp() { date -u +"%Y-%m-%dT%H:%M:%SZ"; }
+}
+
 # Configuration
 LOG_DIR="$HOME/.claude/research-engine"
 AUDIT_LOG="$LOG_DIR/audit.log"

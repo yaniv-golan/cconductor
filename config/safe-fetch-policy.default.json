@@ -1,0 +1,17 @@
+{
+  "_comment": "Safe fetch security policy configuration",
+  "_description": "Controls security restrictions for web fetching operations",
+  "url_restrictions": {
+    "allow_localhost": false,
+    "allow_ip_addresses": false,
+    "allowed_protocols": ["https", "http"],
+    "custom_allowed_domains": []
+  },
+  "content_restrictions": {
+    "block_executables": true,
+    "block_archives": true,
+    "block_compressed": false,
+    "allowed_mime_types": []
+  }
+}
+

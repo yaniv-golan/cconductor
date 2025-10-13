@@ -2,7 +2,11 @@
 # User-Friendly Error Message Wrappers
 # Translates technical errors into actionable user guidance
 
-set -euo pipefail
+# Only set shell options if running directly, not when sourced
+# This prevents mutating the caller's shell state
+if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
+    set -euo pipefail
+fi
 
 # Lock acquisition failed
 error_lock_failed() {

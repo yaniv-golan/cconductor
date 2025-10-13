@@ -98,21 +98,46 @@ perform_update() {
         echo "→ Downloading latest installer..."
         
         local temp_installer="/tmp/cconductor-install-$$.sh"
-        if curl -fsSL "https://github.com/yaniv-golan/cconductor/releases/latest/download/install.sh" \
+        local temp_checksum="/tmp/cconductor-install-$$.sh.sha256"
+        
+        # Download installer
+        if ! curl -fsSL "https://github.com/yaniv-golan/cconductor/releases/latest/download/install.sh" \
             -o "$temp_installer" 2>/dev/null; then
-            chmod +x "$temp_installer"
-            echo "→ Running installer..."
-            bash "$temp_installer" "$CCONDUCTOR_ROOT"
-            rm "$temp_installer"
-            echo ""
-            echo "✅ Updated successfully"
-        else
             echo "✗ Failed to download installer"
             echo ""
             echo "Manual update:"
             echo "  curl -fsSL https://github.com/yaniv-golan/cconductor/releases/latest/download/install.sh | bash"
             exit 1
         fi
+        
+        # Download and verify checksum
+        if ! curl -fsSL "https://github.com/yaniv-golan/cconductor/releases/latest/download/install.sh.sha256" \
+            -o "$temp_checksum" 2>/dev/null; then
+            echo "⚠ Warning: Could not download checksum, skipping verification"
+            echo "This is a security risk. Continue anyway? [y/N]"
+            read -r response
+            if [[ "${response,,}" != "y" ]]; then
+                rm -f "$temp_installer"
+                exit 1
+            fi
+        else
+            # Verify checksum
+            echo "→ Verifying checksum..."
+            if ! (cd /tmp && sha256sum -c "$temp_checksum" 2>/dev/null || shasum -a 256 -c "$temp_checksum" 2>/dev/null); then
+                echo "✗ Checksum verification failed!"
+                echo "This could indicate a compromised download."
+                rm -f "$temp_installer" "$temp_checksum"
+                exit 1
+            fi
+            echo "✓ Checksum verified"
+        fi
+        
+        chmod +x "$temp_installer"
+        echo "→ Running installer..."
+        bash "$temp_installer" "$CCONDUCTOR_ROOT"
+        rm -f "$temp_installer" "$temp_checksum"
+        echo ""
+        echo "✅ Updated successfully"
     fi
 }
 

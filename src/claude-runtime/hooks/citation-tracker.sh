@@ -2,6 +2,15 @@
 # Citation Tracker Hook
 # Maintains a database of all sources accessed during research
 
+# Source shared-state.sh for get_timestamp function
+HOOK_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(cd "$HOOK_DIR/../../.." && pwd)"
+# shellcheck disable=SC1091
+source "$PROJECT_ROOT/src/shared-state.sh" 2>/dev/null || {
+    # Fallback: inline get_timestamp if shared-state.sh not found
+    get_timestamp() { date -u +"%Y-%m-%dT%H:%M:%SZ"; }
+}
+
 CITATIONS_DB="$HOME/.claude/research-engine/citations.json"
 mkdir -p "$(dirname "$CITATIONS_DB")"
 

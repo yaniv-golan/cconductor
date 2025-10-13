@@ -14,6 +14,14 @@ fi
 # Remove 'v' prefix
 TAG_VERSION="${TAG_VERSION#v}"
 
+# Validate semver format
+if ! echo "$TAG_VERSION" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9.-]+)?(\+[a-zA-Z0-9.-]+)?$'; then
+    echo "ERROR: Invalid version format: $TAG_VERSION"
+    echo "Expected semver format: MAJOR.MINOR.PATCH[-prerelease][+build]"
+    echo "Examples: 1.0.0, 1.2.3-beta, 2.0.0-rc.1+build.123"
+    exit 1
+fi
+
 # Read VERSION file
 if [ ! -f "VERSION" ]; then
     echo "ERROR: VERSION file not found"

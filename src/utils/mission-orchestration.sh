@@ -870,7 +870,7 @@ $(artifact_list_all "$session_dir" | jq -r '.[] | "- \(.path) (\(.type), produce
 
 ---
 
-Report generated at: $(date -u +"%Y-%m-%dT%H:%M:%SZ")
+Report generated at: $(get_timestamp)
 EOF
     
     echo "  ✓ Report generated: $report_file"
@@ -1021,7 +1021,7 @@ run_mission_orchestration() {
     
     # Mark session as completed
     local completed_at
-    completed_at=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+    completed_at=$(get_timestamp)
     jq --arg completed "$completed_at" \
         '.completed_at = $completed | .status = "completed"' \
         "$session_dir/session.json" > "$session_dir/session.json.tmp" && \
@@ -1199,7 +1199,7 @@ run_mission_orchestration_resume() {
     
     # Mark session as completed
     local completed_at
-    completed_at=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+    completed_at=$(get_timestamp)
     jq --arg completed "$completed_at" \
         '.completed_at = $completed | .status = "completed"' \
         "$session_dir/session.json" > "$session_dir/session.json.tmp" && \
