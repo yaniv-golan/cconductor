@@ -316,7 +316,7 @@ PROJECT_ROOT/config/
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
-| `default_format` | string | `"markdown"` | Output format (currently only markdown) |
+| `default_format` | string | `"markdown"` | Output format |
 | `include_confidence_scores` | boolean | `true` | Show confidence in findings |
 | `show_conflicting_info` | boolean | `true` | Highlight contradictions |
 | `show_knowledge_gaps` | boolean | `true` | Note areas needing more research |
@@ -430,7 +430,7 @@ CConductor has 5 built-in research modes:
   "name": "Scientific Literature Review",
   "description": "Academic research with full PDF analysis...",
   "agents": ["research-planner", "academic-researcher", "pdf-analyzer", ...],
-  "output_format": "scientific-report",
+  "output_format": "markdown",
   "clarification_required": true,
   "pdf_centric": true,
   "special_instructions": { ... },
@@ -488,7 +488,7 @@ CConductor has 5 built-in research modes:
     "synthesis-agent",
     "fact-checker"
   ],
-  "output_format": "literature-review",
+  "output_format": "markdown",
   "pdf_centric": true,
   "special_instructions": {
     "academic_researcher": {

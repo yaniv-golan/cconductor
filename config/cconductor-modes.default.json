@@ -23,7 +23,7 @@
         "synthesis-agent",
         "fact-checker"
       ],
-      "output_format": "scientific-report",
+      "output_format": "markdown",
       "clarification_required": true,
       "pdf_centric": true,
       "special_instructions": {
@@ -73,7 +73,7 @@
         "synthesis-agent",
         "fact-checker"
       ],
-      "output_format": "business-memo",
+      "output_format": "markdown",
       "clarification_required": true,
       "special_instructions": {
         "market_analyzer": {
@@ -140,7 +140,7 @@
         "synthesis-agent",
         "fact-checker"
       ],
-      "output_format": "literature-review",
+      "output_format": "markdown",
       "clarification_required": true,
       "pdf_centric": true,
       "special_instructions": {

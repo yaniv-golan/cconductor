@@ -62,7 +62,6 @@ Areas where contributions are especially welcome:
 - Bug fixes and error handling improvements
 - Performance optimizations
 - Cross-platform compatibility enhancements
-- New output formats (HTML, JSON)
 - Enhanced PDF extraction
 - Additional research agents or modes
 - Test coverage improvements

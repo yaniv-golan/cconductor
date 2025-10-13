@@ -675,9 +675,8 @@ graph TD
 
         A --> D[Core Engine<br/>src/cconductor-mission.sh]
         A --> E[Utilities<br/>src/utils/]
-        A --> F[Formatters<br/>src/formatters/]
-        A --> G[Documentation<br/>docs/]
-        A --> H[Agent Templates<br/>src/claude-runtime/]
+        A --> F[Documentation<br/>docs/]
+        A --> G[Agent Templates<br/>src/claude-runtime/]
 
         B --> I[macOS<br/>~/Library/]
         B --> J[Linux<br/>~/.local/]
@@ -688,10 +687,9 @@ graph TD
     end
 
     D --> N[Adaptive Research<br/>Multi-agent orchestration]
-    E --> O[Knowledge Injection<br/>Custom domain expertise]
-    E --> P[Session Management<br/>Conversation continuity]
-    E --> Q[PDF Processing<br/>Document analysis]
-    F --> R[Output Formats<br/>Markdown, HTML, JSON]
+        E --> O[Knowledge Injection<br/>Custom domain expertise]
+        E --> P[Session Management<br/>Conversation continuity]
+        E --> Q[PDF Processing<br/>Document analysis]
 
     I --> S[Application Support<br/>research-sessions/]
     I --> T[Caches<br/>pdfs/]
@@ -725,7 +723,6 @@ cconductor/
 │   │   ├── knowledge-loader.sh   # Custom knowledge injection
 │   │   ├── invoke-agent.sh       # Agent invocation
 │   │   └── config-loader.sh      # Configuration management
-│   └── formatters/               # Output formatters (6 files)
 ├── config/
 │   ├── *.default.json           # Default configs (never edit)
 │   └── README.md                # Configuration documentation
