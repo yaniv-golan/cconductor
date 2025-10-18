@@ -29,7 +29,7 @@ session_1234567890/
 ├── task-queue.json           # Tasks (v0.1.x only - replaced by orchestration in v0.2.0)
 ├── raw/                      # Raw research data from agents
 ├── intermediate/             # Processing artifacts
-└── research-report.md        # Final report (when complete)
+└── output/mission-report.md        # Final report (when complete)
 ```
 
 ### Session State

@@ -536,10 +536,15 @@
             display: block;
         }
 
-        .completion-banner.error {
-            background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
-            border-color: #f87171;
-        }
+.completion-banner.error {
+    background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+    border-color: #f87171;
+}
+
+.completion-banner.warning {
+    background: linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%);
+    border-color: #fcd34d;
+}
 
         .completion-banner h2 {
             margin: 0 0 10px 0;
@@ -904,7 +909,7 @@
         <div id="completion-banner" class="completion-banner">
             <h2 id="completion-title">✅ Research Complete!</h2>
             <p id="completion-message"></p>
-            <a id="completion-report-link" class="report-link" href="mission-report.md" target="_blank"
+            <a id="completion-report-link" class="report-link" href="output/mission-report.md" target="_blank"
                 style="display:none;">📄 View Final Report</a>
         </div>
 

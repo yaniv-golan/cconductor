@@ -78,6 +78,7 @@ RELEASE_NOTES_v*.md
 TODO_AUDIT.txt
 research-journal-*.plan.md
 test-*.sh
+!tests/test-quality-gate.sh
 obsidian/
 
 # Additional development notes patterns

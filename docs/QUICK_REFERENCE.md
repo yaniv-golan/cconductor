@@ -92,7 +92,7 @@ bash src/utils/export-journal.sh "$SESSION_DIR/$(cat "$SESSION_DIR/.latest")"
 # Specific session
 bash src/utils/export-journal.sh research-sessions/session_123
 
-# Output: research-journal.md with complete timeline
+# Output: output/research-journal.md with complete timeline
 ```
 
 **Includes**:
@@ -142,7 +142,7 @@ bash src/utils/export-journal.sh research-sessions/session_123
 
 # View latest report directly
 SESSION_DIR=$(./src/utils/path-resolver.sh resolve session_dir)
-cat "$SESSION_DIR"/$(cat "$SESSION_DIR"/.latest)/research-report.md
+cat "$SESSION_DIR"/$(cat "$SESSION_DIR"/.latest)/output/mission-report.md
 ```
 
 ---
@@ -292,7 +292,7 @@ rm ~/.config/cconductor/security-config.json
 ./cconductor sessions latest  # Shows the path
 # Or use path-resolver
 SESSION_DIR=$(./src/utils/path-resolver.sh resolve session_dir)
-cp "$SESSION_DIR"/$(cat "$SESSION_DIR"/.latest)/research-report.md ~/Documents/
+cp "$SESSION_DIR"/$(cat "$SESSION_DIR"/.latest)/output/mission-report.md ~/Documents/
 ```
 
 ### Archive Old Sessions

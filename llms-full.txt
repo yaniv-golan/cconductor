@@ -419,7 +419,7 @@ ls -la config/cconductor-config.json
 ./cconductor sessions list
 
 # Find report (v0.2.0 uses mission_ prefix)
-ls research-sessions/mission_*/research-report.md
+ls research-sessions/mission_*/output/mission-report.md
 
 # Check .latest marker
 cat research-sessions/.latest
@@ -469,7 +469,7 @@ Repository includes pre-commit hook that runs ShellCheck automatically.
 
 ```
 research-sessions/mission_TIMESTAMP/
-├── research-report.md           # Main output
+├── output/mission-report.md           # Main output
 ├── session.json                 # Session metadata with mission info
 ├── budget.json                  # Budget tracking (USD, time, invocations)
 ├── orchestration-log.jsonl      # Orchestrator decisions and reasoning

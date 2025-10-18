@@ -140,7 +140,9 @@ Each agent gets its own namespace in the knowledge graph:
 
 ```
 research-sessions/session_123/
-├── mission-report.md
+├── output/
+│   ├── mission-report.md
+│   └── research-journal.md
 ├── knowledge-graph.json
 ├── synthesis-agent.kg.lock          # Signal file
 └── artifacts/
@@ -359,4 +361,3 @@ For questions or issues:
 2. Review artifacts in `artifacts/<agent>/` directory
 3. Check orchestrator logs for merge failures
 4. See troubleshooting in main documentation
-

@@ -108,7 +108,9 @@ extract_first_sentence() {
 
 export_journal() {
     local session_dir="$1"
-    local output_file="${2:-$session_dir/research-journal.md}"
+    local output_file="${2:-$session_dir/output/research-journal.md}"
+
+    mkdir -p "$(dirname "$output_file")"
     
     local events_file="$session_dir/events.jsonl"
     if [ ! -f "$events_file" ]; then
@@ -1071,7 +1073,7 @@ export_journal() {
                     local sections
                     sections=$(echo "$line" | jq -r '.data.report_sections // 0')
                     local report_file
-                    report_file=$(echo "$line" | jq -r '.data.report_file // "research-report.md"')
+                    report_file=$(echo "$line" | jq -r '.data.report_file // "output/mission-report.md"')
                     
                     echo "## 🎉 Research Complete"
                     echo ""
@@ -1090,7 +1092,7 @@ export_journal() {
                 
                 mission_completed)
                     local report_file
-                    report_file=$(echo "$line" | jq -r '.data.report_file // "mission-report.md"')
+                    report_file=$(echo "$line" | jq -r '.data.report_file // "output/mission-report.md"')
                     
                     # Get final stats from knowledge graph
                     local kg_file="$session_dir/knowledge-graph.json"
@@ -1573,8 +1575,8 @@ export_journal() {
         fi
         
         # Link to final report
-        if [ -f "$session_dir/mission-report.md" ]; then
-            echo "**Final Report:** [mission-report.md](mission-report.md)"
+        if [ -f "$session_dir/output/mission-report.md" ]; then
+            echo "**Final Report:** [output/mission-report.md](output/mission-report.md)"
             echo ""
         fi
         
@@ -1595,10 +1597,9 @@ if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
     if [ $# -lt 1 ]; then
         echo "Usage: $0 <session_dir> [output_file]" >&2
         echo "  session_dir: Path to research session directory" >&2
-        echo "  output_file: Optional output path (default: <session_dir>/research-journal.md)" >&2
+        echo "  output_file: Optional output path (default: <session_dir>/output/research-journal.md)" >&2
         exit 1
     fi
     
     export_journal "$@"
 fi
-

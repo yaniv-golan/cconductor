@@ -161,12 +161,31 @@ Balanced research on any topic.
 - 📝 **Journal Export** - Export comprehensive markdown timeline of your research with all findings and metadata
 - 📁 **Local File Analysis** - Analyze your own PDFs, markdown, and text files with `--input-dir`
 - 🔒 **Configurable Security** - Three profiles (strict/permissive/max_automation)
-- 📊 **Quality Validation** - Research quality gates prevent incomplete results
+- 📊 **Quality Validation** - Hard gating on every mission with automatic remediation passes; failures produce diagnostics in `artifacts/quality-gate.json` before prompting for any remaining manual fixes
 - 🌍 **Cross-Platform Support** - Works on Windows, macOS, and Linux
 - 📖 **Extensible Knowledge** - Add your own domain expertise without modifying code
 - 🔍 **Progress Tracking** - See what's happening during research
 - 💬 **Better Error Messages** - Clear explanations and recovery steps
 - 🧮 **Safe Calculations** - Accurate math using bc (arbitrary precision calculator), not LLM estimation
+
+---
+
+### Quality Gate Enforcement
+
+Every mission finishes with an automated quality gate that reviews each claim for:
+
+- **Evidence coverage** – minimum sources and independent domains
+- **Source trust** – weighted credibility (peer-reviewed, official, etc.)
+- **Confidence and recency** – claim confidence and time-bound evidence
+
+The gate now defaults to **advisory mode**:
+
+- Reports still complete, but the top of the document shows a “Quality Issues Detected” banner when thresholds are missed.
+- Sessions end with status `completed_with_advisory`, and the full diagnostics live in `artifacts/quality-gate.json` plus a compact summary in `artifacts/quality-gate-summary.json`.
+- The orchestrator (or a manual resume) can read those files to follow the remediation checklist and rerun the gate.
+- User-facing deliverables live in `output/` (mission report, research journal); supporting diagnostics remain in `artifacts/`.
+
+Switch the config to `mode: "enforce"` if you prefer to block finalization until every threshold is satisfied. All thresholds and mode settings live in `~/.config/cconductor/quality-gate.json`.
 
 ---
 

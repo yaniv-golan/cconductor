@@ -91,6 +91,9 @@ dashboard_generate_metrics() {
     completed_at=$(echo "$session" | jq -r '.completed_at // ""')
     local research_question
     research_question=$(echo "$session" | jq -r '.research_question // ""')
+
+    local quality_gate
+    quality_gate=$(echo "$session" | jq '.quality_gate // null' 2>/dev/null || echo 'null')
     
     # NEW: Get active agents from recent orchestration decisions (v0.2.0)
     local active_agents
@@ -162,6 +165,7 @@ dashboard_generate_metrics() {
         --arg session_created "$created_at" \
         --arg session_completed "$completed_at" \
         --arg research_question "$research_question" \
+        --argjson quality_gate "$quality_gate" \
         '{
             last_updated: $updated,
             iteration: $iter,
@@ -170,7 +174,8 @@ dashboard_generate_metrics() {
                 status: $session_status,
                 created_at: $session_created,
                 completed_at: $session_completed,
-                research_question: $research_question
+                research_question: $research_question,
+                quality_gate: $quality_gate
             },
             progress: {
                 agent_invocations: $total,
@@ -336,17 +341,43 @@ dashboard_serve() {
         dashboard_generate_html "$session_dir" >/dev/null 2>&1 || return 1
     fi
     
-    # Find an available port (8890-8899)
+    # Find an available port (initial range 8890-8899, with fallbacks)
     local dashboard_port=""
-    for p in {8890..8899}; do
-        if ! lsof -i ":$p" >/dev/null 2>&1; then
-            dashboard_port=$p
+    local search_ranges=("8890 8899" "8890 8929")
+    local attempt=0
+    for range in "${search_ranges[@]}"; do
+        local start_port
+        local end_port
+        start_port=$(echo "$range" | awk '{print $1}')
+        end_port=$(echo "$range" | awk '{print $2}')
+        for p in $(seq "$start_port" "$end_port"); do
+            if ! lsof -i ":$p" >/dev/null 2>&1; then
+                dashboard_port=$p
+                break
+            fi
+        done
+        if [ -n "$dashboard_port" ]; then
             break
         fi
+        if [ $attempt -eq 0 ]; then
+            dashboard_cleanup_orphans "$(dirname "$session_dir")" >/dev/null 2>&1 || true
+        fi
+        attempt=$((attempt + 1))
     done
+
+    if [ -z "$dashboard_port" ]; then
+        # Final fallback: aggressively terminate lingering http-server processes
+        pkill -f 'http-server' >/dev/null 2>&1 || true
+        for p in $(seq 8890 8929); do
+            if ! lsof -i ":$p" >/dev/null 2>&1; then
+                dashboard_port=$p
+                break
+            fi
+        done
+    fi
     
     if [ -z "$dashboard_port" ]; then
-        echo "Error: No available ports in range 8890-8899" >&2
+        echo "Error: No available ports in range 8890-8929" >&2
         echo "Try: pkill -f 'http-server'" >&2
         return 1
     fi
@@ -637,5 +668,3 @@ EOF
             ;;
     esac
 fi
-
-

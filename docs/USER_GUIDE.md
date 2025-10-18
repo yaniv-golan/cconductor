@@ -498,7 +498,7 @@ Claude Code will now orchestrate the research agents...
 ```
 Research Complete!
 
-Report: research-sessions/session_1759420487/research-report.md
+Report: research-sessions/session_1759420487/output/mission-report.md
 Quality Score: 82/100 - VERY GOOD
 ```
 
@@ -509,7 +509,7 @@ After research completes:
 ```
 research-sessions/
   session_1759420487/           ← Your session directory
-    research-report.md          ← Main report (read this!)
+    output/mission-report.md          ← Main report (read this!)
     metadata.json               ← Session info
     raw/                        ← Raw research data
     intermediate/               ← Processing files
@@ -524,7 +524,7 @@ research-sessions/
 
 ### Understanding Output
 
-Your `research-report.md` contains:
+Your `output/mission-report.md` contains:
 
 #### 1. Header
 
@@ -610,11 +610,11 @@ session_1759420487  ← Timestamp-based ID
 Latest session: session_1759420487
 Location: /Users/you/cconductor/research-sessions/session_1759420487
 
-✓ Report available: .../research-report.md
+✓ Report available: .../output/mission-report.md
 
 View with:
-  cat /path/to/research-report.md
-  open /path/to/research-report.md
+  cat /path/to/output/mission-report.md
+  open /path/to/output/mission-report.md
 ```
 
 #### Method 2: List all sessions
@@ -631,7 +631,7 @@ View with:
 cd research-sessions/
 ls -lt  # Shows newest first
 cd session_1759420487/
-cat research-report.md
+cat output/mission-report.md
 ```
 
 ### The `.latest` Marker
@@ -650,7 +650,7 @@ cat research-sessions/.latest
 cd research-sessions/$(cat research-sessions/.latest)/
 
 # Open latest report
-cat research-sessions/$(cat research-sessions/.latest)/research-report.md
+cat research-sessions/$(cat research-sessions/.latest)/output/mission-report.md
 
 # Or just use
 ./cconductor sessions latest  # Simpler!
@@ -741,7 +741,7 @@ ls research-sessions/
 cd research-sessions/session_1759420487/
 
 # Read report
-cat research-report.md
+cat output/mission-report.md
 ```
 
 ### Viewing the Research Journal
@@ -780,7 +780,7 @@ bash src/utils/export-journal.sh "$SESSION_DIR/$(cat "$SESSION_DIR/.latest")"
 bash src/utils/export-journal.sh research-sessions/mission_123
 ```
 
-The exported journal (`research-journal.md`) includes:
+The exported journal (`output/research-journal.md`) includes:
 - Complete timeline of all research activities
 - Agent reasoning and decision-making process
 - All entities discovered with descriptions
@@ -831,7 +831,7 @@ Docker uses container technology [1]. Released in 2013 [2].
 
 ```bash
 # Copy latest report
-cp research-sessions/$(cat research-sessions/.latest)/research-report.md ~/Documents/
+cp research-sessions/$(cat research-sessions/.latest)/output/mission-report.md ~/Documents/
 ```
 
 ---
@@ -865,7 +865,7 @@ ls -ltr research-sessions/ # Oldest first
 **By content**:
 
 ```bash
-grep -r "keyword" research-sessions/*/research-report.md
+grep -r "keyword" research-sessions/*/output/mission-report.md
 ```
 
 ### Resuming Research

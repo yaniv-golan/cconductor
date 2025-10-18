@@ -1339,10 +1339,10 @@ unset CCONDUCTOR_SECURITY_PROFILE
 
 ```bash
 # Report is always here:
-ls research-sessions/*/research-report.md
+ls research-sessions/*/output/mission-report.md
 
 # Or for specific session:
-cat research-sessions/session_*/research-report.md
+cat research-sessions/session_*/output/mission-report.md
 ```
 
 **4. Check .latest marker**:
@@ -1352,7 +1352,7 @@ cat research-sessions/.latest
 # Shows latest session ID
 
 # View that report:
-cat research-sessions/$(cat research-sessions/.latest)/research-report.md
+cat research-sessions/$(cat research-sessions/.latest)/output/mission-report.md
 ```
 
 ---
@@ -1424,7 +1424,7 @@ rm -rf research-sessions/session_old*
 # Keep only final reports, remove intermediate data
 # WARNING: Can't resume these sessions afterward
 for session in research-sessions/session_*; do
-  # Keep: research-report.md, research-question.txt
+  # Keep: output/mission-report.md, research-question.txt
   # Remove: raw/, intermediate/ (large)
   rm -rf "$session/raw"
   rm -rf "$session/intermediate"
@@ -1464,10 +1464,10 @@ ls -lh research-sessions/session_*/*.json
 
 **If research completed but files corrupted**:
 
-1. Check if `research-report.md` is intact:
+1. Check if `output/mission-report.md` is intact:
 
    ```bash
-   cat research-sessions/session_*/research-report.md
+   cat research-sessions/session_*/output/mission-report.md
    ```
 
 2. If report is good, you have your results (other files don't matter)
@@ -1995,7 +1995,7 @@ config/security-config.json
 config/cconductor-modes.json
 
 # Session data
-research-sessions/[session-name]/research-report.md
+research-sessions/[session-name]/output/mission-report.md
 
 # Logs
 logs/research.log

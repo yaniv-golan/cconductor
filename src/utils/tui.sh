@@ -52,8 +52,18 @@ show_session_details() {
     fi
     
     # Report status
-    if [ -f "$session_path/final/mission-report.md" ]; then
-        echo "Status: Complete (report available)"
+    if [ -f "$session_path/output/mission-report.md" ]; then
+        local session_status
+        if [ -f "$session_path/session.json" ]; then
+            session_status=$(jq -r '.status // ""' "$session_path/session.json" 2>/dev/null || echo "")
+        else
+            session_status=""
+        fi
+        if [ "$session_status" = "completed_with_advisory" ]; then
+            echo "Status: Complete (quality advisory)"
+        else
+            echo "Status: Complete (report available)"
+        fi
     else
         echo "Status: In progress or incomplete"
     fi
@@ -312,8 +322,15 @@ sessions_browser() {
             question=$(jq -r '.objective // "N/A"' "$session/session.json" 2>/dev/null)
         fi
         
-        if [ -f "$session/final/mission-report.md" ]; then
+        if [ -f "$session/output/mission-report.md" ]; then
             status="Complete"
+            if [ -f "$session/session.json" ]; then
+                local session_status
+                session_status=$(jq -r '.status // ""' "$session/session.json" 2>/dev/null || echo "")
+                if [ "$session_status" = "completed_with_advisory" ]; then
+                    status="Complete (advisory)"
+                fi
+            fi
         else
             status="In progress"
         fi
@@ -392,4 +409,3 @@ interactive_mode() {
     
     interactive_mode_advanced
 }
-

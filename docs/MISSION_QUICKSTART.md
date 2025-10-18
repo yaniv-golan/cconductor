@@ -120,7 +120,7 @@ The orchestrator will:
 ### 5. Review Results
 
 Outputs in session directory:
-- `final/mission-report.md` - Comprehensive mission report
+- `output/mission-report.md` - Comprehensive mission report
 - `orchestration-log.jsonl` - Decision log with rationale
 - `artifacts/manifest.json` - All artifacts produced
 - `knowledge-graph.json` - Entities, claims, handoffs
@@ -393,4 +393,3 @@ Error: Mission validation failed
 - `docs/AGENT_METADATA_SCHEMA.md` - Agent metadata documentation
 - `docs/EVENTS_CONTRACT.md` - Event system details
 - `IMPLEMENTATION_SUMMARY.md` - Architecture overview
-

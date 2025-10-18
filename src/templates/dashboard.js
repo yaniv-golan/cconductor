@@ -255,40 +255,61 @@ class Dashboard {
         const message = document.getElementById('completion-message');
         const reportLink = document.getElementById('completion-report-link');
 
-        if (session.status === 'completed') {
-            banner.classList.add('show');
-            title.textContent = '✅ Research Complete!';
+        if (!banner || !title || !message || !reportLink) return;
 
+        banner.classList.remove('show', 'warning', 'error');
+        reportLink.style.display = 'none';
+
+        const completionEvent = this.currentEvents?.find(e =>
+            e.type === 'research_complete' || e.type === 'mission_completed');
+        const reportFile = completionEvent?.data?.report_file || 'output/mission-report.md';
+        const qualityGate = session?.quality_gate || null;
+
+        const stopRuntime = () => {
+            if (this.runtimeInterval) {
+                clearInterval(this.runtimeInterval);
+                this.runtimeInterval = null;
+            }
+        };
+
+        if (session.status === 'completed' || session.status === 'completed_with_advisory') {
+            banner.classList.add('show');
             const completedTime = session.completed_at ?
                 new Date(session.completed_at).toLocaleString() :
                 'recently';
-            message.textContent = `Research session finished ${completedTime}`;
 
-            // Get actual report filename from events
-            const completionEvent = this.currentEvents?.find(e => 
-                e.type === 'research_complete' || e.type === 'mission_completed');
-            const reportFile = completionEvent?.data?.report_file || 'mission-report.md';
+            const isAdvisory = session.status === 'completed_with_advisory' ||
+                (qualityGate && qualityGate.status === 'failed' && (qualityGate.mode || 'advisory') === 'advisory');
 
-            // Update link href dynamically
+            if (isAdvisory) {
+                banner.classList.add('warning');
+                title.textContent = '⚠ Research Complete with Advisory';
+                const summaryRef = qualityGate?.summary_file
+                    ? ` <a href="${qualityGate.summary_file}" target="_blank">View remediation summary</a>.`
+                    : '';
+                message.innerHTML = `Research session finished ${completedTime}. Quality gate flagged outstanding issues.${summaryRef}`;
+            } else {
+                title.textContent = '✅ Research Complete!';
+                message.textContent = `Research session finished ${completedTime}`;
+            }
+
             reportLink.href = reportFile;
             reportLink.style.display = 'inline-block';
+            stopRuntime();
 
-            // Stop the runtime counter - research is done
-            if (this.runtimeInterval) {
-                clearInterval(this.runtimeInterval);
-                this.runtimeInterval = null;
-            }
-        } else if (session.status === 'failed') {
+        } else if (session.status === 'blocked_quality_gate' || session.status === 'failed') {
             banner.classList.add('show', 'error');
-            title.textContent = '❌ Research Failed';
-            message.textContent = session.error || 'Research encountered an error and could not complete.';
-            reportLink.style.display = 'none';
-
-            // Stop the runtime counter on failure too
-            if (this.runtimeInterval) {
-                clearInterval(this.runtimeInterval);
-                this.runtimeInterval = null;
+            if (session.status === 'blocked_quality_gate') {
+                title.textContent = '❌ Quality Gate Blocked Completion';
+                const reportRef = qualityGate?.report_file
+                    ? ` <a href="${qualityGate.report_file}" target="_blank">View diagnostic report</a>.`
+                    : '';
+                message.innerHTML = `Enforced quality checks failed—resolve the flagged issues and rerun.${reportRef}`;
+            } else {
+                title.textContent = '❌ Research Failed';
+                message.textContent = session.error || 'Research encountered an error and could not complete.';
             }
+            stopRuntime();
         } else {
             // In progress - don't show banner
             banner.classList.remove('show');
@@ -805,7 +826,7 @@ class Dashboard {
         // Entry N+2: Research completion (support both old and new event types)
         const researchComplete = events.find(e => e.type === 'research_complete' || e.type === 'mission_completed');
         if (researchComplete) {
-            const reportFile = researchComplete.data?.report_file || 'mission-report.md';
+            const reportFile = researchComplete.data?.report_file || 'output/mission-report.md';
             
             // For mission_completed events, we need to enrich data from metrics
             // The formatResearchComplete function expects claims_synthesized, entities_integrated, report_sections
@@ -976,7 +997,7 @@ class Dashboard {
         const claims = data.claims_synthesized || 0;
         const entities = data.entities_integrated || 0;
         const sections = data.report_sections || 0;
-        const reportFile = data.report_file || 'mission-report.md';
+        const reportFile = data.report_file || 'output/mission-report.md';
         
         // Build message based on whether we have section count
         const sectionText = sections > 0 
@@ -987,7 +1008,7 @@ class Dashboard {
         
 📄 <strong><a href="${reportFile}" target="_blank">View Research Report</a></strong>
 
-📖 <strong><a href="research-journal.md" target="_blank">View Research Journal</a></strong> (Sequential timeline with full details)`;
+📖 <strong><a href="output/research-journal.md" target="_blank">View Research Journal</a></strong> (Sequential timeline with full details)`;
     }
 
     getTasksForAgent(agentName, events) {
@@ -1494,7 +1515,7 @@ class Dashboard {
                 const objective = event.data.objective || 'Research mission';
                 return `🚀 Starting research: ${objective}`;
             case 'mission_completed':
-                const reportFile = event.data.report_file || 'mission-report.md';
+                const reportFile = event.data.report_file || 'output/mission-report.md';
                 return `✅ Research complete! Report: ${reportFile}`;
             case 'agent_invocation':
                 return `⚡ Invoking ${event.data.agent}`;

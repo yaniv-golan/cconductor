@@ -76,7 +76,7 @@ See [Complex Research](#complex-research-from-files) section for details.
 ./cconductor sessions
 
 # View specific report
-cat research-sessions/session_1759420487/research-report.md
+cat research-sessions/session_1759420487/output/mission-report.md
 ```
 
 ---
@@ -184,11 +184,17 @@ All research is saved in `research-sessions/`:
 ```
 research-sessions/
   session_1759420487/          # Timestamp-based ID
-    research-report.md         # Main report ← Read this!
+    output/                    # User-facing deliverables
+      mission-report.md        # Main report ← Read this!
+      research-journal.md      # Sequential journal timeline
+    artifacts/                 # Diagnostics & agent artifacts
+      manifest.json            # Agent artifact registry
+      quality-gate.json        # Quality gate diagnostics
+      quality-gate-summary.json
     metadata.json              # Session metadata
     raw/                       # Raw research data
+      quality-remediation-*.json # Auto remediation findings (present after gate retries)
     intermediate/              # Processing artifacts
-    final/                     # Final processed data
 ```
 
 ### Finding Your Latest Research
@@ -213,7 +219,7 @@ research-sessions/
 ls -lt research-sessions/
 
 # Read latest report
-cat research-sessions/$(cat research-sessions/.latest)/research-report.md
+cat research-sessions/$(cat research-sessions/.latest)/output/mission-report.md
 ```
 
 ### Understanding Your Report
@@ -256,6 +262,8 @@ Recommendation: Ready for use
 - **70-79**: GOOD - Solid research
 - **60-69**: FAIR - Usable with caveats
 - **<60**: NEEDS WORK - Run more iterations
+
+If the quality gate blocks completion, CConductor will skip this report section, mark the session as `blocked_quality_gate`, and save detailed remediation guidance to `artifacts/quality-gate.json`. Review the flagged claims, resume the session, and the gate will rerun automatically once fixes are in place.
 
 #### 3. Executive Summary
 
@@ -558,7 +566,7 @@ Shows all research sessions, newest first.
 **By content**:
 
 ```bash
-grep -r "keyword" research-sessions/*/research-report.md
+grep -r "keyword" research-sessions/*/output/mission-report.md
 ```
 
 ### Organizing Sessions
@@ -585,6 +593,13 @@ Every session receives a quality assessment with:
 - **Coverage** (%) - Percentage of topic explored
 
 See [Quality Guide](docs/QUALITY_GUIDE.md) for detailed explanation.
+
+### Quality Gate Failures
+
+- In the default **advisory** mode, reports still complete but the heading shows a “Quality Issues Detected” banner and the session status becomes `completed_with_advisory`.
+- Inspect `research-sessions/<session>/artifacts/quality-gate.json` (full diagnostics) or `artifacts/quality-gate-summary.json` (compact summary) for the list of failing claims, reasons, and suggested fixes.
+- Address the issues—adding independent sources, refreshing stale evidence, improving confidence—and run `./cconductor resume <session>` to re-run the gate.
+- Set `mode` to `enforce` in `~/.config/cconductor/quality-gate.json` if you want runs to stop entirely until everything passes.
 
 ### Citations and Bibliography
 

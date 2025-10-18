@@ -124,12 +124,12 @@ sessions_latest_handler() {
             fi
             
             # Show report if exists
-            if [ -f "$LATEST_PATH/research-report.md" ]; then
-                echo "✓ Report available: $LATEST_PATH/research-report.md"
+            if [ -f "$LATEST_PATH/output/mission-report.md" ]; then
+                echo "✓ Report available: $LATEST_PATH/output/mission-report.md"
                 echo ""
                 echo "View with:"
-                echo "  cat $LATEST_PATH/research-report.md"
-                echo "  open $LATEST_PATH/research-report.md"
+                echo "  cat $LATEST_PATH/output/mission-report.md"
+                echo "  open $LATEST_PATH/output/mission-report.md"
                 echo ""
                 echo "Resume with:"
                 echo "  ./cconductor resume $LATEST_SESSION"
@@ -305,4 +305,3 @@ handle_sessions_command() {
             ;;
     esac
 }
-

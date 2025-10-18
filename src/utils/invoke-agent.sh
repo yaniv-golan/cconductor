@@ -525,16 +525,16 @@ invoke_agent_v2() {
     # Note: timeout command not available on macOS by default, so we run without it
     # The claude CLI has its own timeout mechanisms
     # Note: Don't redirect stderr (2>&1) - let hooks write to terminal in verbose mode
-    if echo "$task" | "${claude_cmd[@]}" > "$output_file"; then
+    if printf '%s\n' "$task" | CLAUDE_PROJECT_DIR="$session_dir" "${claude_cmd[@]}" > "$output_file"; then
         # Return to original directory
         cd "$original_dir" || true
 
         # Check if output file is empty (synthesis-agent may produce artifacts without JSON)
         if [ ! -s "$output_file" ]; then
             # For synthesis-agent, check if expected artifacts were created
-            if [[ "$agent_name" == "synthesis-agent" ]] && [ -f "$session_dir/mission-report.md" ]; then
+            if [[ "$agent_name" == "synthesis-agent" ]] && [ -f "$session_dir/output/mission-report.md" ]; then
                 # Create minimal success JSON for validation
-                echo '{"type":"result","subtype":"success","result":"Mission report generated at mission-report.md"}' > "$output_file"
+                echo '{"type":"result","subtype":"success","result":"Mission report generated at output/mission-report.md"}' > "$output_file"
             else
                 # Empty output is a failure for other agents
                 echo "✗ Agent $agent_name produced no output" >&2
