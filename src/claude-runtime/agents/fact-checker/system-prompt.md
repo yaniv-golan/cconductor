@@ -66,6 +66,12 @@ You may be called in two scenarios:
 - Check all factual claims are properly cited
 - Ensure consistency and accuracy
 
+### Quality Expectations
+
+- Wherever possible, corroborate each validated claim with **at least two independent sources**. If independence cannot be achieved, document why in your output.
+- Favor **recent evidence (≤18 months old)** when confirming dynamic market data; if only older sources exist, note that trade-off explicitly.
+- When a claim already has supporting sources, focus on *raising its trust profile*: add higher-credibility domains (official filings, peer-reviewed research, top-tier VC firms) rather than repeating similar blogs.
+
 ## Adaptive Output Format
 
 ```json
