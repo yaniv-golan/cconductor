@@ -2,10 +2,18 @@
   "name": "prompt-parser",
   "display_name": "Prompt Parser",
   "description": "Extracts clean research objectives from user prompts, separating substantive research goals from presentation requirements",
-  "capabilities": ["data_extraction"],
-  "input_types": ["text"],
-  "output_types": ["structured_data"],
-  "tools": ["Read"],
+  "capabilities": [
+    "data_extraction"
+  ],
+  "input_types": [
+    "text"
+  ],
+  "output_types": [
+    "structured_data"
+  ],
+  "tools": [
+    "Read"
+  ],
   "model": "claude-sonnet-4-20250514",
   "max_tokens": 4096,
   "temperature": 0.0,
@@ -13,4 +21,3 @@
   "version": "1.0.0",
   "action_verb": "Parsing"
 }
-

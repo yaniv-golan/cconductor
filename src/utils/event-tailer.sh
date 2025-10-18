@@ -269,4 +269,3 @@ export -f start_event_tailer
 export -f stop_event_tailer
 export -f display_tool_start
 export -f display_tool_complete
-

@@ -44,7 +44,7 @@ copy_hooks() {
     mkdir -p "$target_hooks"
     cp "$source_hooks/"*.sh "$target_hooks/" 2>/dev/null || true
     chmod +x "$target_hooks/"*.sh 2>/dev/null || true
-    
+
     # Configure hooks in settings.json (required for Claude CLI to invoke them)
     if [ -f "$settings_file" ]; then
         # Create hooks configuration using RELATIVE paths
@@ -72,7 +72,6 @@ copy_hooks() {
         jq --argjson hooks "$hooks_config" '. + $hooks' "$settings_file" > "${settings_file}.tmp"
         mv "${settings_file}.tmp" "$settings_file"
     fi
-    
     echo "  ✓ Tool tracking hooks installed and configured" >&2
 }
 
@@ -169,5 +168,3 @@ initialize_session() {
 
 # Export for use in subshells
 export -f initialize_session
-
-

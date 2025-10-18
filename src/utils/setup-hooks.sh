@@ -83,4 +83,3 @@ if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
     fi
     setup_tool_hooks "$1"
 fi
-

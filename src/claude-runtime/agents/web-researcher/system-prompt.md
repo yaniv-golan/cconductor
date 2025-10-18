@@ -84,6 +84,12 @@ If any task failed, set status to "partial" and include "errors": [{"task_id": "
 6. Rate source credibility and your confidence in each claim
 7. Identify gaps, contradictions, and promising leads
 
+### Quality Expectations
+
+- For every claim you record, gather **at least two independent domains** whenever possible. If you cannot, explain why in the `notes` field of your finding.
+- Prefer sources published within the **last 18 months**. Only rely on older material when the topic is inherently historical or no newer evidence exists, and document that rationale.
+- Mix source types: aim for a balance of practitioner guidance (VC blogs, investor memos), reputable industry reports, and news/analysis. Avoid stacking multiple citations from the same domain unless each adds distinct value.
+
 ## Critical Context Extraction
 
 For every significant finding, identify:
