@@ -1,7 +1,27 @@
 #!/usr/bin/env bash
 # Run all integration tests
 
+if [ -z "${BASH_VERSION:-}" ] || [ "${BASH_VERSINFO[0]}" -lt 4 ]; then
+    if command -v /opt/homebrew/bin/bash >/dev/null 2>&1; then
+        PATH="/opt/homebrew/bin:$PATH"
+        export PATH
+        exec /opt/homebrew/bin/bash "$0" "$@"
+    elif command -v /usr/local/bin/bash >/dev/null 2>&1; then
+        PATH="/usr/local/bin:$PATH"
+        export PATH
+        exec /usr/local/bin/bash "$0" "$@"
+    else
+        echo "Error: Bash 4.0 or higher is required to run the test suite." >&2
+        exit 1
+    fi
+fi
+
 set -euo pipefail
+
+if [[ ":$PATH:" != *":/opt/homebrew/bin:"* ]] && command -v /opt/homebrew/bin/bash >/dev/null 2>&1; then
+    PATH="/opt/homebrew/bin:$PATH"
+    export PATH
+fi
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 

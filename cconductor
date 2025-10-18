@@ -24,6 +24,18 @@ source "$CCONDUCTOR_ROOT/src/utils/cli-parser.sh"
 # Parse arguments early to check for --verbose and --debug flags
 parse_cli_args "$@"
 
+# Ensure we run with Bash 4+ by preferring Homebrew bash if available
+if [ "${BASH_VERSINFO[0]}" -lt 4 ]; then
+    if command -v /opt/homebrew/bin/bash >/dev/null 2>&1; then
+        exec /opt/homebrew/bin/bash "$0" "$@"
+    elif command -v /usr/local/bin/bash >/dev/null 2>&1; then
+        exec /usr/local/bin/bash "$0" "$@"
+    else
+        echo "Error: Bash 4.0 or higher is required to run CConductor." >&2
+        exit 1
+    fi
+fi
+
 # Debug mode support (check both flag and environment variable)
 if has_flag "debug" || [ "${CCONDUCTOR_DEBUG:-0}" = "1" ]; then
     export CCONDUCTOR_DEBUG=1
@@ -36,6 +48,23 @@ fi
 if has_flag "verbose" || [ "${CCONDUCTOR_VERBOSE:-0}" = "1" ]; then
     export CCONDUCTOR_VERBOSE=1
     echo "📢 Verbose mode enabled - showing detailed progress" >&2
+    echo "" >&2
+fi
+
+if [[ "${CCONDUCTOR_VERBOSE:-0}" == "1" ]]; then
+    if [ -n "${CCONDUCTOR_CONFIG_DIR:-}" ]; then
+        config_dir_display="$CCONDUCTOR_CONFIG_DIR"
+    else
+        config_dir_display=$("$CCONDUCTOR_ROOT/src/utils/platform-paths.sh" --config 2>/dev/null || echo "auto (platform default)")
+    fi
+    cache_dir_display=$("$CCONDUCTOR_ROOT/src/utils/path-resolver.sh" resolve cache_dir 2>/dev/null || echo "unavailable")
+    web_cache_display=$("$CCONDUCTOR_ROOT/src/utils/path-resolver.sh" resolve web_cache 2>/dev/null || echo "unavailable")
+    pdf_cache_display=$("$CCONDUCTOR_ROOT/src/utils/path-resolver.sh" resolve pdf_cache 2>/dev/null || echo "unavailable")
+    echo "⚙️  Config directory: $config_dir_display" >&2
+    echo "📂 Cache directories:" >&2
+    echo "    cache_dir → $cache_dir_display" >&2
+    echo "    web_cache → $web_cache_display" >&2
+    echo "    pdf_cache → $pdf_cache_display" >&2
     echo "" >&2
 fi
 
