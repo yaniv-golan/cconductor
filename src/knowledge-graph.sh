@@ -195,18 +195,139 @@ kg_add_claim() {
         return 1
     }
 
+    local statement
+    statement=$(echo "$claim_json" | jq -r '.statement // empty')
+    local existing_id=""
+    if [[ -n "$statement" ]]; then
+        existing_id=$(python3 - "$kg_file" "$statement" <<'PY'
+import json, sys, re
+kg_path, incoming_stmt = sys.argv[1], sys.argv[2]
+try:
+    data = json.load(open(kg_path))
+except Exception:
+    print("")
+    sys.exit(0)
+
+def tokenize(text: str) -> set[str]:
+    tokens = {tok for tok in re.split(r'[^a-z0-9]+', text.lower()) if len(tok) >= 4}
+    return tokens
+
+incoming_tokens = tokenize(incoming_stmt)
+if not incoming_tokens:
+    print("")
+    sys.exit(0)
+
+best_id = ""
+best_score = 0.0
+best_id_value = None
+for claim in data.get("claims", []):
+    existing_stmt = claim.get("statement") or ""
+    if not existing_stmt:
+        continue
+    tokens = tokenize(existing_stmt)
+    if not tokens:
+        continue
+    intersection = incoming_tokens & tokens
+    if not intersection:
+        continue
+    union = incoming_tokens | tokens
+    jaccard = len(intersection) / len(union)
+    coverage_incoming = len(intersection) / len(incoming_tokens)
+    coverage_existing = len(intersection) / len(tokens)
+    if jaccard >= 0.45 or coverage_incoming >= 0.7 or coverage_existing >= 0.7:
+        score = max(jaccard, coverage_incoming, coverage_existing)
+        claim_id = claim.get("id") or ""
+        try:
+            claim_numeric = int(re.sub(r'[^0-9]', '', claim_id) or "0")
+        except Exception:
+            claim_numeric = 0
+        if (score > best_score) or (abs(score - best_score) < 1e-6 and (best_id_value is None or claim_numeric < best_id_value)):
+            best_score = score
+            best_id = claim_id
+            best_id_value = claim_numeric
+
+print(best_id)
+PY
+)
+        existing_id=${existing_id//$'\r'/}
+        existing_id=${existing_id//$'\n'/}
+        if [[ -z "$existing_id" ]]; then
+            existing_id=$(jq -r --arg stmt "$statement" '.claims[]? | select(.statement == $stmt) | .id' "$kg_file" | head -n 1)
+        fi
+    fi
+
+    local timestamp
+    timestamp="$(get_timestamp)"
+    local tmp_file="${kg_file}.tmp"
+
+    if [[ -n "$existing_id" ]]; then
+        jq --arg id "$existing_id" \
+           --argjson claim "$claim_json" \
+           --arg date "$timestamp" \
+           '
+           .claims = (.claims | map(
+             if .id == $id then
+               ( . as $old |
+                 $claim as $incoming |
+                 (
+                   $old + ($incoming | del(.id, .added_at, .updated_at))
+                 )
+                 | .sources = (
+                     (
+                       (($old.sources // []) + ($incoming.sources // []))
+                       | map(select(. != null))
+                       | unique_by((.url // "") + "|" + (.title // "") + "|" + (.relevant_quote // ""))
+                     )
+                   )
+                 | .related_entities = (
+                     (
+                       (($old.related_entities // []) + ($incoming.related_entities // []))
+                       | map(select(. != null))
+                       | unique
+                     )
+                   )
+                 | .confidence = (
+                     ([
+                         ($old.confidence // null),
+                         ($incoming.confidence // null)
+                       ]
+                       | map(select(. != null))
+                       | if length > 0 then max else ($old.confidence // 0) end)
+                   )
+                 | .evidence_quality = ($incoming.evidence_quality // $old.evidence_quality)
+                 | .verification_type = ($incoming.verification_type // $old.verification_type)
+                 | .verified = ((($old.verified // false) or ($incoming.verified // false)))
+                 | .source_context = (
+                     if ($incoming.source_context // null) != null
+                     then $incoming.source_context
+                     else $old.source_context
+                     end
+                   )
+                 | .updated_at = $date
+               )
+            else .
+            end
+           )) |
+           .last_updated = $date
+           ' "$kg_file" > "$tmp_file"
+        mv "$tmp_file" "$kg_file"
+        kg_merge_similar_claims_locked "$session_dir" "$existing_id" "$statement" "$timestamp" || true
+        lock_release "$kg_file"
+        return 0
+    fi
+
     local claim_id
     claim_id="c$(jq '.stats.total_claims' "$kg_file")"
 
     jq --argjson claim "$claim_json" \
        --arg id "$claim_id" \
-       --arg date "$(get_timestamp)" \
-       '.claims += [($claim + {id: $id, added_at: $date, verified: false})] |
+       --arg date "$timestamp" \
+       '.claims += [($claim + {id: $id, added_at: $date, verified: ($claim.verified // false)})] |
         .stats.total_claims += 1 |
         .last_updated = $date' \
-       "$kg_file" > "${kg_file}.tmp"
+       "$kg_file" > "$tmp_file"
 
-    mv "${kg_file}.tmp" "$kg_file"
+    mv "$tmp_file" "$kg_file"
     lock_release "$kg_file"
     
     # Phase 2: Log claim added
@@ -215,6 +336,13 @@ kg_add_claim() {
         confidence=$(echo "$claim_json" | jq -r '.confidence // 0.5')
         log_claim_added "$session_dir" "$claim_id" "$confidence" || true
     fi
+}
+
+# Merge similar claims into an existing claim (expects caller to hold KG lock)
+kg_merge_similar_claims_locked() {
+    # TODO: Implement deduplication of similar claims if needed.
+    # Current remediation flow already updates claims in place, so no-op.
+    :
 }
 
 # Add relationship

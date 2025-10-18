@@ -403,6 +403,16 @@ PROJECT_ROOT/config/
 | `cache_search_results` | boolean | `true` | Cache web search results |
 | `cache_ttl_hours` | integer | `24` | Cache lifetime in hours |
 
+### File: `config/web-fetch-cache.default.json`
+
+```json
+{
+  "enabled": true,
+  "ttl_hours": 24,
+  "max_body_size_mb": 5
+}
+```
+
 ---
 
 ## Research Modes (cconductor-modes.json)
@@ -744,6 +754,92 @@ Three built-in profiles:
 ```
 
 **See**: [Custom Knowledge Guide](CUSTOM_KNOWLEDGE.md) for creating knowledge files.
+
+---
+
+## Quality Gate (quality-gate.json)
+
+### Overview
+
+**File**: `config/quality-gate.json`  
+**Purpose**: Define the enforcement thresholds for mission completion  
+**Affects**: Whether a mission can produce reports/artifacts
+
+### Structure
+
+```json
+{
+  "mode": "advisory",
+  "thresholds": {
+    "min_sources_per_claim": 2,
+    "min_independent_sources": 2,
+    "min_trust_score": 0.6,
+    "min_claim_confidence": 0.6,
+    "max_low_confidence_claims": 0,
+    "max_unresolved_contradictions": 0
+  },
+  "recency": {
+    "enforce": true,
+    "max_source_age_days": 540,
+    "allow_unparsed_dates": true
+  },
+  "trust_weights": {
+    "peer_reviewed": 0.4,
+    "academic": 0.35,
+    "official": 0.35,
+    "high": 0.3,
+    "medium": 0.2,
+    "news": 0.18,
+    "trade_publication": 0.15,
+    "blog": 0.1,
+    "low": 0.05,
+    "unknown": 0.05
+  },
+  "default_trust_weight": 0.1,
+  "reporting": {
+    "output_filename": "artifacts/quality-gate.json",
+    "summary_filename": "artifacts/quality-gate-summary.json",
+    "banner_title": "Quality Issues Detected",
+    "banner_severity": "warning"
+  }
+}
+```
+
+**Key options**:
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `mode` | string | `advisory` | `advisory` completes the mission with warnings; `enforce` blocks finalization |
+| `thresholds.min_sources_per_claim` | integer | `2` | Minimum number of sources per claim |
+| `thresholds.min_independent_sources` | integer | `2` | Minimum unique domains per claim |
+| `thresholds.min_trust_score` | float | `0.6` | Minimum sum of trust weights for a claim |
+| `thresholds.min_claim_confidence` | float | `0.6` | Lowest confidence allowed before flagging |
+| `thresholds.max_low_confidence_claims` | integer | `0` | Permitted claims below confidence threshold |
+| `thresholds.max_unresolved_contradictions` | integer | `0` | Allowed unresolved contradictions |
+| `recency.enforce` | boolean | `true` | Require at least one fresh source per claim |
+| `recency.max_source_age_days` | integer | `540` | Maximum age (in days) for considered fresh |
+| `recency.allow_unparsed_dates` | boolean | `true` | If `false`, missing/ambiguous dates fail the gate |
+| `trust_weights` | object | see above | Weights applied per `sources[].credibility` label |
+| `default_trust_weight` | float | `0.1` | Weight applied when credibility is missing |
+| `reporting.output_filename` | string | `artifacts/quality-gate.json` | Full diagnostic report written after each run |
+| `reporting.summary_filename` | string | `artifacts/quality-gate-summary.json` | Compact summary consumed by the orchestrator and dashboards |
+| `reporting.banner_title` | string | `"Quality Issues Detected"` | Heading used when warnings are rendered in final reports |
+| `reporting.banner_severity` | string | `"warning"` | Severity hint for consumers (e.g., dashboards) |
+
+**Customizing**:
+
+- Create `~/.config/cconductor/quality-gate.json` to override defaults.
+- Lower `min_trust_score` for exploratory missions that rely on less authoritative sources.
+- Increase `max_source_age_days` for historical research.
+- Add new trust labels (e.g., `"regulatory": 0.4`) to match your source taxonomy.
+- Switch `mode` to `enforce` when you want research runs to stop until every threshold passes.
+
+**Failure handling**:
+
+- In `advisory` mode the mission completes, the session status becomes `completed_with_advisory`, and the report includes a prominent warning banner plus remediation guidance.
+- In `enforce` mode the orchestrator marks the mission `blocked_quality_gate` and stops finalization.
+- Detailed findings live in `artifacts/quality-gate.json` (full report) and `artifacts/quality-gate-summary.json` (compact summary).
+- Fix the flagged issues (add sources, resolve contradictions, refresh stale evidence) and rerun or resume the session to re-check quality.
 
 ---
 

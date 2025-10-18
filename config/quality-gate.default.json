@@ -1,0 +1,45 @@
+{
+  "_comment": "Default thresholds for the mission quality gate. Override in ~/.config/cconductor/quality-gate.json if needed.",
+  "mode": "advisory",
+  "thresholds": {
+    "min_sources_per_claim": 2,
+    "min_independent_sources": 2,
+    "min_trust_score": 0.6,
+    "min_claim_confidence": 0.6,
+    "max_low_confidence_claims": 0,
+    "max_unresolved_contradictions": 0
+  },
+  "recency": {
+    "enforce": true,
+    "max_source_age_days": 540,
+    "allow_unparsed_dates": true
+  },
+  "trust_weights": {
+    "peer_reviewed": 0.4,
+    "academic": 0.35,
+    "official": 0.35,
+    "authoritative": 0.32,
+    "high": 0.3,
+    "medium": 0.2,
+    "news": 0.18,
+    "trade_publication": 0.15,
+    "blog": 0.1,
+    "low": 0.05,
+    "unknown": 0.05
+  },
+  "default_trust_weight": 0.1,
+  "reporting": {
+    "output_filename": "artifacts/quality-gate.json",
+    "summary_filename": "artifacts/quality-gate-summary.json",
+    "banner_title": "Quality Issues Detected",
+    "banner_severity": "warning"
+  },
+  "remediation": {
+    "enabled": true,
+    "max_attempts": 2,
+    "min_remaining_budget_usd": 1.0,
+    "min_remaining_invocations": 2,
+    "min_remaining_minutes": 5,
+    "require_progress": true
+  }
+}
