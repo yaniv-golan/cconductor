@@ -1,0 +1,13 @@
+{
+  "name": "quality-remediator",
+  "display_name": "Quality Remediator",
+  "description": "Uses quality gate diagnostics to acquire fresh, independent evidence for failing claims and updates the knowledge graph with improved sourcing.",
+  "tools": [
+    "WebSearch",
+    "WebFetch",
+    "Read",
+    "Write"
+  ],
+  "model": "claude-sonnet-4-5",
+  "action_verb": "Remediating"
+}

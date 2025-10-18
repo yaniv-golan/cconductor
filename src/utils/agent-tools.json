@@ -188,6 +188,20 @@
             "Glob",
             "NotebookEdit"
         ]
+    },
+    "quality-remediator": {
+        "allowed": [
+            "WebSearch",
+            "WebFetch",
+            "Read",
+            "Write",
+            "Grep",
+            "Glob"
+        ],
+        "disallowed": [
+            "Bash",
+            "Edit",
+            "NotebookEdit"
+        ]
     }
 }
-
