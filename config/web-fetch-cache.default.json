@@ -1,0 +1,14 @@
+{
+  "_comment": "Cache settings for web fetch results. Override in ~/.config/cconductor/web-fetch-cache.json if needed.",
+  "enabled": true,
+  "ttl_hours": 24,
+  "max_entries": 500,
+  "max_total_mb": 512,
+  "materialize_per_session": 25,
+  "fresh_url_parameters": [
+    "fresh=1",
+    "fresh=true",
+    "refresh=1",
+    "refresh=true"
+  ]
+}

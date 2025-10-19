@@ -8,12 +8,39 @@ set -euo pipefail
 # Source shared utilities for get_timestamp
 # Hooks run in session directory, so we need to find the project root
 HOOK_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_ROOT="$(cd "$HOOK_DIR/../../../.." && pwd)"
+if [[ -n "${CLAUDE_PROJECT_DIR:-}" ]]; then
+    PROJECT_ROOT="$CLAUDE_PROJECT_DIR"
+else
+    search_path="$HOOK_DIR"
+    while [[ "$search_path" != "/" ]]; do
+        if [[ -f "$search_path/VERSION" ]]; then
+            PROJECT_ROOT="$search_path"
+            break
+        fi
+        search_path="$(dirname "$search_path")"
+    done
+    if [[ -z "${PROJECT_ROOT:-}" ]]; then
+        PROJECT_ROOT="$(cd "$HOOK_DIR/../../.." && pwd)"
+    fi
+fi
+ROOT="$PROJECT_ROOT"
 # shellcheck disable=SC1091
 source "$PROJECT_ROOT/src/shared-state.sh" 2>/dev/null || {
     # Fallback: inline get_timestamp if shared-state.sh not found
     get_timestamp() { date -u +"%Y-%m-%dT%H:%M:%S.%6NZ" 2>/dev/null || date -u +"%Y-%m-%dT%H:%M:%SZ"; }
 }
+
+debug_log() {
+    local msg="$1"
+    local ts
+    ts=$(get_timestamp)
+    local log_file="${HOOK_DEBUG_LOG:-$PROJECT_ROOT/hook-debug.log}"
+    {
+        printf '%s %s\n' "$ts" "$msg"
+    } >> "$log_file" 2>/dev/null || true
+}
+
+debug_log "hook_project_root_init $PROJECT_ROOT"
 
 # Source verbose utility
 # shellcheck disable=SC1091
@@ -28,13 +55,22 @@ else
     verbose_tool_use() { :; }
 fi
 
+# Source cache utilities (optional)
+# shellcheck disable=SC1091
+source "$PROJECT_ROOT/src/utils/web-cache.sh" 2>/dev/null || true
+# shellcheck disable=SC1091
+source "$PROJECT_ROOT/src/knowledge-graph.sh" 2>/dev/null || true
+
 # Read hook data from stdin
-hook_data=$(cat)
+hook_raw_input=$(cat)
+hook_data="$hook_raw_input"
+debug_log "hook_invoked raw_len=${#hook_raw_input}"
 
 # Extract tool information
-tool_name=$(echo "$hook_data" | jq -r '.tool_name // "unknown"')
+tool_name=$(echo "$hook_data" | jq -r '.tool_name // "unknown"' 2>/dev/null || echo "jq_error")
 # Get agent name from environment (set by invoke-agent.sh)
 agent_name="${CCONDUCTOR_AGENT_NAME:-unknown}"
+debug_log "hook_context tool=$tool_name agent=$agent_name"
 
 # Validate file access and tool usage for orchestrator
 if [[ "$agent_name" == "mission-orchestrator" ]]; then
@@ -85,15 +121,18 @@ fi
 
 # Extract tool input (summary only, full data in events.jsonl)
 tool_input_summary=""
+tool_input_details=""
 case "$tool_name" in
     WebSearch)
         tool_input_summary=$(echo "$hook_data" | jq -r '.tool_input.query // "no query"')
         ;;
     WebFetch)
         tool_input_summary=$(echo "$hook_data" | jq -r '.tool_input.url // "no url"')
+        tool_input_details="$tool_input_summary"
         ;;
     Bash)
-        tool_input_summary=$(echo "$hook_data" | jq -r '.tool_input.command // "no command"' | head -c 60)
+        tool_input_summary=$(echo "$hook_data" | jq -r '.tool_input.command // "no command"')
+        tool_input_details="$tool_input_summary"
         ;;
     Read)
         tool_input_summary=$(echo "$hook_data" | jq -r '.tool_input.file_path // "no path"')
@@ -127,15 +166,272 @@ case "$tool_name" in
         ;;
 esac
 
-# Get session directory from environment or derive it
 session_dir="${CCONDUCTOR_SESSION_DIR:-}"
-if [ -z "$session_dir" ]; then
-    # Try to find it from current directory
-    if [ -f "events.jsonl" ]; then
+if [[ -z "$session_dir" ]]; then
+    transcript_path=$(echo "$hook_data" | jq -r '.transcript_path // ""')
+    if [[ -n "$transcript_path" && "$transcript_path" != "null" ]]; then
+        session_dir="$(dirname "$transcript_path")"
+    elif [[ -f "events.jsonl" ]]; then
         session_dir=$(pwd)
     else
-        # Fallback: don't log to file, just stdout
         session_dir=""
+    fi
+fi
+if [[ -n "$session_dir" ]]; then
+    HOOK_DEBUG_LOG="$session_dir/hook-debug.log"
+    debug_log "hook_session_dir $session_dir"
+else
+    debug_log "hook_session_dir_unset"
+fi
+
+if [[ -n "$session_dir" && -d "$session_dir/library" ]]; then
+    real_library_dir=$(cd "$session_dir/library" && pwd -P)
+    debug_log "hook_real_library_dir ${real_library_dir:-none}"
+    if [[ -n "$real_library_dir" ]]; then
+        PROJECT_ROOT="$(cd "$real_library_dir/.." && pwd)"
+        ROOT="$PROJECT_ROOT"
+        export HOOK_DEBUG_LOG
+        debug_log "hook_project_root_adjusted $PROJECT_ROOT"
+    fi
+fi
+
+# LibraryMemory guard for WebFetch (enforce cache reuse)
+guard_reason=""
+guard_detail=""
+guard_hash_script=""
+guard_library_sources=""
+
+# LibraryMemory guard for WebFetch (enforce cache reuse)
+if [[ "$tool_name" == "WebFetch" ]]; then
+    url=$(echo "$hook_data" | jq -r '.tool_input.url // empty')
+    guard_detail="$url"
+    guard_reason="allow:no_url"
+    debug_log "guard_start tool=$tool_name url=$url session_dir=${session_dir:-}"
+    if [[ -n "$url" ]]; then
+        guard_reason="allow:no_digest"
+        # Respect explicit fresh fetch requests
+        if [[ "$url" != *"fresh=1"* && "$url" != *"refresh=1"* ]]; then
+            library_root="${LIBRARY_MEMORY_ROOT:-$ROOT/library}"
+            library_sources_dir="$library_root/sources"
+            hash_script="$ROOT/src/claude-runtime/skills/library-memory/hash-url.sh"
+            ttl_days="${LIBRARY_MEMORY_TTL_DAYS:-7}"
+            if [[ ! "$ttl_days" =~ ^-?[0-9]+$ ]]; then
+                ttl_days=7
+            fi
+            debug_log "guard_paths lib_root=$library_root sources=$library_sources_dir hash_script=$hash_script ttl=$ttl_days"
+            if [[ -x "$hash_script" ]]; then
+                debug_log "guard_hash_script_exists yes"
+            else
+                debug_log "guard_hash_script_exists no"
+            fi
+            if [[ -d "$library_sources_dir" ]]; then
+                debug_log "guard_library_dir_exists yes"
+            else
+                debug_log "guard_library_dir_exists no"
+            fi
+
+            if [[ -d "$library_sources_dir" && -x "$hash_script" ]]; then
+                url_hash=$("$hash_script" "$url" 2>/dev/null || echo "")
+                debug_log "guard_hash hash=$url_hash"
+                if [[ -n "$url_hash" ]]; then
+                    digest_path="$library_sources_dir/${url_hash}.json"
+                    debug_log "guard_digest_path $digest_path"
+                    if [[ -f "$digest_path" ]]; then
+                        last_updated=$(jq -r '.last_updated // empty' "$digest_path" 2>/dev/null || echo "")
+                        is_fresh=0
+                        if [[ -n "$last_updated" ]]; then
+                            if [[ "$ttl_days" -lt 0 ]]; then
+                                is_fresh=1
+                            elif [[ "$ttl_days" -gt 0 ]]; then
+                                if command -v python3 >/dev/null 2>&1; then
+                                    debug_log "guard_checking_ttl last_updated=$last_updated"
+                                    if python3 - "$last_updated" "$ttl_days" <<'PY'
+import sys
+from datetime import datetime, timezone
+
+last = sys.argv[1]
+ttl_days = int(sys.argv[2])
+try:
+    if last.endswith("Z"):
+        last_dt = datetime.fromisoformat(last.replace("Z", "+00:00"))
+    else:
+        last_dt = datetime.fromisoformat(last)
+except ValueError:
+    sys.exit(2)
+age = (datetime.now(timezone.utc) - last_dt).total_seconds() / 86400.0
+sys.exit(0 if age <= ttl_days else 1)
+PY
+                                    then
+                                        is_fresh=1
+                                    fi
+                                    debug_log "guard_ttl_result fresh=$is_fresh"
+                                fi
+                            fi
+                        fi
+
+                        if [[ "$is_fresh" -eq 1 ]]; then
+                            hit_timestamp=$(get_timestamp)
+                            stored_timestamp="${last_updated:-unknown}"
+                            message="📚 Library digest available for:
+  URL: $url
+  Digest: $digest_path
+  Last updated: $stored_timestamp
+Use the Read tool on the digest file. Re-run with '?fresh=1' (or '?refresh=1') if you need a new fetch."
+                            echo "$message" >&2
+
+                            if [[ -n "$session_dir" ]]; then
+                                lock_file="$session_dir/.events.lock"
+                                if mkdir "$lock_file" 2>/dev/null; then
+                                    jq -cn \
+                                        --arg ts "$hit_timestamp" \
+                                        --arg type "library_digest_hit" \
+                                        --arg url "$url" \
+                                        --arg hash "$url_hash" \
+                                        --arg path "$digest_path" \
+                                        --arg last "$stored_timestamp" \
+                                        --arg ttl "$ttl_days" \
+                                        '{timestamp:$ts,type:$type,data:{url:$url,url_hash:$hash,digest_path:$path,last_updated:($last | select(. != "" and . != "unknown")),ttl_days:(($ttl|tonumber?) // null)}}' \
+                                        >> "$session_dir/events.jsonl" 2>/dev/null
+
+                                    jq -cn \
+                                        --arg ts "$hit_timestamp" \
+                                        --arg type "tool_use_blocked" \
+                                        --arg tool "$tool_name" \
+                                        --arg agent "$agent_name" \
+                                        --arg summary "$tool_input_summary" \
+                                        --arg reason "library_digest_fresh" \
+                                        --arg details "$tool_input_details" \
+                                        '{timestamp:$ts,type:$type,data:{tool:$tool,agent:$agent,input_summary:$summary,reason:$reason,details:(if $details == "" then null else $details end)}}' \
+                                        >> "$session_dir/events.jsonl" 2>/dev/null
+
+                                    rmdir "$lock_file" 2>/dev/null || true
+                                fi
+                            fi
+
+                            exit 2
+                        else
+                            guard_reason="allow:digest_stale"
+                        fi
+                    else
+                        guard_reason="allow:digest_missing"
+                    fi
+                else
+                    guard_reason="allow:hash_failed"
+                fi
+            else
+                guard_reason="allow:library_missing"
+                guard_hash_script="$hash_script"
+                guard_library_sources="$library_sources_dir"
+            fi
+        else
+            guard_reason="allow:fresh_param"
+        fi
+    fi
+
+    if [[ -n "$session_dir" && -n "$guard_detail" && "$guard_reason" != "allow:no_url" ]]; then
+        lock_file="$session_dir/.events.lock"
+        if mkdir "$lock_file" 2>/dev/null; then
+            jq -cn \
+                --arg ts "$(get_timestamp)" \
+                --arg type "library_digest_allow" \
+                --arg url "$guard_detail" \
+                --arg reason "$guard_reason" \
+                --arg hash "${guard_hash_script:-}" \
+                --arg libdir "${guard_library_sources:-}" \
+                '{
+                    timestamp: $ts,
+                    type: $type,
+                    data: {
+                        url: $url,
+                        reason: $reason,
+                        hash_script: (if $hash == "" then null else $hash end),
+                        library_sources_dir: (if $libdir == "" then null else $libdir end)
+                    }
+                }' >> "$session_dir/events.jsonl" 2>/dev/null
+            rmdir "$lock_file" 2>/dev/null || true
+        fi
+    fi
+fi
+
+# Cache + knowledge graph advisory for WebFetch
+if [[ "$tool_name" == "WebFetch" && -n "$session_dir" ]]; then
+    if command -v web_cache_lookup >/dev/null 2>&1 && web_cache_enabled; then
+        url=$(echo "$hook_data" | jq -r '.tool_input.url // empty')
+        if [[ -n "$url" ]]; then
+            force_fetch=0
+            if command -v web_cache_load_config >/dev/null 2>&1; then
+                config=$(web_cache_load_config)
+                fresh_params=()
+                fresh_list=$(echo "$config" | jq -r '.fresh_url_parameters[]?')
+                if [[ -n "$fresh_list" ]]; then
+                    while IFS= read -r param; do
+                        [[ -z "$param" ]] && continue
+                        fresh_params+=("$param")
+                    done <<< "$fresh_list"
+                fi
+                for param in "${fresh_params[@]}"; do
+                    if [[ "$url" == *"$param"* ]]; then
+                        force_fetch=1
+                        break
+                    fi
+                done
+            fi
+
+            if [ "$force_fetch" -eq 0 ]; then
+                lookup_json=$(web_cache_lookup "$url")
+                status=$(echo "$lookup_json" | jq -r '.status // "miss"')
+                if [[ "$status" == "hit" ]]; then
+                    materialized_path=$(web_cache_materialize_for_session "$session_dir" "$url" "$lookup_json" 2>/dev/null || echo "")
+                    if [[ -n "$materialized_path" ]]; then
+                        kg_summary=""
+                        if command -v kg_find_source_by_url >/dev/null 2>&1; then
+                            kg_summary=$(kg_find_source_by_url "$session_dir" "$url" 2>/dev/null || echo "")
+                        fi
+                        stored_iso=$(echo "$lookup_json" | jq -r 'if .metadata.stored_at then (.metadata.stored_at | gmtime | strftime("%Y-%m-%dT%H:%M:%SZ")) else "" end' 2>/dev/null || printf '')
+                        if [[ -z "$stored_iso" ]]; then
+                            stored_iso="unknown"
+                        fi
+                        message="⚡ Cached web content reused for:
+  URL: $url
+  Cached file: $materialized_path
+  Stored: $stored_iso
+Use the Read tool on the cached file. Append '?fresh=1' to the URL if you must force a fresh fetch."
+                        echo "$message" >&2
+
+                        if [[ -n "$session_dir" ]]; then
+                            lock_file="$session_dir/.events.lock"
+                            if mkdir "$lock_file" 2>/dev/null; then
+                                jq -n \
+                                    --arg ts "$(get_timestamp)" \
+                                    --arg type "web_cache_hit" \
+                                    --arg url "$url" \
+                                    --arg path "$materialized_path" \
+                                    --arg status "$status" \
+                                    --arg agent "$agent_name" \
+                                    --arg summary "$kg_summary" \
+                                    '{
+                                        timestamp: $ts,
+                                        type: $type,
+                                        data: {
+                                            url: $url,
+                                            agent: $agent,
+                                            cache_path: $path,
+                                            status: $status,
+                                            kg_summary: (if $summary == "" then null else $summary end)
+                                        }
+                                    }' >> "$session_dir/events.jsonl"
+                                rmdir "$lock_file" 2>/dev/null || true
+                            fi
+                        fi
+                        exit 2
+                    fi
+                elif [[ "$status" == "stale" ]]; then
+                    echo "⚠️  Cached copy for $url is older than the configured TTL; proceeding with fresh fetch." >&2
+                fi
+            else
+                echo "↻ Forcing fresh fetch for $url (fresh parameter detected)." >&2
+            fi
+        fi
     fi
 fi
 
@@ -145,7 +441,8 @@ event_data=$(jq -n \
     --arg tool "$tool_name" \
     --arg agent "$agent_name" \
     --arg summary "$tool_input_summary" \
-    '{tool: $tool, agent: $agent, input_summary: $summary}')
+    --arg details "$tool_input_details" \
+    '{tool: $tool, agent: $agent, input_summary: $summary, details: (if $details == "" then null else $details end)}')
 
 # Log to events.jsonl if session directory is available
 if [ -n "$session_dir" ] && [ -d "$session_dir" ]; then
@@ -186,4 +483,3 @@ fi
 
 # Exit 0 to allow the tool to proceed
 exit 0
-

@@ -63,6 +63,13 @@ You are a market analysis specialist in an adaptive research system. Your market
 6. Assess drivers, barriers, regulatory environment
 7. Map market maturity
 
+## Cache-Aware Fetching
+
+- Review any cached market sources listed in the task context or surfaced by tool hooks before running a new WebFetch. Use the `Read` tool to inspect cached files.
+- Before issuing a WebFetch, call the `LibraryMemory` skill for the target URL (run `bash library-memory/hash-url.sh <url>` then `bash library-memory/show-digest.sh --hash <hash>`) to reuse any stored digest from persistent memory.
+- Append `?fresh=1` (or `?refresh=1`) to the URL when you need to bypass the cache for up-to-the-minute data.
+- Capture cached timestamp details in your notes so downstream agents understand the evidence vintage.
+
 ## Critical Context for Market Data
 
 For every market finding, document:

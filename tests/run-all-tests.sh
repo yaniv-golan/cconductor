@@ -36,6 +36,7 @@ TESTS=(
     "test-parallel-execution.sh"
     "test-scientific-research.sh"
     "test-market-research.sh"
+    "test-web-cache.sh"
     "test-pdf-cache-phase1.sh"
 )
 

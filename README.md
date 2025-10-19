@@ -162,6 +162,7 @@ Balanced research on any topic.
 - 📁 **Local File Analysis** - Analyze your own PDFs, markdown, and text files with `--input-dir`
 - 🔒 **Configurable Security** - Three profiles (strict/permissive/max_automation)
 - 📊 **Quality Validation** - Hard gating on every mission with automatic remediation passes; failures produce diagnostics in `artifacts/quality-gate.json` before prompting for any remaining manual fixes
+- ♻️ **Web Fetch Cache** - Successful WebFetch calls are cached and surfaced to agents; reuse cached files via `Read` and append `?fresh=1` when a live refresh is required
 - 🌍 **Cross-Platform Support** - Works on Windows, macOS, and Linux
 - 📖 **Extensible Knowledge** - Add your own domain expertise without modifying code
 - 🔍 **Progress Tracking** - See what's happening during research

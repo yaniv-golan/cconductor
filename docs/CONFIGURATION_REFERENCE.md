@@ -757,6 +757,46 @@ Three built-in profiles:
 
 ---
 
+## Web Fetch Cache (web-fetch-cache.json)
+
+### Overview
+
+**File**: `config/web-fetch-cache.json`  
+**Purpose**: Configure persistence, TTL, and reuse behaviour for WebFetch results  
+**Affects**: Pre-tool cache hits, orchestrator input context, hook guidance messages
+
+### Structure
+
+```json
+{
+  "enabled": true,
+  "ttl_hours": 24,
+  "max_entries": 500,
+  "max_total_mb": 512,
+  "materialize_per_session": 25,
+  "fresh_url_parameters": ["fresh=1", "fresh=true", "refresh=1", "refresh=true"]
+}
+```
+
+**Key options**:
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `enabled` | boolean | `true` | Toggle cache storage globally |
+| `ttl_hours` | integer | `24` | Cached objects older than this are marked stale and re-fetched |
+| `max_entries` | integer | `500` | Upper bound on cached URL entries before pruning oldest |
+| `max_total_mb` | integer | `512` | Soft disk budget; exceeded size triggers pruning |
+| `materialize_per_session` | integer | `25` | Maximum cached sources surfaced in agent context per session |
+| `fresh_url_parameters` | array | see above | URL substrings that force a fresh WebFetch when present |
+
+**Behaviour**:
+
+- Successful WebFetch calls write bodies and metadata to `$cache_dir/web-fetch/objects/` with a shared index (`index.json`).
+- Pre-tool hooks consult the cache; cache hits materialize the content under `<session>/cache/web-fetch/` and instruct agents to `Read` the cached file instead of fetching. Agents can append `?fresh=1` (or variants listed above) to bypass the cache.
+- The orchestrator includes a “Cached Sources Available” section built from the session manifest so downstream agents know which evidence is already on disk.
+
+---
+
 ## Quality Gate (quality-gate.json)
 
 ### Overview

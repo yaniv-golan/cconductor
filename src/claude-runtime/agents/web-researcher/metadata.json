@@ -4,7 +4,12 @@
   "description": "Use for web-based research tasks. Performs targeted web searches and extracts factual information with proper citations",
   "tools": [
     "WebSearch",
-    "WebFetch"
+    "WebFetch",
+    "Bash",
+    "Read",
+    "Write",
+    "Grep",
+    "Glob"
   ],
   "model": "claude-sonnet-4-5",
   "action_verb": "Researching"

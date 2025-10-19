@@ -918,6 +918,39 @@ kg_bulk_update() {
     fi
 }
 
+# Summarize existing knowledge for a specific source URL
+kg_find_source_by_url() {
+    local session_dir="$1"
+    local url="$2"
+
+    local kg_file="$session_dir/knowledge-graph.json"
+    if [ ! -f "$kg_file" ]; then
+        echo ""
+        return 0
+    fi
+
+    local kg_content
+    if ! kg_content=$(atomic_read "$kg_file"); then
+        echo ""
+        return 0
+    fi
+
+    local summary
+    summary=$(echo "$kg_content" | jq -r --arg url "$url" '
+        [
+            (.claims // [] | map(select((.sources // []) | map(.url) | index($url))) |
+                map("- Claim " + ((.id // "unknown")) + ": " + (.statement // ""))),
+            (.entities // [] | map(select((.sources // []) | map(.url) | index($url))) |
+                map("- Entity " + (.name // "unknown") + " (" + (.type // "entity") + ")"))
+        ]
+        | add
+        | unique
+        | if length == 0 then empty else join("\n") end
+    ' 2>/dev/null || echo "")
+
+    echo "$summary"
+}
+
 # Export functions
 export -f kg_init
 export -f kg_get_path
@@ -939,6 +972,7 @@ export -f kg_get_unresolved_contradictions
 export -f kg_get_unexplored_leads
 export -f kg_get_summary
 export -f kg_bulk_update
+export -f kg_find_source_by_url
 
 # Integrate agent findings into knowledge graph
 # Usage: kg_integrate_agent_output <session_dir> <agent_output_file>

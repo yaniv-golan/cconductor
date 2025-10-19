@@ -16,6 +16,7 @@
   "tools": [
     "WebSearch",
     "WebFetch",
+    "Bash",
     "Read"
   ],
   "model": "claude-sonnet-4-5",

@@ -75,6 +75,35 @@ copy_hooks() {
     echo "  ✓ Tool tracking hooks installed and configured" >&2
 }
 
+copy_skills() {
+    local session_dir="$1"
+    local source_skills="$PROJECT_ROOT/src/claude-runtime/skills"
+    local target_skills="$session_dir/.claude/skills"
+
+    if [ ! -d "$source_skills" ]; then
+        return 0
+    fi
+
+    mkdir -p "$target_skills"
+    if compgen -G "$source_skills/*" > /dev/null; then
+        cp -R "$source_skills/"* "$target_skills/" 2>/dev/null || true
+    fi
+}
+
+link_shared_library() {
+    local session_dir="$1"
+    local library_dir="$PROJECT_ROOT/library"
+
+    mkdir -p "$library_dir/sources"
+    if [ ! -f "$library_dir/manifest.json" ]; then
+        echo '{}' > "$library_dir/manifest.json"
+    fi
+
+    if [ ! -e "$session_dir/library" ]; then
+        ln -s "$library_dir" "$session_dir/library" 2>/dev/null || true
+    fi
+}
+
 # Initialize a new mission session
 # Creates session directory with unique timestamp and minimal structure
 #
@@ -125,6 +154,12 @@ initialize_session() {
     
     # Copy hooks for tool tracking
     copy_hooks "$session_dir"
+
+    # Copy runtime skills (e.g., LibraryMemory) into the session
+    copy_skills "$session_dir"
+
+    # Symlink shared research library for skill access
+    link_shared_library "$session_dir"
     
     # Capture Claude Code CLI version for journal metadata
     local claude_version="unknown"

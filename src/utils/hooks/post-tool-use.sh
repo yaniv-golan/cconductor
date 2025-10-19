@@ -112,6 +112,47 @@ else
     echo "    $status $tool_name ($duration_display)" >&2
 fi
 
+# Cache successful WebFetch results
+if [ "$tool_name" = "WebFetch" ] && [ "$exit_code" = "0" ]; then
+    # shellcheck disable=SC1091
+    source "$PROJECT_ROOT/src/utils/web-cache.sh" 2>/dev/null || true
+    if command -v web_cache_store >/dev/null 2>&1 && web_cache_enabled; then
+        if command -v web_cache_root_dir >/dev/null 2>&1; then
+            debug_log="$(web_cache_root_dir)/logs/post-hook-debug.jsonl"
+            mkdir -p "$(dirname "$debug_log")"
+            printf '%s\n' "$hook_data" >> "$debug_log" 2>/dev/null || true
+        fi
+        url=$(echo "$hook_data" | jq -r '.tool_input.url // empty')
+        if [[ -n "$url" ]]; then
+            body_file=$(echo "$hook_data" | jq -r '.tool_output.body_file // empty')
+            metadata=$(echo "$hook_data" | jq -c '
+                {
+                    status_code: (.tool_output.status_code // null),
+                    content_type: (.tool_output.content_type // null),
+                    headers: {
+                        etag: (.tool_output.headers.etag // .tool_output.headers.ETag // null),
+                        last_modified: (
+                            .tool_output.headers["last-modified"]
+                            // .tool_output.headers["Last-Modified"]
+                            // null
+                        )
+                    }
+                }' 2>/dev/null || echo '{}')
+
+            if [[ -n "$body_file" && -f "$body_file" ]]; then
+                web_cache_store "$url" "$body_file" "$metadata"
+            else
+                body_content=$(echo "$hook_data" | jq -r '.tool_output.body // empty')
+                if [[ -n "$body_content" ]]; then
+                    temp_body="$(mktemp)"
+                    printf '%s' "$body_content" > "$temp_body"
+                    web_cache_store "$url" "$temp_body" "$metadata"
+                    rm -f "$temp_body"
+                fi
+            fi
+        fi
+    fi
+fi
+
 # Exit 0 to continue
 exit 0
-

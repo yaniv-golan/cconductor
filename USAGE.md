@@ -601,6 +601,12 @@ See [Quality Guide](docs/QUALITY_GUIDE.md) for detailed explanation.
 - Address the issues—adding independent sources, refreshing stale evidence, improving confidence—and run `./cconductor resume <session>` to re-run the gate.
 - Set `mode` to `enforce` in `~/.config/cconductor/quality-gate.json` if you want runs to stop entirely until everything passes.
 
+### Cached Web Sources
+
+- Successful WebFetch calls are written to the shared cache (`$cache_dir/web-fetch/`) and surfaced in each agent prompt under “Cached Sources Available”.
+- Cached files are materialized inside `<session>/cache/web-fetch/` and can be inspected with the `Read` tool before hitting the network again.
+- To force a fresh fetch when a cached copy is outdated, append `?fresh=1` (or `?refresh=1`) to the URL you provide to WebFetch.
+
 ### Citations and Bibliography
 
 Every report includes:

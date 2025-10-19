@@ -10,10 +10,11 @@
             "Read",
             "Write",
             "Grep",
-            "Glob"
+            "Glob",
+            "Bash(library-memory/hash-url.sh:*)",
+            "Bash(library-memory/show-digest.sh:*)"
         ],
         "disallowed": [
-            "Bash",
             "Edit",
             "NotebookEdit"
         ]
@@ -29,10 +30,11 @@
             "Read",
             "Write",
             "Grep",
-            "Glob"
+            "Glob",
+            "Bash(library-memory/hash-url.sh:*)",
+            "Bash(library-memory/show-digest.sh:*)"
         ],
         "disallowed": [
-            "Bash",
             "Edit",
             "NotebookEdit"
         ]
@@ -59,10 +61,11 @@
             "Read",
             "Write",
             "Grep",
-            "Glob"
+            "Glob",
+            "Bash(library-memory/hash-url.sh:*)",
+            "Bash(library-memory/show-digest.sh:*)"
         ],
         "disallowed": [
-            "Bash",
             "Edit",
             "NotebookEdit"
         ]
@@ -135,10 +138,11 @@
             "Read",
             "Write",
             "Grep",
-            "Glob"
+            "Glob",
+            "Bash(library-memory/hash-url.sh:*)",
+            "Bash(library-memory/show-digest.sh:*)"
         ],
         "disallowed": [
-            "Bash",
             "Edit",
             "NotebookEdit"
         ]

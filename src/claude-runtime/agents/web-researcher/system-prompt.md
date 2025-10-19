@@ -84,6 +84,13 @@ If any task failed, set status to "partial" and include "errors": [{"task_id": "
 6. Rate source credibility and your confidence in each claim
 7. Identify gaps, contradictions, and promising leads
 
+## Cache-Aware Fetching
+
+- When the system provides cached source paths (for example in `Cached Sources Available` or via tool hook notices), inspect those files **before** issuing a new WebFetch by using the `Read` tool.
+- Before invoking **WebFetch**, call the `LibraryMemory` skill (typically by running `bash library-memory/hash-url.sh <url>` followed by `bash library-memory/show-digest.sh --hash <hash>`) so you can reuse any cached digest surfaced from persistent memory.
+- Only run WebFetch if both the memory-based digest and any cached files are insufficient or stale. To explicitly bypass the cache, append `?fresh=1` (or `?refresh=1`) to the URL you fetch.
+- Note the cached timestamp when citing evidence; refresh only when the topic truly requires up-to-the-minute data.
+
 ### Quality Expectations
 
 - For every claim you record, gather **at least two independent domains** whenever possible. If you cannot, explain why in the `notes` field of your finding.

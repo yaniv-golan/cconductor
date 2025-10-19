@@ -37,6 +37,8 @@ source "$UTILS_DIR/verbose.sh" 2>/dev/null || true
 source "$UTILS_DIR/error-logger.sh"
 # shellcheck disable=SC1091
 source "$UTILS_DIR/debug.sh"
+# shellcheck disable=SC1091
+source "$UTILS_DIR/web-cache.sh" 2>/dev/null || true
 
 # Prepare orchestrator context for invocation
 prepare_orchestrator_context() {
@@ -387,6 +389,24 @@ INSTRUCTIONS_EOF
 )
     fi
     
+    local cache_section=""
+    if command -v web_cache_format_summary >/dev/null 2>&1; then
+        local cache_summary_json cache_lines
+        cache_summary_json=$(web_cache_format_summary "$session_dir" 2>/dev/null || echo "[]")
+        if [[ -n "$cache_summary_json" && "$cache_summary_json" != "[]" ]]; then
+            cache_lines=$(echo "$cache_summary_json" | jq -r '
+                map(
+                    "- " + (.url // "") + " → " + (.path // "") +
+                    (if .status == "hit" then " (cached)" elif .status == "stale" then " (stale)" else "" end)
+                )
+                | join("\n")
+            ' 2>/dev/null || printf '')
+            if [[ -n "$cache_lines" ]]; then
+                cache_section=$'\n''## Cached Sources Available\n'"$cache_lines"$'\n'
+            fi
+        fi
+    fi
+
     local agent_input
     agent_input=$(cat <<EOF
 $task
@@ -395,7 +415,7 @@ $task
 $context
 
 ## Input Artifacts
-$artifacts_section${output_spec_section}
+$artifacts_section${output_spec_section}${cache_section}
 
 $instructions_section
 EOF
@@ -1067,7 +1087,13 @@ run_mission_orchestration() {
             duration_seconds: (($end | fromdateiso8601) - ($start | fromdateiso8601)),
             total_cost_usd: ($cost | tonumber)
         }' > "$session_dir/mission-metrics.json"
-    
+
+    # Persist findings into the shared digital library
+    if [ -x "$UTILS_DIR/digital-librarian.sh" ]; then
+        "$UTILS_DIR/digital-librarian.sh" "$session_dir" 2>/dev/null || \
+            echo "  ⚠️  Warning: Digital librarian update failed" >&2
+    fi
+
     # Stop event tailer if running
     # shellcheck disable=SC1091
     if command -v stop_event_tailer &>/dev/null || source "$UTILS_DIR/event-tailer.sh" 2>/dev/null; then
@@ -1309,4 +1335,3 @@ prepare_orchestrator_context_resume() {
             refinement_guidance: (if $refinement != "" then $refinement else null end)
         }'
 }
-

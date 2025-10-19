@@ -8,6 +8,18 @@ set -euo pipefail
 CCONDUCTOR_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 VERSION="$(cat "$CCONDUCTOR_ROOT/VERSION" 2>/dev/null | tr -d '\n' || echo "unknown")"
 
+# Ensure we run with Bash 4+ by preferring Homebrew bash if available
+if [ "${BASH_VERSINFO[0]}" -lt 4 ]; then
+    if command -v /opt/homebrew/bin/bash >/dev/null 2>&1; then
+        exec /opt/homebrew/bin/bash "$0" "$@"
+    elif command -v /usr/local/bin/bash >/dev/null 2>&1; then
+        exec /usr/local/bin/bash "$0" "$@"
+    else
+        echo "Error: Bash 4.0 or higher is required to run CConductor." >&2
+        exit 1
+    fi
+fi
+
 # Debug mode support
 if [ "${CCONDUCTOR_DEBUG:-0}" = "1" ]; then
     echo "🐛 Debug mode enabled" >&2
@@ -23,18 +35,6 @@ source "$CCONDUCTOR_ROOT/src/utils/cli-parser.sh"
 
 # Parse arguments early to check for --verbose and --debug flags
 parse_cli_args "$@"
-
-# Ensure we run with Bash 4+ by preferring Homebrew bash if available
-if [ "${BASH_VERSINFO[0]}" -lt 4 ]; then
-    if command -v /opt/homebrew/bin/bash >/dev/null 2>&1; then
-        exec /opt/homebrew/bin/bash "$0" "$@"
-    elif command -v /usr/local/bin/bash >/dev/null 2>&1; then
-        exec /usr/local/bin/bash "$0" "$@"
-    else
-        echo "Error: Bash 4.0 or higher is required to run CConductor." >&2
-        exit 1
-    fi
-fi
 
 # Debug mode support (check both flag and environment variable)
 if has_flag "debug" || [ "${CCONDUCTOR_DEBUG:-0}" = "1" ]; then

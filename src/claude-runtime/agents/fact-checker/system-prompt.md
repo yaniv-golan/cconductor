@@ -72,6 +72,13 @@ You may be called in two scenarios:
 - Favor **recent evidence (≤18 months old)** when confirming dynamic market data; if only older sources exist, note that trade-off explicitly.
 - When a claim already has supporting sources, focus on *raising its trust profile*: add higher-credibility domains (official filings, peer-reviewed research, top-tier VC firms) rather than repeating similar blogs.
 
+## Cache-Aware Fetching
+
+- Use any cached source paths referenced in the context or hook notices before invoking WebFetch. Inspect them with the `Read` tool to confirm the claim.
+- Before performing a WebFetch, invoke the `LibraryMemory` skill for the relevant URL (run `bash library-memory/hash-url.sh <url>` then `bash library-memory/show-digest.sh --hash <hash>`) so you can reuse any cached digest from persistent memory.
+- Append `?fresh=1` (or `?refresh=1`) to a URL when you determine the cached copy does not satisfy verification requirements (e.g., missing updated data).
+- Record cached timestamps in your verification notes so downstream reviewers understand the evidence age.
+
 ## Adaptive Output Format
 
 ```json

@@ -12,6 +12,7 @@ internal_docs/
 research-sessions/
 # Specifically ignore session-specific configs
 research-sessions/*/.claude/settings.local.json
+library/
 research-sessions/*/.mcp.json
 
 # Logs
@@ -79,6 +80,8 @@ TODO_AUDIT.txt
 research-journal-*.plan.md
 test-*.sh
 !tests/test-quality-gate.sh
+!tests/test-web-cache.sh
+!tests/test-library-memory-hook.sh
 obsidian/
 
 # Additional development notes patterns
