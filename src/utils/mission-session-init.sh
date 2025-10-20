@@ -141,6 +141,7 @@ initialize_session() {
     
     # Create directory structure
     mkdir -p "$session_dir/artifacts"
+    mkdir -p "$session_dir/final"
     mkdir -p "$session_dir/raw"  # For agent findings files
     mkdir -p "$session_dir/.claude/agents"
     

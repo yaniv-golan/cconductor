@@ -52,7 +52,7 @@ show_session_details() {
     fi
     
     # Report status
-    if [ -f "$session_path/output/mission-report.md" ]; then
+    if [ -f "$session_path/final/mission-report.md" ]; then
         local session_status
         if [ -f "$session_path/session.json" ]; then
             session_status=$(jq -r '.status // ""' "$session_path/session.json" 2>/dev/null || echo "")
@@ -322,7 +322,7 @@ sessions_browser() {
             question=$(jq -r '.objective // "N/A"' "$session/session.json" 2>/dev/null)
         fi
         
-        if [ -f "$session/output/mission-report.md" ]; then
+        if [ -f "$session/final/mission-report.md" ]; then
             status="Complete"
             if [ -f "$session/session.json" ]; then
                 local session_status

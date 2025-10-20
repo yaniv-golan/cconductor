@@ -528,7 +528,7 @@ More specific questions get better-sourced results:
 
    ```bash
    # Should end with ## References section
-   tail -50 research-sessions/$(cat research-sessions/.latest)/output/mission-report.md
+   tail -50 research-sessions/$(cat research-sessions/.latest)/final/mission-report.md
    ```
 
 ### Citations Are URLs Not Papers

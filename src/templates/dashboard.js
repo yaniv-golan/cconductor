@@ -262,7 +262,7 @@ class Dashboard {
 
         const completionEvent = this.currentEvents?.find(e =>
             e.type === 'research_complete' || e.type === 'mission_completed');
-        const reportFile = completionEvent?.data?.report_file || 'output/mission-report.md';
+        const reportFile = completionEvent?.data?.report_file || 'final/mission-report.md';
         const qualityGate = session?.quality_gate || null;
 
         const stopRuntime = () => {
@@ -826,7 +826,7 @@ class Dashboard {
         // Entry N+2: Research completion (support both old and new event types)
         const researchComplete = events.find(e => e.type === 'research_complete' || e.type === 'mission_completed');
         if (researchComplete) {
-            const reportFile = researchComplete.data?.report_file || 'output/mission-report.md';
+            const reportFile = researchComplete.data?.report_file || 'final/mission-report.md';
             
             // For mission_completed events, we need to enrich data from metrics
             // The formatResearchComplete function expects claims_synthesized, entities_integrated, report_sections
@@ -997,7 +997,7 @@ class Dashboard {
         const claims = data.claims_synthesized || 0;
         const entities = data.entities_integrated || 0;
         const sections = data.report_sections || 0;
-        const reportFile = data.report_file || 'output/mission-report.md';
+        const reportFile = data.report_file || 'final/mission-report.md';
         
         // Build message based on whether we have section count
         const sectionText = sections > 0 
@@ -1008,7 +1008,7 @@ class Dashboard {
         
 📄 <strong><a href="${reportFile}" target="_blank">View Research Report</a></strong>
 
-📖 <strong><a href="output/research-journal.md" target="_blank">View Research Journal</a></strong> (Sequential timeline with full details)`;
+📖 <strong><a href="final/research-journal.md" target="_blank">View Research Journal</a></strong> (Sequential timeline with full details)`;
     }
 
     getTasksForAgent(agentName, events) {
@@ -1515,7 +1515,7 @@ class Dashboard {
                 const objective = event.data.objective || 'Research mission';
                 return `🚀 Starting research: ${objective}`;
             case 'mission_completed':
-                const reportFile = event.data.report_file || 'output/mission-report.md';
+                const reportFile = event.data.report_file || 'final/mission-report.md';
                 return `✅ Research complete! Report: ${reportFile}`;
             case 'agent_invocation':
                 return `⚡ Invoking ${event.data.agent}`;

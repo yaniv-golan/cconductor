@@ -140,7 +140,7 @@ Each agent gets its own namespace in the knowledge graph:
 
 ```
 research-sessions/session_123/
-├── output/
+├── final/
 │   ├── mission-report.md
 │   └── research-journal.md
 ├── knowledge-graph.json

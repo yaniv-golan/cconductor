@@ -655,7 +655,7 @@ process_agent_kg_artifacts() {
 }
 
 # Validate synthesis agent outputs
-# Ensures mission-report.md is created
+# Ensures final/mission-report.md is created
 validate_synthesis_outputs() {
     local session_dir="$1"
     local agent="$2"
@@ -665,15 +665,15 @@ validate_synthesis_outputs() {
         return 0
     fi
     
-    local mission_report="$session_dir/mission-report.md"
+    local mission_report="$session_dir/final/mission-report.md"
     
     # Check mission report exists
     if [ ! -f "$mission_report" ]; then
-        echo "  ⚠️  Warning: synthesis-agent did not create mission-report.md" >&2
+        echo "  ⚠️  Warning: synthesis-agent did not create final/mission-report.md" >&2
         return 1
     fi
     
-    echo "  ✓ Synthesis outputs validated" >&2
+    echo "  ✓ Synthesis outputs validated (final/mission-report.md)" >&2
     return 0
 }
 
@@ -933,90 +933,6 @@ check_mission_complete() {
     return 0
 }
 
-# Generate final mission report
-generate_mission_report() {
-    local session_dir="$1"
-    local mission_profile="$2"
-    
-    local mission_name
-    mission_name=$(echo "$mission_profile" | jq -r '.name')
-    
-    echo "→ Generating mission report..."
-    
-    local report_file="$session_dir/final/mission-report.md"
-    mkdir -p "$session_dir/final"
-    
-    # Get orchestration summary
-    local orchestration_summary
-    orchestration_summary=$(get_orchestration_summary "$session_dir")
-    
-    # Get budget report
-    local budget_report
-    budget_report=$(budget_report "$session_dir")
-    
-    # Extract KG findings
-    local kg_file
-    kg_file=$(kg_get_path "$session_dir")
-    
-    local kg_findings=""
-    if [[ -f "$kg_file" ]]; then
-        local entity_count
-        entity_count=$(jq '.entities | length' "$kg_file" 2>/dev/null || echo "0")
-        local claim_count
-        claim_count=$(jq '.claims | length' "$kg_file" 2>/dev/null || echo "0")
-        local citation_count
-        citation_count=$(jq '.citations | length' "$kg_file" 2>/dev/null || echo "0")
-        
-        kg_findings="### Knowledge Graph Summary
-
-- **Entities discovered**: $entity_count
-- **Claims validated**: $claim_count
-- **Citations collected**: $citation_count
-
-### Key Entities
-
-$(jq -r '.entities[:10] | .[] | "- \(.name) (\(.type))"' "$kg_file" 2>/dev/null || echo "None")
-
-### Key Claims
-
-$(jq -r '.claims[:10] | .[] | "- \(.claim_text) (confidence: \(.confidence))"' "$kg_file" 2>/dev/null || echo "None")
-"
-    else
-        kg_findings="Knowledge graph not available."
-    fi
-    
-    # Generate report
-    cat > "$report_file" <<EOF
-# Mission Report: $mission_name
-
-## Mission Objective
-
-$(echo "$mission_profile" | jq -r '.objective')
-
-## Execution Summary
-
-$orchestration_summary
-
-## Budget Summary
-
-$budget_report
-
-## Findings
-
-$kg_findings
-
-## Artifacts Produced
-
-$(artifact_list_all "$session_dir" | jq -r '.[] | "- \(.path) (\(.type), produced by \(.produced_by))"')
-
----
-
-Report generated at: $(get_timestamp)
-EOF
-    
-    echo "  ✓ Report generated: $report_file"
-}
-
 # Main mission orchestration loop
 run_mission_orchestration() {
     local mission_profile="$1"
@@ -1168,21 +1084,34 @@ run_mission_orchestration() {
         "$session_dir/session.json" > "$session_dir/session.json.tmp" && \
         mv "$session_dir/session.json.tmp" "$session_dir/session.json"
     
-    # Generate final report
-    generate_mission_report "$session_dir" "$mission_profile"
+    # Announce final report status from synthesis agent
+    local final_report="$session_dir/final/mission-report.md"
+    echo "→ Final report status..."
+    if [ -f "$final_report" ]; then
+        local final_report_display
+        final_report_display=$(rel_path_for_display "$final_report" "$session_dir" "$MISSION_ORCH_BASE_DIR")
+        echo "  ✓ Final report ready: $final_report_display"
+    else
+        local final_report_missing_display
+        final_report_missing_display=$(rel_path_for_display "$final_report" "$session_dir" "$MISSION_ORCH_BASE_DIR")
+        echo "  ✗ Final report missing at $final_report_missing_display" >&2
+    fi
     
     # Export research journal as markdown
     # shellcheck source=/dev/null
     if command -v export_journal &>/dev/null || source "$UTILS_DIR/export-journal.sh" 2>/dev/null; then
         echo "→ Generating research journal..."
-        export_journal "$session_dir" "$session_dir/research-journal.md" 2>&1 || echo "  ⚠️  Warning: Could not generate research journal"
+        export_journal "$session_dir" "$session_dir/final/research-journal.md" 2>&1 || echo "  ⚠️  Warning: Could not generate research journal"
     fi
     
     # Log mission completion event for journal
-    local report_path="$session_dir/mission-report.md"
+    local report_relative=""
+    if [ -f "$final_report" ]; then
+        report_relative="final/mission-report.md"
+    fi
     log_event "$session_dir" "mission_completed" "$(jq -n \
         --arg completed "$completed_at" \
-        --arg report "$([ -f "$report_path" ] && echo "mission-report.md" || echo "")" \
+        --arg report "$report_relative" \
         '{
             completed_at: $completed,
             report_file: $report,
@@ -1221,8 +1150,10 @@ run_mission_orchestration() {
         stop_event_tailer "$session_dir" 2>/dev/null || true
     fi
     
+    local session_display
+    session_display=$(rel_path_for_display "$session_dir" "" "$MISSION_ORCH_BASE_DIR")
     echo ""
-    echo "Session saved at: $session_dir"
+    echo "Session saved at: $session_display"
 }
 
 # Resume mission orchestration
@@ -1352,21 +1283,34 @@ run_mission_orchestration_resume() {
         "$session_dir/session.json" > "$session_dir/session.json.tmp" && \
         mv "$session_dir/session.json.tmp" "$session_dir/session.json"
     
-    # Update final report
-    generate_mission_report "$session_dir" "$mission_profile"
+    # Announce final report status from synthesis agent
+    local final_report="$session_dir/final/mission-report.md"
+    echo "→ Final report status..."
+    if [ -f "$final_report" ]; then
+        local final_report_display
+        final_report_display=$(rel_path_for_display "$final_report" "$session_dir" "$MISSION_ORCH_BASE_DIR")
+        echo "  ✓ Final report ready: $final_report_display"
+    else
+        local final_report_missing_display
+        final_report_missing_display=$(rel_path_for_display "$final_report" "$session_dir" "$MISSION_ORCH_BASE_DIR")
+        echo "  ✗ Final report missing at $final_report_missing_display" >&2
+    fi
     
     # Export research journal as markdown
     # shellcheck source=/dev/null
     if command -v export_journal &>/dev/null || source "$UTILS_DIR/export-journal.sh" 2>/dev/null; then
         echo "→ Generating research journal..."
-        export_journal "$session_dir" "$session_dir/research-journal.md" 2>&1 || echo "  ⚠️  Warning: Could not generate research journal"
+        export_journal "$session_dir" "$session_dir/final/research-journal.md" 2>&1 || echo "  ⚠️  Warning: Could not generate research journal"
     fi
     
     # Log mission completion event for journal
-    local report_path="$session_dir/mission-report.md"
+    local report_relative=""
+    if [ -f "$final_report" ]; then
+        report_relative="final/mission-report.md"
+    fi
     log_event "$session_dir" "mission_completed" "$(jq -n \
         --arg completed "$completed_at" \
-        --arg report "$([ -f "$report_path" ] && echo "mission-report.md" || echo "")" \
+        --arg report "$report_relative" \
         '{
             completed_at: $completed,
             report_file: $report,
@@ -1399,8 +1343,10 @@ run_mission_orchestration_resume() {
         stop_event_tailer "$session_dir" 2>/dev/null || true
     fi
     
+    local session_display
+    session_display=$(rel_path_for_display "$session_dir" "" "$MISSION_ORCH_BASE_DIR")
     echo ""
-    echo "Session saved at: $session_dir"
+    echo "Session saved at: $session_display"
 }
 
 # Prepare orchestrator context for resume

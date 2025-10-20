@@ -48,7 +48,7 @@ Every research session generates a quality report at the end. Find it in:
 
 ```
 research-sessions/[session-name]/
-  output/mission-report.md          ← Main report with findings
+  final/mission-report.md          ← Main report with findings
   intermediate/
     validation.json           ← Quality metrics here
 ```

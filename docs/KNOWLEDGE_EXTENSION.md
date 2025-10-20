@@ -512,7 +512,7 @@ Test custom knowledge with simple queries before using in important research:
 ./cconductor "Simple test question about my domain"
 
 # Review output for knowledge integration
-cat research-sessions/session_*/output/mission-report.md
+cat research-sessions/session_*/final/mission-report.md
 ```
 
 ## Examples

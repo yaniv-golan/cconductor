@@ -492,6 +492,21 @@ bash src/utils/export-journal.sh "$SESSION_DIR/$(cat "$SESSION_DIR/.latest")"
 ./cconductor --version
 ```
 
+### Session Outputs & Storage
+
+Every mission writes to a timestamped directory under `research-sessions/mission_<id>/` with:
+
+- `final/mission-report.md` – user-facing research report
+- `final/research-journal.md` – chronological mission journal
+- `artifacts/` – agent-generated artifacts
+- `raw/` – intermediate findings and knowledge-graph fragments
+- `cache/` – session-local copies of shared web cache objects (safe to delete)
+
+Two additional storage locations matter for reuse:
+
+- **Platform cache** – transient WebFetch/WebSearch assets stored under the OS cache root (`~/Library/Caches/CConductor/` on macOS, `${XDG_CACHE_HOME:-~/.cache}/cconductor/` on Linux). Clearing it only forces fresh network calls next time.
+- **Library** – durable digests in the repository’s `library/` directory (or `LIBRARY_MEMORY_ROOT`). Populated by `src/utils/digital-librarian.sh` from knowledge-graph citations and reused through the LibraryMemory skill.
+
 ### Examples
 
 ```bash

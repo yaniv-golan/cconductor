@@ -56,30 +56,30 @@ if [ -z "$SESSION_DIR" ]; then
     exit 1
 fi
 
-if [ -f "$SESSION_DIR/output/mission-report.md" ]; then
+if [ -f "$SESSION_DIR/final/mission-report.md" ]; then
     echo "✓ Scientific research report generated"
 
     # Check for academic sources
-    if grep -q "arXiv\|Google Scholar\|pubmed\|ieee" "$SESSION_DIR/output/mission-report.md"; then
+    if grep -q "arXiv\|Google Scholar\|pubmed\|ieee" "$SESSION_DIR/final/mission-report.md"; then
         echo "✓ Report contains academic sources"
     else
         echo "⚠ Few academic sources found"
     fi
 
     # Check for methodology discussion
-    if grep -q "Methodology\|methodology\|experimental\|statistical" "$SESSION_DIR/output/mission-report.md"; then
+    if grep -q "Methodology\|methodology\|experimental\|statistical" "$SESSION_DIR/final/mission-report.md"; then
         echo "✓ Methodology assessment present"
     else
         echo "⚠ Methodology assessment may be missing"
     fi
 
     # Check for peer review mentions
-    if grep -q "peer.review\|journal\|conference" "$SESSION_DIR/output/mission-report.md"; then
+    if grep -q "peer.review\|journal\|conference" "$SESSION_DIR/final/mission-report.md"; then
         echo "✓ Peer review status discussed"
     fi
 
     # Check for citation network
-    if grep -q "Citation\|citation\|References" "$SESSION_DIR/output/mission-report.md"; then
+    if grep -q "Citation\|citation\|References" "$SESSION_DIR/final/mission-report.md"; then
         echo "✓ Citations included"
     fi
 else

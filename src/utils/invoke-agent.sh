@@ -532,9 +532,9 @@ invoke_agent_v2() {
         # Check if output file is empty (synthesis-agent may produce artifacts without JSON)
         if [ ! -s "$output_file" ]; then
             # For synthesis-agent, check if expected artifacts were created
-            if [[ "$agent_name" == "synthesis-agent" ]] && [ -f "$session_dir/output/mission-report.md" ]; then
+            if [[ "$agent_name" == "synthesis-agent" ]] && [ -f "$session_dir/final/mission-report.md" ]; then
                 # Create minimal success JSON for validation
-                echo '{"type":"result","subtype":"success","result":"Mission report generated at output/mission-report.md"}' > "$output_file"
+                echo '{"type":"result","subtype":"success","result":"Mission report generated at final/mission-report.md"}' > "$output_file"
             else
                 # Empty output is a failure for other agents
                 echo "✗ Agent $agent_name produced no output" >&2

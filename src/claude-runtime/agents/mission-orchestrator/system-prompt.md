@@ -291,7 +291,7 @@ When mission is complete, generate mission report with:
 6. Required sections from mission profile
 7. Decision log summary
 
-Store as `session_dir/output/mission-report.md`.
+Store as `session_dir/final/mission-report.md`.
 
 ## Critical Rules
 

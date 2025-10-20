@@ -108,7 +108,7 @@ extract_first_sentence() {
 
 export_journal() {
     local session_dir="$1"
-    local output_file="${2:-$session_dir/output/research-journal.md}"
+    local output_file="${2:-$session_dir/final/research-journal.md}"
 
     mkdir -p "$(dirname "$output_file")"
     
@@ -1073,7 +1073,7 @@ export_journal() {
                     local sections
                     sections=$(echo "$line" | jq -r '.data.report_sections // 0')
                     local report_file
-                    report_file=$(echo "$line" | jq -r '.data.report_file // "output/mission-report.md"')
+                    report_file=$(echo "$line" | jq -r '.data.report_file // "final/mission-report.md"')
                     
                     echo "## 🎉 Research Complete"
                     echo ""
@@ -1092,7 +1092,7 @@ export_journal() {
                 
                 mission_completed)
                     local report_file
-                    report_file=$(echo "$line" | jq -r '.data.report_file // "output/mission-report.md"')
+                    report_file=$(echo "$line" | jq -r '.data.report_file // "final/mission-report.md"')
                     
                     # Get final stats from knowledge graph
                     local kg_file="$session_dir/knowledge-graph.json"
@@ -1575,8 +1575,8 @@ export_journal() {
         fi
         
         # Link to final report
-        if [ -f "$session_dir/output/mission-report.md" ]; then
-            echo "**Final Report:** [output/mission-report.md](output/mission-report.md)"
+        if [ -f "$session_dir/final/mission-report.md" ]; then
+            echo "**Final Report:** [final/mission-report.md](final/mission-report.md)"
             echo ""
         fi
         
@@ -1586,7 +1586,19 @@ export_journal() {
         
     } > "$output_file"
     
-    echo "✓ Research journal exported to: $output_file" >&2
+    local display_output="$output_file"
+    if command -v python3 >/dev/null 2>&1; then
+        display_output=$(python3 - "$output_file" <<'PY'
+import os, sys
+path = sys.argv[1]
+try:
+    print(os.path.relpath(path))
+except Exception:
+    print(path)
+PY
+)
+    fi
+    echo "✓ Research journal exported to: $display_output" >&2
 }
 
 # Export function for sourcing
@@ -1597,7 +1609,7 @@ if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
     if [ $# -lt 1 ]; then
         echo "Usage: $0 <session_dir> [output_file]" >&2
         echo "  session_dir: Path to research session directory" >&2
-        echo "  output_file: Optional output path (default: <session_dir>/output/research-journal.md)" >&2
+        echo "  output_file: Optional output path (default: <session_dir>/final/research-journal.md)" >&2
         exit 1
     fi
     

@@ -120,7 +120,7 @@ The orchestrator will:
 ### 5. Review Results
 
 Outputs in session directory:
-- `output/mission-report.md` - Comprehensive mission report
+- `final/mission-report.md` - Comprehensive mission report
 - `orchestration-log.jsonl` - Decision log with rationale
 - `artifacts/manifest.json` - All artifacts produced
 - `knowledge-graph.json` - Entities, claims, handoffs

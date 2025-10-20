@@ -76,8 +76,21 @@ See [Complex Research](#complex-research-from-files) section for details.
 ./cconductor sessions
 
 # View specific report
-cat research-sessions/session_1759420487/output/mission-report.md
+cat research-sessions/session_1759420487/final/mission-report.md
 ```
+
+---
+
+### Where Files Are Stored
+
+- `research-sessions/mission_<id>/final/mission-report.md` — human-readable research report
+- `research-sessions/mission_<id>/final/research-journal.md` — chronological journal exported after completion
+- `research-sessions/mission_<id>/cache/` — session-local copies of cached WebFetch/WebSearch results (safe to delete)
+- `research-sessions/mission_<id>/artifacts/` and `/raw/` — agent artifacts and intermediate findings
+- `~/Library/Caches/CConductor/` (macOS) or `${XDG_CACHE_HOME:-~/.cache}/cconductor/` (Linux) — shared platform cache for transient network results
+- `library/` (or `LIBRARY_MEMORY_ROOT`) — shared LibraryMemory digests populated from the mission knowledge graph
+
+Clear the platform cache to force fresh network calls; keep the `library/` directory if you want to reuse curated evidence across missions.
 
 ---
 
@@ -219,7 +232,7 @@ research-sessions/
 ls -lt research-sessions/
 
 # Read latest report
-cat research-sessions/$(cat research-sessions/.latest)/output/mission-report.md
+cat research-sessions/$(cat research-sessions/.latest)/final/mission-report.md
 ```
 
 ### Understanding Your Report
@@ -566,7 +579,7 @@ Shows all research sessions, newest first.
 **By content**:
 
 ```bash
-grep -r "keyword" research-sessions/*/output/mission-report.md
+grep -r "keyword" research-sessions/*/final/mission-report.md
 ```
 
 ### Organizing Sessions

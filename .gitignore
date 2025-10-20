@@ -82,6 +82,7 @@ test-*.sh
 !tests/test-quality-gate.sh
 !tests/test-web-cache.sh
 !tests/test-library-memory-hook.sh
+!tests/test-mission-report-paths.sh
 obsidian/
 
 # Additional development notes patterns
