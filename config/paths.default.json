@@ -5,6 +5,8 @@
   "audit_log": "${PLATFORM_LOGS}/audit.log",
   "citations_db": "${PLATFORM_DATA}/citations.json",
   "pdf_cache": "${PLATFORM_CACHE}/pdfs",
+  "web_cache": "${PLATFORM_CACHE}/web-fetch",
+  "web_search_cache": "${PLATFORM_CACHE}/web-search",
   "session_dir": "${PLATFORM_DATA}/research-sessions",
   "knowledge_base_core": "${PROJECT_ROOT}/knowledge-base",
   "knowledge_base_custom": "${PLATFORM_DATA}/knowledge-base-custom",

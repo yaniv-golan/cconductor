@@ -315,9 +315,9 @@ dashboard_generate_html() {
     sed "s|<script src=\"./dashboard.js\"></script>|<script src=\"./dashboard.js?${js_version}\"></script>|" \
         "$template" > "$session_dir/dashboard.html"
     
-    # Only output file path in verbose mode
+    # Only output file path in verbose mode (session-relative)
     if [[ "${CCONDUCTOR_VERBOSE:-0}" == "1" ]]; then
-        echo "$session_dir/dashboard.html"
+        echo "session/dashboard.html"
     fi
 }
 

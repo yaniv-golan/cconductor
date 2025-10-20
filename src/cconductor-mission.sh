@@ -290,6 +290,7 @@ cmd_run() {
     local session_dir
     session_dir=$(initialize_session "$mission_objective")
     echo "  ✓ Session: $(basename "$session_dir")"
+    echo "    Path: $session_dir"
     echo ""
     
     # Initialize knowledge graph with clean objective
@@ -506,4 +507,3 @@ main() {
 if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
     main "$@"
 fi
-

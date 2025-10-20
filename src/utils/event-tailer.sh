@@ -18,6 +18,73 @@ TAILER_TOTAL_HITS=0
 TAILER_TOTAL_FETCHES=0
 TAILER_TOTAL_FORCE_REFRESH=0
 declare -A TAILER_CACHE_HIT_COUNTS=()
+TAILER_SESSION_DIR=""
+TAILER_PROJECT_ROOT=""
+
+tailer_rel_path() {
+    local raw_path="$1"
+    if [[ -z "$raw_path" || "$raw_path" == "null" ]]; then
+        echo "$raw_path"
+        return 0
+    fi
+
+    # Only adjust absolute paths
+    if [[ "$raw_path" != /* ]]; then
+        echo "$raw_path"
+        return 0
+    fi
+
+    if [[ -n "$TAILER_SESSION_DIR" && "$raw_path" == "$TAILER_SESSION_DIR"* ]]; then
+        local rel="${raw_path#"$TAILER_SESSION_DIR"}"
+        rel="${rel#/}"
+        if [[ -z "$rel" ]]; then
+            echo "."
+        else
+            echo "$rel"
+        fi
+        return 0
+    fi
+
+    if [[ -n "$TAILER_PROJECT_ROOT" && "$raw_path" == "$TAILER_PROJECT_ROOT"* ]]; then
+        local rel="${raw_path#"$TAILER_PROJECT_ROOT"}"
+        rel="${rel#/}"
+        if [[ -z "$rel" ]]; then
+            echo "."
+        else
+            echo "$rel"
+        fi
+        return 0
+    fi
+
+    echo "$raw_path"
+}
+
+tailer_format_timestamp() {
+    local iso="$1"
+    if [[ -z "$iso" || "$iso" == "null" ]]; then
+        echo "unknown time"
+        return 0
+    fi
+    python3 - "$iso" <<'PY'
+import sys
+from datetime import datetime, timezone
+
+iso = sys.argv[1]
+if not iso or iso == "null":
+    print("unknown time")
+    raise SystemExit
+
+try:
+    iso = iso.replace("Z", "+00:00")
+    dt = datetime.fromisoformat(iso)
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    local_dt = dt.astimezone()
+    print(local_dt.strftime("%b %d %Y, %I:%M %p %Z"))
+except Exception:
+    print(sys.argv[1])
+PY
+}
 
 tailer_reset_agent_state() {
     TAILER_CACHE_ACTIVITY=0
@@ -115,10 +182,22 @@ tailer_process_library_hit() {
 
     if [[ "$current_count" -eq 1 ]]; then
         echo "♻️ Cache hit: Reused digest for $url" >&2
-        local snippet_output
-        snippet_output=$(echo "$line" | jq -r '.data.digest_snippet[]? | "   - " + (if (.collected_at // "") != "" then .collected_at else "unknown time" end) + " (" + (if (.session // "") != "" then .session else "unknown session" end) + "): " + (.text // "")' 2>/dev/null || true)
-        if [[ -n "${snippet_output//[[:space:]]/}" ]]; then
-            printf '%s\n' "$snippet_output" >&2
+        local snippets_json
+        snippets_json=$(echo "$line" | jq -c '.data.digest_snippet[]?' 2>/dev/null || echo "")
+        if [[ -n "${snippets_json//[[:space:]]/}" ]]; then
+            while IFS= read -r snippet_entry; do
+                [[ -z "$snippet_entry" ]] && continue
+                local collected session text human_time
+                collected=$(echo "$snippet_entry" | jq -r '.collected_at // ""' 2>/dev/null || echo "")
+                session=$(echo "$snippet_entry" | jq -r '.session // ""' 2>/dev/null || echo "")
+                text=$(echo "$snippet_entry" | jq -r '.text // ""' 2>/dev/null || echo "")
+                human_time=$(tailer_format_timestamp "$collected")
+                if [[ -n "$session" ]]; then
+                    printf '   - %s · %s: %s\n' "$human_time" "$session" "$text" >&2
+                else
+                    printf '   - %s: %s\n' "$human_time" "$text" >&2
+                fi
+            done <<<"$snippets_json"
         fi
         local digest_path
         digest_path=$(echo "$line" | jq -r '.data.digest_path // empty' 2>/dev/null || echo "")
@@ -131,7 +210,7 @@ tailer_process_library_hit() {
             last_updated=""
         fi
         if [[ -n "$digest_path" ]]; then
-            echo "   Digest: $digest_path" >&2
+            echo "   Digest: $(tailer_rel_path "$digest_path")" >&2
         fi
         if [[ -n "$last_updated" ]]; then
             echo "   Updated: $last_updated" >&2
@@ -198,11 +277,11 @@ tailer_process_tool_start() {
                 echo "📄 Getting information from: $domain" >&2
                 ;;
             Read)
-                echo "📖 Opening: $input_summary" >&2
+                echo "📖 Opening: $(tailer_rel_path "$input_summary")" >&2
                 ;;
             Write|Edit|MultiEdit)
                 if [[ "$input_summary" =~ findings-|mission-report|research-|synthesis- ]]; then
-                    echo "💾 Saving: $input_summary" >&2
+                    echo "💾 Saving: $(tailer_rel_path "$input_summary")" >&2
                 fi
                 ;;
             Grep)
@@ -246,7 +325,7 @@ tailer_process_web_search_cache_hit() {
     path=$(echo "$line" | jq -r '.data.cache_path // ""' 2>/dev/null)
     echo "♻️ Cache hit — reused search results for: $query" >&2
     if [[ -n "$path" ]]; then
-        echo "   Cached file: $path" >&2
+        echo "   Cached file: $(tailer_rel_path "$path")" >&2
     fi
 }
 # Start tailing events for tool use display
@@ -290,6 +369,15 @@ start_event_tailer() {
     local start_line
     start_line=$(wc -l < "$events_file" 2>/dev/null || echo "0")
     
+    TAILER_SESSION_DIR="$session_dir"
+    if [[ -n "${CLAUDE_PROJECT_DIR:-}" ]]; then
+        TAILER_PROJECT_ROOT="$(cd "${CLAUDE_PROJECT_DIR}" && pwd)"
+    elif [[ -n "${PROJECT_ROOT:-}" ]]; then
+        TAILER_PROJECT_ROOT="$(cd "${PROJECT_ROOT}" && pwd)"
+    else
+        TAILER_PROJECT_ROOT="$(cd "$session_dir/.." && pwd)"
+    fi
+
     (
         sleep 0.5
 

@@ -24,6 +24,9 @@ web_cache_load_config() {
 }
 
 web_cache_enabled() {
+    if [[ "${CCONDUCTOR_DISABLE_WEB_FETCH_CACHE:-0}" == "1" ]]; then
+        return 1
+    fi
     local config
     config=$(web_cache_load_config)
     if [[ "$(echo "$config" | jq -r '.enabled // true')" == "true" ]]; then

@@ -40,6 +40,116 @@ source "$UTILS_DIR/debug.sh"
 # shellcheck disable=SC1091
 source "$UTILS_DIR/web-cache.sh" 2>/dev/null || true
 
+MISSION_ORCH_BASE_DIR="$(pwd)"
+
+rel_path_for_display() {
+    local raw_path="$1"
+    local session_dir="$2"
+    local base_dir="$3"
+    if [[ -z "$raw_path" || "$raw_path" == "null" ]]; then
+        echo "$raw_path"
+        return 0
+    fi
+    if [[ "$raw_path" != /* ]]; then
+        echo "$raw_path"
+        return 0
+    fi
+    if [[ -n "$session_dir" && "$raw_path" == "$session_dir"* ]]; then
+        local rel="${raw_path#"$session_dir"}"
+        rel="${rel#/}"
+        if [[ -z "$rel" ]]; then
+            echo "."
+        else
+            echo "$rel"
+        fi
+        return 0
+    fi
+    if [[ -n "$base_dir" && "$raw_path" == "$base_dir"* ]]; then
+        local rel="${raw_path#"$base_dir"}"
+        rel="${rel#/}"
+        if [[ -z "$rel" ]]; then
+            echo "."
+        else
+            echo "$rel"
+        fi
+        return 0
+    fi
+    echo "$raw_path"
+}
+
+format_fetch_cache_lines() {
+    local summary_json="$1"
+    local session_dir="$2"
+    local base_dir="$3"
+    local output=""
+
+    while IFS= read -r entry; do
+        [[ -z "$entry" || "$entry" == "null" ]] && continue
+        local url status stored content_type path display_path
+        url=$(echo "$entry" | jq -r '.url // ""')
+        status=$(echo "$entry" | jq -r '.status // ""')
+        stored=$(echo "$entry" | jq -r '.stored_at_iso // (.stored_at // "")' 2>/dev/null || echo "")
+        [[ -z "$stored" || "$stored" == "null" ]] && stored="unknown"
+        content_type=$(echo "$entry" | jq -r '.content_type // ""' 2>/dev/null || echo "")
+        path=$(echo "$entry" | jq -r '.path // ""' 2>/dev/null || echo "")
+        display_path=$(rel_path_for_display "$path" "$session_dir" "$base_dir")
+
+        local status_label="cached"
+        [[ "$status" == "stale" ]] && status_label="stale"
+
+        if [[ -n "$output" ]]; then
+            output+=$'\n'
+        fi
+        output+="- [WebFetch] ${url} (${status_label})"$'\n'
+        output+="    Stored: ${stored}"$'\n'
+        if [[ -n "$content_type" && "$content_type" != "null" ]]; then
+            output+="    Content-Type: ${content_type}"$'\n'
+        fi
+        output+="    Cached file: ${display_path}"
+    done < <(echo "$summary_json" | jq -c '.[]')
+
+    printf '%s' "$output"
+}
+
+format_search_cache_lines() {
+    local summary_json="$1"
+    local session_dir="$2"
+    local base_dir="$3"
+    local output=""
+
+    while IFS= read -r entry; do
+        [[ -z "$entry" || "$entry" == "null" ]] && continue
+        local query stored status result_count canonical snippet path display_path
+        query=$(echo "$entry" | jq -r '.query // ""')
+        stored=$(echo "$entry" | jq -r '.stored_at_iso // (.stored_at // "")' 2>/dev/null || echo "")
+        [[ -z "$stored" || "$stored" == "null" ]] && stored="unknown"
+        status=$(echo "$entry" | jq -r '.status // ""')
+        result_count=$(echo "$entry" | jq -r '.result_count // 0')
+        canonical=$(echo "$entry" | jq -r '.canonical_query // ""')
+        snippet=$(echo "$entry" | jq -r '.snippet_preview // ""')
+        snippet=${snippet//$'\n'/ }
+        path=$(echo "$entry" | jq -r '.path // ""' 2>/dev/null || echo "")
+        display_path=$(rel_path_for_display "$path" "$session_dir" "$base_dir")
+
+        local status_label="cached"
+        [[ "$status" == "stale" ]] && status_label="stale"
+
+        if [[ -n "$output" ]]; then
+            output+=$'\n'
+        fi
+        output+="- [WebSearch] \"${query}\" (stored ${stored}, ${result_count} results, status: ${status_label})"$'\n'
+        if [[ -n "$canonical" && "$canonical" != "null" ]]; then
+            output+="    Canonical: ${canonical}"$'\n'
+        fi
+        if [[ -n "$snippet" && "$snippet" != "null" ]]; then
+            output+="    Snippet: ${snippet}"$'\n'
+        fi
+        output+="    Cached file: ${display_path}"
+    done < <(echo "$summary_json" | jq -c '.[]')
+
+    printf '%s' "$output"
+}
+
 # Prepare orchestrator context for invocation
 prepare_orchestrator_context() {
     local session_dir="$1"
@@ -395,21 +505,7 @@ INSTRUCTIONS_EOF
         local fetch_summary_json fetch_lines
         fetch_summary_json=$(web_cache_format_summary "$session_dir" 2>/dev/null || echo "[]")
         if [[ -n "$fetch_summary_json" && "$fetch_summary_json" != "[]" ]]; then
-            fetch_lines=$(echo "$fetch_summary_json" | jq -r '
-                map(
-                    "- [WebFetch] " + (.url // "") +
-                    (if .status == "stale" then " (stale)" else " (cached)" end) +
-                    "\n    Stored: " + (
-                        if (.stored_at? and (.stored_at | type) == "number" and .stored_at > 0)
-                        then (.stored_at | strftime("%Y-%m-%dT%H:%M:%SZ"))
-                        else "unknown"
-                        end
-                    ) +
-                    (if (.content_type // "") != "" then "\n    Content-Type: " + (.content_type // "") else "" end) +
-                    "\n    Cached file: " + (.path // "")
-                )
-                | join("\n")
-            ' 2>/dev/null || printf '')
+            fetch_lines=$(format_fetch_cache_lines "$fetch_summary_json" "$session_dir" "$MISSION_ORCH_BASE_DIR")
             if [[ -n "$fetch_lines" ]]; then
                 cache_lines="$fetch_lines"
             fi
@@ -419,25 +515,7 @@ INSTRUCTIONS_EOF
         local search_summary_json search_lines
         search_summary_json=$(web_search_cache_format_summary "$session_dir" 2>/dev/null || echo "[]")
         if [[ -n "$search_summary_json" && "$search_summary_json" != "[]" ]]; then
-            search_lines=$(echo "$search_summary_json" | jq -r '
-                map(
-                    "- [WebSearch] \"" + (.query // "") + "\" " +
-                    "(stored " + (
-                        if (.stored_at_iso // "") != "" then .stored_at_iso else "unknown"
-                        end
-                    ) +
-                    ", " + ((.result_count // 0) | tostring) + " results, status: " +
-                    (if .status == "stale" then "stale" else "cached" end) + ")" +
-                    (if (.canonical_query // "") != "" then
-                        "\n    Canonical: " + (.canonical_query // "")
-                    else "" end) +
-                    (if (.snippet_preview // "") != "" then
-                        "\n    Snippet: " + ((.snippet_preview // "") | gsub("\n"; " "))
-                    else "" end) +
-                    "\n    Cached file: " + (.path // "")
-                )
-                | join("\n")
-            ' 2>/dev/null || printf '')
+            search_lines=$(format_search_cache_lines "$search_summary_json" "$session_dir" "$MISSION_ORCH_BASE_DIR")
             if [[ -n "$search_lines" ]]; then
                 if [[ -n "$cache_lines" ]]; then
                     cache_lines+=$'\n'

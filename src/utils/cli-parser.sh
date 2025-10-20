@@ -29,9 +29,10 @@ declare -a CLI_ARGS
 
 # Known boolean flags (flags that never take a value)
 declare -a BOOLEAN_FLAGS=(
-    "verbose" "debug" "help" "h" "version" "v" 
-    "update" "check-update" "no-update-check" 
+    "verbose" "debug" "help" "h" "version" "v"
+    "update" "check-update" "no-update-check"
     "init" "yes" "y" "non-interactive"
+    "no-cache" "no-web-fetch-cache" "no-web-search-cache"
 )
 
 # Check if a flag is boolean
@@ -165,4 +166,3 @@ debug_cli_args() {
         echo "  [$i] = ${CLI_ARGS[$i]}" >&2
     done
 }
-
