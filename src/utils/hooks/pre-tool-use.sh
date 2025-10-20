@@ -176,6 +176,44 @@ if [[ -n "$session_dir" && -d "$session_dir/library" ]]; then
     fi
 fi
 
+emit_event() {
+    local event_type="$1"
+    local event_data_json="$2"
+
+    if [[ -z "${session_dir:-}" ]]; then
+        return 0
+    fi
+    if [[ -z "$event_type" || -z "$event_data_json" ]]; then
+        return 0
+    fi
+
+    local lock_file="$session_dir/.events.lock"
+    local start_time
+    start_time=$(date +%s)
+    local timeout=5
+
+    while true; do
+        if mkdir "$lock_file" 2>/dev/null; then
+            jq -n -c \
+                --arg ts "$(get_timestamp)" \
+                --arg type "$event_type" \
+                --argjson data "$event_data_json" \
+                '{timestamp: $ts, type: $type, data: $data}' \
+                >> "$session_dir/events.jsonl" 2>/dev/null
+            rmdir "$lock_file" 2>/dev/null || true
+            break
+        fi
+
+        local elapsed
+        elapsed=$(($(date +%s) - start_time))
+        if [[ "$elapsed" -ge "$timeout" ]]; then
+            debug_log "emit_event_timeout type=$event_type"
+            break
+        fi
+        sleep 0.05
+    done
+}
+
 # Source utilities after resolving project root
 # shellcheck disable=SC1091
 if source "$PROJECT_ROOT/src/utils/verbose.sh" 2>/dev/null; then
@@ -330,6 +368,12 @@ if [[ "$tool_name" == "WebFetch" ]]; then
     guard_reason="allow:no_url"
     debug_log "guard_start tool=$tool_name url=$url session_dir=${session_dir:-}"
     if [[ -n "$url" ]]; then
+        check_payload=$(jq -nc \
+            --arg url "$url" \
+            --arg agent "$agent_name" \
+            '{url: $url, agent: $agent}')
+        emit_event "library_digest_check" "$check_payload"
+
         guard_reason="allow:no_digest"
         # Respect explicit fresh fetch requests
         if [[ "$url" != *"fresh=1"* && "$url" != *"refresh=1"* ]]; then
@@ -392,44 +436,80 @@ PY
                         fi
 
                         if [[ "$is_fresh" -eq 1 ]]; then
-                            hit_timestamp=$(get_timestamp)
                             stored_timestamp="${last_updated:-unknown}"
-                            message="📚 Library digest available for:
-  URL: $url
-  Digest: $digest_path
-  Last updated: $stored_timestamp
-Use the Read tool on the digest file. Re-run with '?fresh=1' (or '?refresh=1') if you need a new fetch."
-                            echo "$message" >&2
-
-                            if [[ -n "$session_dir" ]]; then
-                                lock_file="$session_dir/.events.lock"
-                                if mkdir "$lock_file" 2>/dev/null; then
-                                    jq -cn \
-                                        --arg ts "$hit_timestamp" \
-                                        --arg type "library_digest_hit" \
-                                        --arg url "$url" \
-                                        --arg hash "$url_hash" \
-                                        --arg path "$digest_path" \
-                                        --arg last "$stored_timestamp" \
-                                        --arg ttl "$ttl_days" \
-                                        '{timestamp:$ts,type:$type,data:{url:$url,url_hash:$hash,digest_path:$path,last_updated:($last | select(. != "" and . != "unknown")),ttl_days:(($ttl|tonumber?) // null)}}' \
-                                        >> "$session_dir/events.jsonl" 2>/dev/null
-
-                                    jq -cn \
-                                        --arg ts "$hit_timestamp" \
-                                        --arg type "tool_use_blocked" \
-                                        --arg tool "$tool_name" \
-                                        --arg agent "$agent_name" \
-                                        --arg summary "$tool_input_summary" \
-                                        --arg reason "library_digest_fresh" \
-                                        --arg details "$tool_input_details" \
-                                        '{timestamp:$ts,type:$type,data:{tool:$tool,agent:$agent,input_summary:$summary,reason:$reason,details:(if $details == "" then null else $details end)}}' \
-                                        >> "$session_dir/events.jsonl" 2>/dev/null
-
-                                    rmdir "$lock_file" 2>/dev/null || true
+                            digest_snippet_json="[]"
+                            if [[ -f "$digest_path" ]]; then
+                                digest_snippet_json=$(jq -c '
+                                    (.entries // [])
+                                    | sort_by(.collected_at // "") | reverse
+                                    | map({
+                                        session: (.session // ""),
+                                        collected_at: (.collected_at // ""),
+                                        text: (
+                                            if (.claim // "") != "" then .claim
+                                            elif (.quote // "") != "" then .quote
+                                            elif (.title // "") != "" then .title
+                                            else ""
+                                            end
+                                        )
+                                    })
+                                    | map(select(.text != ""))
+                                    | map(.text = (if (.text | length) > 160 then (.text[0:157] + "…") else .text end))
+                                    | .[0:2]
+                                ' "$digest_path" 2>/dev/null || echo "[]")
+                                if [[ -z "$digest_snippet_json" ]]; then
+                                    digest_snippet_json="[]"
                                 fi
                             fi
 
+                            if ! is_verbose_enabled; then
+                                echo "♻️ Cache hit: Reused digest for $url" >&2
+                                if [[ "$digest_snippet_json" != "[]" ]]; then
+                                    snippet_preview=$(printf '%s\n' "$digest_snippet_json" | jq -r '.[] | "   - " + (if (.collected_at // "") != "" then .collected_at else "unknown time" end) + " (" + (if (.session // "") != "" then .session else "unknown session" end) + "): " + (.text // "")' 2>/dev/null || true)
+                                    if [[ -n "${snippet_preview//[[:space:]]/}" ]]; then
+                                        printf '%s\n' "$snippet_preview" >&2
+                                    fi
+                                fi
+                                echo "   Last updated: $stored_timestamp" >&2
+                                echo "   Digest: $digest_path" >&2
+                                echo "   Use Read on the digest or append '?fresh=1' for a live copy." >&2
+                            fi
+
+                            hit_event=$(jq -nc \
+                                --arg url "$url" \
+                                --arg hash "$url_hash" \
+                                --arg path "$digest_path" \
+                                --arg last "$stored_timestamp" \
+                                --arg agent "$agent_name" \
+                                --argjson ttl "$ttl_days" \
+                                --argjson snippet "$digest_snippet_json" \
+                                '{
+                                    url: $url,
+                                    agent: $agent,
+                                    url_hash: $hash,
+                                    digest_path: $path,
+                                    last_updated: (if $last == "" or $last == "unknown" then null else $last end),
+                                    ttl_days: $ttl,
+                                    digest_snippet: $snippet
+                                }')
+                            emit_event "library_digest_hit" "$hit_event"
+
+                            blocked_event=$(jq -nc \
+                                --arg tool "$tool_name" \
+                                --arg agent "$agent_name" \
+                                --arg summary "$tool_input_summary" \
+                                --arg reason "library_digest_fresh" \
+                                --arg details "$tool_input_details" \
+                                '{
+                                    tool: $tool,
+                                    agent: $agent,
+                                    input_summary: $summary,
+                                    reason: $reason,
+                                    details: (if $details == "" then null else $details end)
+                                }')
+                            emit_event "tool_use_blocked" "$blocked_event"
+
+                            debug_log "guard_digest_reused path=$digest_path"
                             exit 2
                         else
                             guard_reason="allow:digest_stale"
@@ -447,6 +527,14 @@ Use the Read tool on the digest file. Re-run with '?fresh=1' (or '?refresh=1') i
             fi
         else
             guard_reason="allow:fresh_param"
+            refresh_payload=$(jq -nc \
+                --arg url "$url" \
+                --arg agent "$agent_name" \
+                '{url: $url, agent: $agent}')
+            emit_event "library_digest_force_refresh" "$refresh_payload"
+            if ! is_verbose_enabled; then
+                echo "⟳ Fresh fetch requested for $url" >&2
+            fi
         fi
     fi
 
@@ -460,11 +548,13 @@ Use the Read tool on the digest file. Re-run with '?fresh=1' (or '?refresh=1') i
                 --arg reason "$guard_reason" \
                 --arg hash "${guard_hash_script:-}" \
                 --arg libdir "${guard_library_sources:-}" \
+                --arg agent "$agent_name" \
                 '{
                     timestamp: $ts,
                     type: $type,
                     data: {
                         url: $url,
+                        agent: $agent,
                         reason: $reason,
                         hash_script: (if $hash == "" then null else $hash end),
                         library_sources_dir: (if $libdir == "" then null else $libdir end)

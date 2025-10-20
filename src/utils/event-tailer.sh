@@ -12,6 +12,243 @@ source "$SCRIPT_DIR/verbose.sh" 2>/dev/null || {
     is_verbose_enabled() { [[ "${CCONDUCTOR_VERBOSE:-0}" == "1" ]]; }
 }
 
+TAILER_CURRENT_AGENT=""
+TAILER_CACHE_ACTIVITY=0
+TAILER_TOTAL_HITS=0
+TAILER_TOTAL_FETCHES=0
+TAILER_TOTAL_FORCE_REFRESH=0
+declare -A TAILER_CACHE_HIT_COUNTS=()
+
+tailer_reset_agent_state() {
+    TAILER_CACHE_ACTIVITY=0
+    TAILER_TOTAL_HITS=0
+    TAILER_TOTAL_FETCHES=0
+    TAILER_TOTAL_FORCE_REFRESH=0
+    TAILER_CACHE_HIT_COUNTS=()
+}
+
+tailer_pluralize() {
+    local count="$1"
+    local singular="$2"
+    local plural="$3"
+    if [[ "$count" -eq 1 ]]; then
+        echo "$singular"
+    else
+        echo "$plural"
+    fi
+}
+
+tailer_emit_cache_summary() {
+    if ! is_verbose_enabled; then
+        return 0
+    fi
+    if [[ "$TAILER_CACHE_ACTIVITY" -eq 0 ]]; then
+        return 0
+    fi
+
+    local hits="$TAILER_TOTAL_HITS"
+    local fetches="$TAILER_TOTAL_FETCHES"
+    local forced="$TAILER_TOTAL_FORCE_REFRESH"
+    local hit_label
+    hit_label=$(tailer_pluralize "$hits" "hit" "hits")
+    local fetch_label
+    fetch_label=$(tailer_pluralize "$fetches" "fetch" "fetches")
+    local forced_label
+    forced_label=$(tailer_pluralize "$forced" "forced refresh" "forced refreshes")
+
+    echo "Cache usage: ♻️ $hits $hit_label · 🌐 $fetches $fetch_label · ⟳ $forced $forced_label" >&2
+}
+
+tailer_process_library_check() {
+    local line="$1"
+    local url
+    url=$(echo "$line" | jq -r '.data.url // empty' 2>/dev/null || echo "")
+    local event_agent
+    event_agent=$(echo "$line" | jq -r '.data.agent // empty' 2>/dev/null || echo "")
+    if [[ -n "$TAILER_CURRENT_AGENT" && -n "$event_agent" && "$event_agent" != "$TAILER_CURRENT_AGENT" ]]; then
+        return 0
+    fi
+    TAILER_CACHE_ACTIVITY=1
+    if is_verbose_enabled; then
+        echo "🔁 Checking library cache for ${url}…" >&2
+    fi
+}
+
+tailer_process_library_force_refresh() {
+    local line="$1"
+    local url
+    url=$(echo "$line" | jq -r '.data.url // empty' 2>/dev/null || echo "")
+    local event_agent
+    event_agent=$(echo "$line" | jq -r '.data.agent // empty' 2>/dev/null || echo "")
+    if [[ -n "$TAILER_CURRENT_AGENT" && -n "$event_agent" && "$event_agent" != "$TAILER_CURRENT_AGENT" ]]; then
+        return 0
+    fi
+    TAILER_CACHE_ACTIVITY=1
+    TAILER_TOTAL_FORCE_REFRESH=$((TAILER_TOTAL_FORCE_REFRESH + 1))
+    if is_verbose_enabled; then
+        echo "⟳ Fresh fetch requested for $url" >&2
+    fi
+}
+
+tailer_process_library_hit() {
+    local line="$1"
+    local url
+    url=$(echo "$line" | jq -r '.data.url // empty' 2>/dev/null || echo "")
+    local event_agent
+    event_agent=$(echo "$line" | jq -r '.data.agent // empty' 2>/dev/null || echo "")
+    if [[ -n "$TAILER_CURRENT_AGENT" && -n "$event_agent" && "$event_agent" != "$TAILER_CURRENT_AGENT" ]]; then
+        return 0
+    fi
+    TAILER_CACHE_ACTIVITY=1
+    TAILER_TOTAL_HITS=$((TAILER_TOTAL_HITS + 1))
+
+    local current_count=0
+    if [[ -n "${TAILER_CACHE_HIT_COUNTS[$url]+_}" ]]; then
+        current_count="${TAILER_CACHE_HIT_COUNTS[$url]}"
+    fi
+    current_count=$((current_count + 1))
+    TAILER_CACHE_HIT_COUNTS["$url"]=$current_count
+
+    if ! is_verbose_enabled; then
+        return 0
+    fi
+
+    if [[ "$current_count" -eq 1 ]]; then
+        echo "♻️ Cache hit: Reused digest for $url" >&2
+        local snippet_output
+        snippet_output=$(echo "$line" | jq -r '.data.digest_snippet[]? | "   - " + (if (.collected_at // "") != "" then .collected_at else "unknown time" end) + " (" + (if (.session // "") != "" then .session else "unknown session" end) + "): " + (.text // "")' 2>/dev/null || true)
+        if [[ -n "${snippet_output//[[:space:]]/}" ]]; then
+            printf '%s\n' "$snippet_output" >&2
+        fi
+        local digest_path
+        digest_path=$(echo "$line" | jq -r '.data.digest_path // empty' 2>/dev/null || echo "")
+        local last_updated
+        last_updated=$(echo "$line" | jq -r '.data.last_updated // empty' 2>/dev/null || echo "")
+        if [[ "$digest_path" == "null" ]]; then
+            digest_path=""
+        fi
+        if [[ "$last_updated" == "null" ]]; then
+            last_updated=""
+        fi
+        if [[ -n "$digest_path" ]]; then
+            echo "   Digest: $digest_path" >&2
+        fi
+        if [[ -n "$last_updated" ]]; then
+            echo "   Updated: $last_updated" >&2
+        fi
+    else
+        echo "♻️ Cache hit (seen ×$current_count): Reused digest for $url" >&2
+    fi
+}
+
+tailer_process_library_allow() {
+    local line="$1"
+    local url
+    url=$(echo "$line" | jq -r '.data.url // empty' 2>/dev/null || echo "")
+    local reason
+    reason=$(echo "$line" | jq -r '.data.reason // empty' 2>/dev/null || echo "")
+    local event_agent
+    event_agent=$(echo "$line" | jq -r '.data.agent // empty' 2>/dev/null || echo "")
+    if [[ -n "$TAILER_CURRENT_AGENT" && -n "$event_agent" && "$event_agent" != "$TAILER_CURRENT_AGENT" ]]; then
+        return 0
+    fi
+    TAILER_CACHE_ACTIVITY=1
+    if [[ "$reason" == "allow:fresh_param" ]]; then
+        return 0
+    fi
+    if is_verbose_enabled; then
+        echo "🌐 Cache miss: Fetching $url" >&2
+    fi
+}
+
+tailer_process_tool_start() {
+    local line="$1"
+    local session_dir="$2"
+
+    local tool_name
+    tool_name=$(echo "$line" | jq -r '.data.tool // empty' 2>/dev/null)
+    [[ -z "$tool_name" ]] && return 0
+
+    local input_summary
+    input_summary=$(echo "$line" | jq -r '.data.input_summary // empty' 2>/dev/null)
+
+    if [[ "$tool_name" == "WebFetch" ]]; then
+        TAILER_TOTAL_FETCHES=$((TAILER_TOTAL_FETCHES + 1))
+        TAILER_CACHE_ACTIVITY=1
+    fi
+
+    local lock_dir="$session_dir/.output.lock"
+    local start_time
+    start_time=$(date +%s)
+    while ! mkdir "$lock_dir" 2>/dev/null; do
+        if [[ $(($(date +%s) - start_time)) -ge 5 ]]; then
+            return 0
+        fi
+        sleep 0.05
+    done
+
+    if is_verbose_enabled; then
+        case "$tool_name" in
+            WebSearch)
+                echo "🔍 Searching the web for: $input_summary" >&2
+                ;;
+            WebFetch)
+                local domain
+                domain=$(echo "$input_summary" | sed -E 's|^https?://([^/]+).*|\1|')
+                echo "📄 Getting information from: $domain" >&2
+                ;;
+            Read)
+                echo "📖 Opening: $input_summary" >&2
+                ;;
+            Write|Edit|MultiEdit)
+                if [[ "$input_summary" =~ findings-|mission-report|research-|synthesis- ]]; then
+                    echo "💾 Saving: $input_summary" >&2
+                fi
+                ;;
+            Grep)
+                echo "🔎 Looking for: $input_summary" >&2
+                ;;
+            Glob)
+                echo "📁 Finding files: $input_summary" >&2
+                ;;
+            TodoWrite)
+                if [[ -n "$input_summary" && "$input_summary" != "tasks" ]]; then
+                    if [[ ${#input_summary} -gt 100 ]]; then
+                        echo "📋 Planning: ${input_summary:0:100}..." >&2
+                    else
+                        echo "📋 Planning: $input_summary" >&2
+                    fi
+                fi
+                ;;
+            Bash)
+                ;;
+            *)
+                echo "🔧 Using $tool_name" >&2
+                ;;
+        esac
+    else
+        if [[ "$tool_name" != "Bash" && "$tool_name" != "TodoRead" ]]; then
+            printf "." >&2
+        fi
+    fi
+
+    rmdir "$lock_dir" 2>/dev/null || true
+}
+
+tailer_process_web_search_cache_hit() {
+    local line="$1"
+    if ! is_verbose_enabled; then
+        return 0
+    fi
+    local query
+    query=$(echo "$line" | jq -r '.data.query // ""' 2>/dev/null)
+    local path
+    path=$(echo "$line" | jq -r '.data.cache_path // ""' 2>/dev/null)
+    echo "♻️ Cache hit — reused search results for: $query" >&2
+    if [[ -n "$path" ]]; then
+        echo "   Cached file: $path" >&2
+    fi
+}
 # Start tailing events for tool use display
 # Usage: start_event_tailer SESSION_DIR
 start_event_tailer() {
@@ -22,9 +259,16 @@ start_event_tailer() {
     # In verbose mode: show detailed messages
     # In non-verbose mode: show progress dots
     
-    # Check if tailer already started in this shell session
+    # Check if tailer already started in this shell session and still running
     if [[ -n "${CCONDUCTOR_EVENT_TAILER_RUNNING:-}" ]]; then
-        return 0
+        local existing_pid_file="${session_dir}/.event-tailer.pid"
+        if [[ -f "$existing_pid_file" ]]; then
+            local existing_pid
+            existing_pid=$(cat "$existing_pid_file" 2>/dev/null || echo "")
+            if [[ -n "$existing_pid" ]] && kill -0 "$existing_pid" 2>/dev/null; then
+                return 0
+            fi
+        fi
     fi
     
     # Check if tailer already running for this session (PID file check)
@@ -46,73 +290,57 @@ start_event_tailer() {
     local start_line
     start_line=$(wc -l < "$events_file" 2>/dev/null || echo "0")
     
-    # Start background tail process with inline display logic (no function exports)
     (
-        # Wait a moment for file to be ready
         sleep 0.5
-        
-        # Tail new lines only
-        tail -n +$((start_line + 1)) -f "$events_file" 2>/dev/null | while IFS= read -r line; do
-            # Parse JSON event
-            local event_type tool_name input_summary status duration_ms
+
+        tailer_reset_agent_state
+        TAILER_CURRENT_AGENT=""
+
+        while IFS= read -r line; do
             event_type=$(echo "$line" | jq -r '.type // empty' 2>/dev/null)
-            
+            [[ -z "$event_type" ]] && continue
+
             case "$event_type" in
-                tool_use_start)
-                    tool_name=$(echo "$line" | jq -r '.data.tool // empty' 2>/dev/null)
-                    input_summary=$(echo "$line" | jq -r '.data.input_summary // empty' 2>/dev/null)
-                    [[ -z "$tool_name" ]] && continue
-                    
-                    # Acquire lock and display
-                    local lock_dir="$session_dir/.output.lock"
-                    local start_time
-                    start_time=$(date +%s)
-                    while ! mkdir "$lock_dir" 2>/dev/null; do
-                        [[ $(($(date +%s) - start_time)) -ge 5 ]] && continue 2
-                        sleep 0.05
-                    done
-                    
-                    # Check if verbose mode (get from parent environment)
-                    if [[ "${CCONDUCTOR_VERBOSE:-0}" == "1" ]]; then
-                        # Verbose mode: show detailed messages
-                        case "$tool_name" in
-                            WebSearch) echo "🔍 Searching the web for: $input_summary" >&2 ;;
-                            WebFetch) echo "📄 Getting information from: $(echo "$input_summary" | sed -E 's|^https?://([^/]+).*|\1|')" >&2 ;;
-                            Read) echo "📖 Opening: $input_summary" >&2 ;;
-                            Write|Edit|MultiEdit)
-                                [[ "$input_summary" =~ findings-|mission-report|research-|synthesis- ]] && echo "💾 Saving: $input_summary" >&2 ;;
-                            Grep) echo "🔎 Looking for: $input_summary" >&2 ;;
-                            Glob) echo "📁 Finding files: $input_summary" >&2 ;;
-                            TodoWrite)
-                                # Show todo content if available, otherwise hide
-                                if [[ -n "$input_summary" && "$input_summary" != "tasks" ]]; then
-                                    # Truncate if too long (show first task or two)
-                                    if [[ ${#input_summary} -gt 100 ]]; then
-                                        echo "📋 Planning: ${input_summary:0:100}..." >&2
-                                    else
-                                        echo "📋 Planning: $input_summary" >&2
-                                    fi
-                                fi
-                                ;;
-                            Bash) ;; # Hide bash (internal operation)
-                            *) echo "🔧 Using $tool_name" >&2 ;;
-                        esac
-                    else
-                        # Non-verbose mode: show progress dots (hide internal tools)
-                        if [[ "$tool_name" != "Bash" && "$tool_name" != "TodoRead" ]]; then
-                            printf "." >&2
-                        fi
+                agent_invocation)
+                    agent=$(echo "$line" | jq -r '.data.agent // empty' 2>/dev/null || echo "")
+                    if [[ -n "$TAILER_CURRENT_AGENT" && "$TAILER_CURRENT_AGENT" != "$agent" ]]; then
+                        tailer_emit_cache_summary
+                        tailer_reset_agent_state
                     fi
-                    rmdir "$lock_dir" 2>/dev/null || true
+                    TAILER_CURRENT_AGENT="$agent"
+                    tailer_reset_agent_state
                     ;;
-                    
+                agent_result)
+                    agent=$(echo "$line" | jq -r '.data.agent // empty' 2>/dev/null || echo "")
+                    if [[ -z "$TAILER_CURRENT_AGENT" ]] || [[ -z "$agent" ]] || [[ "$agent" == "$TAILER_CURRENT_AGENT" ]]; then
+                        tailer_emit_cache_summary
+                        tailer_reset_agent_state
+                        TAILER_CURRENT_AGENT=""
+                    fi
+                    ;;
+                library_digest_check)
+                    tailer_process_library_check "$line"
+                    ;;
+                library_digest_force_refresh)
+                    tailer_process_library_force_refresh "$line"
+                    ;;
+                library_digest_hit)
+                    tailer_process_library_hit "$line"
+                    ;;
+                library_digest_allow)
+                    tailer_process_library_allow "$line"
+                    ;;
+                tool_use_start)
+                    tailer_process_tool_start "$line" "$session_dir"
+                    ;;
                 tool_use_complete)
-                    # Skip completion messages - they're not very informative
-                    # Only log failures if needed in the future
                     continue
                     ;;
+                web_search_cache_hit)
+                    tailer_process_web_search_cache_hit "$line"
+                    ;;
             esac
-        done
+        done < <(tail -n +$((start_line + 1)) -f "$events_file" 2>/dev/null)
     ) &
     
     # Store tailer PID for cleanup
@@ -140,6 +368,8 @@ stop_event_tailer() {
         
         rm -f "$pid_file"
     fi
+    
+    unset CCONDUCTOR_EVENT_TAILER_RUNNING
 }
 
 # Display tool start event
