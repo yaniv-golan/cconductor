@@ -42,25 +42,6 @@ debug_log() {
 
 debug_log "hook_project_root_init $PROJECT_ROOT"
 
-# Source verbose utility
-# shellcheck disable=SC1091
-if source "$PROJECT_ROOT/src/utils/verbose.sh" 2>/dev/null; then
-    # Successfully loaded verbose.sh
-    :
-else
-    # Fallback: stub functions if verbose.sh not available
-    # shellcheck disable=SC2329
-    is_verbose_enabled() { [[ "${CCONDUCTOR_VERBOSE:-0}" == "1" ]]; }
-    # shellcheck disable=SC2329
-    verbose_tool_use() { :; }
-fi
-
-# Source cache utilities (optional)
-# shellcheck disable=SC1091
-source "$PROJECT_ROOT/src/utils/web-cache.sh" 2>/dev/null || true
-# shellcheck disable=SC1091
-source "$PROJECT_ROOT/src/knowledge-graph.sh" 2>/dev/null || true
-
 # Read hook data from stdin
 hook_raw_input=$(cat)
 hook_data="$hook_raw_input"
@@ -192,6 +173,147 @@ if [[ -n "$session_dir" && -d "$session_dir/library" ]]; then
         ROOT="$PROJECT_ROOT"
         export HOOK_DEBUG_LOG
         debug_log "hook_project_root_adjusted $PROJECT_ROOT"
+    fi
+fi
+
+# Source utilities after resolving project root
+# shellcheck disable=SC1091
+if source "$PROJECT_ROOT/src/utils/verbose.sh" 2>/dev/null; then
+    :
+else
+    # Fallback stubs if verbose utilities unavailable
+    # shellcheck disable=SC2329
+    is_verbose_enabled() { [[ "${CCONDUCTOR_VERBOSE:-0}" == "1" ]]; }
+    # shellcheck disable=SC2329
+    verbose_tool_use() { :; }
+fi
+# shellcheck disable=SC1091
+source "$PROJECT_ROOT/src/utils/web-cache.sh" 2>/dev/null || true
+# shellcheck disable=SC1091
+source "$PROJECT_ROOT/src/utils/web-search-cache.sh" 2>/dev/null || true
+# shellcheck disable=SC1091
+source "$PROJECT_ROOT/src/knowledge-graph.sh" 2>/dev/null || true
+
+# WebSearch cache guard (avoid redundant billed queries)
+if [[ "$tool_name" == "WebSearch" ]]; then
+    query=$(echo "$hook_data" | jq -r '.tool_input.query // empty')
+    debug_log "web_search_guard_start query_length=${#query}"
+    if [[ -n "$query" ]] && command -v web_search_cache_lookup >/dev/null 2>&1 && web_search_cache_enabled; then
+        lookup_json=$(web_search_cache_lookup "$query")
+        status=$(echo "$lookup_json" | jq -r '.status // "miss"')
+        debug_log "web_search_guard_status $status"
+        case "$status" in
+            hit)
+                display_query=$(web_search_cache_display_query "$query" 2>/dev/null || printf '%s' "$query")
+                stored_iso=$(echo "$lookup_json" | jq -r '.metadata.stored_at_iso // ""')
+                if [[ -z "$stored_iso" ]]; then
+                    stored_iso=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+                fi
+                materialized_path=""
+                if [[ -n "$session_dir" ]]; then
+                    materialized_path=$(web_search_cache_materialize_for_session "$session_dir" "$query" "$lookup_json" 2>/dev/null || echo "")
+                fi
+                result_count=$(echo "$lookup_json" | jq -r '.metadata.result_count // 0')
+                if [[ -z "$result_count" || "$result_count" == "null" ]]; then
+                    result_count=0
+                fi
+                match_ratio=$(echo "$lookup_json" | jq -r '.match_ratio // ""')
+                match_base_query=$(echo "$lookup_json" | jq -r '.match_base_query // ""')
+                tool_block_reason="web_search_cache_hit"
+                if [[ -n "$match_ratio" && "$match_ratio" != "null" ]]; then
+                    tool_block_reason="web_search_cache_hit_overlap"
+                    ratio_fmt=$(printf '%.2f' "$match_ratio")
+                    base_query_display="$match_base_query"
+                    if [[ -z "$base_query_display" || "$base_query_display" == "null" ]]; then
+                        base_query_display="$display_query"
+                    fi
+                    message="♻️ Cache reuse (match $ratio_fmt) using cached query:
+  Cached query: $base_query_display
+  Requested query: $display_query
+  Cached file: ${materialized_path:-"(materialization unavailable)"}
+  Stored: $stored_iso (${result_count} results)
+Use the Read tool on the cached file. Append '?fresh=1' to the query if you need to force a fresh search."
+                else
+                    message="♻️ Cache hit: reused search results for:
+  Query: $display_query
+  Cached file: ${materialized_path:-"(materialization unavailable)"}
+  Stored: $stored_iso (${result_count} results)
+Use the Read tool on the cached file. Append '?fresh=1' to the query if you need to force a fresh search."
+                fi
+                echo "$message" >&2
+
+                if [[ -n "$session_dir" ]]; then
+                    lock_file="$session_dir/.events.lock"
+                    if mkdir "$lock_file" 2>/dev/null; then
+                        jq -cn \
+                            --arg ts "$(get_timestamp)" \
+                            --arg type "web_search_cache_hit" \
+                            --arg query "$display_query" \
+                            --arg normalized "$(echo "$lookup_json" | jq -r '.normalized_query // ""')" \
+                            --arg path "$materialized_path" \
+                            --arg status "$status" \
+                            --arg count "$result_count" \
+                            --arg match "$match_ratio" \
+                            --arg base "$match_base_query" \
+                            '{
+                                timestamp: $ts,
+                                type: $type,
+                                data: {
+                                    query: $query,
+                                    normalized_query: (if $normalized == "" then null else $normalized end),
+                                    cache_path: (if $path == "" then null else $path end),
+                                    status: $status,
+                                    result_count: ($count | tonumber),
+                                    match_ratio: (if $match == "" or $match == "null" then null else ($match | tonumber) end),
+                                    match_base_query: (if $base == "" or $base == "null" then null else $base end)
+                                }
+                            }' >> "$session_dir/events.jsonl" 2>/dev/null
+
+                        jq -cn \
+                            --arg ts "$(get_timestamp)" \
+                            --arg type "tool_use_blocked" \
+                            --arg tool "$tool_name" \
+                            --arg agent "$agent_name" \
+                            --arg summary "$tool_input_summary" \
+                            --arg reason "$tool_block_reason" \
+                            --arg details "$display_query" \
+                            '{
+                                timestamp: $ts,
+                                type: $type,
+                                data: {
+                                    tool: $tool,
+                                    agent: $agent,
+                                    input_summary: $summary,
+                                    reason: $reason,
+                                    details: (if $details == "" then null else $details end)
+                                }
+                            }' >> "$session_dir/events.jsonl" 2>/dev/null
+                        rmdir "$lock_file" 2>/dev/null || true
+                    fi
+                fi
+
+                debug_log "web_search_guard_hit path=${materialized_path:-none}"
+                exit 2
+                ;;
+            stale)
+                display_query=$(web_search_cache_display_query "$query" 2>/dev/null || printf '%s' "$query")
+                echo "⚠️  Cached search results for '$display_query' are older than the configured TTL; proceeding with fresh search." >&2
+                debug_log "web_search_guard_stale"
+                ;;
+            force_refresh)
+                display_query=$(web_search_cache_display_query "$query" 2>/dev/null || printf '%s' "$query")
+                echo "↻ Forcing fresh search for '$display_query' (fresh parameter detected)." >&2
+                debug_log "web_search_guard_force_refresh"
+                ;;
+            disabled)
+                debug_log "web_search_guard_disabled"
+                ;;
+            *)
+                debug_log "web_search_guard_miss"
+                ;;
+        esac
+    else
+        debug_log "web_search_guard_unavailable"
     fi
 fi
 
@@ -401,7 +523,7 @@ Use the Read tool on the cached file. Append '?fresh=1' to the URL if you must f
                         if [[ -n "$session_dir" ]]; then
                             lock_file="$session_dir/.events.lock"
                             if mkdir "$lock_file" 2>/dev/null; then
-                                jq -n \
+                                jq -cn \
                                     --arg ts "$(get_timestamp)" \
                                     --arg type "web_cache_hit" \
                                     --arg url "$url" \

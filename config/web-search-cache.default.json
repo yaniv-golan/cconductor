@@ -1,0 +1,11 @@
+{
+  "enabled": true,
+  "ttl_hours": 12,
+  "max_entries": 400,
+  "materialize_per_session": 20,
+  "fresh_query_markers": [
+    "?fresh=1",
+    "?refresh=1"
+  ],
+  "log_debug_samples": false
+}

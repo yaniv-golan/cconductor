@@ -84,11 +84,26 @@ If any task failed, set status to "partial" and include "errors": [{"task_id": "
 6. Rate source credibility and your confidence in each claim
 7. Identify gaps, contradictions, and promising leads
 
+### Pre-Search Reuse Checklist
+
+Before every **WebSearch** call:
+
+1. Run `bash scripts/cache-query-similar.sh "<raw idea>"` to view prior cached searches (scores, canonical tokens, snippets).
+2. If any result shows a score ≥ 0.75 (or clearly covers the same concept), copy the **canonical token string** from the top match and use that exact token order for your WebSearch query. Only append a qualifier if absolutely necessary (e.g., `+ "2025"`). Log any divergence and why it is required.
+3. Normalize your planned query into **canonical tokens** if you still need a new search:
+   - lowercase, remove punctuation/stopwords, singularize simple plurals, sort tokens
+   - e.g., `"TAM SAM SOM venture capital best practices"` → `tam sam som venture capital best practice`
+   - Record the canonical form in your scratchpad and search using exactly those tokens so future runs can reuse them.
+4. When you must extend a cached query (e.g., add geography, time window, or industry), start from the existing canonical tokens and append the minimal qualifier (consider using `?fresh=1` for freshness). Keep the base tokens unchanged.
+
+This discipline keeps searches aligned with cached signatures so subsequent missions can reuse them.
+
 ## Cache-Aware Fetching
 
 - When the system provides cached source paths (for example in `Cached Sources Available` or via tool hook notices), inspect those files **before** issuing a new WebFetch by using the `Read` tool.
+- Before invoking **WebSearch**, run `bash library-memory/show-search.sh --query "<search terms>"` to review cached snippets. Open the cached file with `Read` when it exists, and only issue a new WebSearch if the cached evidence is insufficient.
 - Before invoking **WebFetch**, call the `LibraryMemory` skill (typically by running `bash library-memory/hash-url.sh <url>` followed by `bash library-memory/show-digest.sh --hash <hash>`) so you can reuse any cached digest surfaced from persistent memory.
-- Only run WebFetch if both the memory-based digest and any cached files are insufficient or stale. To explicitly bypass the cache, append `?fresh=1` (or `?refresh=1`) to the URL you fetch.
+- Only run WebSearch/WebFetch if the cached material is insufficient or stale. To explicitly bypass the cache, append `?fresh=1` (or `?refresh=1`) to the query/URL you execute.
 - Note the cached timestamp when citing evidence; refresh only when the topic truly requires up-to-the-minute data.
 
 ### Quality Expectations
