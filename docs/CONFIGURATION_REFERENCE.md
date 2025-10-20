@@ -400,8 +400,8 @@ PROJECT_ROOT/config/
 | `mcp_servers` | array | `[]` | MCP servers to use |
 | `custom_agents` | array | `[]` | Custom agent scripts |
 | `enable_hooks` | boolean | `true` | Enable hooks system |
-| `cache_search_results` | boolean | `true` | Cache web search results |
-| `cache_ttl_hours` | integer | `24` | Cache lifetime in hours |
+| `cache_search_results` | boolean | `true` | Enable WebSearch cache (overrides `config/web-search-cache.default.json`) |
+| `cache_ttl_hours` | integer | `24` | Default TTL for WebSearch cache entries (hours) |
 
 ### File: `config/web-fetch-cache.default.json`
 
@@ -412,6 +412,35 @@ PROJECT_ROOT/config/
   "max_body_size_mb": 5
 }
 ```
+
+---
+
+### File: `config/web-search-cache.default.json`
+
+```json
+{
+  "enabled": true,
+  "ttl_hours": 12,
+  "max_entries": 400,
+  "materialize_per_session": 20,
+  "fresh_query_markers": [
+    "?fresh=1",
+    "?refresh=1"
+  ],
+  "log_debug_samples": false
+}
+```
+
+**Options**:
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `enabled` | boolean | `true` | Toggle WebSearch cache guard and storage |
+| `ttl_hours` | integer | `12` | Time-to-live for cached search results (overridden by `advanced.cache_ttl_hours` if set) |
+| `max_entries` | integer | `400` | Maximum number of query entries retained in the cache index |
+| `materialize_per_session` | integer | `20` | Maximum cached searches materialized into each session’s context |
+| `fresh_query_markers` | array | `["?fresh=1","?refresh=1"]` | Suffixes that force a live WebSearch instead of using cache |
+| `log_debug_samples` | boolean | `false` | If true, post-tool hook logs raw search payloads for debugging |
 
 ---
 

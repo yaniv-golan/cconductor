@@ -4,18 +4,20 @@
 > It checks the shared research library and returns cached evidence so we can avoid redundant fetches.
 
 ## Quick Summary (TL;DR)
-- Purpose: reuse digests from `library/` instead of hitting WebFetch.
-- Main actions: hash URL → show digest → summarise → recommend `reuse` or `refresh`.
+- Purpose: reuse stored digests and search snippets instead of hitting WebFetch/WebSearch.
+- Main actions: hash URL → show digest → summarise → recommend `reuse` or `refresh`; lookup query → show cached results → decide if fresh search needed.
 - Typical users: web-researcher, academic-researcher, fact-checker, market-analyzer.
 
 ## When to Use
-- Before WebFetch/WebSearch on a URL that might already be stored
+- Before WebFetch on a URL that might already be stored
+- Before repeating a WebSearch query that may have been run earlier in the mission or across sessions
 - When the orchestrator says "check cached sources" or "library has a digest"
 - When validating an existing claim’s URL and you want supporting quotes quickly
 
 ## Provided Commands
 - `bash library-memory/hash-url.sh <url>` → SHA-256 hash of the URL
 - `bash library-memory/show-digest.sh [--limit N] (--url <url> | --hash <hash>)` → returns a concise JSON digest
+- `bash library-memory/show-search.sh --query "<search terms>" [--limit N]` → returns cached WebSearch results and metadata
 
 ## Library Layout
 - `library/manifest.json` – manifest keyed by URL hash (`sha256(url)`)
@@ -29,6 +31,12 @@
    - Summarize key entries (claim, quote, confidence, session)
    - Note `last_updated` and advise whether cached evidence is sufficient
 4. Respond to the caller with a brief digest summary and recommendation (`reuse cached evidence` vs `fetch fresh copy`).
+
+### Cached Search Workflow
+1. Run `bash library-memory/show-search.sh --query "<keywords>"` before issuing WebSearch.
+2. If the command returns cached results, open the referenced JSON file with `Read` to review snippets, providers, and timestamps.
+3. Decide whether the cached snippets answer the question. If not, append `?fresh=1` to the search query and explain why a live search is required.
+4. Record any reuse or refresh decision in your reasoning so downstream agents understand the choice.
 
 ### Expected Response Snippet
 ```

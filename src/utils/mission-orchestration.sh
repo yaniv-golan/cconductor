@@ -390,21 +390,64 @@ INSTRUCTIONS_EOF
     fi
     
     local cache_section=""
+    local cache_lines=""
     if command -v web_cache_format_summary >/dev/null 2>&1; then
-        local cache_summary_json cache_lines
-        cache_summary_json=$(web_cache_format_summary "$session_dir" 2>/dev/null || echo "[]")
-        if [[ -n "$cache_summary_json" && "$cache_summary_json" != "[]" ]]; then
-            cache_lines=$(echo "$cache_summary_json" | jq -r '
+        local fetch_summary_json fetch_lines
+        fetch_summary_json=$(web_cache_format_summary "$session_dir" 2>/dev/null || echo "[]")
+        if [[ -n "$fetch_summary_json" && "$fetch_summary_json" != "[]" ]]; then
+            fetch_lines=$(echo "$fetch_summary_json" | jq -r '
                 map(
-                    "- " + (.url // "") + " → " + (.path // "") +
-                    (if .status == "hit" then " (cached)" elif .status == "stale" then " (stale)" else "" end)
+                    "- [WebFetch] " + (.url // "") +
+                    (if .status == "stale" then " (stale)" else " (cached)" end) +
+                    "\n    Stored: " + (
+                        if (.stored_at? and (.stored_at | type) == "number" and .stored_at > 0)
+                        then (.stored_at | strftime("%Y-%m-%dT%H:%M:%SZ"))
+                        else "unknown"
+                        end
+                    ) +
+                    (if (.content_type // "") != "" then "\n    Content-Type: " + (.content_type // "") else "" end) +
+                    "\n    Cached file: " + (.path // "")
                 )
                 | join("\n")
             ' 2>/dev/null || printf '')
-            if [[ -n "$cache_lines" ]]; then
-                cache_section=$'\n''## Cached Sources Available\n'"$cache_lines"$'\n'
+            if [[ -n "$fetch_lines" ]]; then
+                cache_lines="$fetch_lines"
             fi
         fi
+    fi
+    if command -v web_search_cache_format_summary >/dev/null 2>&1; then
+        local search_summary_json search_lines
+        search_summary_json=$(web_search_cache_format_summary "$session_dir" 2>/dev/null || echo "[]")
+        if [[ -n "$search_summary_json" && "$search_summary_json" != "[]" ]]; then
+            search_lines=$(echo "$search_summary_json" | jq -r '
+                map(
+                    "- [WebSearch] \"" + (.query // "") + "\" " +
+                    "(stored " + (
+                        if (.stored_at_iso // "") != "" then .stored_at_iso else "unknown"
+                        end
+                    ) +
+                    ", " + ((.result_count // 0) | tostring) + " results, status: " +
+                    (if .status == "stale" then "stale" else "cached" end) + ")" +
+                    (if (.canonical_query // "") != "" then
+                        "\n    Canonical: " + (.canonical_query // "")
+                    else "" end) +
+                    (if (.snippet_preview // "") != "" then
+                        "\n    Snippet: " + ((.snippet_preview // "") | gsub("\n"; " "))
+                    else "" end) +
+                    "\n    Cached file: " + (.path // "")
+                )
+                | join("\n")
+            ' 2>/dev/null || printf '')
+            if [[ -n "$search_lines" ]]; then
+                if [[ -n "$cache_lines" ]]; then
+                    cache_lines+=$'\n'
+                fi
+                cache_lines+="$search_lines"
+            fi
+        fi
+    fi
+    if [[ -n "$cache_lines" ]]; then
+        cache_section=$'\n''## Cached Sources Available\n'"$cache_lines"$'\n'
     fi
 
     local agent_input

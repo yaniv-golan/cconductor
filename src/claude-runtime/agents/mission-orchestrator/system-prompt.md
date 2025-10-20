@@ -95,6 +95,7 @@ You receive:
 2. Provide relevant context and artifacts
 3. Monitor progress and agent outputs
 4. Update knowledge graph with findings
+5. Surface cached evidence (see `Cached Sources Available`) and instruct agents to reuse it — run `bash library-memory/show-search.sh --query "<query>"` before authorizing WebSearch and `bash library-memory/show-digest.sh` before WebFetch unless freshness is explicitly required.
 
 ### Reflect Phase (after each agent invocation)
 1. Evaluate output quality and completeness

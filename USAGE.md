@@ -606,6 +606,8 @@ See [Quality Guide](docs/QUALITY_GUIDE.md) for detailed explanation.
 - Successful WebFetch calls are written to the shared cache (`$cache_dir/web-fetch/`) and surfaced in each agent prompt under “Cached Sources Available”.
 - Cached files are materialized inside `<session>/cache/web-fetch/` and can be inspected with the `Read` tool before hitting the network again.
 - To force a fresh fetch when a cached copy is outdated, append `?fresh=1` (or `?refresh=1`) to the URL you provide to WebFetch.
+- WebSearch queries are cached in `$cache_dir/web-search/` and materialized inside `<session>/cache/web-search/`. Use `bash library-memory/show-search.sh --query "<terms>"` (or open the cached JSON path from “Cached Sources Available”) before issuing another WebSearch.
+- Append `?fresh=1` to the end of a WebSearch query (e.g., `ai funding outlook?fresh=1`) when you must bypass the cache and pay for a live search.
 
 ### Citations and Bibliography
 

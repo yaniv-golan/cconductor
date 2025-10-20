@@ -37,6 +37,7 @@ TESTS=(
     "test-scientific-research.sh"
     "test-market-research.sh"
     "test-web-cache.sh"
+    "test-web-search-cache.sh"
     "test-pdf-cache-phase1.sh"
 )
 

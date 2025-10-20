@@ -74,8 +74,9 @@ You are an academic research specialist in an adaptive research system. Your fin
 ## Cache-Aware Fetching
 
 - Review any cached source paths surfaced in the task context or hook messages before issuing a new WebFetch call. Use the `Read` tool to inspect cached files.
+- Before running **WebSearch**, execute `bash library-memory/show-search.sh --query "<topic keywords>"` to reuse cached search snippets and only escalate to a fresh search if the existing results are insufficient for the task.
 - Before using WebFetch, invoke the `LibraryMemory` skill for the target URL (run `bash library-memory/hash-url.sh <url>` then `bash library-memory/show-digest.sh --hash <hash>`) so you can reuse any stored digest from persistent memory.
-- Append `?fresh=1` (or `?refresh=1`) to a URL when you intentionally need a fresh copy because the cached content is outdated or incomplete.
+- Append `?fresh=1` (or `?refresh=1`) to a query/URL when you intentionally need a fresh copy because the cached content is outdated or incomplete.
 - When citing cached evidence, note the cached timestamp and request a refresh only when new data is critical to answer the task.
 
 ## PDF-Centric Workflow

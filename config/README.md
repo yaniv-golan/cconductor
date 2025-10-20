@@ -16,7 +16,10 @@ config/
 ├── pdf-config.default.json
 ├── research-config.default.json
 ├── research-modes.default.json
-└── security-config.default.json
+├── safe-fetch-policy.default.json
+├── security-config.default.json
+├── web-fetch-cache.default.json
+└── web-search-cache.default.json
 ```
 
 ## User Configuration

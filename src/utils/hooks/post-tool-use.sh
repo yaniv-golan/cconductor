@@ -25,6 +25,12 @@ source "$PROJECT_ROOT/src/utils/verbose.sh" 2>/dev/null || {
     verbose_completion() { :; }
 }
 
+# Optional cache utilities
+# shellcheck disable=SC1091
+source "$PROJECT_ROOT/src/utils/web-cache.sh" 2>/dev/null || true
+# shellcheck disable=SC1091
+source "$PROJECT_ROOT/src/utils/web-search-cache.sh" 2>/dev/null || true
+
 # Read hook data from stdin
 hook_data=$(cat)
 
@@ -114,8 +120,6 @@ fi
 
 # Cache successful WebFetch results
 if [ "$tool_name" = "WebFetch" ] && [ "$exit_code" = "0" ]; then
-    # shellcheck disable=SC1091
-    source "$PROJECT_ROOT/src/utils/web-cache.sh" 2>/dev/null || true
     if command -v web_cache_store >/dev/null 2>&1 && web_cache_enabled; then
         if command -v web_cache_root_dir >/dev/null 2>&1; then
             debug_log="$(web_cache_root_dir)/logs/post-hook-debug.jsonl"
@@ -149,6 +153,39 @@ if [ "$tool_name" = "WebFetch" ] && [ "$exit_code" = "0" ]; then
                     web_cache_store "$url" "$temp_body" "$metadata"
                     rm -f "$temp_body"
                 fi
+            fi
+        fi
+    fi
+fi
+
+# Cache successful WebSearch results
+if [ "$tool_name" = "WebSearch" ] && [ "$exit_code" = "0" ]; then
+    if command -v web_search_cache_store >/dev/null 2>&1 && web_search_cache_enabled; then
+        query=$(echo "$hook_data" | jq -r '.tool_input.query // empty')
+        payload=$(echo "$hook_data" | jq -c '
+            {
+                query: .tool_input.query,
+                results: (.tool_output.results // []),
+                context: {
+                    provider: (.tool_output.provider // .tool_output.engine // null),
+                    search_type: (.tool_output.search_type // null),
+                    region: (.tool_output.region // null),
+                    total_count: (.tool_output.total_count // null),
+                    executed_at: (.tool_output.issued_at // .tool_output.timestamp // null)
+                },
+                metadata: (.tool_output.metadata // null)
+            }
+        ' 2>/dev/null || echo "null")
+
+        if [[ -n "$query" && "$payload" != "null" ]]; then
+            metadata=$(echo "$payload" | jq -c '{provider: .context.provider, search_type: .context.search_type, region: .context.region, total_count: .context.total_count, executed_at: .context.executed_at}')
+            web_search_cache_store "$query" "$payload" "$metadata"
+
+            config=$(web_search_cache_load_config)
+            if [[ "$(echo "$config" | jq -r '.log_debug_samples // false')" == "true" ]] && command -v web_search_cache_root_dir >/dev/null 2>&1; then
+                search_debug="$(web_search_cache_root_dir)/logs/web-search-post-hook.jsonl"
+                mkdir -p "$(dirname "$search_debug")"
+                printf '%s\n' "$hook_data" >> "$search_debug" 2>/dev/null || true
             fi
         fi
     fi
