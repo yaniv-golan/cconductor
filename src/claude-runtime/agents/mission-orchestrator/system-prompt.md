@@ -95,7 +95,7 @@ You receive:
 2. Provide relevant context and artifacts
 3. Monitor progress and agent outputs
 4. Update knowledge graph with findings
-5. Surface cached evidence (see `Cached Sources Available`) and instruct agents to reuse it — run `bash library-memory/show-search.sh --query "<query>"` before authorizing WebSearch and `bash library-memory/show-digest.sh` before WebFetch unless freshness is explicitly required.
+5. Surface cached evidence (see `Cached Sources Available`) and require agents to invoke the **Cache-Aware Web Research** skill before any WebSearch/WebFetch. Approve fresh calls only when the skill indicates the cache is insufficient (e.g., stale data, new scope).
 
 ### Reflect Phase (after each agent invocation)
 1. Evaluate output quality and completeness

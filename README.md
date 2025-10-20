@@ -507,6 +507,11 @@ Two additional storage locations matter for reuse:
 - **Platform cache** – transient WebFetch/WebSearch assets stored under the OS cache root (`~/Library/Caches/CConductor/` on macOS, `${XDG_CACHE_HOME:-~/.cache}/cconductor/` on Linux). Clearing it only forces fresh network calls next time.
 - **Library** – durable digests in the repository’s `library/` directory (or `LIBRARY_MEMORY_ROOT`). Populated by `src/utils/digital-librarian.sh` from knowledge-graph citations and reused through the LibraryMemory skill.
 
+### Built-in Skills
+
+- **Cache-Aware Web Research** — shared guidance for canonical query reuse, LibraryMemory digests, and deciding when to bypass caches with `?fresh=1`. Copied into each session’s `.claude/skills/` directory.
+- **LibraryMemory** — hash, digest, and cached search helpers for reusing previously collected evidence (also copied into `.claude/skills/`).
+
 ### Examples
 
 ```bash

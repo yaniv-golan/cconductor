@@ -92,6 +92,11 @@ cat research-sessions/session_1759420487/final/mission-report.md
 
 Clear the platform cache to force fresh network calls; keep the `library/` directory if you want to reuse curated evidence across missions.
 
+### Built-in Skills
+
+- **Cache-Aware Web Research** — teaches every agent how to reuse cached queries, consult LibraryMemory digests, and decide when to run fresh WebSearch/WebFetch calls. Each mission copies it into `.claude/skills/`.
+- **LibraryMemory** — provides hash/digest helpers for existing evidence (also available in `.claude/skills/`).
+
 ---
 
 ## How CConductor Works

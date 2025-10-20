@@ -54,8 +54,8 @@ rel_path_for_display() {
         echo "$raw_path"
         return 0
     fi
-    if [[ -n "$session_dir" && "$raw_path" == "$session_dir"* ]]; then
-        local rel="${raw_path#"$session_dir"}"
+    if [[ -n "$base_dir" && "$raw_path" == "$base_dir"* ]]; then
+        local rel="${raw_path#"$base_dir"}"
         rel="${rel#/}"
         if [[ -z "$rel" ]]; then
             echo "."
@@ -64,8 +64,8 @@ rel_path_for_display() {
         fi
         return 0
     fi
-    if [[ -n "$base_dir" && "$raw_path" == "$base_dir"* ]]; then
-        local rel="${raw_path#"$base_dir"}"
+    if [[ -n "$session_dir" && "$raw_path" == "$session_dir"* ]]; then
+        local rel="${raw_path#"$session_dir"}"
         rel="${rel#/}"
         if [[ -z "$rel" ]]; then
             echo "."

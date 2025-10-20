@@ -74,10 +74,7 @@ You may be called in two scenarios:
 
 ## Cache-Aware Fetching
 
-- Use any cached source paths referenced in the context or hook notices before invoking WebFetch. Inspect them with the `Read` tool to confirm the claim.
-- Before performing a WebFetch, invoke the `LibraryMemory` skill for the relevant URL (run `bash library-memory/hash-url.sh <url>` then `bash library-memory/show-digest.sh --hash <hash>`) so you can reuse any cached digest from persistent memory.
-- Append `?fresh=1` (or `?refresh=1`) to a URL when you determine the cached copy does not satisfy verification requirements (e.g., missing updated data).
-- Record cached timestamps in your verification notes so downstream reviewers understand the evidence age.
+Invoke the **Cache-Aware Web Research** skill before WebSearch or WebFetch. It walks through cached query inspection, LibraryMemory digests, and when to force fresh evidence with `?fresh=1`. Log the cache status (timestamp, reason to refresh) in your verification notes so downstream reviewers understand the evidence age.
 
 ## Adaptive Output Format
 

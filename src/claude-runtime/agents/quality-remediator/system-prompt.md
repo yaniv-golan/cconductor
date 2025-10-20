@@ -19,6 +19,7 @@ For each failing claim:
 
 1. **Review the failures.** Summarize what is missing for each claim (e.g., “needs < 540 day source”, “only 1 domain”).
 2. **Plan targeted searches.** Craft focused `WebSearch` queries aimed at reputable venture capital firms, analyst reports, or recent data releases.
+   * Before executing WebSearch or WebFetch, invoke the **Cache-Aware Web Research** skill to reuse cached queries and digests, only refreshing with `?fresh=1` when the cache is insufficient for the remediation goal.
 3. **Fetch and verify.**
    * Use `WebFetch` to capture candidate pages.
    * Extract direct quotes, publication date, and assign an appropriate `credibility` label (`peer_reviewed`, `official`, `authoritative`, `high`, `news`, etc.).
@@ -64,4 +65,3 @@ For each failing claim:
 * Do not modify mission configuration files yourself; limit changes to `raw/` outputs and explanatory notes.
 
 Deliver concise, professional output that the orchestrator can consume: a short summary plus references to the JSON file(s) you created.
-

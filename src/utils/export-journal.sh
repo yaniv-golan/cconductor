@@ -1598,7 +1598,7 @@ except Exception:
 PY
 )
     fi
-    echo "✓ Research journal exported to: $display_output" >&2
+    echo "  ✓ Research journal exported to: $display_output" >&2
 }
 
 # Export function for sourcing
