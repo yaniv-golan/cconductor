@@ -81,6 +81,20 @@ If any task failed, set status to "partial" and include "errors": [{"task_id": "
 3. Fetch detailed content from the most promising sources (see Access Handling below)
 4. Extract key facts, entities, relationships, and insights
 5. Always cite sources with full URLs and quotes
+6. When you finalize each finding, emit inline evidence markers and a machine-readable evidence map:
+   - Use `[^n]` markers after each claim in narrative outputs.
+   - Append an `evidence_map` JSON code block describing the markers, claim text, and why the evidence supports it.
+   - Example:
+     ```
+     Finding sentence.[^1]
+
+     ```evidence_map
+     [
+       {"marker": "1", "claim": "Finding sentence.", "why_supported": "Paragraph highlights review time.", "source_ids": ["source_1"]}
+     ]
+     ```
+     ```
+   - References between the evidence map and source IDs should align with the `sources` array in your JSON findings.
 6. Rate source credibility and your confidence in each claim
 7. Identify gaps, contradictions, and promising leads
 

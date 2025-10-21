@@ -4,8 +4,6 @@
 
 set -euo pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-
 if [[ "${BASH_VERSINFO[0]:-0}" -lt 4 ]]; then
     echo "render_mission_report.sh requires Bash 4.0 or newer." >&2
     exit 1
@@ -18,6 +16,7 @@ single_line() {
 
 strip_section() {
     local heading="$1"
+    # shellcheck disable=SC2016
     env TARGET_HEADING="$heading" perl -0pe '
         my $h = $ENV{TARGET_HEADING};
         if ($h && /\n## \Q$h\E\b/s) {

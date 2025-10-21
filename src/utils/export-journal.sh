@@ -106,6 +106,201 @@ extract_first_sentence() {
     echo "$first_sent"
 }
 
+format_single_line() {
+    local text="$1"
+    echo "$text" | tr '\n' ' ' | sed 's/  */ /g' | sed 's/^ *//;s/ *$//'
+}
+
+render_evidence_footnotes() {
+    local evidence_file="$1"
+
+    echo ""
+    echo "## Evidence Highlights"
+    echo ""
+
+    local claim_json
+    local idx=0
+    local used_markers=""
+    local claim_lines=()
+    local footnote_lines=()
+
+    while IFS= read -r claim_json; do
+        ((idx+=1))
+        local marker
+        marker=$(echo "$claim_json" | jq -r '.marker // .id // ""')
+        if [[ -z "$marker" || "$marker" == "null" ]]; then
+            marker="$idx"
+        fi
+        marker=$(echo "$marker" | tr '[:upper:]' '[:lower:]' | tr -cd 'a-z0-9_-')
+        if [[ -z "$marker" ]]; then
+            marker="$idx"
+        fi
+        while [[ "$used_markers" == *"|$marker|"* ]]; do
+            marker="${marker}_${idx}"
+        done
+        used_markers+="|$marker|"
+
+        local claim_text why_supported
+        claim_text=$(echo "$claim_json" | jq -r '.claim_text // .statement // ""')
+        why_supported=$(echo "$claim_json" | jq -r '.why_supported // ""')
+
+        claim_lines+=("- ${claim_text}[^${marker}]")
+
+        local source_ids=()
+        while IFS= read -r source_id; do
+            [[ -n "$source_id" ]] && source_ids+=("$source_id")
+        done < <(echo "$claim_json" | jq -r '.sources[]? // empty')
+        if [[ ${#source_ids[@]} -eq 0 ]]; then
+            continue
+        fi
+
+        local summary="Evidence"
+        local first_label=""
+        local footnote_block=()
+
+        for source_id in "${source_ids[@]}"; do
+            [[ -z "$source_id" ]] && continue
+            local source_json
+            source_json=$(jq -c --arg sid "$source_id" '.sources[]? | select(.id == $sid)' "$evidence_file")
+            [[ -z "$source_json" ]] && continue
+
+            local title url link quote
+            title=$(echo "$source_json" | jq -r '.title // ""')
+            url=$(echo "$source_json" | jq -r '.url // ""')
+            link=$(echo "$source_json" | jq -r '.deep_link // .url // ""')
+            quote=$(format_single_line "$(echo "$source_json" | jq -r '.quote // ""')")
+
+            if [[ -z "$first_label" ]]; then
+                first_label=${title:-$url}
+                summary="Evidence from ${first_label:-Source}"
+            fi
+
+            if [[ -n "$quote" ]]; then
+                footnote_block+=("> ${quote}")
+                footnote_block+=("")
+            fi
+
+            local label=${title:-$url}
+            if [[ -n "$link" ]]; then
+                footnote_block+=("Source: [${label}](${link})")
+            elif [[ -n "$url" ]]; then
+                footnote_block+=("Source: ${url}")
+            else
+                footnote_block+=("Source: ${label:-Evidence}")
+            fi
+            footnote_block+=("")
+        done
+
+        if [[ ${#footnote_block[@]} -eq 0 ]]; then
+            continue
+        fi
+
+        footnote_lines+=("[^${marker}]: <details><summary>${summary}</summary>")
+        footnote_lines+=("")
+        for line in "${footnote_block[@]}"; do
+            footnote_lines+=("$line")
+        done
+        if [[ -n "$why_supported" && "$why_supported" != "null" ]]; then
+            footnote_lines+=("**Why this supports the claim:** $(format_single_line "$why_supported")")
+            footnote_lines+=("")
+        fi
+        footnote_lines+=("</details>")
+        footnote_lines+=("")
+    done < <(jq -c '.claims[]' "$evidence_file")
+
+    if [[ ${#claim_lines[@]} -eq 0 ]]; then
+        return
+    fi
+
+    for line in "${claim_lines[@]}"; do
+        echo "$line"
+    done
+    echo ""
+    for line in "${footnote_lines[@]}"; do
+        printf '%s\n' "$line"
+    done
+}
+
+render_evidence_fallback() {
+    local evidence_file="$1"
+
+    echo ""
+    echo "## Evidence"
+    echo ""
+
+    local claim_json
+    while IFS= read -r claim_json; do
+        local claim_text why_supported
+        claim_text=$(echo "$claim_json" | jq -r '.claim_text // .statement // ""')
+        why_supported=$(echo "$claim_json" | jq -r '.why_supported // ""')
+        echo "- ${claim_text}"
+        if [[ -n "$why_supported" && "$why_supported" != "null" ]]; then
+            echo "  - Why: $(format_single_line "$why_supported")"
+        fi
+
+        local source_ids=()
+        while IFS= read -r source_id; do
+            [[ -n "$source_id" ]] && source_ids+=("$source_id")
+        done < <(echo "$claim_json" | jq -r '.sources[]? // empty')
+        if [[ ${#source_ids[@]} -gt 0 ]]; then
+            echo "  - Sources:"
+            for source_id in "${source_ids[@]}"; do
+                [[ -z "$source_id" ]] && continue
+                local source_json
+                source_json=$(jq -c --arg sid "$source_id" '.sources[]? | select(.id == $sid)' "$evidence_file")
+                [[ -z "$source_json" ]] && continue
+
+                local title url link quote
+                title=$(echo "$source_json" | jq -r '.title // ""')
+                url=$(echo "$source_json" | jq -r '.url // ""')
+                link=$(echo "$source_json" | jq -r '.deep_link // .url // ""')
+                quote=$(format_single_line "$(echo "$source_json" | jq -r '.quote // ""')")
+                local label=${title:-$url}
+                local descriptor="${quote}"
+                if [[ -n "$descriptor" ]]; then
+                    descriptor=" — ${descriptor}"
+                fi
+                if [[ -n "$link" ]]; then
+                    echo "    - [${label}](${link})${descriptor}"
+                elif [[ -n "$url" ]]; then
+                    echo "    - ${url}${descriptor}"
+                else
+                    echo "    - ${label:-Source}${descriptor}"
+                fi
+            done
+        fi
+        echo ""
+    done < <(jq -c '.claims[]' "$evidence_file")
+}
+
+render_evidence_section() {
+    local session_dir="$1"
+    local evidence_file="$session_dir/evidence/evidence.json"
+
+    if [[ "${CCONDUCTOR_EVIDENCE_MODE:-render}" == "disabled" ]]; then
+        return
+    fi
+    if [ ! -f "$evidence_file" ]; then
+        return
+    fi
+
+    local claim_count
+    claim_count=$(jq '.claims | length' "$evidence_file" 2>/dev/null || echo 0)
+    if [[ "$claim_count" -eq 0 ]]; then
+        return
+    fi
+
+    local render_mode="${CCONDUCTOR_EVIDENCE_RENDER:-footnotes}"
+    case "$render_mode" in
+        fallback)
+            render_evidence_fallback "$evidence_file"
+            ;;
+        *)
+            render_evidence_footnotes "$evidence_file"
+            ;;
+    esac
+}
+
 export_journal() {
     local session_dir="$1"
     local output_file="${2:-$session_dir/final/research-journal.md}"
@@ -318,6 +513,8 @@ export_journal() {
             fi
         fi
         
+        render_evidence_section "$session_dir"
+
         echo "---"
         echo ""
         

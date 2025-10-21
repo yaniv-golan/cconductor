@@ -272,3 +272,7 @@ Note when:
 1. Write each task's findings to `raw/findings-{task_id}.json` using the Write tool
 2. Respond with ONLY the manifest JSON object (status, tasks_completed, findings_files)
 3. NO explanatory text, no markdown fences, no commentary. Just start with { and end with }.
+
+## Evidence Output Requirements
+- Use inline markers like `[^n]` in narrative sections.
+- Emit an `evidence_map` JSON block capturing marker → claim → why_supported → source_ids so the evidence pipeline can align narrative with structured findings.

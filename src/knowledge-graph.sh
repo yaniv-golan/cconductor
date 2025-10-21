@@ -951,6 +951,291 @@ kg_find_source_by_url() {
     echo "$summary"
 }
 
+kg_merge_evidence_claims() {
+    local session_dir="$1"
+    local evidence_file="$session_dir/evidence/evidence.json"
+
+    if [ ! -f "$evidence_file" ]; then
+        return 0
+    fi
+
+    local kg_file
+    kg_file=$(kg_get_path "$session_dir")
+
+    python3 - "$kg_file" "$evidence_file" <<'PY'
+import json, re, sys
+from datetime import datetime, timezone
+from pathlib import Path
+
+kg_path = Path(sys.argv[1])
+evidence_path = Path(sys.argv[2])
+
+try:
+    evidence = json.loads(evidence_path.read_text(encoding="utf-8"))
+except Exception:
+    sys.exit(0)
+
+claims_data = evidence.get("claims") or []
+sources_data = evidence.get("sources") or []
+if not claims_data or not sources_data:
+    sys.exit(0)
+
+try:
+    kg = json.loads(kg_path.read_text(encoding="utf-8"))
+except Exception:
+    sys.exit(0)
+
+now = datetime.now(timezone.utc).isoformat()
+
+kg.setdefault("claims", [])
+kg.setdefault("citations", [])
+stats = kg.setdefault("stats", {})
+stats.setdefault("total_claims", len(kg["claims"]))
+stats.setdefault("total_citations", len(kg["citations"]))
+
+sources_by_id = {s.get("id"): s for s in sources_data if isinstance(s, dict) and s.get("id")}
+if not sources_by_id:
+    sys.exit(0)
+
+def tokenize(text: str) -> set[str]:
+    return {tok for tok in re.split(r"[^a-z0-9]+", (text or "").lower()) if len(tok) >= 4}
+
+def source_key(src: dict) -> tuple[str, str, str]:
+    return (
+        (src.get("url") or "").strip(),
+        (src.get("deep_link") or "").strip(),
+        (src.get("quote") or "").strip(),
+    )
+
+def claim_source_key(payload: dict) -> tuple[str, str, str]:
+    return (
+        (payload.get("url") or "").strip(),
+        (payload.get("deep_link") or "").strip(),
+        (payload.get("relevant_quote") or "").strip(),
+    )
+
+def convert_source_for_claim(src: dict) -> dict:
+    payload = {
+        "url": src.get("url"),
+        "title": src.get("title"),
+        "relevant_quote": src.get("quote"),
+        "deep_link": src.get("deep_link"),
+        "retrieved_at": src.get("retrieved_at"),
+        "paragraph_index": src.get("paragraph_index"),
+        "char_span": src.get("char_span"),
+    }
+    return {k: v for k, v in payload.items() if v is not None}
+
+def build_citation(src: dict) -> dict:
+    payload = {
+        "url": src.get("url"),
+        "title": src.get("title"),
+        "quote": src.get("quote"),
+        "deep_link": src.get("deep_link"),
+        "retrieved_at": src.get("retrieved_at"),
+        "paragraph_index": src.get("paragraph_index"),
+        "char_span": src.get("char_span"),
+        "type": "url",
+    }
+    return {k: v for k, v in payload.items() if v is not None}
+
+existing_claims = kg["claims"]
+
+def claim_numeric_id(claim_id: str) -> int:
+    try:
+        return int(re.sub(r"[^0-9]", "", claim_id) or "0")
+    except ValueError:
+        return 0
+
+def find_best_claim(statement: str):
+    tokens = tokenize(statement)
+    if not tokens:
+        return None
+    best = None
+    best_score = 0.0
+    best_numeric = None
+    for claim in existing_claims:
+        existing_statement = claim.get("statement") or claim.get("claim") or ""
+        existing_tokens = tokenize(existing_statement)
+        if not existing_tokens:
+            continue
+        intersection = tokens & existing_tokens
+        if not intersection:
+            continue
+        union = tokens | existing_tokens
+        jaccard = len(intersection) / len(union)
+        coverage_incoming = len(intersection) / len(tokens)
+        coverage_existing = len(intersection) / len(existing_tokens)
+        if jaccard >= 0.45 or coverage_incoming >= 0.7 or coverage_existing >= 0.7:
+            score = max(jaccard, coverage_incoming, coverage_existing)
+            cid = claim.get("id") or ""
+            numeric = claim_numeric_id(cid)
+            if score > best_score or (abs(score - best_score) < 1e-6 and (best_numeric is None or numeric < best_numeric)):
+                best = claim
+                best_score = score
+                best_numeric = numeric
+    return best
+
+next_claim_id = max((claim_numeric_id(c.get("id", "")) for c in existing_claims), default=-1) + 1
+
+claims_by_citation = {}
+citation_inputs = {}
+modified = False
+
+for evidence_claim in claims_data:
+    statement = evidence_claim.get("claim_text")
+    if not statement:
+        continue
+
+    source_ids = evidence_claim.get("sources") or []
+    claim_sources = []
+    source_keys = []
+    source_originals = []
+    for source_id in source_ids:
+        src = sources_by_id.get(source_id)
+        if not src:
+            continue
+        converted = convert_source_for_claim(src)
+        if not converted.get("url"):
+            continue
+        key = source_key(src)
+        claim_sources.append(converted)
+        source_keys.append(key)
+        source_originals.append(src)
+    if not claim_sources:
+        continue
+
+    support_entry = {
+        "marker": evidence_claim.get("marker"),
+        "why_supported": evidence_claim.get("why_supported"),
+        "source_ids": [sid for sid in source_ids if sid in sources_by_id],
+    }
+    support_entry = {k: v for k, v in support_entry.items() if v}
+
+    match = find_best_claim(statement)
+    if match is not None:
+        claim_id = match.get("id") or ""
+        existing_sources = match.setdefault("sources", [])
+        source_map = {claim_source_key(s): s for s in existing_sources if isinstance(s, dict)}
+        for payload, key in zip(claim_sources, source_keys):
+            existing = source_map.get(key)
+            if existing:
+                existing.update({k: v for k, v in payload.items() if v is not None})
+            else:
+                existing_sources.append(payload)
+                source_map[key] = payload
+            if claim_id:
+                claims_by_citation.setdefault(key, set()).add(claim_id)
+        if support_entry:
+            support_list = match.setdefault("evidence_support", [])
+            if support_entry not in support_list:
+                support_list.append(support_entry)
+        if evidence_claim.get("why_supported"):
+            match["why_supported"] = evidence_claim["why_supported"]
+        if evidence_claim.get("confidence") is not None:
+            try:
+                match["confidence"] = max(float(evidence_claim["confidence"]), float(match.get("confidence", 0.0)))
+            except Exception:
+                match["confidence"] = max(0.0, float(match.get("confidence", 0.0)))
+        else:
+            match["confidence"] = max(0.65, float(match.get("confidence", 0.0)))
+        match["updated_at"] = now
+        modified = True
+    else:
+        claim_id = f"c{next_claim_id}"
+        next_claim_id += 1
+        new_claim = {
+            "id": claim_id,
+            "statement": statement,
+            "sources": claim_sources,
+            "confidence": float(evidence_claim.get("confidence", 0.7)),
+            "added_at": now,
+            "verified": False,
+        }
+        if evidence_claim.get("why_supported"):
+            new_claim["why_supported"] = evidence_claim["why_supported"]
+        if evidence_claim.get("marker"):
+            new_claim["evidence_marker"] = evidence_claim["marker"]
+        if support_entry:
+            new_claim["evidence_support"] = [support_entry]
+        existing_claims.append(new_claim)
+        for key in source_keys:
+            if key[0]:
+                claims_by_citation.setdefault(key, set()).add(claim_id)
+        modified = True
+
+    for key, src in zip(source_keys, source_originals):
+        if not key[0]:
+            continue
+        current = citation_inputs.get(key)
+        if not current or len([v for v in current.values() if v]) < len([v for v in src.values() if v]):
+            citation_inputs[key] = src
+
+if not modified:
+    sys.exit(0)
+
+stats["total_claims"] = len(existing_claims)
+
+existing_citations = kg.get("citations", [])
+existing_map = {}
+order_keys = []
+max_cite_id = -1
+
+for citation in existing_citations:
+    key = source_key(citation)
+    existing_map[key] = citation
+    order_keys.append(key)
+    match = re.search(r'(\d+)$', str(citation.get("id") or ""))
+    if match:
+        try:
+            max_cite_id = max(max_cite_id, int(match.group(1)))
+        except ValueError:
+            pass
+    claims_list = citation.get("cited_by_claims")
+    if isinstance(claims_list, list):
+        citation["cited_by_claims"] = sorted({cid for cid in claims_list if cid})
+
+for key, src in citation_inputs.items():
+    claims_for_key = sorted(claims_by_citation.get(key, []))
+    if key in existing_map:
+        citation = existing_map[key]
+        updated = build_citation(src)
+        updated["id"] = citation.get("id")
+        updated["added_at"] = citation.get("added_at", now)
+        existing_claim_refs = citation.get("cited_by_claims") or []
+        combined = sorted(set(existing_claim_refs) | set(claims_for_key))
+        if combined:
+            updated["cited_by_claims"] = combined
+        existing_map[key] = updated
+    else:
+        max_cite_id += 1
+        citation_id = f"cite_{max_cite_id}"
+        new_citation = build_citation(src)
+        new_citation["id"] = citation_id
+        new_citation["added_at"] = now
+        if claims_for_key:
+            new_citation["cited_by_claims"] = claims_for_key
+        existing_map[key] = new_citation
+        order_keys.append(key)
+
+updated_citations = []
+seen = set()
+for key in order_keys:
+    if key in seen:
+        continue
+    citation = existing_map.get(key)
+    if citation:
+        updated_citations.append(citation)
+        seen.add(key)
+
+kg["citations"] = updated_citations
+stats["total_citations"] = len(updated_citations)
+kg["last_updated"] = now
+
+kg_path.write_text(json.dumps(kg, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+PY
+}
+
 # Export functions
 export -f kg_init
 export -f kg_get_path
@@ -973,6 +1258,7 @@ export -f kg_get_unexplored_leads
 export -f kg_get_summary
 export -f kg_bulk_update
 export -f kg_find_source_by_url
+export -f kg_merge_evidence_claims
 
 # Integrate agent findings into knowledge graph
 # Usage: kg_integrate_agent_output <session_dir> <agent_output_file>
@@ -1059,6 +1345,8 @@ kg_integrate_agent_output() {
                     done
                 fi
                 
+                kg_merge_evidence_claims "$session_dir" >/dev/null 2>&1 || true
+
                 echo "  ✓ Integrated structured findings into knowledge graph" >&2
                 return 0
             fi
@@ -1172,7 +1460,9 @@ kg_integrate_agent_output() {
         # If there's a separate citations array, we could process it here
         
     done <<< "$findings_files"
-    
+
+    kg_merge_evidence_claims "$session_dir" >/dev/null 2>&1 || true
+
     # Validate knowledge graph after integration
     if ! jq empty "$kg_file" 2>/dev/null; then
         echo "ERROR: Knowledge graph corrupted after integration. Restoring backup." >&2

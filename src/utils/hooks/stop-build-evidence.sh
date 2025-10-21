@@ -8,8 +8,6 @@ if [[ "${BASH_VERSINFO[0]:-0}" -lt 4 ]]; then
     exit 1
 fi
 
-SUPPORTED_MODES=(disabled collect render)
-
 declare -A SUPPORTED_MODE_MAP=([disabled]=1 [collect]=1 [render]=1)
 
 single_line() {
@@ -174,8 +172,10 @@ lookup_manifest_entry() {
     fi
     local filter
     if [[ "$kind" == "web" ]]; then
+        # shellcheck disable=SC2016
         filter='(.entries // []) | map(select(.url == $key)) | first // {}'
     else
+        # shellcheck disable=SC2016
         filter='(.entries // []) | map(select(.url == $key or .local_path == $key)) | first // {}'
     fi
     jq -c --arg key "$key" "$filter" <<<"$manifest_json"

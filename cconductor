@@ -64,6 +64,71 @@ else
     fi
 fi
 
+# Evidence mode flag (controls Stop hook behaviour)
+set_evidence_mode() {
+    local default_mode="render"
+    local selected_mode=""
+
+    if has_flag "evidence-mode"; then
+        selected_mode="$(get_flag "evidence-mode")"
+    elif [ -n "${CCONDUCTOR_EVIDENCE_MODE:-}" ]; then
+        selected_mode="$CCONDUCTOR_EVIDENCE_MODE"
+    else
+        selected_mode="$default_mode"
+    fi
+
+    selected_mode="${selected_mode,,}"
+    if [[ -z "$selected_mode" ]]; then
+        selected_mode="$default_mode"
+    fi
+
+    case "$selected_mode" in
+        disabled|collect|render)
+            ;;
+        *)
+            echo "Error: Invalid value for --evidence-mode: $selected_mode" >&2
+            echo "Allowed values: disabled, collect, render" >&2
+            exit 1
+            ;;
+    esac
+
+    export CCONDUCTOR_EVIDENCE_MODE="$selected_mode"
+}
+
+set_evidence_mode
+
+set_evidence_render() {
+    local default_render="footnotes"
+    local selected_render=""
+
+    if has_flag "evidence-render"; then
+        selected_render="$(get_flag "evidence-render")"
+    elif [ -n "${CCONDUCTOR_EVIDENCE_RENDER:-}" ]; then
+        selected_render="$CCONDUCTOR_EVIDENCE_RENDER"
+    else
+        selected_render="$default_render"
+    fi
+
+    selected_render="${selected_render,,}"
+    if [[ -z "$selected_render" ]]; then
+        selected_render="$default_render"
+    fi
+
+    case "$selected_render" in
+        footnotes|fallback)
+            ;;
+        *)
+            echo "Error: Invalid value for --evidence-render: $selected_render" >&2
+            echo "Allowed values: footnotes, fallback" >&2
+            exit 1
+            ;;
+    esac
+
+    export CCONDUCTOR_EVIDENCE_RENDER="$selected_render"
+}
+
+set_evidence_render
+
 if [[ "${CCONDUCTOR_VERBOSE:-0}" == "1" ]]; then
     if [ -n "${CCONDUCTOR_CONFIG_DIR:-}" ]; then
         config_dir_display="$CCONDUCTOR_CONFIG_DIR"
@@ -147,6 +212,10 @@ OPTIONS:
   --no-cache                       Disable both WebFetch and WebSearch caches for this run
   --no-web-fetch-cache             Disable only WebFetch caching (always fetch live content)
   --no-web-search-cache            Disable only WebSearch caching (always run live searches)
+  --evidence-mode MODE             Control paragraph-evidence pipeline:
+                                   render (default), collect, disabled
+  --evidence-render STYLE          Evidence rendering style for reports:
+                                   footnotes (default) or fallback
 
 SESSIONS SUBCOMMANDS:
   list                                  List all research sessions

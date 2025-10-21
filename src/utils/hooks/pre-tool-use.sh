@@ -565,6 +565,24 @@ PY
     fi
 fi
 
+# Backup existing files before Write tool executes (for JSON validation rollback)
+if [[ "$tool_name" == "Write" ]]; then
+    file_path=$(echo "$hook_data" | jq -r '.tool_input.file_path // empty')
+    if [[ -n "$file_path" && -f "$file_path" ]]; then
+        backup_root=""
+        if [[ -n "$session_dir" ]]; then
+            backup_root="$session_dir/.claude/write-backups"
+        elif [[ -n "$CCONDUCTOR_SESSION_DIR" ]]; then
+            backup_root="$CCONDUCTOR_SESSION_DIR/.claude/write-backups"
+        fi
+        if [[ -n "$backup_root" ]]; then
+            mkdir -p "$backup_root"
+            hash=$(printf '%s' "$file_path" | shasum -a 256 | awk '{print $1}')
+            cp "$file_path" "$backup_root/$hash.bak" 2>/dev/null || true
+        fi
+    fi
+fi
+
 # Cache + knowledge graph advisory for WebFetch
 if [[ "$tool_name" == "WebFetch" && -n "$session_dir" ]]; then
     if command -v web_cache_lookup >/dev/null 2>&1 && web_cache_enabled; then

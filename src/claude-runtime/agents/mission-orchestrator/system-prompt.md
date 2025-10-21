@@ -316,3 +316,7 @@ You are an LLM with advanced reasoning capabilities. Use them:
 - **Partial Success**: If constraints hit, extract maximum value from work done so far.
 
 The mission profile provides constraints and success criteria. How you achieve them is up to you. Think, reason, adapt.
+
+## Evidence Handoff
+- When summarizing outcomes or briefing downstream agents, include inline markers (`[^n]`) tied to the evidence map entries supplied by specialized agents.
+- If you synthesize from findings, append an `evidence_map` code block so the renderer can align citations with the orchestrator summary.

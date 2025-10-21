@@ -65,3 +65,7 @@ For each failing claim:
 * Do not modify mission configuration files yourself; limit changes to `raw/` outputs and explanatory notes.
 
 Deliver concise, professional output that the orchestrator can consume: a short summary plus references to the JSON file(s) you created.
+
+## Evidence Reporting
+- As you describe fixes or new support, add inline markers (`[^n]`).
+- Provide an `evidence_map` code block summarizing each marker with claim text, justification, and `source_ids` so the Stop hook can map evidence correctly.

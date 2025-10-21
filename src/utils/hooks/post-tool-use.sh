@@ -120,6 +120,87 @@ fi
 
 # Cache successful WebFetch results
 if [ "$tool_name" = "WebFetch" ] && [ "$exit_code" = "0" ]; then
+    # Persist bodies for evidence pipeline
+    if [ -n "$session_dir" ]; then
+        cache_root="$session_dir/cache/webfetch"
+        mkdir -p "$cache_root"
+
+        url=$(echo "$hook_data" | jq -r '.tool_input.url // empty')
+        fetch_timestamp=$(echo "$hook_data" | jq -r '.timestamp // empty')
+        content_type=$(echo "$hook_data" | jq -r '.tool_output.content_type // empty')
+        status_code=$(echo "$hook_data" | jq -r '.tool_output.status_code // empty')
+
+        if [[ -n "$url" ]]; then
+            url_hash=$(printf '%s' "$url" | shasum -a 256 | awk '{print $1}')
+            body_path="$cache_root/${url_hash}.txt"
+            metadata_path="$cache_root/${url_hash}.json"
+
+            body_file=$(echo "$hook_data" | jq -r '.tool_output.body_file // empty')
+            if [[ -n "$body_file" && -f "$body_file" ]]; then
+                cp "$body_file" "$body_path"
+            else
+                body_content=$(echo "$hook_data" | jq -r '.tool_output.body // empty')
+                if [[ -n "$body_content" ]]; then
+                    printf '%s' "$body_content" > "$body_path"
+                else
+                    rm -f "$body_path"
+                fi
+            fi
+
+            jq -n \
+                --arg url "$url" \
+                --arg fetched_at "${fetch_timestamp:-$(get_timestamp)}" \
+                --arg content_type "${content_type:-}" \
+                --arg status_code "${status_code:-}" \
+                --arg body_path "$(basename "$body_path")" \
+                '{
+                    url: $url,
+                    fetched_at: $fetched_at,
+                    content_type: (if $content_type == "" then null else $content_type end),
+                    status_code: (if $status_code == "" then null else ($status_code | tonumber) end),
+                    body_file: $body_path
+                }' > "$metadata_path"
+
+            manifest="$cache_root/index.json"
+            tmp_manifest="${manifest}.tmp"
+            if [ -f "$manifest" ]; then
+                jq --arg hash "$url_hash" --arg url "$url" --arg body "$(basename "$body_path")" \
+                   --arg meta "$(basename "$metadata_path")" \
+                   --arg fetched "${fetch_timestamp:-$(get_timestamp)}" '
+                    .entries = (
+                        [.entries[]? | select(.hash != $hash)] +
+                        [{
+                            hash: $hash,
+                            url: $url,
+                            body_file: $body,
+                            metadata_file: $meta,
+                            fetched_at: $fetched
+                        }]
+                    )
+                ' "$manifest" > "$tmp_manifest"
+            else
+                mkdir -p "$cache_root"
+                jq -n \
+                    --arg hash "$url_hash" \
+                    --arg url "$url" \
+                    --arg body "$(basename "$body_path")" \
+                    --arg meta "$(basename "$metadata_path")" \
+                    --arg fetched "${fetch_timestamp:-$(get_timestamp)}" \
+                    '{
+                        hash_algo: "sha256",
+                        entries: [{
+                            hash: $hash,
+                            url: $url,
+                            body_file: $body,
+                            metadata_file: $meta,
+                            fetched_at: $fetched
+                        }]
+                    }' > "$tmp_manifest"
+            fi
+            mv "$tmp_manifest" "$manifest"
+        fi
+    fi
+
     if command -v web_cache_store >/dev/null 2>&1 && web_cache_enabled; then
         if command -v web_cache_root_dir >/dev/null 2>&1; then
             debug_log="$(web_cache_root_dir)/logs/post-hook-debug.jsonl"
@@ -153,6 +234,48 @@ if [ "$tool_name" = "WebFetch" ] && [ "$exit_code" = "0" ]; then
                     web_cache_store "$url" "$temp_body" "$metadata"
                     rm -f "$temp_body"
                 fi
+            fi
+        fi
+    fi
+fi
+
+# Validate JSON written by Write tool and restore backup on failure
+if [ "$tool_name" = "Write" ] && [ "$exit_code" = "0" ]; then
+    file_path=$(echo "$hook_data" | jq -r '.tool_input.file_path // empty')
+    if [[ -n "$file_path" && "$file_path" == *.json ]]; then
+        if ! jq empty "$file_path" >/dev/null 2>&1; then
+            restored="false"
+            backup=""
+            if [[ -n "$session_dir" ]]; then
+                hash=$(printf '%s' "$file_path" | shasum -a 256 | awk '{print $1}')
+                backup="$session_dir/.claude/write-backups/$hash.bak"
+            fi
+            if [[ -n "$backup" && -f "$backup" ]]; then
+                cp "$backup" "$file_path" 2>/dev/null || true
+                restored="true"
+            else
+                rm -f "$file_path" 2>/dev/null || true
+            fi
+            if [[ -n "$session_dir" ]]; then
+                jq -n \
+                    --arg ts "$(get_timestamp)" \
+                    --arg fp "$file_path" \
+                    --arg restored "$restored" \
+                    '{
+                        timestamp: $ts,
+                        type: "json_validation_error",
+                        data: {
+                            tool: "Write",
+                            file_path: $fp,
+                            restored: ($restored == "true")
+                        }
+                    }' >> "$session_dir/events.jsonl" 2>/dev/null || true
+            fi
+            echo "⚠️ Invalid JSON detected in $file_path; previous content restored." >&2
+        else
+            if [[ -n "$session_dir" ]]; then
+                hash=$(printf '%s' "$file_path" | shasum -a 256 | awk '{print $1}')
+                rm -f "$session_dir/.claude/write-backups/$hash.bak" 2>/dev/null || true
             fi
         fi
     fi

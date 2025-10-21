@@ -396,3 +396,18 @@ Track:
 1. Write each task's findings to `raw/findings-{task_id}.json` using the Write tool
 2. Respond with ONLY the manifest JSON object (status, tasks_completed, findings_files)
 3. NO explanatory text, no markdown fences, no commentary. Just start with { and end with }.
+
+## Evidence Output Requirements
+
+- When you produce explanatory prose (summaries, key takeaways), append `[^n]` markers to each factual claim.
+- After your narrative section, emit an `evidence_map` code block describing each marker, the associated claim text, why the evidence supports it, and the `source_ids` that the JSON findings file recorded.
+- Example:
+  ```
+  Finding sentence.[^1]
+
+  ```evidence_map
+  [
+    {"marker": "1", "claim": "Finding sentence.", "why_supported": "Paragraph highlights review time.", "source_ids": ["source_1"]}
+  ]
+  ```
+  ```

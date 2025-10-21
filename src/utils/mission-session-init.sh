@@ -31,48 +31,12 @@ copy_runtime_settings() {
 # Enables live tool tracking in dashboard
 copy_hooks() {
     local session_dir="$1"
-    local source_hooks="$PROJECT_ROOT/src/utils/hooks"
-    local target_hooks="$session_dir/.claude/hooks"
-    local settings_file="$session_dir/.claude/settings.json"
     
-    if [ ! -d "$source_hooks" ]; then
-        echo "  ⚠ Warning: Hooks directory not found at $source_hooks" >&2
-        return 1
+    if "$PROJECT_ROOT/src/utils/setup-hooks.sh" "$session_dir" >/dev/null 2>&1; then
+        echo "  ✓ Tool tracking hooks installed and configured" >&2
+    else
+        echo "  ⚠ Warning: Failed to configure tool hooks for session" >&2
     fi
-    
-    # Copy hook scripts
-    mkdir -p "$target_hooks"
-    cp "$source_hooks/"*.sh "$target_hooks/" 2>/dev/null || true
-    chmod +x "$target_hooks/"*.sh 2>/dev/null || true
-
-    # Configure hooks in settings.json (required for Claude CLI to invoke them)
-    if [ -f "$settings_file" ]; then
-        # Create hooks configuration using RELATIVE paths
-        local hooks_config
-        hooks_config=$(jq -n '{
-            hooks: {
-                PreToolUse: [{
-                    matcher: "*",
-                    hooks: [{
-                        type: "command",
-                        command: ".claude/hooks/pre-tool-use.sh"
-                    }]
-                }],
-                PostToolUse: [{
-                    matcher: "*",
-                    hooks: [{
-                        type: "command",
-                        command: ".claude/hooks/post-tool-use.sh"
-                    }]
-                }]
-            }
-        }')
-        
-        # Merge with existing settings
-        jq --argjson hooks "$hooks_config" '. + $hooks' "$settings_file" > "${settings_file}.tmp"
-        mv "${settings_file}.tmp" "$settings_file"
-    fi
-    echo "  ✓ Tool tracking hooks installed and configured" >&2
 }
 
 copy_skills() {
@@ -183,7 +147,7 @@ initialize_session() {
         --arg question "$mission_objective" \
         --arg timestamp "$(get_timestamp)" \
         --arg session_type "mission" \
-        --arg version "0.2.0" \
+        --arg version "0.3.0" \
         --arg claude_ver "$claude_version" \
         '{
             session_type: $session_type,
@@ -198,6 +162,16 @@ initialize_session() {
                 claude_code_version: $claude_ver
             }
         }' > "$session_dir/session.json"
+
+    # Record evidence configuration (mode only for now)
+    local tmp_session="$session_dir/session.json.tmp"
+    jq --arg mode "${CCONDUCTOR_EVIDENCE_MODE:-render}" \
+       --arg render "${CCONDUCTOR_EVIDENCE_RENDER:-footnotes}" '
+        .evidence = (.evidence // {}) |
+        .evidence.mode = $mode |
+        .evidence.render = $render
+    ' "$session_dir/session.json" > "$tmp_session"
+    mv "$tmp_session" "$session_dir/session.json"
     
     echo "$session_dir"
 }
