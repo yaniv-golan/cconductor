@@ -371,12 +371,6 @@ Loading Order:
 Environment Variables:
   CCONDUCTOR_CONFIG_DIR - Override user config directory location
 
-Benefits:
-  • User configs in OS-standard location
-  • Survive project deletion/reinstallation
-  • Multi-user support (each user has own configs)
-  • Zero merge conflicts on git pull!
-  • Proper separation of code and user data
 
 EOF
             ;;

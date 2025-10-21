@@ -544,7 +544,9 @@ resume_session_simple() {
 
 configure_simple() {
     echo ""
-    main configure
+    if ! "$CCONDUCTOR_ROOT/cconductor" configure; then
+        echo "Error: Unable to display configuration details." >&2
+    fi
     echo ""
     read -r -p "Press Enter to continue..." _
 }
@@ -582,6 +584,8 @@ interactive_mode_advanced() {
     
     while true; do
         choice=$(dialog --clear --title "CConductor - AI Research System" \
+            --ok-label "Choose" \
+            --no-cancel \
             --menu "What would you like to do?" 16 60 4 \
             1 "Start New Research" \
             2 "View Sessions" \
@@ -594,12 +598,14 @@ interactive_mode_advanced() {
             1) research_wizard ;;
             2) sessions_browser ;;
             3)
-                clear
-                main configure
-                read -r -p "Press Enter to continue..."
+                local config_output
+                if config_output=$("$CCONDUCTOR_ROOT/cconductor" configure 2>&1); then
+                    dialog --title "Configuration" --msgbox "$config_output" 22 90
+                else
+                    dialog --title "Configuration" --msgbox "Unable to load configuration details." 7 60
+                fi
                 ;;
             4) break ;;
-            "") continue ;;
         esac
     done
 }
