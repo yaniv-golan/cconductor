@@ -218,11 +218,11 @@ Write to: ./artifacts/synthesis-agent/summary.md
 
 ## Executive Summary
 
-<2-3 paragraph executive summary with key findings, inline citations [1][2]>
+<2-3 paragraph executive summary with key findings, inline citations [1], [2]>
 
 ## <Section Title>
 
-<Well-written content with inline citations [1][2][3]>
+<Well-written content with inline citations [1], [2], [3]>
 
 ### Key Points
 
@@ -289,7 +289,7 @@ This research was conducted using [CConductor](https://github.com/yaniv-golan/cc
 
 **Citation Management**:
 
-- Number citations [1][2]
+- Number citations [1], [2] (use comma-space between adjacent citations)
 - Group citations for same claim
 - Include full references section
 - Note high-credibility vs low-credibility sources

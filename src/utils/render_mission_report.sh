@@ -28,7 +28,10 @@ strip_section() {
 convert_inline_references() {
     perl -0pe '
         my %allowed = map { $_ => 1 } grep { length } split(/\t/, $ENV{ALLOWED_MARKERS});
+        # First convert [N] to [^N] for allowed markers
         s/\[(\d+)\]/$allowed{$1} ? "[^$1]" : $&/ge;
+        # Then add comma-space between adjacent footnote markers
+        s/\]\[\^/], [^/g;
     '
 }
 
