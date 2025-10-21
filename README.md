@@ -27,6 +27,8 @@ CConductor is a multi-agent AI research system that conducts comprehensive, adap
 ```bash
 ./cconductor
 # Launches dialog-based TUI for guided research setup
+# (Install the optional `dialog` package for the full menu experience:
+#   macOS → brew install dialog, Debian/Ubuntu → sudo apt install dialog)
 ```
 
 **Direct Command**:

@@ -10,50 +10,42 @@ if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
     exit 1
 fi
 
+# Shared session helpers
+# shellcheck disable=SC1091
+source "$CCONDUCTOR_ROOT/src/utils/session-utils.sh"
+
 # Handle sessions list subcommand
 sessions_list_handler() {
-    # List research sessions from session directory
-    # shellcheck disable=SC1091
-    source "$CCONDUCTOR_ROOT/src/utils/path-resolver.sh"
-    local session_dir
-    session_dir=$(resolve_path "session_dir" 2>/dev/null || echo "$CCONDUCTOR_ROOT/research-sessions")
-    
-    if [ ! -d "$session_dir" ]; then
+    local count=0
+    local entries
+    entries=$(session_utils_collect_sessions)
+
+    if [ -z "$entries" ]; then
         echo "No research sessions found"
         echo "Start your first research: ./cconductor \"your question\""
         exit 0
     fi
-    
+
     echo "Research Sessions:"
     echo "══════════════════════════════════════════════════"
     echo ""
-    
-    # Find all session directories
-    local count=0
-    for session in "$session_dir"/session_* "$session_dir"/mission_session_*; do
-        [ -d "$session" ] || continue
+
+    while IFS=$'\t' read -r path mission_id created status objective; do
+        [ -n "$path" ] || continue
         count=$((count + 1))
-        
-        local session_name
-        session_name=$(basename "$session")
-        local created="N/A"
-        local question="N/A"
-        local status="unknown"
-        
-        # Try to read session metadata
-        if [ -f "$session/session.json" ]; then
-            created=$(jq -r '.created_at // .started_at // "N/A"' "$session/session.json" 2>/dev/null)
-            question=$(jq -r '.research_question // .objective // "N/A"' "$session/session.json" 2>/dev/null)
-            status=$(jq -r '.status // "unknown"' "$session/session.json" 2>/dev/null)
+        local display_question
+        display_question=$(echo "$objective" | sed 's/  */ /g' | sed 's/^ *//; s/ *$//')
+        if [ ${#display_question} -gt 80 ]; then
+            display_question="${display_question:0:80}..."
         fi
-        
-        echo "[$count] $session_name"
+        echo "[$count] $mission_id"
         echo "    Created: $created"
         echo "    Status: $status"
-        echo "    Question: ${question:0:80}$([ ${#question} -gt 80 ] && echo '...')"
+        echo "    Objective: $display_question"
+        echo "    Path: $path"
         echo ""
-    done
-    
+    done <<< "$entries"
+
     if [ $count -eq 0 ]; then
         echo "No research sessions found"
         echo ""

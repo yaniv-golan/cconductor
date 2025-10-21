@@ -9,6 +9,8 @@
 ```bash
 # Interactive mode (dialog-based TUI) - RECOMMENDED FOR NEW USERS
 ./cconductor
+# Tip: install the optional `dialog` package (brew install dialog / sudo apt install dialog)
+# to enable the full menu experience. Without it, a simple text menu is used.
 
 # Start research (command-line mode)
 ./cconductor "your question"

@@ -7,6 +7,16 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(dirname "$(dirname "$SCRIPT_DIR")")"
 
+# Path resolver for configurable session directory
+SESSION_BASE_DIR="$PROJECT_ROOT/research-sessions"
+if [ -f "$PROJECT_ROOT/src/utils/path-resolver.sh" ]; then
+    # shellcheck disable=SC1091
+    source "$PROJECT_ROOT/src/utils/path-resolver.sh" 2>/dev/null || true
+    if resolved_dir=$(resolve_path "session_dir" 2>/dev/null); then
+        SESSION_BASE_DIR="$resolved_dir"
+    fi
+fi
+
 # Load error logger for session initialization
 # shellcheck disable=SC1091
 source "$SCRIPT_DIR/error-logger.sh" 2>/dev/null || true
@@ -92,7 +102,8 @@ initialize_session() {
         timestamp="$(date +%s)_$$_${RANDOM}"
     fi
     
-    local session_dir="$PROJECT_ROOT/research-sessions/mission_${timestamp}"
+    mkdir -p "$SESSION_BASE_DIR"
+    local session_dir="$SESSION_BASE_DIR/mission_${timestamp}"
     
     # Prevent collision: if directory already exists (rare race condition), add suffix
     if [[ -d "$session_dir" ]]; then
