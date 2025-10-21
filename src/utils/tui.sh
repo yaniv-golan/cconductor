@@ -10,6 +10,126 @@ if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
     exit 1
 fi
 
+# ---------------------------------------------------------------------------
+# Shared helpers
+# ---------------------------------------------------------------------------
+
+# shellcheck disable=SC1091
+source "$CCONDUCTOR_ROOT/src/utils/session-utils.sh"
+
+# shellcheck disable=SC2034
+declare -a TUI_SESSION_PATHS=()
+declare -a TUI_SESSION_LABELS=()
+
+truncate_text() {
+    local text="$1"
+    local max="${2:-60}"
+    text=$(echo "$text" | tr '
+
+	' ' ' | sed 's/  */ /g' | sed 's/^ *//; s/ *$//')
+    if [ "${#text}" -gt "$max" ]; then
+        printf '%s…' "${text:0:max-1}"
+    else
+        printf '%s' "$text"
+    fi
+}
+
+session_short_status_label() {
+    local status="$1"
+    case "$status" in
+        "In progress"|"In Progress")
+            echo "In Progress"
+            ;;
+        "Complete (advisory)")
+            echo "Advisory"
+            ;;
+        "Complete")
+            echo "Complete"
+            ;;
+        "Error"|"Failed"|"Failure")
+            echo "Error"
+            ;;
+        "Aborted"|"Cancelled"|"Canceled")
+            echo "Aborted"
+            ;;
+        ""|"null"|"N/A")
+            echo "Unknown"
+            ;;
+        *)
+            echo "$status"
+            ;;
+    esac
+}
+
+session_status_field() {
+    local label
+    label=$(session_short_status_label "$1")
+    if [ "${#label}" -gt 11 ]; then
+        label="${label:0:11}"
+    fi
+    printf ' %-11s ' "$label"
+}
+
+session_status_emoji() {
+    local process_state="$1"
+    local status="$2"
+
+    case "$process_state" in
+        running)
+            echo "🟢"
+            return
+            ;;
+        idle)
+            echo "🟡"
+            return
+            ;;
+    esac
+
+    case "$status" in
+        "Complete"|"Complete (advisory)")
+            echo "✅"
+            ;;
+        "In progress"|"In Progress")
+            echo "🔴"
+            ;;
+        "Advisory")
+            echo "✅"
+            ;;
+        "Error"|"Failed"|"Failure"|"Aborted"|"Cancelled"|"Canceled")
+            echo "⚠️"
+            ;;
+        *)
+            echo "⚪"
+            ;;
+    esac
+}
+
+load_sessions_into_arrays() {
+    TUI_SESSION_PATHS=()
+    TUI_SESSION_LABELS=()
+
+    declare -A process_state_map=()
+    while IFS=$'\t' read -r proc_path _proc_pid proc_state _proc_children; do
+        [ -n "$proc_path" ] || continue
+        process_state_map["$proc_path"]="$proc_state"
+    done < <(session_utils_collect_active_processes || true)
+
+    while IFS=$'\t' read -r path _mission_id created status objective; do
+        [ -n "$path" ] || continue
+        TUI_SESSION_PATHS+=("$path")
+        local excerpt label pretty_created status_field emoji session_id_display process_state
+        excerpt=$(truncate_text "$objective" 60)
+        pretty_created=$(session_utils_pretty_timestamp "$created")
+        [ -n "$pretty_created" ] || pretty_created="$created"
+        status_field=$(session_status_field "$status")
+        process_state="${process_state_map[$path]:-}"
+        emoji=$(session_status_emoji "$process_state" "$status")
+        session_id_display=$(basename "$path")
+        label=$(printf '%s %s | %s |%s| "%s"' "$emoji" "$session_id_display" "$pretty_created" "$status_field" "$excerpt")
+        TUI_SESSION_LABELS+=("$label")
+    done < <(session_utils_collect_sessions)
+}
+
 # Helper: Show session details
 show_session_details() {
     local session_path="$1"
@@ -18,57 +138,173 @@ show_session_details() {
         echo "Invalid session directory"
         return 1
     fi
-    
+    local session_id
+    session_id=$(basename "$session_path")
+
     echo "Session Details:"
     echo "=================="
     echo ""
-    
+
     local objective
     objective=$(jq -r '.objective // "N/A"' "$session_path/session.json" 2>/dev/null)
     local created
     created=$(jq -r '.created_at // "N/A"' "$session_path/session.json" 2>/dev/null)
     local mission
     mission=$(jq -r '.mission_name // "general-research"' "$session_path/session.json" 2>/dev/null)
-    
+    local status_value
+    status_value=$(jq -r '.status // ""' "$session_path/session.json" 2>/dev/null || echo "")
+
+    local created_display
+    created_display=$(session_utils_pretty_timestamp "$created")
+    [ -n "$created_display" ] || created_display="$created"
+
+    echo "Session ID: $session_id"
     echo "Objective: $objective"
     echo "Mission: $mission"
-    echo "Created: $created"
+    echo "Created: $created_display"
+    if [ -n "$status_value" ] && [ "$status_value" != "null" ]; then
+        echo "Session status: $status_value"
+    fi
     echo ""
-    
-    # Budget info
+
+    local total_cost=""
+    if [ -f "$session_path/mission-metrics.json" ]; then
+        total_cost=$(jq -r '.total_cost_usd // empty' "$session_path/mission-metrics.json" 2>/dev/null || echo "")
+    fi
+
+    local budget_cost=""
+    local invocations=""
+    local elapsed_minutes=""
     if [ -f "$session_path/budget.json" ]; then
-        local spent
-        spent=$(jq -r '.spent.cost_usd // 0' "$session_path/budget.json" 2>/dev/null)
-        local invocations
-        invocations=$(jq -r '.spent.agent_invocations // 0' "$session_path/budget.json" 2>/dev/null)
-        echo "Budget spent: \$$spent ($invocations invocations)"
+        budget_cost=$(jq -r '.spent.cost_usd // empty' "$session_path/budget.json" 2>/dev/null || echo "")
+        invocations=$(jq -r '.spent.agent_invocations // empty' "$session_path/budget.json" 2>/dev/null || echo "")
+        elapsed_minutes=$(jq -r '.spent.elapsed_minutes // empty' "$session_path/budget.json" 2>/dev/null || echo "")
     fi
-    
-    # Iteration count
-    if [ -f "$session_path/orchestration-log.jsonl" ]; then
-        local iterations
-        iterations=$(wc -l < "$session_path/orchestration-log.jsonl" | tr -d ' ')
-        echo "Iterations: $iterations"
+
+    local cost_display=""
+    if [ -n "$total_cost" ] && [ "$total_cost" != "null" ]; then
+        cost_display="$total_cost"
+    elif [ -n "$budget_cost" ] && [ "$budget_cost" != "null" ]; then
+        cost_display="$budget_cost"
     fi
-    
-    # Report status
-    if [ -f "$session_path/final/mission-report.md" ]; then
-        local session_status
-        if [ -f "$session_path/session.json" ]; then
-            session_status=$(jq -r '.status // ""' "$session_path/session.json" 2>/dev/null || echo "")
-        else
-            session_status=""
+
+    if [ -n "$cost_display" ]; then
+        if [[ "$cost_display" =~ ^[0-9]+(\.[0-9]+)?$ ]]; then
+            printf -v cost_display '%.2f' "$cost_display"
         fi
-        if [ "$session_status" = "completed_with_advisory" ]; then
-            echo "Status: Complete (quality advisory)"
-        else
-            echo "Status: Complete (report available)"
-        fi
+    fi
+
+    local budget_line="Budget spent"
+    if [ -n "$cost_display" ]; then
+        budget_line+=": \$$cost_display"
     else
-        echo "Status: In progress or incomplete"
+        budget_line+=": Unknown"
     fi
-    
+
+    local budget_meta=()
+    if [ -n "$invocations" ] && [ "$invocations" != "null" ]; then
+        budget_meta+=("$invocations invocations")
+    fi
+    if [ -n "$elapsed_minutes" ] && [ "$elapsed_minutes" != "null" ]; then
+        budget_meta+=("${elapsed_minutes} min elapsed")
+    fi
+
+    if [ "${#budget_meta[@]}" -gt 0 ]; then
+        budget_line+=" ($(IFS=', '; echo "${budget_meta[*]}"))"
+    fi
+
+    echo "$budget_line"
+
+    local iterations=""
+    if [ -f "$session_path/dashboard-metrics.json" ]; then
+        iterations=$(jq -r '.iteration // empty' "$session_path/dashboard-metrics.json" 2>/dev/null || echo "")
+    fi
+    if [ -z "$iterations" ] || [ "$iterations" = "null" ]; then
+        iterations=""
+    fi
+
+    if [ -n "$iterations" ]; then
+        echo "Iterations: $iterations"
+    else
+        echo "Iterations: Unknown"
+    fi
+
+    if [ -f "$session_path/final/mission-report.md" ]; then
+        if [ "$status_value" = "completed_with_advisory" ]; then
+            echo "Report: Complete with quality advisory"
+        else
+            echo "Report: Complete"
+        fi
+        echo "Report path: $session_path/final/mission-report.md"
+    else
+        echo "Report: Not yet available"
+    fi
+
     echo ""
+}
+
+show_session_process_status() {
+    local session_path="$1"
+    local session_id
+    session_id=$(basename "$session_path")
+
+    local report=""
+    local found=0
+
+    while IFS=$'\t' read -r proc_path pid state child_count; do
+        [ -n "$proc_path" ] || continue
+        if [ "$proc_path" != "$session_path" ]; then
+            continue
+        fi
+        found=1
+        local ppid
+        ppid=$(ps -o ppid= -p "$pid" 2>/dev/null | tr -d ' ')
+        local start_time
+        start_time=$(ps -o lstart= -p "$pid" 2>/dev/null | sed 's/^ *//')
+        local status_line="Idle"
+        if [ "$state" = "running" ]; then
+            status_line="Running (${child_count} child process(es))"
+        fi
+
+        report+="Mission process for $session_id\n"
+        report+="===============================\n"
+        report+=$'\n'
+        report+="PID: $pid"$'\n'
+        report+="Parent PID: ${ppid:-unknown}"$'\n'
+        [ -n "$start_time" ] && report+="Started: $start_time"$'\n'
+        report+="Status: $status_line"$'\n'
+        break
+    done < <(session_utils_collect_active_processes || true)
+
+    if [ "$found" -eq 0 ]; then
+        report+="No active mission process for $session_id."$'\n'
+        local status_value
+        status_value=$(jq -r '.status // ""' "$session_path/session.json" 2>/dev/null || echo "")
+        if [ "$status_value" = "in_progress" ] || [ -z "$status_value" ] || [ "$status_value" = "running" ]; then
+            report+="Session metadata indicates it may still be in progress."$'\n'
+        fi
+    fi
+
+    local pid_file
+    for pid_file in "$session_path"/.event-tailer.pid "$session_path"/.dashboard-server.pid; do
+        [ -f "$pid_file" ] || continue
+        local pid_value
+        pid_value=$(cat "$pid_file" 2>/dev/null || echo "")
+        [ -n "$pid_value" ] || continue
+        local label
+        case "$(basename "$pid_file")" in
+            .event-tailer.pid) label="Event tailer" ;;
+            .dashboard-server.pid) label="Dashboard server" ;;
+            *) label=$(basename "$pid_file") ;;
+        esac
+        local state="stopped"
+        if kill -0 "$pid_value" 2>/dev/null; then
+            state="running"
+        fi
+        report+=$'\n'"${label^} PID: $pid_value ($state)"
+    done
+
+    echo "$report"
 }
 
 # Helper: Resume session interactively
@@ -96,28 +332,29 @@ resume_session_interactive() {
 }
 
 # Simple interactive mode (fallback)
-interactive_mode_simple() {
+start_new_research_simple() {
     echo "🔍 CConductor - AI Research, Orchestrated"
     echo ""
     echo "What would you like to research?"
     read -r research_question
-    
+
     if [ -z "$research_question" ]; then
-        echo "No research question provided. Exiting."
-        return 0
+        echo "No research question provided."
+        read -r -p "Press Enter to return to the menu..." _
+        return
     fi
-    
+
     echo ""
     echo "Select mission type:"
-    echo "  1) general-research (default - flexible for any topic)"
-    echo "  2) academic-research (scholarly sources, scientific papers)"
-    echo "  3) market-research (market sizing, trends, TAM/SAM/SOM)"
+    echo "  1) general-research (flexible for any topic)"
+    echo "  2) academic-research (scholarly sources)"
+    echo "  3) market-research (market sizing, trends)"
     echo "  4) competitive-analysis (competitor landscape)"
     echo "  5) technical-analysis (technical deep-dive)"
     echo ""
     echo -n "Choice [1-5] (default: 1): "
     read -r mission_choice
-    
+
     local mission_name="general-research"
     case "${mission_choice:-1}" in
         1) mission_name="general-research" ;;
@@ -127,14 +364,173 @@ interactive_mode_simple() {
         5) mission_name="technical-analysis" ;;
         *) echo "Invalid choice, using general-research"; mission_name="general-research" ;;
     esac
-    
+
     echo ""
     echo "Starting research with $mission_name mission..."
     echo ""
-    
-    # Build and execute mission command
+
     local mission_cmd=("$CCONDUCTOR_ROOT/src/cconductor-mission.sh" "run" "--mission" "$mission_name" "$research_question")
     "${mission_cmd[@]}"
+
+    echo ""
+    read -r -p "Press Enter to return to the menu..." _
+}
+
+sessions_browser_simple() {
+    while true; do
+        echo ""
+        echo "Loading research sessions..."
+        load_sessions_into_arrays
+
+        if [ ${#TUI_SESSION_PATHS[@]} -eq 0 ]; then
+            echo ""
+            echo "No sessions found. Start your first research!"
+            read -r -p "Press Enter to continue..." _
+            return
+        fi
+
+        echo ""
+        echo "Sessions (newest first):"
+        local idx
+        for idx in "${!TUI_SESSION_PATHS[@]}"; do
+            printf "  %d) %s\n" "$((idx + 1))" "${TUI_SESSION_LABELS[$idx]}"
+        done
+        echo ""
+        echo "Legend: 🟢 Running  🟡 Idle  ✅ Complete  🔴 In Progress  ⚪ Unknown"
+        echo ""
+        echo -n "Select a session number (or press Enter to go back): "
+        local choice
+        read -r choice
+        if [ -z "$choice" ]; then
+            return
+        fi
+        if ! [[ "$choice" =~ ^[0-9]+$ ]] || [ "$choice" -lt 1 ] || [ "$choice" -gt "${#TUI_SESSION_PATHS[@]}" ]; then
+            echo "Invalid selection."
+            continue
+        fi
+
+        local selected_idx=$((choice - 1))
+        local session_path="${TUI_SESSION_PATHS[$selected_idx]}"
+
+        local refresh_needed="false"
+        while true; do
+            echo ""
+            echo "Session: ${TUI_SESSION_LABELS[$selected_idx]}"
+            echo "  1) View details"
+            echo "  2) View process status"
+            echo "  3) Resume session"
+            echo "  4) View journal"
+            echo "  5) Back"
+            echo -n "Choice: "
+            local action
+            read -r action
+            case "$action" in
+                1)
+                    echo ""
+                    show_session_details "$session_path"
+                    read -r -p "Press Enter to continue..." _
+                    ;;
+                2)
+                    echo ""
+                    show_session_process_status "$session_path"
+                    echo ""
+                    read -r -p "Press Enter to continue..." _
+                    ;;
+                3)
+                    resume_session_interactive "$session_path"
+                    read -r -p "Press Enter to continue..." _
+                    refresh_needed="true"
+                    break
+                    ;;
+                4)
+                    # shellcheck disable=SC1091
+                    if source "$CCONDUCTOR_ROOT/src/utils/dashboard.sh" 2>/dev/null; then
+                        dashboard_view "$session_path"
+                    else
+                        echo "Error: Dashboard utility not found"
+                    fi
+                    read -r -p "Press Enter to continue..." _
+                    ;;
+                5|"")
+                    break
+                    ;;
+                *)
+                    echo "Invalid selection."
+                    ;;
+            esac
+        done
+
+        if [ "$refresh_needed" = "true" ]; then
+            continue
+        fi
+    done
+}
+
+resume_session_simple() {
+    load_sessions_into_arrays
+
+    if [ ${#TUI_SESSION_PATHS[@]} -eq 0 ]; then
+        echo ""
+        echo "No sessions found. Start your first research!"
+        read -r -p "Press Enter to continue..." _
+        return
+    fi
+
+    echo ""
+    echo "Resume which session?"
+    local idx
+    for idx in "${!TUI_SESSION_PATHS[@]}"; do
+        printf "  %d) %s\n" "$((idx + 1))" "${TUI_SESSION_LABELS[$idx]}"
+    done
+    echo ""
+    echo -n "Select a session number (or press Enter to cancel): "
+    local choice
+    read -r choice
+    if [ -z "$choice" ]; then
+        return
+    fi
+    if ! [[ "$choice" =~ ^[0-9]+$ ]] || [ "$choice" -lt 1 ] || [ "$choice" -gt "${#TUI_SESSION_PATHS[@]}" ]; then
+        echo "Invalid selection."
+        read -r -p "Press Enter to continue..." _
+        return
+    fi
+
+    local session_path="${TUI_SESSION_PATHS[$((choice - 1))]}"
+    resume_session_interactive "$session_path"
+    read -r -p "Press Enter to continue..." _
+}
+
+configure_simple() {
+    echo ""
+    main configure
+    echo ""
+    read -r -p "Press Enter to continue..." _
+}
+
+interactive_mode_simple() {
+    while true; do
+        echo ""
+        echo "=============================="
+        echo " CConductor Interactive Menu"
+        echo "=============================="
+        echo "1) Start new research"
+        echo "2) View sessions"
+        echo "3) Resume session"
+        echo "4) Configure"
+        echo "5) Exit"
+        echo ""
+        echo -n "Choice [1-5]: "
+        local choice
+        read -r choice
+        case "$choice" in
+            1) start_new_research_simple ;;
+            2) sessions_browser_simple ;;
+            3) resume_session_simple ;;
+            4) configure_simple ;;
+            5|"") return ;;
+            *) echo "Invalid selection." ;;
+        esac
+    done
 }
 
 # Advanced interactive mode with dialog
@@ -146,35 +542,26 @@ interactive_mode_advanced() {
     
     while true; do
         choice=$(dialog --clear --title "CConductor - AI Research System" \
-            --menu "What would you like to do?" 16 60 6 \
+            --menu "What would you like to do?" 16 60 5 \
             1 "Start New Research" \
             2 "View Sessions" \
             3 "Resume Session" \
-            4 "Check Status" \
-            5 "Configure" \
-            6 "Exit" \
+            4 "Configure" \
+            5 "Exit" \
             2>&1 >/dev/tty)
-        
+
         clear
         case $choice in
             1) research_wizard ;;
             2) sessions_browser ;;
             3) resume_wizard ;;
-            4) 
-                # shellcheck disable=SC2317
-                pids=$(pgrep -f "cconductor-mission.sh" || true)
-                if [ -z "$pids" ]; then
-                    dialog --msgbox "No active research sessions" 7 40
-                else
-                    dialog --msgbox "Active sessions found:\nPIDs: $pids" 10 50
-                fi
-                ;;
-            5)
+            4)
                 clear
                 main configure
                 read -r -p "Press Enter to continue..."
                 ;;
-            6|"") break ;;
+            5) break ;;
+            "") continue ;;
         esac
     done
 }
@@ -294,102 +681,111 @@ research_wizard() {
 
 # Sessions browser for dialog TUI
 sessions_browser() {
-    # shellcheck disable=SC1091
-    source "$CCONDUCTOR_ROOT/src/utils/path-resolver.sh" 2>/dev/null || true
-    local session_dir
-    session_dir=$(resolve_path "session_dir" 2>/dev/null || echo "$CCONDUCTOR_ROOT/research-sessions")
-    
-    if [ ! -d "$session_dir" ]; then
-        dialog --msgbox "No sessions found. Start your first research!" 7 50
-        return
-    fi
-    
-    # Build session list sorted by modification time (newest first)
-    local sessions=()
-    local session_paths=()
-    local idx=1
-    
-    # Sort by modification time, newest first
-    # shellcheck disable=SC2045
-    for session in $(ls -dt "$session_dir"/mission_* 2>/dev/null); do
-        [ -d "$session" ] || continue
-        local created="N/A"
-        local question="N/A"
-        local status="unknown"
-        
-        if [ -f "$session/session.json" ]; then
-            created=$(jq -r '.created_at // "N/A"' "$session/session.json" 2>/dev/null)
-            question=$(jq -r '.objective // "N/A"' "$session/session.json" 2>/dev/null)
+    while true; do
+        dialog --infobox "Loading research sessions..." 5 50
+        sleep 0.1
+        load_sessions_into_arrays
+
+        if [ ${#TUI_SESSION_PATHS[@]} -eq 0 ]; then
+            dialog --msgbox "No sessions found. Start your first research!" 7 50
+            clear
+            return
         fi
-        
-        if [ -f "$session/final/mission-report.md" ]; then
-            status="Complete"
-            if [ -f "$session/session.json" ]; then
-                local session_status
-                session_status=$(jq -r '.status // ""' "$session/session.json" 2>/dev/null || echo "")
-                if [ "$session_status" = "completed_with_advisory" ]; then
-                    status="Complete (advisory)"
-                fi
+
+        local sessions=()
+        local idx
+        for idx in "${!TUI_SESSION_PATHS[@]}"; do
+            sessions+=("$((idx + 1))" "${TUI_SESSION_LABELS[$idx]}")
+        done
+        local legend_text="Legend: 🟢 Running  🟡 Idle  ✅ Complete  🔴 In Progress  ⚪ Unknown"
+        sessions+=("legend" "$legend_text")
+
+        local choice
+        if ! choice=$(dialog --title "Research Sessions (Newest First)" \
+            --cancel-label "Back" \
+            --menu "Select a session:" 20 90 10 \
+            "${sessions[@]}" \
+            2>&1 >/dev/tty); then
+            clear
+            return
+        fi
+
+        clear
+        [ -z "$choice" ] && continue
+
+        if [ "$choice" = "legend" ]; then
+            dialog --msgbox "$legend_text" 7 70
+            clear
+            continue
+        fi
+
+        if ! [[ "$choice" =~ ^[0-9]+$ ]]; then
+            continue
+        fi
+
+        local selected_idx=$((choice - 1))
+        if [ "$selected_idx" -lt 0 ] || [ "$selected_idx" -ge "${#TUI_SESSION_PATHS[@]}" ]; then
+            continue
+        fi
+
+        local session_path="${TUI_SESSION_PATHS[$selected_idx]}"
+        local refresh_needed="false"
+
+        while true; do
+            local action
+            if ! action=$(dialog --title "Session Actions" \
+                --menu "What would you like to do?" 14 70 5 \
+                1 "View Details" \
+                2 "View Process Status" \
+                3 "Resume Research" \
+                4 "View Journal" \
+                5 "Back" \
+                2>&1 >/dev/tty); then
+                clear
+                break
             fi
-        else
-            status="In progress"
+
+            clear
+            case $action in
+                1)
+                    clear
+                    show_session_details "$session_path"
+                    read -r -p "Press Enter to return to actions..." _
+                    clear
+                    ;;
+                2)
+                    local status_report
+                    status_report=$(show_session_process_status "$session_path")
+                    dialog --title "Process Status" --msgbox "${status_report:-No data available}" 20 80
+                    clear
+                    ;;
+                3)
+                    resume_session_interactive "$session_path"
+                    read -r -p "Press Enter to continue..." _
+                    refresh_needed="true"
+                    clear
+                    break
+                    ;;
+                4)
+                    # shellcheck disable=SC1091
+                    if source "$CCONDUCTOR_ROOT/src/utils/dashboard.sh" 2>/dev/null; then
+                        dashboard_view "$session_path"
+                    else
+                        echo "Error: Dashboard utility not found" >&2
+                    fi
+                    read -r -p "Press Enter to return to actions..." _
+                    clear
+                    ;;
+                5|"")
+                    break
+                    ;;
+            esac
+        done
+
+        if [ "$refresh_needed" = "true" ]; then
+            continue
         fi
-        
-        # Truncate question for display
-        local display_text="$status | ${question:0:35}..."
-        sessions+=("$idx" "$display_text")
-        session_paths+=("$session")
-        idx=$((idx + 1))
     done
-    
-    if [ ${#sessions[@]} -eq 0 ]; then
-        dialog --msgbox "No sessions found." 7 50
-        return
-    fi
-    
-    local choice
-    choice=$(dialog --title "Research Sessions (Newest First)" \
-        --menu "Select a session:" 20 70 10 \
-        "${sessions[@]}" \
-        2>&1 >/dev/tty)
-    
-    clear
-    [ -z "$choice" ] && return
-    
-    # Get selected session path
-    local selected_idx=$((choice - 1))
-    local session_path="${session_paths[$selected_idx]}"
-    
-    # Action menu for selected session
-    local action
-    action=$(dialog --title "Session Actions" \
-        --menu "What would you like to do?" 12 60 4 \
-        1 "View Details" \
-        2 "Resume Research" \
-        3 "View Journal" \
-        4 "Back" \
-        2>&1 >/dev/tty)
-    
-    clear
-    case $action in
-        1) 
-            show_session_details "$session_path"
-            read -r -p "Press Enter to continue..."
-            ;;
-        2) 
-            resume_session_interactive "$session_path"
-            read -r -p "Press Enter to continue..."
-            ;;
-        3) 
-            # shellcheck disable=SC1091
-            if source "$CCONDUCTOR_ROOT/src/utils/dashboard.sh" 2>/dev/null; then
-                dashboard_view "$session_path"
-            else
-                echo "Error: Dashboard utility not found" >&2
-            fi
-            read -r -p "Press Enter to continue..."
-            ;;
-    esac
 }
 
 # Resume wizard (uses sessions browser)

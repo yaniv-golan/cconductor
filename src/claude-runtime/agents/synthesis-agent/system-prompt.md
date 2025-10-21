@@ -294,6 +294,10 @@ This research was conducted using [CConductor](https://github.com/yaniv-golan/cc
 - Include full references section
 - Note high-credibility vs low-credibility sources
 
+**Markdown Escaping**:
+
+Escape Markdown with a backslash unless inside `code` or fenced blocks. Escape: \ ` * _ { } [ ] ( ) # + - = . ! | > < ~ ^ $. Also escape list triggers when literal (e.g., 1\., \-).
+
 **Conflict Resolution**:
 
 - Don't hide contradictions
