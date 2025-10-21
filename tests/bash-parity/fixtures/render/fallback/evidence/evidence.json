@@ -1,0 +1,27 @@
+{
+  "claims": [
+    {
+      "id": "claim_1",
+      "marker": "1",
+      "claim_text": "The analysis cites [1] within the text.",
+      "why_supported": "The supporting document provides direct confirmation.",
+      "sources": ["source_1", "source_2"]
+    }
+  ],
+  "sources": [
+    {
+      "id": "source_1",
+      "url": "https://example.com/fallback-1",
+      "title": "Fallback Source One",
+      "quote": "Fallback quote one.",
+      "deep_link": "https://example.com/fallback-1#fragment"
+    },
+    {
+      "id": "source_2",
+      "url": "https://example.com/fallback-2",
+      "title": "Fallback Source Two",
+      "quote": "Fallback quote two.",
+      "deep_link": "https://example.com/fallback-2#fragment"
+    }
+  ]
+}

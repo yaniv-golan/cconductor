@@ -1,0 +1,2 @@
+{"message":{"role":"assistant","content":[{"type":"text","text":"Assistant claim [1].","citations":[{"url":"https://example.com/transcript","title":"Transcript Source","cited_text":"Transcript snippet with supporting detail."}]},{"type":"code","text":"```json-evidence_map\n[{\"marker\":\"1\",\"claim\":\"Assistant claim [1].\",\"why_supported\":\"Snippet supports claim.\"}]\n```"}]}}
+{"message":{"role":"user","content":[]}}

@@ -1,0 +1,11 @@
+{
+  "hash_algo": "sha256",
+  "entries": [
+    {
+      "hash": "abc123",
+      "url": "https://example.com/article",
+      "body_file": "abc123.txt",
+      "fetched_at": "2025-10-20T20:00:00Z"
+    }
+  ]
+}

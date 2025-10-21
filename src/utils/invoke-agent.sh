@@ -661,6 +661,23 @@ invoke_agent_v2() {
             dashboard_update_metrics "$session_dir" || true
         fi
 
+        if [[ "$agent_name" == "synthesis-agent" ]]; then
+            local report_renderer_sh="$cconductor_root/src/utils/render_mission_report.sh"
+            if [[ -f "$report_renderer_sh" ]]; then
+                local renderer_cmd=()
+                if [[ -n "${CCONDUCTOR_BASH_RUNTIME:-}" ]]; then
+                    renderer_cmd=("${CCONDUCTOR_BASH_RUNTIME}" "$report_renderer_sh")
+                elif [[ -n "${BASH_RUNTIME:-}" ]]; then
+                    renderer_cmd=("${BASH_RUNTIME}" "$report_renderer_sh")
+                else
+                    renderer_cmd=("$report_renderer_sh")
+                fi
+                if ! "${renderer_cmd[@]}" "$session_dir"; then
+                    echo "  ⚠ Warning: Mission report evidence rendering failed" >&2
+                fi
+            fi
+        fi
+
         # Show agent reasoning in verbose mode
         if is_verbose_enabled 2>/dev/null && [ "$(type -t verbose_agent_reasoning)" = "function" ]; then
             # Try to extract reasoning from agent output (JSON format)

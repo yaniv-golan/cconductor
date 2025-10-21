@@ -1,0 +1,31 @@
+{
+  "claims": [
+    {
+      "claim_text": "Assistant claim [1].",
+      "confidence": null,
+      "id": "claim_1",
+      "marker": "1",
+      "sources": [
+        "source_1"
+      ],
+      "why_supported": "Snippet supports claim."
+    }
+  ],
+  "metadata": {},
+  "mode": "render",
+  "sources": [
+    {
+      "char_span": [
+        0,
+        42
+      ],
+      "deep_link": "https://example.com/transcript#:~:text=Transcript%20snippet%20with%20supporting%20detail&text=Transcript%20snippet%20with%20supporting&text=snippet%20with%20supporting%20detail",
+      "id": "source_1",
+      "paragraph_index": 0,
+      "quote": "Transcript snippet with supporting detail.",
+      "retrieved_at": "2025-10-20T21:00:00Z",
+      "title": "Transcript Source",
+      "url": "https://example.com/transcript"
+    }
+  ]
+}

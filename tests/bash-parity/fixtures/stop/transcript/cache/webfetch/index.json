@@ -1,0 +1,11 @@
+{
+  "hash_algo": "sha256",
+  "entries": [
+    {
+      "hash": "def456",
+      "url": "https://example.com/transcript",
+      "body_file": "def456.txt",
+      "fetched_at": "2025-10-20T21:00:00Z"
+    }
+  ]
+}

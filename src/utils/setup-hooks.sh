@@ -25,8 +25,12 @@ setup_tool_hooks() {
     # This avoids issues with spaces in paths and makes sessions portable
     cp "$source_hooks_dir/pre-tool-use.sh" "$session_hooks_dir/"
     cp "$source_hooks_dir/post-tool-use.sh" "$session_hooks_dir/"
+    cp "$source_hooks_dir/stop-build-evidence.sh" "$session_hooks_dir/"
+    cp "$source_hooks_dir/evidence_fragment.pl" "$session_hooks_dir/"
     chmod +x "$session_hooks_dir/pre-tool-use.sh"
     chmod +x "$session_hooks_dir/post-tool-use.sh"
+    chmod +x "$session_hooks_dir/stop-build-evidence.sh"
+    chmod +x "$session_hooks_dir/evidence_fragment.pl"
     
     # Path to settings file
     local settings_file="$session_dir/.claude/settings.json"
@@ -34,12 +38,6 @@ setup_tool_hooks() {
     # Initialize settings if it doesn't exist
     if [ ! -f "$settings_file" ]; then
         echo '{}' > "$settings_file"
-    fi
-    
-    # Check if hooks already configured (idempotent)
-    if jq -e '.hooks.PostToolUse[0].hooks[0].command == ".claude/hooks/post-tool-use.sh"' "$settings_file" >/dev/null 2>&1; then
-        echo "✓ Tool observability hooks already configured" >&2
-        return 0
     fi
     
     # Create hooks configuration using RELATIVE paths
@@ -60,14 +58,22 @@ setup_tool_hooks() {
                     type: "command",
                     command: ".claude/hooks/post-tool-use.sh"
                 }]
+            }],
+            Stop: [{
+                hooks: [{
+                    type: "command",
+                    command: ".claude/hooks/stop-build-evidence.sh"
+                }]
             }]
         }
     }')
     
     # Merge with existing settings (using deep merge to avoid duplicates)
     jq --argjson hooks "$hooks_config" '
-        .hooks.PreToolUse = ($hooks.hooks.PreToolUse // .hooks.PreToolUse // []) |
-        .hooks.PostToolUse = ($hooks.hooks.PostToolUse // .hooks.PostToolUse // [])
+        .hooks = (.hooks // {}) |
+        .hooks.PreToolUse = $hooks.hooks.PreToolUse |
+        .hooks.PostToolUse = $hooks.hooks.PostToolUse |
+        .hooks.Stop = $hooks.hooks.Stop
     ' "$settings_file" > "${settings_file}.tmp"
     mv "${settings_file}.tmp" "$settings_file"
     

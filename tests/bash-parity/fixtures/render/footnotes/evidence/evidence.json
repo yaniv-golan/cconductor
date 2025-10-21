@@ -1,0 +1,20 @@
+{
+  "claims": [
+    {
+      "id": "claim_1",
+      "marker": "1",
+      "claim_text": "This paragraph references [1] for evidence.",
+      "why_supported": "Because the source directly supports the statement.",
+      "sources": ["source_1"]
+    }
+  ],
+  "sources": [
+    {
+      "id": "source_1",
+      "url": "https://example.com/footnote",
+      "title": "Footnote Source",
+      "quote": "Example quote from the source.",
+      "deep_link": "https://example.com/footnote#fragment"
+    }
+  ]
+}

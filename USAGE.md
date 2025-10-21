@@ -2,8 +2,6 @@
 
 **How to use CConductor for AI-powered research**
 
-Version: 0.1.0
-
 ---
 
 ## Quick Start
@@ -66,6 +64,14 @@ For multi-part research with structured context:
 
 See [Complex Research](#complex-research-from-files) section for details.
 
+**Default run (footnote evidence enabled):**
+
+```bash
+./cconductor "Map the current state of multimodal AI startups"
+```
+
+Need the legacy report layout without footnotes? Use `--evidence-mode collect`. Want a markdown-only evidence section? Switch to `--evidence-render fallback`. Disable evidence entirely with `--evidence-mode disabled`.
+
 ### Viewing Results
 
 ```bash
@@ -85,6 +91,7 @@ cat research-sessions/session_1759420487/final/mission-report.md
 
 - `research-sessions/mission_<id>/final/mission-report.md` — human-readable research report
 - `research-sessions/mission_<id>/final/research-journal.md` — chronological journal exported after completion
+- `research-sessions/mission_<id>/evidence/evidence.json` — structured claim/source map with paragraph deep links used for footnotes
 - `research-sessions/mission_<id>/cache/` — session-local copies of cached WebFetch/WebSearch results (safe to delete)
 - `research-sessions/mission_<id>/artifacts/` and `/raw/` — agent artifacts and intermediate findings
 - `~/Library/Caches/CConductor/` (macOS) or `${XDG_CACHE_HOME:-~/.cache}/cconductor/` (Linux) — shared platform cache for transient network results
@@ -96,6 +103,17 @@ Clear the platform cache to force fresh network calls; keep the `library/` direc
 
 - **Cache-Aware Web Research** — teaches every agent how to reuse cached queries, consult LibraryMemory digests, and decide when to run fresh WebSearch/WebFetch calls. Each mission copies it into `.claude/skills/`.
 - **LibraryMemory** — provides hash/digest helpers for existing evidence (also available in `.claude/skills/`).
+
+### Evidence Collection & Rendering
+
+CConductor can capture per-paragraph evidence and emit research journals with Github-flavoured Markdown (GFM) footnotes.
+
+- `--evidence-mode=<disabled|collect|render>` controls Stop hook behaviour. The default `render` mode collects evidence and embeds footnotes automatically. Use `collect` to build `evidence/evidence.json` without altering report output, or `disabled` to skip evidence generation entirely.
+- `--evidence-render=<footnotes|fallback>` selects how evidence appears when `--evidence-mode=render` is active. `footnotes` (default) outputs inline markers with `<details>` blocks; `fallback` emits a CommonMark-only “Evidence” section without HTML tags.
+- Environment variables `CCONDUCTOR_EVIDENCE_MODE` and `CCONDUCTOR_EVIDENCE_RENDER` provide the same controls for automation.
+- Reports generated in `footnotes` mode assume a GFM-aware viewer (GitHub, VS Code, Obsidian). If you need maximum compatibility (strict CommonMark or legacy tooling), re-render via `CCONDUCTOR_EVIDENCE_RENDER=fallback ./src/utils/export-journal.sh <session>` and publish the resulting `research-journal-fallback.md`.
+- Every evidence-enabled mission stores deep links, highlighted quotes, and verification metadata in `research-sessions/<mission>/evidence/evidence.json`. The knowledge graph and renderer both consume this file, so avoid manual edits unless you rebuild via `stop-build-evidence.sh`.
+- Mission reports are rewritten after synthesis to include the same evidence footnotes (or fallback Evidence section) as the research journal, ensuring the user-facing deliverable carries paragraph-level citations.
 
 ---
 

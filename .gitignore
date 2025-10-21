@@ -110,3 +110,11 @@ PROMPT_PARSER*.md
 ARTIFACT_PATTERN*.md
 tests/*_USAGE_TESTING.md
 AGENTS.md
+docs/internal/knowledge-graph-schema.md
+
+!tests/bash-parity/test-stop-build-evidence.sh
+!tests/bash-parity/test-render-mission-report.sh
+!tests/bash-parity/expected/
+!tests/bash-parity/expected/**
+!tests/bash-parity/fixtures/
+!tests/bash-parity/fixtures/**

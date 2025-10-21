@@ -1,0 +1,31 @@
+{
+  "claims": [
+    {
+      "claim_text": "Sample claim from findings",
+      "confidence": 0.7,
+      "id": "claim_1",
+      "marker": "1",
+      "sources": [
+        "source_1"
+      ],
+      "why_supported": "Source excerpt supports the claim."
+    }
+  ],
+  "metadata": {},
+  "mode": "render",
+  "sources": [
+    {
+      "char_span": [
+        0,
+        29
+      ],
+      "deep_link": "https://example.com/article#:~:text=Example%20snippet%20from%20article",
+      "id": "source_1",
+      "paragraph_index": 0,
+      "quote": "Example snippet from article.",
+      "retrieved_at": "2025-10-01",
+      "title": "Example Article",
+      "url": "https://example.com/article"
+    }
+  ]
+}
