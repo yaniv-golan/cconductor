@@ -125,25 +125,23 @@ load_sessions_into_arrays() {
         process_state="${process_state_map[$path]:-}"
         emoji=$(session_status_emoji "$process_state" "$status")
         session_id_display=$(basename "$path")
+        session_id_display=${session_id_display#mission_}
+        session_id_display=${session_id_display#session_}
         label=$(printf '%s %s | %s |%s| "%s"' "$emoji" "$session_id_display" "$pretty_created" "$status_field" "$excerpt")
         TUI_SESSION_LABELS+=("$label")
     done < <(session_utils_collect_sessions)
 }
 
-# Helper: Show session details
-show_session_details() {
+# Session details formatter shared by interfaces
+session_details_collect() {
     local session_path="$1"
-    
+
     if [ ! -f "$session_path/session.json" ]; then
-        echo "Invalid session directory"
         return 1
     fi
+
     local session_id
     session_id=$(basename "$session_path")
-
-    echo "Session Details:"
-    echo "=================="
-    echo ""
 
     local objective
     objective=$(jq -r '.objective // "N/A"' "$session_path/session.json" 2>/dev/null)
@@ -158,14 +156,19 @@ show_session_details() {
     created_display=$(session_utils_pretty_timestamp "$created")
     [ -n "$created_display" ] || created_display="$created"
 
-    echo "Session ID: $session_id"
-    echo "Objective: $objective"
-    echo "Mission: $mission"
-    echo "Created: $created_display"
-    if [ -n "$status_value" ] && [ "$status_value" != "null" ]; then
-        echo "Session status: $status_value"
-    fi
-    echo ""
+    local status_display="$status_value"
+    case "$status_value" in
+        completed_with_advisory) status_display="Complete (quality advisory)" ;;
+        completed) status_display="Complete" ;;
+        in_progress|"")
+            status_display="In progress"
+            ;;
+        null) status_display="Unknown" ;;
+        *)
+            status_display=${status_value//_/ }
+            ;;
+    esac
+    [ -n "$status_display" ] || status_display="Unknown"
 
     local total_cost=""
     if [ -f "$session_path/mission-metrics.json" ]; then
@@ -194,11 +197,11 @@ show_session_details() {
         fi
     fi
 
-    local budget_line="Budget spent"
+    local budget_value
     if [ -n "$cost_display" ]; then
-        budget_line+=": \$$cost_display"
+        budget_value="\$$cost_display"
     else
-        budget_line+=": Unknown"
+        budget_value="Unknown"
     fi
 
     local budget_meta=()
@@ -208,38 +211,77 @@ show_session_details() {
     if [ -n "$elapsed_minutes" ] && [ "$elapsed_minutes" != "null" ]; then
         budget_meta+=("${elapsed_minutes} min elapsed")
     fi
-
     if [ "${#budget_meta[@]}" -gt 0 ]; then
-        budget_line+=" ($(IFS=', '; echo "${budget_meta[*]}"))"
+        budget_value+=" ($(IFS=', '; echo "${budget_meta[*]}"))"
     fi
-
-    echo "$budget_line"
 
     local iterations=""
     if [ -f "$session_path/dashboard-metrics.json" ]; then
         iterations=$(jq -r '.iteration // empty' "$session_path/dashboard-metrics.json" 2>/dev/null || echo "")
     fi
-    if [ -z "$iterations" ] || [ "$iterations" = "null" ]; then
-        iterations=""
+    local iterations_display="$iterations"
+    if [ -z "$iterations_display" ] || [ "$iterations_display" = "null" ]; then
+        iterations_display="Unknown"
     fi
 
-    if [ -n "$iterations" ]; then
-        echo "Iterations: $iterations"
-    else
-        echo "Iterations: Unknown"
-    fi
-
+    local report_path=""
+    local report_status="Not yet available"
     if [ -f "$session_path/final/mission-report.md" ]; then
+        report_path="$session_path/final/mission-report.md"
         if [ "$status_value" = "completed_with_advisory" ]; then
-            echo "Report: Complete with quality advisory"
+            report_status="Complete (quality advisory)"
         else
-            echo "Report: Complete"
+            report_status="Complete"
         fi
-        echo "Report path: $session_path/final/mission-report.md"
-    else
-        echo "Report: Not yet available"
     fi
 
+    local journal_path=""
+    if [ -f "$session_path/final/research-journal.md" ]; then
+        journal_path="$session_path/final/research-journal.md"
+    elif [ -f "$session_path/research-journal.md" ]; then
+        journal_path="$session_path/research-journal.md"
+    fi
+
+    local lines=()
+    lines+=("Session Overview")
+    lines+=("  Session ID: $session_id")
+    lines+=("  Objective: $objective")
+    lines+=("  Mission: $mission")
+    lines+=("  Created: $created_display")
+    lines+=("  Status: $status_display")
+    lines+=("")
+    lines+=("Progress")
+    lines+=("  Budget spent: $budget_value")
+    lines+=("  Iterations: $iterations_display")
+    lines+=("")
+    lines+=("Artifacts")
+    lines+=("  Report: $report_status")
+    if [ -n "$report_path" ]; then
+        lines+=("  Report path: $report_path")
+    fi
+    if [ -n "$journal_path" ]; then
+        lines+=("  Research journal: $journal_path")
+    else
+        lines+=("  Research journal: Not yet generated")
+    fi
+
+    printf '%s\n' "${lines[@]}"
+}
+
+# Helper: Show session details (CLI)
+show_session_details() {
+    local session_path="$1"
+    local details
+    if ! details=$(session_details_collect "$session_path"); then
+        echo "Invalid session directory"
+        return 1
+    fi
+
+    echo ""
+    echo "Session Details"
+    echo "==============="
+    echo ""
+    printf '%s\n' "$details"
     echo ""
 }
 
@@ -390,13 +432,13 @@ sessions_browser_simple() {
         fi
 
         echo ""
+        echo "Legend: 🟢 Running  🟡 Idle  ✅ Complete  🔴 In Progress  ⚪ Unknown"
+        echo ""
         echo "Sessions (newest first):"
         local idx
         for idx in "${!TUI_SESSION_PATHS[@]}"; do
             printf "  %d) %s\n" "$((idx + 1))" "${TUI_SESSION_LABELS[$idx]}"
         done
-        echo ""
-        echo "Legend: 🟢 Running  🟡 Idle  ✅ Complete  🔴 In Progress  ⚪ Unknown"
         echo ""
         echo -n "Select a session number (or press Enter to go back): "
         local choice
@@ -515,19 +557,17 @@ interactive_mode_simple() {
         echo "=============================="
         echo "1) Start new research"
         echo "2) View sessions"
-        echo "3) Resume session"
-        echo "4) Configure"
-        echo "5) Exit"
+        echo "3) Configure"
+        echo "4) Exit"
         echo ""
-        echo -n "Choice [1-5]: "
+        echo -n "Choice [1-4]: "
         local choice
         read -r choice
         case "$choice" in
             1) start_new_research_simple ;;
             2) sessions_browser_simple ;;
-            3) resume_session_simple ;;
-            4) configure_simple ;;
-            5|"") return ;;
+            3) configure_simple ;;
+            4|"") return ;;
             *) echo "Invalid selection." ;;
         esac
     done
@@ -542,25 +582,23 @@ interactive_mode_advanced() {
     
     while true; do
         choice=$(dialog --clear --title "CConductor - AI Research System" \
-            --menu "What would you like to do?" 16 60 5 \
+            --menu "What would you like to do?" 16 60 4 \
             1 "Start New Research" \
             2 "View Sessions" \
-            3 "Resume Session" \
-            4 "Configure" \
-            5 "Exit" \
+            3 "Configure" \
+            4 "Exit" \
             2>&1 >/dev/tty)
 
         clear
         case $choice in
             1) research_wizard ;;
             2) sessions_browser ;;
-            3) resume_wizard ;;
-            4)
+            3)
                 clear
                 main configure
                 read -r -p "Press Enter to continue..."
                 ;;
-            5) break ;;
+            4) break ;;
             "") continue ;;
         esac
     done
@@ -698,12 +736,12 @@ sessions_browser() {
             sessions+=("$((idx + 1))" "${TUI_SESSION_LABELS[$idx]}")
         done
         local legend_text="Legend: 🟢 Running  🟡 Idle  ✅ Complete  🔴 In Progress  ⚪ Unknown"
-        sessions+=("legend" "$legend_text")
+        local menu_text=$'Select a session:\n\n'"$legend_text"
 
         local choice
         if ! choice=$(dialog --title "Research Sessions (Newest First)" \
             --cancel-label "Back" \
-            --menu "Select a session:" 20 90 10 \
+            --menu "$menu_text" 20 90 10 \
             "${sessions[@]}" \
             2>&1 >/dev/tty); then
             clear
@@ -712,12 +750,6 @@ sessions_browser() {
 
         clear
         [ -z "$choice" ] && continue
-
-        if [ "$choice" = "legend" ]; then
-            dialog --msgbox "$legend_text" 7 70
-            clear
-            continue
-        fi
 
         if ! [[ "$choice" =~ ^[0-9]+$ ]]; then
             continue
@@ -748,9 +780,12 @@ sessions_browser() {
             clear
             case $action in
                 1)
-                    clear
-                    show_session_details "$session_path"
-                    read -r -p "Press Enter to return to actions..." _
+                    local detail_text
+                    if detail_text=$(session_details_collect "$session_path"); then
+                        dialog --title "Session Details" --msgbox "$detail_text" 22 90
+                    else
+                        dialog --msgbox "Unable to load session details." 7 60
+                    fi
                     clear
                     ;;
                 2)
