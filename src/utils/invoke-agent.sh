@@ -363,6 +363,14 @@ invoke_agent_v2() {
             search_dir="$(dirname "$search_dir")"
         done
 
+        if [ -z "${cconductor_root:-}" ] && [ -f "$session_dir/.cconductor-root" ]; then
+            local stored_root
+            stored_root=$(cat "$session_dir/.cconductor-root" 2>/dev/null || echo "")
+            if [ -n "$stored_root" ] && [ -d "$stored_root/src" ] && [ -f "$stored_root/VERSION" ]; then
+                cconductor_root="$stored_root"
+            fi
+        fi
+
         if [ -z "${cconductor_root:-}" ]; then
             echo "Error: Could not find CCONDUCTOR_ROOT from session_dir: $session_dir" >&2
             return 1

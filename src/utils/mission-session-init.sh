@@ -136,6 +136,9 @@ initialize_session() {
 
     # Symlink shared research library for skill access
     link_shared_library "$session_dir"
+
+    # Persist project root so agents can resolve codebase outside of repo tree
+    echo "$PROJECT_ROOT" > "$session_dir/.cconductor-root"
     
     # Capture Claude Code CLI version for journal metadata
     local claude_version="unknown"
