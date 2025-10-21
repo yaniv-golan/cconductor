@@ -2,8 +2,6 @@
 
 **Complete guide to using CConductor for research**
 
-**Version**: 0.2.0  
-**Last Updated**: October 2025  
 **For**: Semi-technical users (CLI comfortable, no coding required)
 
 ---

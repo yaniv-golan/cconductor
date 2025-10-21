@@ -118,3 +118,4 @@ docs/internal/knowledge-graph-schema.md
 !tests/bash-parity/expected/**
 !tests/bash-parity/fixtures/
 !tests/bash-parity/fixtures/**
+tests/citation-readiness-tests/
