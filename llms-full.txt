@@ -1,6 +1,5 @@
 # CConductor - Technical Reference for LLMs
 
-Version: 0.2.0 (October 2025)
 Repository: https://github.com/yaniv-golan/cconductor
 
 ## System Overview
@@ -16,7 +15,7 @@ CConductor is a multi-agent AI research system built in Bash that uses mission-b
 - **Orchestration**: Mission-based with autonomous agent selection
 - **Agents**: 10+ specialized agents with capability-based discovery
 
-### Key Capabilities (v0.2.0)
+### Key Capabilities 
 
 - Mission-based orchestration with four mission types
 - Autonomous agent selection based on capabilities
@@ -27,11 +26,15 @@ CConductor is a multi-agent AI research system built in Bash that uses mission-b
 - Agent reasoning visibility in dashboard
 - Multi-source integration (academic, web, PDFs, code)
 - Automatic citation tracking and bibliography generation
-- Quality scoring (0-100) with detailed metrics
+- Evidence artifacts with paragraph-level citations and source deep links
+- Quality scoring (0-100) with detailed metrics and configurable quality gates
+- Quality remediation agent for automated issue resolution
+- Cache-aware web research with fine-grained control flags
 - Configurable security profiles
 - Session resume with refinement guidance
 - Content-addressed PDF caching
 - Custom knowledge base extension
+- Helper function consolidation for maintainability
 
 ## Installation
 
@@ -73,7 +76,7 @@ chmod +x cconductor
 
 ## Basic Usage
 
-### Commands (v0.2.0)
+### Commands
 
 ```bash
 # Interactive mode (recommended for new users)
@@ -93,6 +96,11 @@ chmod +x cconductor
 
 # Research with local files (PDFs, markdown, text)
 ./cconductor "question" --input-dir /path/to/files/ --mission market-research
+
+# Cache control (fine-grained control over web caching)
+./cconductor "question" --no-cache              # Disable all caching
+./cconductor "question" --no-web-fetch-cache    # Skip web fetch cache only
+./cconductor "question" --no-web-search-cache   # Skip web search cache only
 
 # Session management
 ./cconductor sessions list              # List all sessions
@@ -147,6 +155,16 @@ Configuration uses overlay pattern: `*.default.json` files in `config/` director
 **config/adaptive-config.json**: Advanced tuning
 - Termination conditions
 - Task generation settings
+
+**config/quality-gate.default.json**: Quality gate diagnostics
+- Configurable quality thresholds
+- Automated remediation triggers
+- Granular quality metrics control
+
+**config/safe-fetch-policy.default.json**: Safe-fetch security
+- URL restrictions (localhost, IP addresses)
+- Content restrictions (executables, archives)
+- Configurable blocking policies
 
 ### Security Profiles
 
@@ -418,7 +436,7 @@ ls -la config/cconductor-config.json
 # List all sessions
 ./cconductor sessions list
 
-# Find report (v0.2.0 uses mission_ prefix)
+# Find report 
 ls research-sessions/mission_*/final/mission-report.md
 
 # Check .latest marker
@@ -465,11 +483,10 @@ Repository includes pre-commit hook that runs ShellCheck automatically.
 6. Commit with clear messages (feat/fix/docs/refactor/test/chore)
 7. Push and create PR
 
-## Session Structure (v0.2.0)
+## Session Structure 
 
 ```
 research-sessions/mission_TIMESTAMP/
-├── final/mission-report.md           # Main output
 ├── session.json                 # Session metadata with mission info
 ├── budget.json                  # Budget tracking (USD, time, invocations)
 ├── orchestration-log.jsonl      # Orchestrator decisions and reasoning
@@ -480,10 +497,13 @@ research-sessions/mission_TIMESTAMP/
 │   └── agent-findings/
 ├── intermediate/                # Processing artifacts
 │   └── knowledge-graph.json
-├── final/                       # Final processed data
-│   └── mission-report.md
+├── final/                       # Final outputs
+│   ├── mission-report.md        # Main research report
+│   ├── research-journal.md      # Detailed research journal
+│   └── evidence/                # Evidence artifacts with citations
 ├── events.jsonl                 # Event log for dashboard
 ├── dashboard-metrics.json       # Real-time metrics
+├── .cconductor-root             # Project root marker for relocated sessions
 └── .claude/                     # Per-session Claude config
     ├── agents/                  # Agent definitions
     ├── settings.json            # Claude settings
@@ -498,7 +518,7 @@ SESSION_DIR=$(./src/utils/path-resolver.sh resolve session_dir)
 KNOWLEDGE_DIR=$(./src/utils/path-resolver.sh resolve knowledge_base_custom_dir)
 ```
 
-**Cleaning old sessions** (v0.2.0 uses mission_ prefix):
+**Cleaning old sessions** 
 ```bash
 # Remove sessions older than 30 days
 find research-sessions -name "mission_*" -type d -mtime +30 -exec rm -rf {} +
@@ -547,7 +567,7 @@ CCONDUCTOR_SESSION_DIR     # Override session directory
 - File locking prevents race conditions
 - Atomic writes for state files
 
-## Known Limitations (v0.2.0)
+## Known Limitations 
 
 - Single machine execution (not distributed)
 - File-based state (potential bottleneck at scale)
@@ -555,7 +575,6 @@ CCONDUCTOR_SESSION_DIR     # Override session directory
 - Input directory: flat only (no recursive discovery)
 - Supported input files: PDF, MD, TXT only
 - Parallel agent invocation not yet implemented
-- Session resumption improvements ongoing
 
 ## Related Documentation (Raw URLs for Direct LLM Access)
 
@@ -581,7 +600,7 @@ CCONDUCTOR_SESSION_DIR     # Override session directory
 - PDF Research: https://raw.githubusercontent.com/yaniv-golan/cconductor/main/docs/PDF_RESEARCH_GUIDE.md
 - Session Resume: https://raw.githubusercontent.com/yaniv-golan/cconductor/main/docs/SESSION_RESUME_GUIDE.md
 
-**Mission System (v0.2.0)**:
+**Mission System **:
 - Mission Quick Start: https://raw.githubusercontent.com/yaniv-golan/cconductor/main/docs/MISSION_QUICKSTART.md
 - Agent Metadata Schema: https://raw.githubusercontent.com/yaniv-golan/cconductor/main/docs/AGENT_METADATA_SCHEMA.md
 - Events Contract: https://raw.githubusercontent.com/yaniv-golan/cconductor/main/docs/EVENTS_CONTRACT.md
@@ -591,5 +610,7 @@ CCONDUCTOR_SESSION_DIR     # Override session directory
 - Knowledge System: https://raw.githubusercontent.com/yaniv-golan/cconductor/main/docs/KNOWLEDGE_SYSTEM_TECHNICAL.md
 - Agent Tools Config: https://raw.githubusercontent.com/yaniv-golan/cconductor/main/docs/AGENT_TOOLS_CONFIG.md
 - Session Continuity: https://raw.githubusercontent.com/yaniv-golan/cconductor/main/docs/SESSION_CONTINUITY_GUIDE.md
+- KG Artifact Pattern: https://raw.githubusercontent.com/yaniv-golan/cconductor/main/docs/KG_ARTIFACT_PATTERN.md
+- Error Log Format: https://raw.githubusercontent.com/yaniv-golan/cconductor/main/docs/ERROR_LOG_FORMAT.md
 
 **Changelog**: https://raw.githubusercontent.com/yaniv-golan/cconductor/main/CHANGELOG.md

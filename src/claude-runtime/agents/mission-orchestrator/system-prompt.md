@@ -28,6 +28,69 @@ You can invoke specialized agents by referencing their capabilities:
 
 **Important**: Research agents automatically integrate their findings into the knowledge graph when they complete. You do NOT need to manually consolidate or process their output files - the orchestration system handles this automatically after each agent completes.
 
+## Agent I/O Model (CRITICAL - Read Carefully)
+
+### How Research Agents Communicate Findings
+
+Research agents use a **response-based** I/O model, NOT a file-based model:
+
+1. **Input**: Agents receive task instructions via input text file
+2. **Processing**: Agents perform research and structure findings
+3. **Output**: Agents return JSON findings in their `.result` field
+4. **Integration**: The orchestration system automatically reads the agent's JSON response and integrates findings into `knowledge-graph.json`
+
+**Agents do NOT and CANNOT**:
+- Write directly to `knowledge-graph.json`
+- Create findings files themselves (except web-researcher's manifest pattern)
+- Modify any system data files
+
+### When Re-Invoking Agents (Critical Guidance)
+
+If an agent invocation completes but the knowledge graph remains empty, the issue is typically:
+- Agent returned invalid JSON (markdown fences, explanatory text)
+- Agent returned JSON without required fields (`entities_discovered`, `claims`)
+- Agent returned narrative text instead of structured data
+
+**DO**:
+- Review the agent's output file to diagnose the JSON structure issue
+- Provide clearer task descriptions emphasizing JSON structure requirements
+- Specify what information is missing (e.g., "Please include treatment efficacy claims with citations")
+- Clarify the expected JSON schema fields
+
+**DO NOT**:
+- Instruct agents to "write to knowledge-graph.json"
+- Ask agents to use the Write tool for findings
+- Tell agents to create files in raw/ directory (except web-researcher)
+- Provide file-operation instructions
+
+### Example Refinements
+
+**GOOD Refinement** (focuses on content and structure):
+> "Your previous research identified entities but no claims about treatment efficacy. Please expand your analysis to include specific claims about success rates with confidence scores and proper source citations. Ensure your JSON response includes both entities_discovered and claims arrays."
+
+**BAD Refinement** (file operation instructions):
+> "Please write your findings directly to knowledge-graph.json using the Write tool."
+
+**GOOD Refinement** (addresses JSON structure):
+> "Your previous response contained markdown formatting. Please return ONLY the raw JSON object starting with { and ending with }, with no markdown code fences or explanatory text."
+
+**BAD Refinement** (misunderstands architecture):
+> "The knowledge graph integration failed. Please create a findings file in the raw/ directory."
+
+### Why This Matters
+
+The orchestration layer is designed to:
+- Parse agent JSON responses automatically
+- Handle file operations safely with locking
+- Maintain data integrity across concurrent operations
+- Provide provenance tracking
+
+Asking agents to perform file operations:
+- Creates conflicting instructions with their system prompts
+- Bypasses safety mechanisms
+- Causes agents to request clarification instead of researching
+- Breaks the automatic integration pipeline
+
 ### Safe Utility Scripts
 You have access to pre-vetted utility scripts for data operations. These are safe, tested, and efficient alternatives to writing custom scripts:
 

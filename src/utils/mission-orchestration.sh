@@ -483,14 +483,19 @@ Return ONLY valid JSON matching this exact schema:
 }
 
 CRITICAL REQUIREMENTS:
-- Return ONLY the JSON object above
+- Return ONLY the JSON object above IN YOUR RESPONSE
+- The orchestration system will automatically integrate your findings into the knowledge graph
+- Do NOT use the Write tool to create knowledge-graph.json or findings files
+- Do NOT attempt to write to any data files - all findings go in your JSON response
 - Start with { and end with }
 - NO markdown formatting (no ```json blocks)
-- NO explanatory text before or after
+- NO explanatory text before or after the JSON
 - Validate all JSON is properly escaped
 
 Example CORRECT: {"task_id":"t0","status":"completed","entities_discovered":[...],"claims":[...]}
 Example WRONG: Here are my findings: ```json {"entities_discovered": [...]} ```
+Example WRONG: I will write the findings to knowledge-graph.json using the Write tool.
+Example WRONG: Let me create a findings file...
 
 If you must explain something, put it in a "notes" field within the JSON.
 INSTRUCTIONS_EOF
@@ -829,6 +834,16 @@ process_orchestrator_decisions() {
             reason=$(echo "$decision_json" | jq -r '.reason')
             local refinements
             refinements=$(echo "$decision_json" | jq -r '.refinements // "Please provide more detail"')
+            
+            # Validate refinements don't contain file-writing instructions
+            # These confuse research agents since they're designed to return JSON, not write files
+            if echo "$refinements" | grep -Eqi "write.*(knowledge-graph|file|findings)|write tool|create.*file|save to"; then
+                log_warn "⚠️  Orchestrator refinements contain file-writing instructions"
+                log_warn "Research agents return JSON responses - they don't write data files"
+                log_warn "This may cause agents to ask for clarification instead of researching"
+                log_warn "Refinements: ${refinements:0:200}..."
+                # Continue anyway - let orchestrator learn from the response
+            fi
             
             log_decision "$session_dir" "agent_reinvocation" "$orchestrator_output"
             

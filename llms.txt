@@ -8,8 +8,10 @@
 - **Multi-Agent Architecture**: Specialized agents dynamically selected based on research needs and capabilities
 - **Interactive Mode**: Dialog-based TUI for guided research setup and session management
 - **Adaptive Research**: Dynamic agent selection, budget tracking, and strategy adaptation based on findings
-- **Quality Validation**: Automatic confidence scoring (0-100), citation tracking, contradiction detection, and gap coverage analysis
+- **Quality Validation**: Automatic confidence scoring (0-100), citation tracking, contradiction detection, and quality gate diagnostics with automated remediation
+- **Evidence Artifacts**: Paragraph-level citations with source deep links and comprehensive evidence tracking
 - **Multi-Source Integration**: Academic databases (arXiv, Semantic Scholar, PubMed), web content, local PDFs, markdown files, and code repositories
+- **Cache-Aware Research**: Intelligent web content caching with fine-grained control (--no-cache, --no-web-fetch-cache, --no-web-search-cache)
 - **Enhanced Observability**: Real-time progress updates, agent reasoning visibility, and comprehensive decision logging
 - **Cross-Platform**: Works on macOS, Linux, and Windows (WSL/Git Bash)
 
@@ -17,7 +19,6 @@
 
 - CConductor requires Claude Code CLI (`npm install -g @anthropic-ai/claude-code`) - it cannot run standalone with just an API key
 - Built with Bash 4.0+, uses jq for JSON processing, curl for HTTP requests, and bc for accurate calculations
-- Version 0.2.0 (October 2025) - Mission-based orchestration with breaking changes from v0.1.x
 - Research sessions typically take 5-40 minutes depending on complexity and depth
 
 ## Getting Started
