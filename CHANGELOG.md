@@ -60,10 +60,8 @@ This release focuses on production-ready research outputs and smoother day-to-da
   - Control content restrictions (executables, archives, compressed files)
   - All policies default to secure settings (blocking enabled)
 
-- **Documentation**: Root cause analysis and security fixes documentation
-  - `ROOT_CAUSE_ANALYSIS_2025-10-13.md` - Detailed analysis of WebFetch bug
-  - `BUG_FIX_CONFIG_NAMING.md` - Quick reference for the critical fix
-  - `docs/SECURITY_FIXES_2025-10-13.md` - Complete security fixes documentation
+- **Documentation**: Quick reference for security fixes
+  - `BUG_FIX_CONFIG_NAMING.md` - Quick walkthrough of the critical WebFetch configuration fix
 
 ### Changed
 
