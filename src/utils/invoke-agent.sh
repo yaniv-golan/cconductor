@@ -328,7 +328,8 @@ invoke_agent_v2() {
     local agent_name="$1"
     local input_file="$2"
     local output_file="$3"
-    local timeout="${4:-600}"
+    # shellcheck disable=SC2034
+    local timeout="${4:-600}"  # Legacy parameter, kept for backward compatibility
     local session_dir="${5:-}"
 
     # Validate inputs
@@ -480,15 +481,32 @@ invoke_agent_v2() {
     original_dir=$(pwd)
     cd "$session_dir" || return 1
 
+    # Load agent timeout from config (before showing start message)
+    load_agent_timeout() {
+        local agent_name="$1"
+        if [[ -f "$PROJECT_ROOT/src/utils/config-loader.sh" ]]; then
+            # shellcheck disable=SC1091
+            source "$PROJECT_ROOT/src/utils/config-loader.sh" 2>/dev/null || { echo "600"; return; }
+            local config
+            config=$(load_config "agent-timeouts" 2>/dev/null || echo "{}")
+            echo "$config" | jq -r ".per_agent_timeouts.\"$agent_name\" // .default_timeout_seconds // 600"
+        else
+            echo "600"
+        fi
+    }
+
+    local agent_timeout
+    agent_timeout=$(load_agent_timeout "$agent_name")
+
     # Show friendly message in verbose mode, technical in normal/debug mode
     if is_verbose_enabled 2>/dev/null && [ "$(type -t verbose_agent_start)" = "function" ]; then
         # Verbose mode: user-friendly
         # Special message for orchestrator
         if [[ "$agent_name" == "mission-orchestrator" ]]; then
             if [ "$(type -t verbose)" = "function" ]; then
-                verbose "🎯 Coordinating next research step..."
+                verbose "🎯 Coordinating next research step... [mission-orchestrator with ${agent_timeout}s timeout]"
             else
-                echo "🎯 Coordinating next research step..." >&2
+                echo "🎯 Coordinating next research step... [mission-orchestrator with ${agent_timeout}s timeout]" >&2
             fi
         else
             # Regular agents: extract first line of input file as task description
@@ -497,13 +515,14 @@ invoke_agent_v2() {
                 task_desc=$(head -n 1 "$input_file" 2>/dev/null || echo "")
             fi
             verbose_agent_start "$agent_name" "$task_desc"
+            verbose "  [$agent_name with ${agent_timeout}s timeout]"
         fi
     else
         # Normal/debug mode: technical
         if [[ "$agent_name" == "mission-orchestrator" ]]; then
-            echo "→ Invoking mission orchestrator..." >&2
+            echo "→ Invoking mission orchestrator... [${agent_timeout}s timeout]" >&2
         else
-            echo "⚡ Invoking $agent_name with systemPrompt (tools: ${allowed_tools:-all})" >&2
+            echo "⚡ Invoking $agent_name with systemPrompt (tools: ${allowed_tools:-all}) [${agent_timeout}s timeout]" >&2
         fi
     fi
 
@@ -531,16 +550,55 @@ invoke_agent_v2() {
         tailer_started=1
     fi
 
+    # Set agent name for hooks (enables heartbeat tracking)
+    export CCONDUCTOR_AGENT_NAME="$agent_name"
+
+    # Initialize heartbeat file
+    echo "${agent_name}:$(get_epoch)" > "$session_dir/.agent-heartbeat" 2>/dev/null || true
+
     # Read task from input file
     local task
     task=$(cat "$input_file")
 
-    # Invoke Claude with validated patterns
+    # Start agent in background with watchdog monitoring
     # Output goes to $output_file in JSON format
-    # Note: timeout command not available on macOS by default, so we run without it
-    # The claude CLI has its own timeout mechanisms
     # Note: Don't redirect stderr (2>&1) - let hooks write to terminal in verbose mode
-    if printf '%s\n' "$task" | CLAUDE_PROJECT_DIR="$session_dir" "${claude_cmd[@]}" > "$output_file"; then
+    printf '%s\n' "$task" | CLAUDE_PROJECT_DIR="$session_dir" "${claude_cmd[@]}" > "$output_file" &
+    local agent_pid=$!
+
+    # Start watchdog in background to monitor for inactivity
+    local watchdog_pid=""
+    if [[ -f "$PROJECT_ROOT/src/utils/agent-watchdog.sh" ]]; then
+        bash "$PROJECT_ROOT/src/utils/agent-watchdog.sh" \
+            "$session_dir" "$agent_pid" "$agent_timeout" "$agent_name" &
+        watchdog_pid=$!
+    fi
+
+    # Wait for agent to complete
+    wait "$agent_pid"
+    local agent_exit_code=$?
+
+    # Kill watchdog if it's still running
+    if [[ -n "$watchdog_pid" ]]; then
+        kill "$watchdog_pid" 2>/dev/null || true
+        wait "$watchdog_pid" 2>/dev/null || true
+    fi
+
+    # Check if agent timed out (exit code 124 = timeout, 143 = SIGTERM)
+    if [[ $agent_exit_code -eq 124 ]] || [[ $agent_exit_code -eq 143 ]]; then
+        echo "✗ $agent_name timed out after ${agent_timeout}s (no activity detected)" >&2
+        
+        # Log timeout event for orchestrator awareness
+        if command -v log_event &>/dev/null; then
+            log_event "$session_dir" "agent_invocation_timeout" \
+                "{\"agent\":\"$agent_name\",\"timeout_seconds\":$agent_timeout}" 2>/dev/null || true
+        fi
+        
+        return 124
+    fi
+
+    # Continue with existing validation if agent succeeded
+    if [[ $agent_exit_code -eq 0 ]]; then
         # Return to original directory
         cd "$original_dir" || true
 
@@ -734,6 +792,8 @@ invoke_agent_v2() {
         
         return 0
     else
+        # Capture exit code from agent invocation
+        # shellcheck disable=SC2319
         local exit_code=$?
 
         # Return to original directory
@@ -762,11 +822,8 @@ invoke_agent_v2() {
             echo "" >&2
         fi
         
-        if [ $exit_code -eq 124 ]; then
-            echo "✗ $friendly_name timed out after ${timeout}s" >&2
-        else
-            echo "✗ $friendly_name failed with code $exit_code" >&2
-        fi
+        # Note: Exit code 124/143 (timeout) is handled earlier, so this handles other failures
+        echo "✗ $friendly_name failed with code $exit_code" >&2
         return 1
     fi
 }

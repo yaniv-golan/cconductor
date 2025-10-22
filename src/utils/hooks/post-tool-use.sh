@@ -320,5 +320,14 @@ if [ "$tool_name" = "WebSearch" ] && [ "$exit_code" = "0" ]; then
     fi
 fi
 
+# Heartbeat tracking for agent timeout detection
+# This runs after every tool use to signal agent is still active
+if [[ -n "${CCONDUCTOR_AGENT_NAME:-}" && -n "$session_dir" ]]; then
+    HEARTBEAT_FILE="$session_dir/.agent-heartbeat"
+    TIMESTAMP=$(date +%s)
+    echo "${CCONDUCTOR_AGENT_NAME}:${TIMESTAMP}" > "${HEARTBEAT_FILE}.tmp" 2>/dev/null || true
+    mv "${HEARTBEAT_FILE}.tmp" "$HEARTBEAT_FILE" 2>/dev/null || true
+fi
+
 # Exit 0 to continue
 exit 0
