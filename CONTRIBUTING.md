@@ -117,6 +117,32 @@ cd cconductor
 ./tests/run-all-tests.sh
 ```
 
+### Development Configuration
+
+For easier debugging, configure research sessions to save in the project root instead of the system data directory:
+
+```bash
+# Create development config override
+cat > ~/.config/cconductor/paths.json << 'EOF'
+{
+  "_comment": "Development override: Store sessions in project root for easier debugging",
+  "session_dir": "${PROJECT_ROOT}/research-sessions"
+}
+EOF
+
+# Verify it's working
+./src/utils/path-resolver.sh resolve session_dir
+# Should output: <project-root>/research-sessions
+```
+
+**Benefits**:
+- ✅ Sessions stored alongside code for easier debugging
+- ✅ Git-safe: user configs never tracked or overwritten by `git pull`
+- ✅ Can easily examine session artifacts, logs, and state
+- ✅ Easy to revert: just delete `~/.config/cconductor/paths.json`
+
+**Note**: Production users will still get sessions in the standard OS data directory (`~/Library/Application Support/CConductor/` on macOS).
+
 ---
 
 ## Coding Standards

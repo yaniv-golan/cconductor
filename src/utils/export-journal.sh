@@ -1783,13 +1783,18 @@ export_journal() {
         
     } > "$output_file"
     
+    # Display path relative to session directory
     local display_output="$output_file"
-    if command -v python3 >/dev/null 2>&1; then
-        display_output=$(python3 - "$output_file" <<'PY'
+    if [[ "$output_file" == "$session_dir"* ]]; then
+        display_output="${output_file#"$session_dir"}"
+        display_output="${display_output#/}"
+    elif command -v python3 >/dev/null 2>&1; then
+        display_output=$(python3 - "$output_file" "$session_dir" <<'PY'
 import os, sys
 path = sys.argv[1]
+session_dir = sys.argv[2]
 try:
-    print(os.path.relpath(path))
+    print(os.path.relpath(path, session_dir))
 except Exception:
     print(path)
 PY

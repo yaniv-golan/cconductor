@@ -30,17 +30,29 @@ debug_trace() {
 
 # Log error (always shown)
 error() {
-    echo "[ERROR $(date +%H:%M:%S)] $*" >&2
+    if is_debug_enabled; then
+        echo "[ERROR $(date +%H:%M:%S)] $*" >&2
+    else
+        echo "Error: $*" >&2
+    fi
 }
 
 # Log warning (always shown)
 warn() {
-    echo "[WARN $(date +%H:%M:%S)] $*" >&2
+    if is_debug_enabled; then
+        echo "[WARN $(date +%H:%M:%S)] $*" >&2
+    else
+        echo "Warning: $*" >&2
+    fi
 }
 
 # Log info (always shown)
 info() {
-    echo "[INFO $(date +%H:%M:%S)] $*" >&2
+    if is_debug_enabled; then
+        echo "[INFO $(date +%H:%M:%S)] $*" >&2
+    else
+        echo "$*" >&2
+    fi
 }
 
 # Enable debug mode for a command
