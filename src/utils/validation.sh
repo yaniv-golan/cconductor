@@ -239,6 +239,46 @@ validate_enum() {
     return 0
 }
 
+# Validate command exists with helpful error
+# Usage: validate_command "jq" "JSON processor"
+# Returns: 0 if command exists, 1 if not (with error message)
+validate_command() {
+    local command_name="$1"
+    local command_description="${2:-$command_name}"
+    
+    if ! command -v "$command_name" >/dev/null 2>&1; then
+        echo "Error: $command_description is required but not installed" >&2
+        echo "Command: $command_name" >&2
+        echo "Install with: brew install $command_name (macOS) or apt install $command_name (Linux)" >&2
+        return 1
+    fi
+    
+    return 0
+}
+
+# Validate agent metadata structure
+# Usage: validate_agent_metadata "$metadata_file"
+# Returns: 0 if valid, 1 if invalid (with error message)
+validate_agent_metadata() {
+    local metadata_file="${1:-}"
+    
+    # Validate file exists
+    validate_file "agent metadata" "$metadata_file" || return 1
+    
+    # Read metadata
+    local metadata
+    metadata=$(cat "$metadata_file")
+    
+    # Validate JSON syntax
+    validate_json "agent metadata" "$metadata" || return 1
+    
+    # Validate required fields
+    validate_json_field "$metadata" "name" "string" || return 1
+    validate_json_field "$metadata" "capabilities" "array" || return 1
+    
+    return 0
+}
+
 # Export functions for use in other scripts
 export -f validate_required
 export -f validate_directory
@@ -249,3 +289,5 @@ export -f validate_session_dir
 export -f validate_integer
 export -f validate_float
 export -f validate_enum
+export -f validate_command
+export -f validate_agent_metadata

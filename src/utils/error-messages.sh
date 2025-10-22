@@ -255,6 +255,166 @@ For more help: docs/TROUBLESHOOTING.md#disk-space
 EOF
 }
 
+# Dependency missing
+error_dependency_missing() {
+    local dependency="$1"
+    local install_cmd="${2:-brew install $dependency (macOS) or apt install $dependency (Linux)}"
+
+    cat >&2 <<EOF
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+❌ Required dependency not found
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Dependency: $dependency
+
+This tool is required for CConductor to function.
+
+What to do:
+
+1. Install the dependency:
+   $install_cmd
+
+2. Verify it's installed:
+   command -v $dependency
+
+3. Try again
+
+For more help: docs/TROUBLESHOOTING.md#dependencies
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+EOF
+}
+
+# Invalid argument
+error_invalid_argument() {
+    local arg_name="$1"
+    local provided_value="$2"
+    local expected_format="${3:-valid value}"
+
+    cat >&2 <<EOF
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+❌ Invalid argument
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Argument: $arg_name
+Provided: $provided_value
+Expected: $expected_format
+
+What to do:
+
+1. Check command syntax:
+   ./cconductor --help
+
+2. Verify argument format
+
+3. See documentation for examples:
+   docs/USAGE.md
+
+For more help: docs/TROUBLESHOOTING.md#invalid-arguments
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+EOF
+}
+
+# Network failure
+error_network_failure() {
+    local url="$1"
+    local error_code="${2:-unknown}"
+
+    cat >&2 <<EOF
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+❌ Network request failed
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+URL: $url
+Error code: $error_code
+
+This could be caused by:
+  • No internet connection
+  • Firewall blocking requests
+  • API service is down
+  • Rate limiting
+
+What to do:
+
+1. Check internet connection:
+   ping -c 3 8.8.8.8
+
+2. Test specific service:
+   curl -I "$url"
+
+3. Check firewall settings
+
+4. Wait 60 seconds and retry if rate limited
+
+For more help: docs/TROUBLESHOOTING.md#network-errors
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+EOF
+}
+
+# Permission denied
+error_permission_denied() {
+    local path="$1"
+
+    cat >&2 <<EOF
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+❌ Permission denied
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Path: $path
+
+Cannot read or write to this location.
+
+What to do:
+
+1. Check file permissions:
+   ls -la "$path"
+
+2. Fix permissions if you own the file:
+   chmod u+rw "$path"
+
+3. Check directory permissions:
+   ls -la "$(dirname "$path")"
+
+4. If in system directory, may need sudo:
+   sudo chmod u+rw "$path"
+
+For more help: docs/TROUBLESHOOTING.md#permissions
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+EOF
+}
+
+# API rate limit
+error_rate_limit() {
+    local provider="${1:-API}"
+    local retry_after="${2:-60}"
+
+    cat >&2 <<EOF
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+⚠️  API rate limit exceeded
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Provider: $provider
+Retry after: $retry_after seconds
+
+You've made too many requests in a short time.
+
+What to do:
+
+1. Wait $retry_after seconds
+
+2. Resume your research:
+   ./cconductor resume
+
+3. Consider spreading out API calls
+
+4. Check your rate limits:
+   • Anthropic: https://console.anthropic.com/
+   • OpenAI: https://platform.openai.com/account/limits
+
+For more help: docs/TROUBLESHOOTING.md#rate-limits
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+EOF
+}
+
 # Export functions for use in other scripts
 export -f error_lock_failed
 export -f error_json_corrupted
@@ -263,3 +423,8 @@ export -f error_missing_file
 export -f error_invalid_config
 export -f error_api_key
 export -f error_disk_space
+export -f error_dependency_missing
+export -f error_invalid_argument
+export -f error_network_failure
+export -f error_permission_denied
+export -f error_rate_limit
