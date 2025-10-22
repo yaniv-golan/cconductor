@@ -44,11 +44,11 @@ log_decision() {
         if command -v log_warning &>/dev/null; then
             log_warning "$session_dir" "invalid_json" "Decision data is not valid JSON, wrapping as string"
         fi
-        validated_data=$(jq -n --arg text "$decision_data" '{raw_text: $text}')
+        validated_data=$(jq -cn --arg text "$decision_data" '{raw_text: $text}')
     fi
     
     local entry
-    entry=$(jq -n \
+    entry=$(jq -cn \
         --arg timestamp "$timestamp" \
         --arg type "$decision_type" \
         --argjson data "$validated_data" \
@@ -72,7 +72,7 @@ log_agent_handoff() {
     local handoff_data="$4"
     
     local handoff_json
-    handoff_json=$(jq -n \
+    handoff_json=$(jq -cn \
         --arg from "$from_agent" \
         --arg to "$to_agent" \
         --argjson data "$handoff_data" \
@@ -92,7 +92,7 @@ log_reflection() {
     local reflection_text="$3"
     
     local reflection_json
-    reflection_json=$(jq -n \
+    reflection_json=$(jq -cn \
         --arg agent "$agent" \
         --arg reflection "$reflection_text" \
         '{
@@ -110,7 +110,7 @@ log_plan_change() {
     local reason="$3"
     
     local plan_json
-    plan_json=$(jq -n \
+    plan_json=$(jq -cn \
         --arg change "$change_description" \
         --arg reason "$reason" \
         '{
@@ -126,7 +126,8 @@ get_orchestration_log() {
     local session_dir="$1"
     local log_file="$session_dir/orchestration-log.jsonl"
     
-    if [[ ! -f "$log_file" ]]; then
+    if [[ ! -f "$log_file" ]] || [[ ! -s "$log_file" ]]; then
+        # File doesn't exist or is empty
         echo "[]"
         return 0
     fi
