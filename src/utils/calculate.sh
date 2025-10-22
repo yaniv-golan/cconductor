@@ -5,6 +5,11 @@
 
 set -euo pipefail
 
+# Source core helpers if available
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck disable=SC1091
+source "$SCRIPT_DIR/core-helpers.sh" 2>/dev/null || true
+
 # Safe calculation with input validation
 safe_calculate() {
     local expression="$1"

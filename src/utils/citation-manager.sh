@@ -6,8 +6,17 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+
+# Source core helpers
 # shellcheck disable=SC1091
-source "$SCRIPT_DIR/../shared-state.sh"
+source "$SCRIPT_DIR/core-helpers.sh"
+# shellcheck disable=SC1091
+source "$SCRIPT_DIR/error-messages.sh"
+
+# Source shared-state
+# shellcheck disable=SC1091
+source "$PROJECT_ROOT/src/shared-state.sh"
 
 # Add citation to knowledge graph (with deduplication by DOI/URL)
 cm_add_citation() {
@@ -15,7 +24,7 @@ cm_add_citation() {
     local citation_json="$2"
 
     lock_acquire "$kg_file" || {
-        echo "Error: Failed to acquire lock for adding citation" >&2
+        log_error "Failed to acquire lock for adding citation"
         return 1
     }
 
@@ -67,7 +76,7 @@ cm_link_citation_to_claim() {
     local page_number="${5:-}"
 
     lock_acquire "$kg_file" || {
-        echo "Error: Failed to acquire lock for linking citation" >&2
+        log_error "Failed to acquire lock for linking citation"
         return 1
     }
 
@@ -160,7 +169,7 @@ cm_validate_all_cited() {
     ' "$kg_file")
 
     if [ -n "$uncited" ]; then
-        echo "Warning: Claims without citations: $uncited" >&2
+        log_warn "Claims without citations: $uncited"
         return 1
     fi
     return 0
@@ -184,7 +193,7 @@ cm_deduplicate() {
     local kg_file="$1"
 
     lock_acquire "$kg_file" || {
-        echo "Error: Failed to acquire lock for deduplication" >&2
+        log_error "Failed to acquire lock for deduplication"
         return 1
     }
 

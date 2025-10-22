@@ -8,6 +8,12 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 
+# Source core helpers
+# shellcheck disable=SC1091
+source "$SCRIPT_DIR/core-helpers.sh" 2>/dev/null || true
+# shellcheck disable=SC1091
+source "$SCRIPT_DIR/error-messages.sh" 2>/dev/null || true
+
 # Configuration for update checking
 REPO="yaniv-golan/cconductor"
 CACHE_TTL_SECONDS=86400  # 24 hours
@@ -159,7 +165,11 @@ get_engine_version() {
     local version_file="$PROJECT_ROOT/VERSION"
 
     if [ ! -f "$version_file" ]; then
-        echo "Error: VERSION file not found: $version_file" >&2
+        if command -v error_missing_file &>/dev/null; then
+            error_missing_file "$version_file" "VERSION file not found"
+        else
+            echo "Error: VERSION file not found: $version_file" >&2
+        fi
         return 1
     fi
 
@@ -167,7 +177,11 @@ get_engine_version() {
     version=$(head -n1 "$version_file" | tr -d '[:space:]')
 
     if [ -z "$version" ]; then
-        echo "Error: VERSION file is empty" >&2
+        if command -v log_error &>/dev/null; then
+            log_error "VERSION file is empty"
+        else
+            echo "Error: VERSION file is empty" >&2
+        fi
         return 1
     fi
 
@@ -182,7 +196,11 @@ get_session_version() {
     local metadata_file="$session_dir/session.json"
 
     if [ ! -f "$metadata_file" ]; then
-        echo "Error: Session metadata not found: $metadata_file" >&2
+        if command -v error_missing_file &>/dev/null; then
+            error_missing_file "$metadata_file" "Session metadata not found"
+        else
+            echo "Error: Session metadata not found: $metadata_file" >&2
+        fi
         return 1
     fi
 
@@ -190,7 +208,11 @@ get_session_version() {
     version=$(jq -r '.engine_version // "unknown"' "$metadata_file")
 
     if [ "$version" = "unknown" ]; then
-        echo "Error: Session has no engine version in metadata" >&2
+        if command -v log_error &>/dev/null; then
+            log_error "Session has no engine version in metadata"
+        else
+            echo "Error: Session has no engine version in metadata" >&2
+        fi
         return 1
     fi
 
@@ -215,7 +237,11 @@ validate_session_compatibility() {
     if is_compatible "$engine_version" "$session_version"; then
         return 0
     else
-        echo "Error: Session incompatible with current engine" >&2
+        if command -v log_error &>/dev/null; then
+            log_error "Session incompatible with current engine"
+        else
+            echo "Error: Session incompatible with current engine" >&2
+        fi
         echo "" >&2
         echo "  Session version:  $session_version" >&2
         echo "  Engine version:   $engine_version" >&2

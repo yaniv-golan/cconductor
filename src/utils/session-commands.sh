@@ -10,6 +10,14 @@ if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
     exit 1
 fi
 
+# Source core helpers (when available)
+if [[ -n "${CCONDUCTOR_ROOT:-}" ]] && [[ -f "$CCONDUCTOR_ROOT/src/utils/core-helpers.sh" ]]; then
+    # shellcheck disable=SC1091
+    source "$CCONDUCTOR_ROOT/src/utils/core-helpers.sh"
+    # shellcheck disable=SC1091
+    source "$CCONDUCTOR_ROOT/src/utils/error-messages.sh"
+fi
+
 # Shared session helpers
 # shellcheck disable=SC1091
 source "$CCONDUCTOR_ROOT/src/utils/session-utils.sh"
@@ -132,7 +140,11 @@ sessions_latest_handler() {
                 echo "  ./cconductor resume $LATEST_SESSION"
             fi
         else
-            echo "Error: Latest session directory not found: $LATEST_SESSION"
+            if command -v error_missing_file &>/dev/null; then
+                error_missing_file "$LATEST_SESSION" "Latest session directory not found"
+            else
+                echo "Error: Latest session directory not found: $LATEST_SESSION"
+            fi
             exit 1
         fi
     else
@@ -151,7 +163,11 @@ sessions_viewer_handler() {
         # No argument - use latest session
         local latest_file="$CCONDUCTOR_ROOT/research-sessions/.latest"
         if [ ! -f "$latest_file" ]; then
-            echo "Error: No active session found" >&2
+            if command -v log_error &>/dev/null; then
+                log_error "No active session found"
+            else
+                echo "Error: No active session found" >&2
+            fi
             echo "Run a research query first: ./cconductor \"your question\"" >&2
             exit 1
         fi
@@ -172,7 +188,11 @@ sessions_viewer_handler() {
     
     # Validate session directory exists
     if [ ! -d "$session_dir" ]; then
-        echo "Error: Session directory not found: $session_dir" >&2
+        if command -v error_missing_file &>/dev/null; then
+            error_missing_file "$session_dir" "Session directory not found"
+        else
+            echo "Error: Session directory not found: $session_dir" >&2
+        fi
         exit 1
     fi
     
@@ -190,11 +210,19 @@ sessions_viewer_handler() {
             fi
             echo "  or: pkill -f 'http-server'"
         else
-            echo "Error: Failed to launch dashboard viewer" >&2
+            if command -v log_error &>/dev/null; then
+                log_error "Failed to launch dashboard viewer"
+            else
+                echo "Error: Failed to launch dashboard viewer" >&2
+            fi
             exit 1
         fi
     else
-        echo "Error: Dashboard viewer utility not found" >&2
+        if command -v log_error &>/dev/null; then
+            log_error "Dashboard viewer utility not found"
+        else
+            echo "Error: Dashboard viewer utility not found" >&2
+        fi
         exit 1
     fi
 }
@@ -204,7 +232,11 @@ sessions_resume_handler() {
     local session_id="$1"
     
     if [ -z "$session_id" ]; then
-        echo "Error: Session ID required" >&2
+        if command -v log_error &>/dev/null; then
+            log_error "Session ID required"
+        else
+            echo "Error: Session ID required" >&2
+        fi
         echo "Usage: cconductor sessions resume <session_id> [--refine \"guidance\" | --refine-file path]" >&2
         exit 1
     fi
@@ -217,7 +249,11 @@ sessions_resume_handler() {
         local refine_file
         refine_file=$(get_flag "refine-file")
         if [ ! -f "$refine_file" ]; then
-            echo "Error: Refinement file not found: $refine_file" >&2
+            if command -v error_missing_file &>/dev/null; then
+                error_missing_file "$refine_file" "Refinement file not found"
+            else
+                echo "Error: Refinement file not found: $refine_file" >&2
+            fi
             exit 1
         fi
         refinement=$(cat "$refine_file")
@@ -253,7 +289,11 @@ sessions_resume_handler() {
     fi
     
     if [ ! -d "$session_path" ]; then
-        echo "Error: Session not found: $session_id" >&2
+        if command -v log_error &>/dev/null; then
+            log_error "Session not found: $session_id"
+        else
+            echo "Error: Session not found: $session_id" >&2
+        fi
         exit 1
     fi
     

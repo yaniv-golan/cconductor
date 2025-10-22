@@ -10,6 +10,11 @@ if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
     exit 1
 fi
 
+# Source core helpers if available
+SCRIPT_DIR_INIT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck disable=SC1091
+source "$SCRIPT_DIR_INIT/core-helpers.sh" 2>/dev/null || true
+
 check_initialization() {
     # Check if user config directory exists (created by init.sh)
     # Platform-aware check

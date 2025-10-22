@@ -13,6 +13,12 @@ set -euo pipefail
 # Get script directory for invoking invoke-agent.sh CLI
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
+# Source core helpers
+# shellcheck disable=SC1091
+source "$SCRIPT_DIR/core-helpers.sh"
+# shellcheck disable=SC1091
+source "$SCRIPT_DIR/error-messages.sh"
+
 # Session state directory structure:
 # $session_dir/
 #   .agent-sessions/
@@ -44,12 +50,12 @@ start_agent_session() {
 
     # Validate inputs
     if [ -z "$agent_name" ] || [ -z "$session_dir" ] || [ -z "$initial_task" ]; then
-        echo "Error: start_agent_session requires agent_name, session_dir, and initial_task" >&2
+        log_error "start_agent_session requires agent_name, session_dir, and initial_task"
         return 1
     fi
 
     if [ ! -d "$session_dir" ]; then
-        echo "Error: Session directory not found: $session_dir" >&2
+        error_missing_file "$session_dir" "Session directory not found"
         return 1
     fi
 
@@ -60,7 +66,7 @@ start_agent_session() {
     # Check if session already exists for this agent
     local session_file="$sessions_dir/${agent_name}.session"
     if [ -f "$session_file" ]; then
-        echo "Warning: Agent $agent_name already has a session, returning existing session_id" >&2
+        log_warn "Agent $agent_name already has a session, returning existing session_id"
         cat "$session_file"
         return 0
     fi
@@ -82,7 +88,7 @@ start_agent_session() {
         "$output_file" \
         "$timeout" \
         "$session_dir"; then
-        echo "Error: Failed to start session for agent $agent_name" >&2
+        log_error "Failed to start session for agent $agent_name"
         return 1
     fi
 
@@ -92,7 +98,7 @@ start_agent_session() {
     session_id=$(jq -r '.session_id // empty' "$output_file" 2>/dev/null)
 
     if [ -z "$session_id" ] || [ "$session_id" = "null" ]; then
-        echo "Error: Could not extract session_id from response" >&2
+        log_error "Could not extract session_id from response"
         echo "Response structure:" >&2
         jq 'keys' "$output_file" >&2
         return 1
@@ -143,7 +149,7 @@ continue_agent_session() {
 
     # Validate inputs
     if [ -z "$agent_name" ] || [ -z "$session_dir" ] || [ -z "$task" ] || [ -z "$output_file" ]; then
-        echo "Error: continue_agent_session requires agent_name, session_dir, task, and output_file" >&2
+        log_error "continue_agent_session requires agent_name, session_dir, task, and output_file"
         return 1
     fi
 
@@ -152,7 +158,7 @@ continue_agent_session() {
     local session_file="$sessions_dir/${agent_name}.session"
 
     if [ ! -f "$session_file" ]; then
-        echo "Error: No active session for agent $agent_name" >&2
+        log_error "No active session for agent $agent_name"
         echo "Hint: Call start_agent_session() first" >&2
         return 1
     fi
@@ -166,7 +172,7 @@ continue_agent_session() {
     # Get agent definition for systemPrompt
     local agent_file="$session_dir/.claude/agents/${agent_name}.json"
     if [ ! -f "$agent_file" ]; then
-        echo "Error: Agent definition not found: $agent_file" >&2
+        error_missing_file "$agent_file" "Agent definition not found"
         return 1
     fi
 
@@ -174,7 +180,7 @@ continue_agent_session() {
     system_prompt=$(jq -r '.systemPrompt' "$agent_file" 2>/dev/null)
 
     if [ -z "$system_prompt" ] || [ "$system_prompt" = "null" ]; then
-        echo "Error: Agent $agent_name missing systemPrompt" >&2
+        log_error "Agent $agent_name missing systemPrompt"
         return 1
     fi
 
@@ -374,7 +380,7 @@ end_agent_session() {
     local session_file="$sessions_dir/${agent_name}.session"
 
     if [ ! -f "$session_file" ]; then
-        echo "Warning: No active session to end for agent $agent_name" >&2
+        log_warn "No active session to end for agent $agent_name"
         return 1
     fi
 

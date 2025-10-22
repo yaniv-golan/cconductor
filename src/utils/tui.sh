@@ -14,6 +14,14 @@ fi
 # Shared helpers
 # ---------------------------------------------------------------------------
 
+# Source core helpers (when available)
+if [[ -n "${CCONDUCTOR_ROOT:-}" ]] && [[ -f "$CCONDUCTOR_ROOT/src/utils/core-helpers.sh" ]]; then
+    # shellcheck disable=SC1091
+    source "$CCONDUCTOR_ROOT/src/utils/core-helpers.sh"
+    # shellcheck disable=SC1091
+    source "$CCONDUCTOR_ROOT/src/utils/error-messages.sh"
+fi
+
 # shellcheck disable=SC1091
 source "$CCONDUCTOR_ROOT/src/utils/session-utils.sh"
 
@@ -545,7 +553,11 @@ resume_session_simple() {
 configure_simple() {
     echo ""
     if ! "$CCONDUCTOR_ROOT/cconductor" configure; then
-        echo "Error: Unable to display configuration details." >&2
+        if command -v log_error &>/dev/null; then
+            log_error "Unable to display configuration details."
+        else
+            echo "Error: Unable to display configuration details." >&2
+        fi
     fi
     echo ""
     read -r -p "Press Enter to continue..." _
@@ -577,7 +589,12 @@ interactive_mode_simple() {
 
 # Advanced interactive mode with dialog
 interactive_mode_advanced() {
-    if ! command -v dialog &> /dev/null; then
+    if command -v require_command &>/dev/null; then
+        if ! require_command "dialog" "" "" "silent"; then
+            interactive_mode_simple
+            return
+        fi
+    elif ! command -v dialog &> /dev/null; then
         interactive_mode_simple
         return
     fi
@@ -838,9 +855,15 @@ resume_wizard() {
 interactive_mode() {
     # Check for CI environment or non-TTY
     if [ -n "${CI:-}" ] || [ ! -t 0 ]; then
-        echo "Error: Interactive mode requires a TTY" >&2
-        echo "In CI or non-interactive environments, provide explicit arguments" >&2
-        echo "Run: ./cconductor --help" >&2
+        if command -v log_error &>/dev/null; then
+            log_error "Interactive mode requires a TTY"
+            log_info "In CI or non-interactive environments, provide explicit arguments"
+            log_info "Run: ./cconductor --help"
+        else
+            echo "Error: Interactive mode requires a TTY" >&2
+            echo "In CI or non-interactive environments, provide explicit arguments" >&2
+            echo "Run: ./cconductor --help" >&2
+        fi
         return 1
     fi
     

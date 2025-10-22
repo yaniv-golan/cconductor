@@ -8,6 +8,13 @@ if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
     set -euo pipefail 2>/dev/null || set -eu
 fi
 
+# Source core helpers if available (for timestamps)
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+if [[ -f "$SCRIPT_DIR/core-helpers.sh" ]]; then
+    # shellcheck disable=SC1091
+    source "$SCRIPT_DIR/core-helpers.sh" 2>/dev/null || true
+fi
+
 # Check if debug mode is enabled
 is_debug_enabled() {
     [[ "${CCONDUCTOR_DEBUG:-0}" == "1" ]]
@@ -87,7 +94,7 @@ debug_exec() {
     shift 2
     
     local start_time
-    start_time=$(date +%s)
+    start_time=$(if command -v get_epoch &>/dev/null; then get_epoch; else date +%s; fi)
     
     # Capture both stdout and stderr
     local temp_stderr
@@ -108,7 +115,7 @@ debug_exec() {
     fi
     
     local end_time
-    end_time=$(date +%s)
+    end_time=$(if command -v get_epoch &>/dev/null; then get_epoch; else date +%s; fi)
     local duration=$((end_time - start_time))
     
     # If command failed, log error

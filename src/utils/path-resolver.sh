@@ -15,6 +15,10 @@ else
     PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 fi
 
+# Source core helpers first
+# shellcheck disable=SC1091
+source "$PROJECT_ROOT/src/utils/core-helpers.sh" 2>/dev/null || true
+
 # Source platform-aware paths
 # shellcheck disable=SC1091
 source "$PROJECT_ROOT/src/utils/platform-paths.sh"
@@ -84,7 +88,11 @@ ensure_path_exists() {
     # Create directory if it doesn't exist
     if [ ! -d "$path" ]; then
         mkdir -p "$path" 2>/dev/null || {
-            echo "Warning: Could not create directory: $path" >&2
+            if command -v log_warn &>/dev/null; then
+                log_warn "Could not create directory: $path"
+            else
+                echo "Warning: Could not create directory: $path" >&2
+            fi
             return 1
         }
     fi

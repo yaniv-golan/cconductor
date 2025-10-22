@@ -68,7 +68,10 @@ setup_tool_hooks() {
         }
     }')
     
-    # Merge with existing settings (using deep merge to avoid duplicates)
+    # Merge with existing settings
+    # Note: This intentionally REPLACES hook arrays (not merges) to ensure session isolation.
+    # Each session gets a clean set of cconductor hooks, preventing conflicts between
+    # different research sessions running concurrently. This is by design for session safety.
     jq --argjson hooks "$hooks_config" '
         .hooks = (.hooks // {}) |
         .hooks.PreToolUse = $hooks.hooks.PreToolUse |

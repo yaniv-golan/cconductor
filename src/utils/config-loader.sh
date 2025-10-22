@@ -8,6 +8,12 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 
+# Source core helpers first
+# shellcheck disable=SC1091
+source "$SCRIPT_DIR/core-helpers.sh" 2>/dev/null || true
+# shellcheck disable=SC1091
+source "$SCRIPT_DIR/error-messages.sh" 2>/dev/null || true
+
 # Source platform-aware paths
 if [ -f "$SCRIPT_DIR/platform-paths.sh" ]; then
     # shellcheck disable=SC1091
@@ -46,14 +52,22 @@ load_config() {
 
     # Validate default config exists (required)
     if [ ! -f "$default_file" ]; then
-        echo "Error: Default config not found: $default_file" >&2
+        if command -v error_missing_file &>/dev/null; then
+            error_missing_file "$default_file" "Default config not found"
+        else
+            echo "Error: Default config not found: $default_file" >&2
+        fi
         echo "This should never happen - default configs are git-tracked." >&2
         return 1
     fi
 
     # Validate default config is valid JSON
     if ! jq '.' "$default_file" >/dev/null 2>&1; then
-        echo "Error: Default config is invalid JSON: $default_file" >&2
+        if command -v log_error &>/dev/null; then
+            log_error "Default config is invalid JSON: $default_file"
+        else
+            echo "Error: Default config is invalid JSON: $default_file" >&2
+        fi
         return 1
     fi
 
@@ -66,7 +80,11 @@ load_config() {
         if jq '.' "$user_file" >/dev/null 2>&1; then
             merged_config=$(echo "$merged_config" | jq -s '.[0] * .[1]' - "$user_file")
         else
-            echo "Warning: User config is invalid JSON: $user_file" >&2
+            if command -v log_warn &>/dev/null; then
+                log_warn "User config is invalid JSON: $user_file"
+            else
+                echo "Warning: User config is invalid JSON: $user_file" >&2
+            fi
             echo "Falling back to default config" >&2
         fi
     fi
@@ -127,7 +145,11 @@ init_user_config() {
     local user_file="$user_config_dir/${config_name}.json"
 
     if [ ! -f "$default_file" ]; then
-        echo "Error: Default config not found: $default_file" >&2
+        if command -v error_missing_file &>/dev/null; then
+            error_missing_file "$default_file" "Default config not found"
+        else
+            echo "Error: Default config not found: $default_file" >&2
+        fi
         return 1
     fi
 
@@ -138,7 +160,11 @@ init_user_config() {
     fi
 
     if [ -f "$user_file" ]; then
-        echo "Warning: User config already exists: $user_file" >&2
+        if command -v log_warn &>/dev/null; then
+            log_warn "User config already exists: $user_file"
+        else
+            echo "Warning: User config already exists: $user_file" >&2
+        fi
         echo "Not overwriting. Delete it first if you want to reset." >&2
         return 1
     fi

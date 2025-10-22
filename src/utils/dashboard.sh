@@ -6,8 +6,16 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(dirname "$(dirname "$SCRIPT_DIR")")"
+
+# Source core helpers first
 # shellcheck disable=SC1091
-source "$SCRIPT_DIR/../shared-state.sh"
+source "$SCRIPT_DIR/core-helpers.sh"
+# shellcheck disable=SC1091
+source "$SCRIPT_DIR/error-messages.sh"
+
+# Source shared-state for atomic operations
+# shellcheck disable=SC1091
+source "$PROJECT_ROOT/src/shared-state.sh"
 # shellcheck disable=SC1091
 source "$SCRIPT_DIR/error-logger.sh" 2>/dev/null || true
 
@@ -212,9 +220,9 @@ dashboard_generate_metrics() {
             log_error "$session_dir" "dashboard_metrics" "Failed to generate dashboard metrics JSON" \
                 "Check variables: iter=$iteration, confidence=$confidence, total=$total_invocations"
         fi
-        echo "Error: Failed to generate dashboard metrics" >&2
+        log_error "Failed to generate dashboard metrics"
         # Create minimal valid JSON so dashboard doesn't break
-        echo '{"error": "Failed to generate metrics", "last_updated": "'"$(date -u +%Y-%m-%dT%H:%M:%SZ)"'"}' > "$metrics_file"
+        echo '{"error": "Failed to generate metrics", "last_updated": "'"$(get_timestamp)"'"}' > "$metrics_file"
         return 1
     fi
     
@@ -223,7 +231,7 @@ dashboard_generate_metrics() {
         if command -v log_error &>/dev/null && [ -n "${session_dir:-}" ]; then
             log_error "$session_dir" "dashboard_metrics" "Failed to move temp metrics file"
         fi
-        echo "Error: Failed to write dashboard metrics" >&2
+        log_error "Failed to write dashboard metrics"
         return 1
     fi
 }
@@ -272,7 +280,7 @@ calculate_elapsed_seconds() {
     else
         # Linux (GNU date) - use -d flag for date parsing
         start_epoch=$(date -u -d "$start_time" +%s 2>/dev/null || echo "0")
-        now_epoch=$(date -u +%s)
+        now_epoch=$(get_epoch)
     fi
     
     # If parsing failed (start_epoch is 0), return 0
@@ -296,12 +304,12 @@ dashboard_generate_html() {
     local js_template="$PROJECT_ROOT/src/templates/dashboard.js"
     
     if [ ! -f "$template" ]; then
-        echo "Error: Dashboard template not found: $template" >&2
+        log_error "Dashboard template not found: $template"
         return 1
     fi
     
     if [ ! -f "$js_template" ]; then
-        echo "Error: Dashboard JS not found: $js_template" >&2
+        log_error "Dashboard JS not found: $js_template"
         return 1
     fi
     
@@ -311,7 +319,7 @@ dashboard_generate_html() {
     # Generate HTML with cache-busting timestamp for JS file
     # This forces browser to reload JS on each dashboard generation (critical for file:// protocol)
     local js_version
-    js_version="v=$(date +%s)"
+    js_version="v=$(get_epoch)"
     sed "s|<script src=\"./dashboard.js\"></script>|<script src=\"./dashboard.js?${js_version}\"></script>|" \
         "$template" > "$session_dir/dashboard.html"
     
@@ -331,7 +339,7 @@ dashboard_serve() {
     local auto_open="${2:-true}"
     
     if [ ! -d "$session_dir" ]; then
-        echo "Error: Session directory not found: $session_dir" >&2
+        log_error "Session directory not found: $session_dir"
         return 1
     fi
     
@@ -377,7 +385,7 @@ dashboard_serve() {
     fi
     
     if [ -z "$dashboard_port" ]; then
-        echo "Error: No available ports in range 8890-8929" >&2
+        log_error "No available ports in range 8890-8929"
         echo "Try: pkill -f 'http-server'" >&2
         return 1
     fi
