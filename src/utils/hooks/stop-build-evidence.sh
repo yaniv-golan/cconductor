@@ -2,6 +2,14 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
+
+# Source core helpers with fallback (hooks must never fail)
+# shellcheck disable=SC1091
+source "$PROJECT_ROOT/src/utils/core-helpers.sh" 2>/dev/null || {
+    # Minimal fallbacks if core-helpers unavailable
+    get_timestamp() { date -u +"%Y-%m-%dT%H:%M:%S.%6NZ" 2>/dev/null || date -u +"%Y-%m-%dT%H:%M:%SZ"; }
+}
 
 if [[ "${BASH_VERSINFO[0]:-0}" -lt 4 ]]; then
     echo "stop-build-evidence.sh requires Bash 4.0 or newer." >&2
@@ -525,7 +533,7 @@ write_evidence_file() {
     local evidence_json="$4"
 
     local generated_at
-    generated_at=$(date -u +"%Y-%m-%dT%H:%M:%S.%6NZ" 2>/dev/null || date -u +"%Y-%m-%dT%H:%M:%SZ")
+    generated_at=$(get_timestamp)
     local metadata
     if [[ -n "$transcript_path" ]]; then
         metadata=$(jq -n --arg path "$transcript_path" '{transcript_path: $path}')

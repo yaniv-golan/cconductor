@@ -15,7 +15,7 @@
 - When validating an existing claim’s URL and you want supporting quotes quickly
 
 ## Provided Commands
-- `bash library-memory/hash-url.sh <url>` → SHA-256 hash of the URL
+- `bash library-memory/hash-url.sh <url>` → SHA-256 hash of the URL (wrapper for src/utils/hash-string.sh)
 - `bash library-memory/show-digest.sh [--limit N] (--url <url> | --hash <hash>)` → returns a concise JSON digest
 - `bash library-memory/show-search.sh --query "<search terms>" [--limit N]` → returns cached WebSearch results and metadata
 

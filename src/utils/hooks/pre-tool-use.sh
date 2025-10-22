@@ -5,8 +5,7 @@
 
 set -euo pipefail
 
-# Source shared utilities for get_timestamp
-# Hooks run in session directory, so we need to find the project root
+# Find project root robustly (hooks may run in various contexts)
 HOOK_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 if [[ -n "${CLAUDE_PROJECT_DIR:-}" ]]; then
     PROJECT_ROOT="$CLAUDE_PROJECT_DIR"
@@ -24,11 +23,18 @@ else
     fi
 fi
 ROOT="$PROJECT_ROOT"
+
+# Source core helpers with fallback (hooks must never fail)
 # shellcheck disable=SC1091
-source "$PROJECT_ROOT/src/shared-state.sh" 2>/dev/null || {
-    # Fallback: inline get_timestamp if shared-state.sh not found
+source "$PROJECT_ROOT/src/utils/core-helpers.sh" 2>/dev/null || {
+    # Minimal fallbacks if core-helpers unavailable
     get_timestamp() { date -u +"%Y-%m-%dT%H:%M:%S.%6NZ" 2>/dev/null || date -u +"%Y-%m-%dT%H:%M:%SZ"; }
+    get_epoch() { date +%s; }
 }
+
+# Source shared-state for atomic operations (with fallback)
+# shellcheck disable=SC1091
+source "$PROJECT_ROOT/src/shared-state.sh" 2>/dev/null || true
 
 debug_log() {
     local msg="$1"
@@ -189,7 +195,7 @@ emit_event() {
 
     local lock_file="$session_dir/.events.lock"
     local start_time
-    start_time=$(date +%s)
+    start_time=$(get_epoch)
     local timeout=5
 
     while true; do
@@ -205,7 +211,7 @@ emit_event() {
         fi
 
         local elapsed
-        elapsed=$(($(date +%s) - start_time))
+        elapsed=$(($(get_epoch) - start_time))
         if [[ "$elapsed" -ge "$timeout" ]]; then
             debug_log "emit_event_timeout type=$event_type"
             break
@@ -245,7 +251,7 @@ if [[ "$tool_name" == "WebSearch" ]]; then
                 display_query=$(web_search_cache_display_query "$query" 2>/dev/null || printf '%s' "$query")
                 stored_iso=$(echo "$lookup_json" | jq -r '.metadata.stored_at_iso // ""')
                 if [[ -z "$stored_iso" ]]; then
-                    stored_iso=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+                    stored_iso=$(get_timestamp)
                 fi
                 materialized_path=""
                 if [[ -n "$session_dir" ]]; then
@@ -678,7 +684,7 @@ event_data=$(jq -n \
 if [ -n "$session_dir" ] && [ -d "$session_dir" ]; then
     # Use atomic mkdir for locking (portable, works on all platforms)
     lock_file="$session_dir/.events.lock"
-    start_time=$(date +%s)
+    start_time=$(get_epoch)
     timeout=5
     
     while true; do
@@ -697,7 +703,7 @@ if [ -n "$session_dir" ] && [ -d "$session_dir" ]; then
         fi
         
         # Check timeout - but don't fail hook if lock times out
-        elapsed=$(($(date +%s) - start_time))
+        elapsed=$(($(get_epoch) - start_time))
         if [ "$elapsed" -ge "$timeout" ]; then
             break
         fi

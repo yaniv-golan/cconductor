@@ -48,7 +48,7 @@ if [[ -n "$url_arg" && -n "$hash_arg" ]]; then
 fi
 
 if [[ -n "$url_arg" ]]; then
-    hash_arg="$("$SCRIPT_DIR/hash-url.sh" "$url_arg")"
+    hash_arg="$("$SCRIPT_DIR/../../../utils/hash-string.sh" "$url_arg")"
 fi
 
 digest_path="$LIBRARY_DIR/sources/${hash_arg}.json"

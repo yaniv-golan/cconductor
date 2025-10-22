@@ -8,20 +8,30 @@ set -euo pipefail
 HOOK_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$HOOK_DIR/../../.." && pwd)"
 
+# Source core helpers with fallback (hooks must never fail)
+# shellcheck disable=SC1091
+source "$PROJECT_ROOT/src/utils/core-helpers.sh" 2>/dev/null || {
+    # Minimal fallbacks if core-helpers unavailable
+    get_timestamp() { date -u +"%Y-%m-%dT%H:%M:%SZ"; }
+    require_command() { command -v "$1" >/dev/null 2>&1 || { echo "$1 is required" >&2; return 1; }; }
+    log_error() { echo "Error: $*" >&2; }
+}
+
 # shellcheck disable=SC1091
 source "$PROJECT_ROOT/src/utils/config-loader.sh"
 # shellcheck disable=SC1091
 source "$PROJECT_ROOT/src/utils/error-messages.sh" 2>/dev/null || true
 
-if ! command -v python3 >/dev/null 2>&1; then
-    echo "quality-gate: python3 is required for trust and recency calculations" >&2
+# Check required dependencies
+require_command "python3" || {
+    log_error "python3 is required for trust and recency calculations"
     exit 1
-fi
+}
 
-if ! command -v bc >/dev/null 2>&1; then
-    echo "quality-gate: bc is required for threshold comparisons" >&2
+require_command "bc" || {
+    log_error "bc is required for threshold comparisons"
     exit 1
-fi
+}
 
 SESSION_DIR="${1:-${CCONDUCTOR_SESSION_DIR:-}}"
 if [[ -z "$SESSION_DIR" ]]; then
@@ -72,9 +82,7 @@ mkdir -p "$OUTPUT_DIR"
 SUMMARY_FILENAME=$(echo "$CONFIG_JSON" | jq -r '.reporting.summary_filename // "artifacts/quality-gate-summary.json"')
 SUMMARY_PATH="$SESSION_DIR/$SUMMARY_FILENAME"
 
-timestamp() {
-    date -u +"%Y-%m-%dT%H:%M:%SZ"
-}
+# Use get_timestamp from core-helpers (fallback provided above)
 
 normalize_domain() {
     local url="$1"
@@ -366,7 +374,7 @@ fi
 
 summary_json=$(jq -n \
     --arg status "$status" \
-    --arg evaluated_at "$(timestamp)" \
+    --arg evaluated_at "$(get_timestamp)" \
     --argjson total_claims "$total_claims" \
     --argjson failed_claims "$failed_claims" \
     --argjson low_confidence "$low_confidence_claims" \
