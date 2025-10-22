@@ -14,7 +14,7 @@ This release focuses on production-ready research outputs and smoother day-to-da
 - Configurable quality gate diagnostics (`config/quality-gate.default.json`) with granular thresholds, expanded documentation, and automated tests so teams can dial rigor up or down per mission.
 - A dedicated quality remediator agent that can automatically address issues flagged by the gate before a report ships.
 - Cache-aware web research tooling: shared Library Memory guardrails, new `cache-aware web research` skill, and supporting scripts/hooks that safely reuse previously sourced material.
-- Bash-first evidence tooling that captures paragraph-level citations, fallback evidence bundles, and journal exports without relying on external scripts—complete with parity tests.
+- Bash-first evidence tooling that captures paragraph-level citations, source deep links, fallback bundles, and journal exports without relying on external scripts—complete with parity tests.
 - Updated documentation covering the new evidence workflow, cache controls, and release planning guidance.
 
 ### Changed
