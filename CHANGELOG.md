@@ -5,37 +5,32 @@ All notable changes to CConductor will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.1] - 2025-10-22
+
+### Changed
+
+- **Code Consolidation** - Centralized helper functions across 38 files, reducing code duplication by ~500 lines and improving maintainability
+- **Cross-Platform Improvements** - Enhanced macOS compatibility with atomic locking using `mkdir` instead of `flock`
+- **Error Handling** - Consistent error messages and logging across all utilities and hooks
+
+### Fixed
+
+- Fixed path error in `kg-integrate.sh` that prevented knowledge graph integration
+- Fixed bash syntax error in `orchestration-logger.sh` when logging JSON with parentheses
+- Fixed variable collision in `shared-state.sh` that broke digital librarian functionality
+- Fixed missing input validation in `citation-tracker.sh` and `research-logger.sh` hooks
+
+### Added
+
+- New helper modules: `core-helpers.sh`, `json-helpers.sh`, `file-helpers.sh`, `hash-file.sh`, `hash-string.sh`
+- Cross-platform hashing utilities supporting sha256sum/shasum/openssl
+- Graceful degradation for hooks when helper functions unavailable
+
 ## [0.3.0] - 2025-10-22
 
 This release focuses on production-ready research outputs and smoother day-to-day workflows: configurable quality gates (with automated remediation), a fully integrated paragraph-level evidence pipeline, hardened fact-checking prompts, and a revamped caching + TUI experience that makes repeated missions faster and easier to manage.
 
 ### Added
-
-#### Helper Function Consolidation
-
-- **NEW: Centralized Helper Modules** - Major code consolidation initiative reducing duplication and improving maintainability:
-  - Created `src/utils/core-helpers.sh` with 15+ universal helper functions (timestamps, logging, validation, locking, path utilities)
-  - Created `src/utils/json-helpers.sh` for safe JSON manipulation operations
-  - Created `src/utils/file-helpers.sh` for atomic file operations and utilities
-  - Enhanced `src/utils/validation.sh` with 3 new validation functions
-  - Enhanced `src/utils/error-messages.sh` with 5 new error wrapper functions
-
-- **NEW: Comprehensive Documentation**:
-  - `docs/HELPER_FUNCTIONS.md` - Complete API reference for all 20+ helper functions
-  - `docs/MIGRATION_HELPERS.md` - Migration guide with 11 common patterns and examples
-  - Updated `CONTRIBUTING.md` with helper function usage guidelines
-
-- **Migrated 38 Files to Use Helpers**:
-  - 10 core utilities (invoke-agent, budget-tracker, agent-registry, mission-orchestration, etc.)
-  - 6 hooks with graceful fallbacks (research-logger, citation-tracker, post-tool-use, etc.)
-  - 26 utility files across analysis, data, system, and UI categories
-  - All changes maintain backward compatibility with graceful degradation
-
-- **Adoption Metrics** (as of 2025-10-22):
-  - 34 files source `core-helpers.sh`
-  - 81 instances of `get_timestamp()` unified timestamp format
-  - 19 instances of `require_command()` consistent dependency checking
-  - 113 instances of `log_error()` standardized error logging
 
 #### Other Additions
 
