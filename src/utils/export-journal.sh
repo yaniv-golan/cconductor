@@ -1800,22 +1800,27 @@ export_journal() {
         
     } > "$output_file"
     
-    # Display path relative to session directory
+    # Display path relative to current working directory
     local display_output="$output_file"
-    if [[ "$output_file" == "$session_dir"* ]]; then
-        display_output="${output_file#"$session_dir"}"
-        display_output="${display_output#/}"
-    elif command -v python3 >/dev/null 2>&1; then
-        display_output=$(python3 - "$output_file" "$session_dir" <<'PY'
+    if command -v python3 >/dev/null 2>&1; then
+        display_output=$(python3 - "$output_file" "$(pwd)" <<'PY'
 import os, sys
 path = sys.argv[1]
-session_dir = sys.argv[2]
+cwd = sys.argv[2]
 try:
-    print(os.path.relpath(path, session_dir))
+    print(os.path.relpath(path, cwd))
 except Exception:
     print(path)
 PY
 )
+    else
+        # Fallback: try bash string manipulation relative to pwd
+        local pwd_path
+        pwd_path="$(pwd)"
+        if [[ "$output_file" == "$pwd_path"* ]]; then
+            display_output="${output_file#"$pwd_path"}"
+            display_output="${display_output#/}"
+        fi
     fi
     echo "  ✓ Research journal exported to: $display_output" >&2
 }

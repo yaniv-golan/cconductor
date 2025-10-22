@@ -437,8 +437,8 @@ if [[ "$status" == "passed" ]]; then
     exit 0
 fi
 
-echo "✗ Quality gate failed (${failed_claims} claims flagged)" >&2
-echo "  See $(realpath "$OUTPUT_PATH") for details" >&2
+echo "✗ Quality gate flagged ${failed_claims} claims" >&2
+echo "  See $OUTPUT_FILENAME for details" >&2
 
 if [[ "$MODE" == "advisory" ]]; then
     exit 0
