@@ -12,6 +12,12 @@ fi
 PROJECT_ROOT="${PROJECT_ROOT:-$(dirname "$SCRIPT_DIR")}"
 
 # Load dependencies from utils directory
+# Note: SCRIPT_DIR may be set to src/ by parent, but we need core helpers from utils
+UTILS_DIR_FOR_HELPERS="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck disable=SC1091
+source "$UTILS_DIR_FOR_HELPERS/core-helpers.sh"
+# shellcheck disable=SC1091
+source "$UTILS_DIR_FOR_HELPERS/error-messages.sh"
 # Note: SCRIPT_DIR may be set to src/ by parent (cconductor-mission.sh sets CCONDUCTOR_MISSION_SCRIPT_DIR)
 # But mission-orchestration.sh is actually in src/utils/, so we need to detect where WE are
 UTILS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -592,11 +598,11 @@ EOF
     source "$UTILS_DIR/invoke-agent.sh"
     
     local start_time
-    start_time=$(date +%s)
+    start_time=$(get_epoch)
     
     if invoke_agent_v2 "$agent_name" "$agent_input_file" "$agent_output_file" 600 "$session_dir"; then
         local end_time
-        end_time=$(date +%s)
+        end_time=$(get_epoch)
         local duration=$((end_time - start_time))
         
         echo "  ✓ $agent_name completed ($duration seconds)"

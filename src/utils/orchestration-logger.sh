@@ -7,9 +7,22 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 export SCRIPT_DIR
 
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+
+# Source core helpers first
+# shellcheck disable=SC1091
+source "$PROJECT_ROOT/src/utils/core-helpers.sh"
+
+# Check for jq dependency using helper
+require_command "jq" "brew install jq" "apt install jq" || exit 1
+
 # Load error logger for validation failures
 # shellcheck disable=SC1091
 source "$SCRIPT_DIR/error-logger.sh" 2>/dev/null || true
+
+# Source shared-state for locking
+# shellcheck disable=SC1091
+source "$PROJECT_ROOT/src/shared-state.sh"
 
 # Log orchestrator decision
 log_decision() {
@@ -26,7 +39,8 @@ log_decision() {
     if echo "$decision_data" | jq empty 2>/dev/null; then
         validated_data="$decision_data"
     else
-        # Not valid JSON - wrap as string
+        # Not valid JSON - wrap as string and always warn
+        log_warn "Decision data is not valid JSON, wrapping as string"
         if command -v log_warning &>/dev/null; then
             log_warning "$session_dir" "invalid_json" "Decision data is not valid JSON, wrapping as string"
         fi
@@ -44,7 +58,10 @@ log_decision() {
             decision: $data
         }')
     
-    echo "$entry" >> "$log_file"
+    # Use with_lock for thread-safe JSONL append
+    # Use printf to safely handle JSON with special characters
+    # shellcheck disable=SC2016
+    with_lock "$log_file" bash -c 'printf "%s\n" "$0" >> "$1"' "$entry" "$log_file"
 }
 
 # Log agent handoff

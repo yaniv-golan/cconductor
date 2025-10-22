@@ -10,8 +10,15 @@
 
 set -euo pipefail
 
-# Source event logger for Phase 2 metrics
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# Source core helpers first
+# shellcheck disable=SC1091
+source "$SCRIPT_DIR/core-helpers.sh"
+# shellcheck disable=SC1091
+source "$SCRIPT_DIR/error-messages.sh"
+
+# Source event logger for Phase 2 metrics
 # shellcheck disable=SC1091
 source "$SCRIPT_DIR/event-logger.sh" 2>/dev/null || true
 # shellcheck disable=SC1091
@@ -22,11 +29,11 @@ source "$SCRIPT_DIR/verbose.sh" 2>/dev/null || true
 
 # Check if Claude CLI is available
 check_claude_cli() {
-    if ! command -v claude &> /dev/null; then
-        echo "Error: Claude CLI not found in PATH" >&2
-        echo "Install (native): curl -fsSL https://claude.ai/install.sh | bash" >&2
-        echo "Or (npm): npm install -g @anthropic-ai/claude-code" >&2
-        echo "Docs: https://docs.claude.com/en/docs/claude-code/overview" >&2
+    if ! require_command "claude" "curl -fsSL https://claude.ai/install.sh | bash" "npm install -g @anthropic-ai/claude-code"; then
+        log_error "Claude CLI not found in PATH"
+        log_error "Install (native): curl -fsSL https://claude.ai/install.sh | bash"
+        log_error "Or (npm): npm install -g @anthropic-ai/claude-code"
+        log_error "Docs: https://docs.claude.com/en/docs/claude-code/overview"
         return 1
     fi
     
@@ -502,8 +509,8 @@ invoke_agent_v2() {
 
     # Phase 2: Track start time for metrics
     local start_time
-    # macOS-compatible milliseconds (date +%s gives seconds, multiply by 1000)
-    start_time=$(($(date +%s) * 1000))
+    # macOS-compatible milliseconds (epoch gives seconds, multiply by 1000)
+    start_time=$(($(get_epoch) * 1000))
 
     # Phase 2: Log agent invocation with model
     if [ -n "${session_dir:-}" ] && command -v log_agent_invocation &>/dev/null; then
@@ -624,7 +631,7 @@ invoke_agent_v2() {
 
         # Phase 2: Extract metrics and log result
         local end_time
-        end_time=$(($(date +%s) * 1000))
+        end_time=$(($(get_epoch) * 1000))
         local duration=$((end_time - start_time))
         
         # Try to extract cost from Claude's response

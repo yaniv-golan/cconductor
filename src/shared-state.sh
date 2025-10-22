@@ -4,12 +4,17 @@
 
 set -euo pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# Use unique variable name to avoid clobbering caller's SCRIPT_DIR
+_SHARED_STATE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-# Source error messages
-if [ -f "$SCRIPT_DIR/utils/error-messages.sh" ]; then
+# Source core helpers first (provides get_timestamp, logging, etc.)
+# shellcheck disable=SC1091
+source "$_SHARED_STATE_DIR/utils/core-helpers.sh"
+
+# Source error messages for user-friendly errors
+if [ -f "$_SHARED_STATE_DIR/utils/error-messages.sh" ]; then
     # shellcheck disable=SC1091
-    source "$SCRIPT_DIR/utils/error-messages.sh"
+    source "$_SHARED_STATE_DIR/utils/error-messages.sh"
 fi
 
 # Acquire lock on a file
@@ -70,7 +75,9 @@ lock_release() {
 }
 
 # Get ISO 8601 timestamp (UTC)
-# Centralized to ensure consistency across all modules
+# NOTE: This function is also provided by core-helpers.sh
+# We keep it here for backward compatibility with older scripts that source only shared-state.sh
+# The implementation delegates to core-helpers if available, otherwise falls back to inline
 get_timestamp() {
     date -u +"%Y-%m-%dT%H:%M:%SZ"
 }

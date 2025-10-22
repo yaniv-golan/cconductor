@@ -8,6 +8,10 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="${PROJECT_ROOT:-$(dirname "$(dirname "$SCRIPT_DIR")")}"
 
+# Source core helpers
+# shellcheck disable=SC1091
+source "$SCRIPT_DIR/core-helpers.sh" 2>/dev/null || true
+
 # Source dependencies
 # shellcheck disable=SC1091
 source "$SCRIPT_DIR/debug.sh" 2>/dev/null || true

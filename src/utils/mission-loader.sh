@@ -7,6 +7,14 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(dirname "$(dirname "$SCRIPT_DIR")")"
 
+# Source core helpers first
+# shellcheck disable=SC1091
+source "$SCRIPT_DIR/core-helpers.sh"
+# shellcheck disable=SC1091
+source "$SCRIPT_DIR/error-messages.sh"
+# shellcheck disable=SC1091
+source "$SCRIPT_DIR/validation.sh"
+
 # Load dependencies
 # shellcheck disable=SC1091
 source "$SCRIPT_DIR/path-resolver.sh" 2>/dev/null || true
@@ -33,15 +41,17 @@ mission_load() {
   elif [[ -f "$project_mission_dir/${mission_name}.json" ]]; then
     mission_file="$project_mission_dir/${mission_name}.json"
   else
-    echo "Error: Mission '$mission_name' not found" >&2
-    echo "  Searched: $user_mission_dir/" >&2
-    echo "            $project_mission_dir/" >&2
+    log_error "Mission '$mission_name' not found"
+    log_info "Searched: $user_mission_dir/"
+    log_info "          $project_mission_dir/"
+    log_info "Available missions: $(find "$project_mission_dir" -maxdepth 1 -name '*.json' -print0 2>/dev/null | xargs -0 -n1 basename | sed 's/.json$//' | tr '\n' ' ' || echo 'none')"
     return 1
   fi
   
   # Validate mission profile
   if ! mission_validate "$mission_file"; then
-    echo "Error: Mission validation failed for '$mission_name'" >&2
+    log_error "Mission validation failed for '$mission_name'"
+    log_info "Check mission file: $mission_file"
     return 1
   fi
   
@@ -53,12 +63,13 @@ mission_load_file() {
   local mission_file="$1"
   
   if [[ ! -f "$mission_file" ]]; then
-    echo "Error: Mission file not found: $mission_file" >&2
+    error_missing_file "$mission_file" "mission profile"
     return 1
   fi
   
   if ! mission_validate "$mission_file"; then
-    echo "Error: Mission validation failed" >&2
+    log_error "Mission validation failed"
+    log_info "File: $mission_file"
     return 1
   fi
   
@@ -71,7 +82,7 @@ mission_validate() {
   
   # Check valid JSON
   if ! jq empty "$mission_file" 2>/dev/null; then
-    echo "Error: Invalid JSON in $mission_file" >&2
+    error_json_corrupted "$mission_file" "Invalid JSON syntax"
     return 1
   fi
   
@@ -95,14 +106,14 @@ mission_validate() {
   
   for field in "${required_fields[@]}"; do
     if ! jq -e ".$field" "$mission_file" >/dev/null 2>&1; then
-      echo "Error: Missing required field '$field' in mission profile" >&2
+      log_error "Missing required field '$field' in mission profile"
       return 1
     fi
   done
   
   # Validate success_criteria structure
   if ! jq -e '.success_criteria.required_outputs' "$mission_file" >/dev/null 2>&1; then
-    echo "Error: Missing success_criteria.required_outputs in mission profile" >&2
+    log_error "Missing success_criteria.required_outputs in mission profile"
     return 1
   fi
   
@@ -110,7 +121,7 @@ mission_validate() {
   local constraint_fields=("max_iterations")
   for field in "${constraint_fields[@]}"; do
     if ! jq -e ".constraints.$field" "$mission_file" >/dev/null 2>&1; then
-      echo "Error: Missing constraints.$field in mission profile" >&2
+      log_error "Missing constraints.$field in mission profile"
       return 1
     fi
   done
@@ -119,7 +130,7 @@ mission_validate() {
   local max_iterations
   max_iterations=$(jq -r '.constraints.max_iterations' "$mission_file")
   if [[ ! "$max_iterations" =~ ^[0-9]+$ ]] || [[ "$max_iterations" -lt 1 ]]; then
-    echo "Error: constraints.max_iterations must be a positive integer" >&2
+    log_error "constraints.max_iterations must be a positive integer"
     return 1
   fi
   

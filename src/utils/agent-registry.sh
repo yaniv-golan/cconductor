@@ -7,6 +7,14 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(dirname "$(dirname "$SCRIPT_DIR")")"
 
+# Source core helpers first
+# shellcheck disable=SC1091
+source "$SCRIPT_DIR/core-helpers.sh"
+# shellcheck disable=SC1091
+source "$SCRIPT_DIR/error-messages.sh"
+# shellcheck disable=SC1091
+source "$SCRIPT_DIR/validation.sh"
+
 # Load dependencies
 # shellcheck disable=SC1091
 source "$SCRIPT_DIR/path-resolver.sh" 2>/dev/null || true
@@ -38,7 +46,8 @@ agent_registry_init() {
   local output_types_file="$PROJECT_ROOT/config/output_types.json"
   
   if [[ ! -f "$capabilities_file" ]] || [[ ! -f "$input_types_file" ]] || [[ ! -f "$output_types_file" ]]; then
-    echo "Error: Taxonomy files not found in config/" >&2
+    log_error "Taxonomy files not found in config/"
+    log_error "Missing: capabilities.json, input_types.json, or output_types.json"
     return 1
   fi
   
@@ -139,7 +148,8 @@ agent_registry_get() {
   local agent_name="$1"
   
   if [[ -z "${AGENT_REGISTRY_CACHE[$agent_name]:-}" ]]; then
-    echo "Error: Agent '$agent_name' not found in registry" >&2
+    log_error "Agent '$agent_name' not found in registry"
+    log_info "Run 'cconductor list-agents' to see available agents"
     return 1
   fi
   

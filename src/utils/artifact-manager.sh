@@ -7,6 +7,19 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 export SCRIPT_DIR
 
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+
+# Source core helpers first
+# shellcheck disable=SC1091
+source "$PROJECT_ROOT/src/utils/core-helpers.sh"
+
+# Check for jq dependency using helper
+require_command "jq" "brew install jq" "apt install jq" || exit 1
+
+# Source shared-state for atomic operations
+# shellcheck disable=SC1091
+source "$PROJECT_ROOT/src/shared-state.sh"
+
 # Initialize artifact manifest
 artifact_init() {
   local session_dir="$1"
@@ -28,7 +41,13 @@ artifact_register() {
   
   local manifest_file="$session_dir/artifacts/manifest.json"
   
-  if [[ ! -f "$manifest_file" ]]; then
+  # Validate or reinitialize manifest
+  if [[ -f "$manifest_file" ]]; then
+    if ! jq -e '.artifacts | type == "array"' "$manifest_file" >/dev/null 2>&1; then
+      echo "Warning: Corrupted artifact manifest detected, reinitializing" >&2
+      artifact_init "$session_dir"
+    fi
+  else
     artifact_init "$session_dir"
   fi
   
@@ -37,16 +56,16 @@ artifact_register() {
     return 1
   fi
   
-  # Generate artifact ID
+  # Generate content-based artifact ID (stable across file moves)
   local artifact_id
-  artifact_id=$(echo -n "$artifact_path" | sha256sum | cut -c1-12)
+  artifact_id=$("$SCRIPT_DIR/hash-file.sh" "$artifact_path" | cut -c1-12)
   
   # Get file size and hash
   local file_size
   file_size=$(stat -f%z "$artifact_path" 2>/dev/null || stat -c%s "$artifact_path" 2>/dev/null)
   
   local file_hash
-  file_hash=$(sha256sum "$artifact_path" | cut -d' ' -f1)
+  file_hash=$("$SCRIPT_DIR/hash-file.sh" "$artifact_path")
   
   local timestamp
   timestamp=$(get_timestamp)
@@ -57,8 +76,9 @@ artifact_register() {
     tags_json=$(echo "$tags" | jq -R 'split(",") | map(gsub("^\\s+|\\s+$";""))')
   fi
   
-  # Add to manifest
-  jq \
+  # Add to manifest with atomic update
+  # shellcheck disable=SC2016
+  atomic_json_update "$manifest_file" \
     --arg id "$artifact_id" \
     --arg path "$artifact_path" \
     --arg type "$artifact_type" \
@@ -76,9 +96,7 @@ artifact_register() {
       sha256: $sha256,
       size: $size,
       tags: $tags
-    }]' "$manifest_file" > "$manifest_file.tmp"
-  
-  mv "$manifest_file.tmp" "$manifest_file"
+    }]'
   
   echo "$artifact_id"
 }
@@ -95,10 +113,19 @@ artifact_get_path() {
     return 1
   fi
   
-  jq -r \
+  local result
+  result=$(jq -r \
     --arg id "$artifact_id" \
     '.artifacts[] | select(.id == $id) | .path' \
-    "$manifest_file"
+    "$manifest_file")
+  
+  # Check if artifact was found
+  if [[ -z "$result" || "$result" == "null" ]]; then
+    echo "Error: Artifact not found: $artifact_id" >&2
+    return 1
+  fi
+  
+  echo "$result"
 }
 
 # List artifacts by agent
@@ -132,13 +159,11 @@ artifact_link_handoff() {
     return 1
   fi
   
-  jq \
+  # shellcheck disable=SC2016
+  atomic_json_update "$manifest_file" \
     --arg id "$artifact_id" \
     --arg handoff "$handoff_id" \
-    '(.artifacts[] | select(.id == $id) | .handoffs) |= (. // []) + [$handoff]' \
-    "$manifest_file" > "$manifest_file.tmp"
-  
-  mv "$manifest_file.tmp" "$manifest_file"
+    '(.artifacts[] | select(.id == $id) | .handoffs) |= (. // []) + [$handoff]'
 }
 
 # Get artifact metadata

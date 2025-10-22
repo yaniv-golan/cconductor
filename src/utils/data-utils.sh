@@ -4,6 +4,13 @@
 
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# Source core helpers
+# shellcheck disable=SC1091
+source "$SCRIPT_DIR/core-helpers.sh" 2>/dev/null || true
+# shellcheck disable=SC1091
+source "$SCRIPT_DIR/error-messages.sh" 2>/dev/null || true
+
 # Merge multiple JSON files
 merge_json() {
     local files=("$@")
@@ -69,7 +76,11 @@ json_to_csv() {
     local json_file="$1"
     
     if [[ ! -f "$json_file" ]]; then
-        echo "Error: File not found: $json_file" >&2
+        if command -v error_missing_file &>/dev/null; then
+            error_missing_file "$json_file" "File not found"
+        else
+            echo "Error: File not found: $json_file" >&2
+        fi
         return 1
     fi
     
@@ -85,7 +96,11 @@ create_summary() {
     local title="${2:-Summary}"
     
     if [[ ! -f "$json_file" ]]; then
-        echo "Error: File not found: $json_file" >&2
+        if command -v error_missing_file &>/dev/null; then
+            error_missing_file "$json_file" "File not found"
+        else
+            echo "Error: File not found: $json_file" >&2
+        fi
         return 1
     fi
     

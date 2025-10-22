@@ -14,6 +14,13 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# Source core helpers
+# shellcheck disable=SC1091
+source "$SCRIPT_DIR/core-helpers.sh" 2>/dev/null || true
+# shellcheck disable=SC1091
+source "$SCRIPT_DIR/error-messages.sh" 2>/dev/null || true
+
 # shellcheck disable=SC1091
 source "$SCRIPT_DIR/pdf-cache.sh"
 
@@ -37,7 +44,11 @@ get_pdf_read_info() {
     local output_format="${2:-text}"
 
     if [ ! -f "$pdf_path" ]; then
-        echo "Error: PDF file not found: $pdf_path" >&2
+        if command -v error_missing_file &>/dev/null; then
+            error_missing_file "$pdf_path" "PDF file not found"
+        else
+            echo "Error: PDF file not found: $pdf_path" >&2
+        fi
         return 1
     fi
 
@@ -67,7 +78,11 @@ get_pdf_read_info() {
 EOF
             ;;
         *)
-            echo "Error: Unknown format: $output_format" >&2
+            if command -v log_error &>/dev/null; then
+                log_error "Unknown format: $output_format"
+            else
+                echo "Error: Unknown format: $output_format" >&2
+            fi
             echo "Supported formats: text, json" >&2
             return 1
             ;;
@@ -88,12 +103,19 @@ get_pdf_metadata_info() {
     local pdf_path="$1"
 
     if [ ! -f "$pdf_path" ]; then
-        echo "Error: PDF file not found: $pdf_path" >&2
+        if command -v error_missing_file &>/dev/null; then
+            error_missing_file "$pdf_path" "PDF file not found"
+        else
+            echo "Error: PDF file not found: $pdf_path" >&2
+        fi
         return 1
     fi
 
     # Use pdfinfo if available, otherwise basic file info
-    if command -v pdfinfo &> /dev/null; then
+    if command -v require_command &>/dev/null; then
+        require_command "pdfinfo" "" "" "silent" || return 1
+    elif command -v pdfinfo &> /dev/null; then
+        :
         pdfinfo "$pdf_path" 2>/dev/null | grep -E "^(Title|Author|Subject|Keywords|CreationDate|Pages):" || true
     else
         echo "Title: $(basename "$pdf_path" .pdf)"
@@ -215,7 +237,11 @@ batch_prepare_pdfs() {
     local urls_file="$1"
 
     if [ ! -f "$urls_file" ]; then
-        echo "Error: URLs file not found: $urls_file" >&2
+        if command -v error_missing_file &>/dev/null; then
+            error_missing_file "$urls_file" "URLs file not found"
+        else
+            echo "Error: URLs file not found: $urls_file" >&2
+        fi
         return 1
     fi
 
@@ -277,7 +303,11 @@ if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
     case "${1:-help}" in
         info)
             if [ -z "${2:-}" ]; then
-                echo "Error: PDF path required" >&2
+                if command -v log_error &>/dev/null; then
+                    log_error "PDF path required"
+                else
+                    echo "Error: PDF path required" >&2
+                fi
                 echo "Usage: $0 info <pdf_path> [format]" >&2
                 exit 1
             fi
@@ -285,7 +315,11 @@ if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
             ;;
         metadata)
             if [ -z "${2:-}" ]; then
-                echo "Error: PDF path required" >&2
+                if command -v log_error &>/dev/null; then
+                    log_error "PDF path required"
+                else
+                    echo "Error: PDF path required" >&2
+                fi
                 echo "Usage: $0 metadata <pdf_path>" >&2
                 exit 1
             fi
@@ -293,7 +327,11 @@ if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
             ;;
         prepare)
             if [ -z "${2:-}" ]; then
-                echo "Error: URL required" >&2
+                if command -v log_error &>/dev/null; then
+                    log_error "URL required"
+                else
+                    echo "Error: URL required" >&2
+                fi
                 echo "Usage: $0 prepare <url> [title] [source]" >&2
                 exit 1
             fi
@@ -301,7 +339,11 @@ if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
             ;;
         structure)
             if [ -z "${2:-}" ]; then
-                echo "Error: PDF path required" >&2
+                if command -v log_error &>/dev/null; then
+                    log_error "PDF path required"
+                else
+                    echo "Error: PDF path required" >&2
+                fi
                 echo "Usage: $0 structure <pdf_path>" >&2
                 exit 1
             fi
@@ -309,7 +351,11 @@ if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
             ;;
         batch)
             if [ -z "${2:-}" ]; then
-                echo "Error: URLs file required" >&2
+                if command -v log_error &>/dev/null; then
+                    log_error "URLs file required"
+                else
+                    echo "Error: URLs file required" >&2
+                fi
                 echo "Usage: $0 batch <urls_file>" >&2
                 exit 1
             fi
@@ -360,7 +406,11 @@ Note: For actual PDF reading, use Claude's read_file tool with the
 EOF
             ;;
         *)
-            echo "Error: Unknown command: $1" >&2
+            if command -v log_error &>/dev/null; then
+                log_error "Unknown command: $1"
+            else
+                echo "Error: Unknown command: $1" >&2
+            fi
             echo "Run '$0 help' for usage information" >&2
             exit 1
             ;;

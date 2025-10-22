@@ -13,6 +13,12 @@ set -euo pipefail
 # Get script directory and source dependencies
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
+# Source core helpers
+# shellcheck disable=SC1091
+source "$SCRIPT_DIR/core-helpers.sh" 2>/dev/null || true
+# shellcheck disable=SC1091
+source "$SCRIPT_DIR/error-messages.sh" 2>/dev/null || true
+
 # shellcheck disable=SC1091
 source "$SCRIPT_DIR/pdf-cache.sh"
 
@@ -123,7 +129,11 @@ process_pdf() {
     # Compute content hash
     local content_hash
     content_hash=$(compute_file_hash "$file_path") || {
-        echo "Error: Failed to hash PDF: $file_path" >&2
+        if command -v log_error &>/dev/null; then
+            log_error "Failed to hash PDF: $file_path"
+        else
+            echo "Error: Failed to hash PDF: $file_path" >&2
+        fi
         return 1
     }
     
@@ -136,7 +146,11 @@ process_pdf() {
         echo "  ✓ $original_name ($file_size bytes) - adding to cache" >&2
         # Add to cache using content-based hashing
         cache_path=$(cache_local_pdf "$file_path" "$original_name") || {
-            echo "Error: Failed to cache PDF: $file_path" >&2
+            if command -v log_error &>/dev/null; then
+                log_error "Failed to cache PDF: $file_path"
+            else
+                echo "Error: Failed to cache PDF: $file_path" >&2
+            fi
             return 1
         }
     fi
@@ -163,7 +177,11 @@ process_text_file() {
     
     # Copy to session knowledge directory
     if ! cp "$file_path" "$session_dir/knowledge/"; then
-        echo "Error: Failed to copy file to session knowledge: $file_path" >&2
+        if command -v log_error &>/dev/null; then
+            log_error "Failed to copy file to session knowledge: $file_path"
+        else
+            echo "Error: Failed to copy file to session knowledge: $file_path" >&2
+        fi
         return 1
     fi
     
@@ -190,7 +208,11 @@ process_input_directory() {
     
     # Validate directory
     if [[ ! -d "$input_dir" ]]; then
-        echo "Error: Input directory not found: $input_dir" >&2
+        if command -v error_missing_file &>/dev/null; then
+            error_missing_file "$input_dir" "Input directory not found"
+        else
+            echo "Error: Input directory not found: $input_dir" >&2
+        fi
         return 1
     fi
     
@@ -208,7 +230,13 @@ process_input_directory() {
     
     # Process each PDF
     for pdf in "${pdf_files[@]}"; do
-        process_pdf "$pdf" "$session_dir" || echo "Warning: Failed to process PDF: $pdf" >&2
+        process_pdf "$pdf" "$session_dir" || {
+            if command -v log_warn &>/dev/null; then
+                log_warn "Failed to process PDF: $pdf"
+            else
+                echo "Warning: Failed to process PDF: $pdf" >&2
+            fi
+        }
     done
     
     # Discover markdown/text files (flat, no recursion)
@@ -219,7 +247,13 @@ process_input_directory() {
     
     # Process each text file
     for txt in "${text_files[@]}"; do
-        process_text_file "$txt" "$session_dir" || echo "Warning: Failed to process file: $txt" >&2
+        process_text_file "$txt" "$session_dir" || {
+            if command -v log_warn &>/dev/null; then
+                log_warn "Failed to process file: $txt"
+            else
+                echo "Warning: Failed to process file: $txt" >&2
+            fi
+        }
     done
     
     # Check for unsupported file types and warn

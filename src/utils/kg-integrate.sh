@@ -9,6 +9,13 @@ set -euo pipefail
 WRAPPER_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 WRAPPER_ROOT="$(cd "$WRAPPER_DIR/.." && pwd)"
 
+# Source core helpers
+# shellcheck disable=SC1091
+source "$WRAPPER_DIR/core-helpers.sh"
+
+# Check for jq dependency using helper
+require_command "jq" "brew install jq" "apt install jq" || exit 1
+
 # Source dependencies in correct order with explicit error handling
 # Use saved paths to avoid conflicts with sourced scripts that set SCRIPT_DIR
 # shellcheck disable=SC1091

@@ -6,6 +6,15 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(dirname "$(dirname "$SCRIPT_DIR")")"
 
+# Source core helpers and shared-state for atomic operations
+# shellcheck disable=SC1091
+source "$PROJECT_ROOT/src/utils/core-helpers.sh"
+# shellcheck disable=SC1091
+source "$PROJECT_ROOT/src/shared-state.sh"
+
+# Check for jq dependency using helper
+require_command "jq" "brew install jq" "apt install jq" || exit 1
+
 LIBRARY_DIR="$PROJECT_ROOT/library"
 SOURCES_DIR="$LIBRARY_DIR/sources"
 MANIFEST_FILE="$LIBRARY_DIR/manifest.json"
@@ -29,7 +38,7 @@ if [[ ! -f "$MANIFEST_FILE" ]]; then
 fi
 
 session_name="$(basename "$session_dir")"
-timestamp="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
+timestamp=$(get_timestamp)
 
 # Extract claim/source pairs from knowledge graph
 mapfile -t SOURCES < <(jq -c '
@@ -65,12 +74,13 @@ for raw in "${SOURCES[@]}"; do
         collected_at: $now
     }')
 
-    url_hash=$(printf '%s' "$url" | shasum -a 256 | awk '{print $1}')
+    url_hash=$("$SCRIPT_DIR/hash-string.sh" "$url")
     digest_path="$SOURCES_DIR/${url_hash}.json"
 
     if [[ -f "$digest_path" ]]; then
-        tmp_digest="$(mktemp)"
-        jq --argjson entry "$entry_json" '
+        # Use atomic_json_update for thread-safe update
+        # shellcheck disable=SC2016
+        atomic_json_update "$digest_path" --argjson entry "$entry_json" '
             .last_updated = $entry.collected_at |
             .titles = ((.titles // []) + (if ($entry.title // "") == "" then [] else [$entry.title] end) | unique) |
             .entries += [{
@@ -83,8 +93,7 @@ for raw in "${SOURCES[@]}"; do
                 collected_at: $entry.collected_at
             }] |
             .entries |= unique_by({session: .session, claim_id: .claim_id, quote: .quote})
-        ' "$digest_path" > "$tmp_digest"
-        mv "$tmp_digest" "$digest_path"
+        '
     else
         echo "$entry_json" | jq '{
             url: .url,
@@ -105,8 +114,9 @@ for raw in "${SOURCES[@]}"; do
 
     entry_count=$(jq '.entries | length' "$digest_path")
 
-    tmp_manifest="$(mktemp)"
-    jq --arg hash "$url_hash" --arg url "$url" --arg session "$session_name" --arg now "$timestamp" --argjson count "$entry_count" '
+    # Use atomic_json_update for thread-safe manifest update
+    # shellcheck disable=SC2016
+    atomic_json_update "$MANIFEST_FILE" --arg hash "$url_hash" --arg url "$url" --arg session "$session_name" --arg now "$timestamp" --argjson count "$entry_count" '
         .[$hash] = (
             (.[$hash] // {url: $url, first_seen: $now, sessions: []})
             | .url = $url
@@ -115,8 +125,7 @@ for raw in "${SOURCES[@]}"; do
             | .sessions = ((.sessions + [$session]) | unique)
             | .entry_count = $count
         )
-    ' "$MANIFEST_FILE" > "$tmp_manifest"
-    mv "$tmp_manifest" "$MANIFEST_FILE"
+    '
 done
 
 echo "  ✓ Research library updated (${#SOURCES[@]} source references processed)" >&2

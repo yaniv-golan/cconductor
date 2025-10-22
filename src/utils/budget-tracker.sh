@@ -5,6 +5,10 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
+# Source core helpers first
+# shellcheck disable=SC1091
+source "$SCRIPT_DIR/core-helpers.sh"
+
 # Load shared state utilities for atomic JSON updates
 # shellcheck disable=SC1091
 source "$SCRIPT_DIR/../shared-state.sh"
@@ -27,7 +31,7 @@ budget_init() {
   max_time_minutes=$(echo "$mission_profile" | jq -r '.constraints.max_time_minutes // 9999')
   
   local start_time
-  start_time=$(date +%s)
+  start_time=$(get_epoch)
   
   # Initialize budget tracking
   jq -n \
@@ -100,7 +104,7 @@ budget_check() {
   fi
   
   local current_time
-  current_time=$(date +%s)
+  current_time=$(get_epoch)
   
   local start_time
   start_time=$(jq -r '.start_time' "$budget_file")
@@ -133,7 +137,7 @@ budget_check() {
   local start_time
   start_time=$(jq -r '.start_time' "$budget_file")
   local current_time
-  current_time=$(date +%s)
+  current_time=$(get_epoch)
   local elapsed_seconds
   elapsed_seconds=$((current_time - start_time))
   local elapsed_minutes
