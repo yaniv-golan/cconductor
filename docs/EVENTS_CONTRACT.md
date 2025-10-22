@@ -39,7 +39,7 @@ All events follow this base schema:
 - **cost** (number): Estimated cost in USD
 - **duration** (number): Duration in seconds
 
-## Core Event Types (v0.1.x - Preserved)
+## Core Event Types (Preserved)
 
 ### Research Lifecycle
 
@@ -189,7 +189,7 @@ All events follow this base schema:
 }
 ```
 
-## Mission System Event Types (v0.2.0 - New)
+## Mission System Event Types
 
 ### Mission Lifecycle
 
@@ -369,11 +369,11 @@ All events follow this base schema:
 
 ## Backward Compatibility
 
-### v0.1.x Events (Preserved)
-All existing event types remain unchanged. Dashboard and journal export continue working with v0.1.x sessions.
+### Legacy Events (Preserved)
+All existing event types remain unchanged. Dashboard and journal export continue working with legacy sessions.
 
-### v0.2.0 Events (Additive)
-New event types added for mission system. Old consumers can ignore them gracefully.
+### Mission System Events (Additive)
+Event types for mission system are added incrementally. Old consumers can ignore them gracefully.
 
 ### Contract Guarantees
 
@@ -422,10 +422,10 @@ cat session/events.jsonl | jq 'select(.agent == "market-analyzer")'
 
 ## Migration Notes
 
-### From v0.1.x to v0.2.0
-- No migration needed
+### Session Compatibility
+- No migration needed for session upgrades
 - Old sessions remain readable
-- New sessions include additional event types
+- Newer sessions may include additional event types
 - Consumers should check event type before processing
 
 ### Event Schema Versioning

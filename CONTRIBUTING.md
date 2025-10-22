@@ -147,7 +147,7 @@ EOF
 
 ## Coding Standards
 
-### Helper Functions (NEW in v0.2.0)
+### Helper Functions (NEW in v0.3.0)
 
 CConductor provides centralized helper functions to promote code reuse and consistency. **Always use these helpers instead of inline implementations.**
 

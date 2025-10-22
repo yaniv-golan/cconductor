@@ -271,9 +271,9 @@ jq --arg agent "my-agent" \
 
 ## Migration Notes
 
-### From Direct KG Updates (v0.2.0 → v0.2.1)
+### From Direct KG Updates (Early versions)
 
-**Old pattern** (synthesis-agent in v0.2.0):
+**Old pattern** (synthesis-agent in early versions):
 ```markdown
 2. **Knowledge Graph Update**: `knowledge-graph.json`
    - Read existing KG from session root
@@ -281,7 +281,7 @@ jq --arg agent "my-agent" \
    - Write back to same location
 ```
 
-**New pattern** (v0.2.1+):
+**Current pattern**:
 ```markdown
 2. **Synthesis Metadata** (in artifacts directory)
    - Write artifacts to: `artifacts/synthesis-agent/*.json`
@@ -289,7 +289,7 @@ jq --arg agent "my-agent" \
    - Orchestrator handles merge
 ```
 
-**No backward compatibility**: v0.2.0 sessions using old pattern will complete successfully (synthesis-agent wrote KG directly), but new sessions will use artifact pattern.
+**No backward compatibility**: Sessions using old pattern completed successfully (synthesis-agent wrote KG directly), but newer sessions use the artifact pattern.
 
 ## Testing
 

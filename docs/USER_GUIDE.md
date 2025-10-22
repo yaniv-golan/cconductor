@@ -592,7 +592,7 @@ session_1759420487  ← Timestamp-based ID
 
 **Why timestamps**: Ensures unique names, sorts chronologically.
 
-**Note**: Custom session naming (e.g., `my-research-2024`) is planned for v0.2.
+**Note**: Custom session naming (e.g., `my-research-2024`) is planned for a future release.
 
 ### Finding Your Research
 
@@ -715,7 +715,7 @@ CConductor supports different approaches (configured in `config/cconductor-modes
 - Citation networks
 - 30-45 minutes typical
 
-**Note**: v0.2 uses mission-based orchestration. Specify mission type with `--mission` flag or let the system select the best approach automatically.
+**Note**: CConductor uses mission-based orchestration. Specify mission type with `--mission` flag or let the system select the best approach automatically.
 
 ---
 
@@ -888,7 +888,7 @@ Continue previous research to improve quality:
 - Found gaps in coverage
 - Need more citations
 
-**Note**: Session resumption improvements are ongoing in v0.2.x
+**Note**: Session resumption improvements are ongoing
 
 ### Checking Status
 
@@ -1538,11 +1538,11 @@ tar -czf sessions-backup.tar.gz ~/Library/Application\ Support/CConductor/resear
 
 ---
 
-## What's New in v0.2.0
+## Recent Features
 
 ### Mission-Based Orchestration
 
-v0.2.0 introduces autonomous, agentic research coordination:
+CConductor features autonomous, agentic research coordination:
 
 - **Mission Types**: Choose from academic-research, market-research, competitive-analysis, technical-analysis
 - **Dynamic Agent Selection**: System selects best agents based on research needs

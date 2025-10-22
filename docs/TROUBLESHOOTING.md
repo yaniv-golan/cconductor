@@ -617,7 +617,7 @@ find research-sessions -name "*.lock" -exec rm -rf {} +
 
 # Or for specific session
 rm -rf research-sessions/session_*/knowledge-graph.json.lock
-rm -rf research-sessions/session_*/task-queue.json.lock  # v0.1.x only (legacy)
+rm -rf research-sessions/session_*/task-queue.json.lock  # Legacy sessions only
 ```
 
 **Step 4: Resume research**:
@@ -1448,7 +1448,7 @@ jq parse error
 ```bash
 # Check which file is corrupted
 jq empty research-sessions/session_*/knowledge-graph.json
-jq empty research-sessions/session_*/task-queue.json  # v0.1.x only (legacy)
+jq empty research-sessions/session_*/task-queue.json  # Legacy sessions only
 
 # Check file sizes (0 bytes = corrupted)
 ls -lh research-sessions/session_*/*.json
@@ -1674,7 +1674,7 @@ claude --print --settings .claude/settings.json "list files" 2>&1 | grep "HOOK"
 
 ## Verbose Mode
 
-**New in v0.2.0**: Show detailed, user-friendly progress messages during research.
+Show detailed, user-friendly progress messages during research.
 
 ### What is Verbose Mode?
 
@@ -1777,7 +1777,7 @@ CCONDUCTOR_DEBUG=1 CCONDUCTOR_VERBOSE=1 ./cconductor "query"
 
 ## Debug Mode
 
-**New in v0.2.0**: Enable technical logging for troubleshooting.
+Enable technical logging for troubleshooting.
 
 ### Enabling Debug Mode
 

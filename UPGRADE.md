@@ -104,8 +104,8 @@ CConductor automatically checks for updates **once per day** and notifies you wh
 ┌───────────────────────────────────────────────┐
 │ 🔔 Update Available                           │
 │                                               │
-│ Current version: 0.1.0                        │
-│ Latest version:  0.2.0                        │
+│ Current version: 0.3.0                        │
+│ Latest version:  0.3.1                        │
 │                                               │
 │ Run 'cconductor --update' to upgrade              │
 │                                               │
@@ -179,7 +179,7 @@ When you run `cconductor --update`:
 
 ### Version Compatibility
 
-**Same major version** (e.g., 0.1.0 → 0.2.0):
+**Same major version** (e.g., 0.3.0 → 0.3.1):
 
 - ✅ All sessions remain compatible
 - ✅ Configurations work unchanged
@@ -256,7 +256,7 @@ Your research sessions and custom knowledge are always safe in `~/Library/Applic
 
 ### Standard Update
 
-For updates within the same major version (e.g., 0.1.0 → 0.2.0):
+For updates within the same major version (e.g., 0.3.0 → 0.3.1):
 
 ```bash
 # 1. Navigate to your cconductor directory
@@ -523,10 +523,10 @@ PROJECT_ROOT/VERSION                      ← Version tracking (auto-generated)
 
 | Your Session | Engine Version | Compatible? | Action |
 |--------------|----------------|-------------|--------|
-| 0.1.x        | 0.1.x          | ✓ Yes       | Resume works |
-| 0.1.x        | 0.5.x          | ✓ Yes       | Resume works (minor version up) |
-| 0.1.x        | 1.0.x          | ✗ No        | Start new session |
-| 1.0.x        | 0.1.x          | ✗ No        | Upgrade engine |
+| 0.3.x        | 0.3.x          | ✓ Yes       | Resume works |
+| 0.3.x        | 0.5.x          | ✓ Yes       | Resume works (minor version up) |
+| 0.3.x        | 1.0.x          | ✗ No        | Start new session |
+| 1.0.x        | 0.3.x          | ✗ No        | Upgrade engine |
 
 **Rule**: Same major version = compatible. Different major version = incompatible.
 

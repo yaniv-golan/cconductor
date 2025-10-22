@@ -244,7 +244,7 @@ fi
 
 **Symptom**: No `system-errors.log` in session directory  
 **Cause**: `init_error_log()` not called during session init  
-**Fix**: Normal for old sessions created before v0.2.0
+**Fix**: Normal for old sessions created before error logging was introduced
 
 ### Empty log file
 

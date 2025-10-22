@@ -2,7 +2,7 @@
 
 ## Overview
 
-CConductor v0.2.0 introduces **mission-based orchestration** - an autonomous, agentic approach to research that leverages Claude's reasoning capabilities to dynamically plan, execute, and adapt research strategies.
+CConductor features **mission-based orchestration** - an autonomous, agentic approach to research that leverages Claude's reasoning capabilities to dynamically plan, execute, and adapt research strategies.
 
 ## Key Concepts
 

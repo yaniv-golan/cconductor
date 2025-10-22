@@ -1,6 +1,6 @@
 # CConductor Quick Reference
 
-**Command cheat sheet for daily use** - v0.2.0
+**Command cheat sheet for daily use**
 
 ---
 
@@ -456,7 +456,7 @@ dlr session_123                # Resume
 
 ---
 
-## 🎉 New in v0.2.0
+## 🎉 Recent Features
 
 **Mission-Based Orchestration**:
 - Use `--mission` flag to specify research type

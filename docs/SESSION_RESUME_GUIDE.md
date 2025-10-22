@@ -26,7 +26,7 @@ Each research session creates a directory with complete state in your OS-appropr
 session_1234567890/
 ├── session.json              # Metadata (question, timestamps, version, status)
 ├── knowledge-graph.json      # All findings (entities, claims, citations, gaps)
-├── task-queue.json           # Tasks (v0.1.x only - replaced by orchestration in v0.2.0)
+├── task-queue.json           # Tasks (legacy - replaced by orchestration)
 ├── raw/                      # Raw research data from agents
 ├── intermediate/             # Processing artifacts
 └── final/mission-report.md        # Final report (when complete)
@@ -384,7 +384,7 @@ Currently sessions use timestamps:
 session_1234567890
 ```
 
-Future enhancement (planned v0.2):
+Future enhancement (planned for future release):
 
 ```bash
 ./cconductor "question" --name my-research-2024
@@ -423,8 +423,8 @@ jq '{
   gaps: .stats.unresolved_gaps
 }' "$SESSION_DIR/session_1234567890/knowledge-graph.json"
 
-# Get task statistics
-jq '.stats' "$SESSION_DIR/session_1234567890/task-queue.json"  # v0.1.x only (legacy)
+# Get task statistics (if available in legacy sessions)
+jq '.stats' "$SESSION_DIR/session_1234567890/task-queue.json"
 ```
 
 ### Session Migration (Future)

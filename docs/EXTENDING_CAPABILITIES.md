@@ -4,7 +4,7 @@
 
 CConductor's capability taxonomy enables the mission orchestrator to discover and select agents based on what they can do, not just their names. As you build custom agents or need new research types, you can extend the taxonomy.
 
-## Current Taxonomy (v0.2.0)
+## Current Taxonomy
 
 **24 capabilities defined in `config/capabilities.json`**:
 
@@ -226,7 +226,7 @@ Capabilities follow semantic versioning in `capabilities.json`:
 
 ## Future: User Capability Extensions
 
-Planned for v0.3.0:
+Planned for future release:
 
 ```bash
 ~/.config/cconductor/capabilities.json  # User extensions
