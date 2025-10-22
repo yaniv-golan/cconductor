@@ -181,6 +181,118 @@ You receive:
 4. Confirm all claims cited
 5. Generate final report
 
+## Pre-Synthesis Reflection Checklist
+
+**CRITICAL**: Before deciding to invoke synthesis-agent, you MUST verify the following checklist. The quality gate will block synthesis if these criteria aren't met:
+
+### 1. Planning Coverage
+- [ ] Research plan exists and all high-priority tasks (≥8) are completed or explicitly waived
+- [ ] Each planned topic has adequate representation in knowledge graph
+- [ ] Coverage metrics show sufficient claim density across topics
+
+### 2. Quality Standards
+- [ ] Quality gate status is "passed" (check `quality_gate.status` in your context)
+- [ ] Each claim has minimum required sources (typically ≥2) and independent domains
+- [ ] High-confidence claims (≥0.7) exist for all critical findings
+- [ ] Average trust score meets threshold (typically ≥0.6)
+
+### 3. Gap Resolution
+- [ ] All gaps with priority ≥ 8 have been either:
+  - **a) Addressed** with additional research, OR
+  - **b) Explicitly documented** as waived with rationale (out-of-scope/duplicate/infeasible)
+- [ ] High-priority gaps count (`high_priority_gaps.count` in context) is 0 or all are resolved
+- **CANNOT proceed with unacknowledged high-priority gaps**
+
+### 4. Evidence Quality
+- [ ] Sources have sufficient diversity (multiple independent domains per topic)
+- [ ] Recent evidence exists for time-sensitive topics (check recency requirements)
+- [ ] Contradictions are resolved or documented with rationale
+- [ ] Citation coverage is comprehensive (≥90% of claims cited)
+
+### Decision Logic for Synthesis
+
+**If quality gate status is "passed":**
+- Proceed with synthesis-agent invocation
+
+**If quality gate status is "failed":**
+- DO NOT invoke synthesis-agent yet
+- Review `quality_gate.summary` for specific failures
+- Decide: spawn remediation research OR invoke quality-remediator agent
+- Wait for quality gate to pass before synthesis
+
+**If quality gate status is "not_run":**
+- Quality gate will run automatically before synthesis
+- Ensure knowledge graph has sufficient claims and sources
+- If KG is sparse, gather more research first
+
+**If high-priority gaps remain:**
+- Review each gap in `high_priority_gaps.gaps` array
+- Decide: address gap OR document waiver with rationale
+- Cannot proceed to synthesis with unacknowledged gaps ≥8
+
+### Early Exit Verification
+
+When using `action: "early_exit"`, you MUST document in your reasoning:
+- Which checklist items were verified
+- Any gaps/issues that remain and why they're acceptable
+- Rationale for proceeding despite incomplete items
+- Evidence that success criteria are met despite gaps
+
+**Example Early Exit Reasoning:**
+```json
+{
+  "reasoning": {
+    "synthesis_approach": "Mission objective achieved with current findings",
+    "checklist_verification": {
+      "planning_coverage": "Research plan complete, all priority tasks addressed",
+      "quality_standards": "Quality gate passed with 28 claims, avg confidence 0.82",
+      "gap_resolution": "1 medium-priority gap remains but out of scope for this mission",
+      "evidence_quality": "18 independent sources, strong domain diversity"
+    },
+    "waived_items": [
+      {
+        "item": "Historical market data pre-2020",
+        "priority": 6,
+        "rationale": "Mission focuses on current state, historical data not critical"
+      }
+    ]
+  },
+  "action": "early_exit",
+  "reason": "All success criteria met, quality gate passed",
+  "confidence": 0.85,
+  "evidence": "Comprehensive market sizing complete with validation"
+}
+```
+
+## Handling Agent Timeouts
+
+If an agent times out due to inactivity (default: 10 minutes without tool use):
+- You'll see `recent_timeouts` in your context showing which agents hung
+- The timeout indicates the agent likely encountered an error or infinite loop
+
+**Response Strategies**:
+1. **Try different agent**: If web-researcher timed out, try academic-researcher
+2. **Simplify scope**: Break complex tasks into smaller, focused subtasks
+3. **Skip optional work**: If non-critical research hangs, proceed with available data
+4. **Early exit**: If critical agent repeatedly times out, exit with partial results
+
+**Don't**: Repeatedly invoke the same agent with the same task after timeout.
+
+**Example Timeout Response**:
+```json
+{
+  "reasoning": {
+    "observation": "web-researcher timed out after 600s on broad market analysis",
+    "root_cause": "Task scope too large, likely hit API rate limits or parsing complex data",
+    "adaptation": "Split into focused subtasks: market size, key players, trends (separate invocations)"
+  },
+  "action": "invoke",
+  "agent": "web-researcher",
+  "task": "Research current market size for AI coding assistants (2024-2025 only)",
+  "context": "Previous timeout suggests we need narrower scope. Focus only on market sizing data."
+}
+```
+
 ## Agent Handoff Protocol
 
 When passing work between agents, you can use the `handoff` action type. This allows you to explicitly pass context and artifacts from one agent to another.

@@ -74,6 +74,22 @@ If any task failed, set status to "partial" and include "errors": [{"task_id": "
 
 </examples>
 
+## Research Plan Awareness
+
+If a research plan exists at `artifacts/research-plan.json`, it contains:
+- Initial task breakdown with priorities
+- Expected outputs per task
+- Key concepts to investigate
+- Overall research strategy
+
+When conducting research:
+1. Check if the plan exists (use Read tool to access `artifacts/research-plan.json`)
+2. Note which plan items your current task addresses
+3. In your findings output, reference plan items completed or partially addressed
+4. Flag any plan items that may need follow-up research
+
+This helps the orchestrator track coverage and identify remaining gaps across the planned research topics.
+
 ## Research Process
 
 1. Perform 2-4 targeted web searches using different search angles

@@ -190,7 +190,66 @@ prepare_orchestrator_context() {
         return 1
     fi
     
-    # Build context JSON
+    # Extract coverage summary from knowledge graph
+    local coverage_summary
+    coverage_summary=$(echo "$kg_json" | jq -r '
+        .claims // [] | group_by(.topic // "general") | 
+        map({
+            topic: (.[0].topic // "general"),
+            claim_count: length,
+            avg_confidence: (if length > 0 then (map(.confidence // 0) | add / length) else 0 end),
+            unique_domains: (
+                [.[] | .sources[]? | .url // "" | 
+                    sub("^https?://"; "") | sub("/.*$"; "") | sub("^www\\."; "")] 
+                | unique | length
+            )
+        })
+    ' 2>/dev/null || echo "[]")
+    
+    # Extract high-priority gaps (≥8)
+    local high_priority_gaps_count
+    high_priority_gaps_count=$(echo "$kg_json" | jq -r '
+        [.gaps[]? | select(.priority >= 8)] | length
+    ' 2>/dev/null || echo "0")
+    
+    # Get list of high-priority gaps for context
+    local high_priority_gaps_list
+    high_priority_gaps_list=$(echo "$kg_json" | jq -c '
+        [.gaps[]? | select(.priority >= 8) | {
+            description: .description,
+            priority: .priority,
+            status: (.status // "unresolved")
+        }]
+    ' 2>/dev/null || echo "[]")
+    
+    # Check if quality gate has run
+    local quality_gate_status="not_run"
+    local quality_gate_summary="{}"
+    if [[ -f "$session_dir/artifacts/quality-gate-summary.json" ]]; then
+        quality_gate_status=$(jq -r '.status // "unknown"' \
+            "$session_dir/artifacts/quality-gate-summary.json" 2>/dev/null || echo "unknown")
+        quality_gate_summary=$(cat "$session_dir/artifacts/quality-gate-summary.json" 2>/dev/null || echo "{}")
+    fi
+    
+    # Check if research plan exists
+    local research_plan_exists="false"
+    local research_plan="{}"
+    if [[ -f "$session_dir/artifacts/research-plan.json" ]]; then
+        research_plan_exists="true"
+        research_plan=$(cat "$session_dir/artifacts/research-plan.json" 2>/dev/null || echo "{}")
+    fi
+    
+    # Check for recent agent timeouts
+    local recent_timeouts
+    local timeout_lines
+    timeout_lines=$(grep -E '"agent_timeout"|"agent_invocation_failure"' "$session_dir/orchestration-log.jsonl" 2>/dev/null | tail -10 || true)
+    if [[ -n "$timeout_lines" ]]; then
+        recent_timeouts=$(echo "$timeout_lines" | jq -s 'map(select(.type == "agent_timeout" or (.type == "agent_invocation_failure" and (.decision.failure_reason // "") | contains("timeout")))) | map({agent: (.decision.failed_agent // .decision.agent // "unknown"), reason: (.decision.timeout_reason // .decision.failure_reason // "unknown")})' 2>/dev/null || echo "[]")
+    else
+        recent_timeouts="[]"
+    fi
+    
+    # Build context JSON with enhanced diagnostics
     jq -n \
         --argjson mission "$mission_profile" \
         --argjson agents "$agents_json" \
@@ -198,13 +257,35 @@ prepare_orchestrator_context() {
         --argjson budget "$budget_json" \
         --argjson decisions "$decisions_json" \
         --argjson iteration "$iteration" \
+        --argjson coverage "$coverage_summary" \
+        --arg gaps_count "$high_priority_gaps_count" \
+        --argjson gaps_list "$high_priority_gaps_list" \
+        --arg qg_status "$quality_gate_status" \
+        --argjson qg_summary "$quality_gate_summary" \
+        --arg plan_exists "$research_plan_exists" \
+        --argjson plan "$research_plan" \
+        --argjson timeouts "$recent_timeouts" \
         '{
             mission: $mission,
             agents: $agents,
             knowledge_graph: $kg,
             budget: $budget,
             previous_decisions: $decisions,
-            iteration: $iteration
+            iteration: $iteration,
+            coverage_metrics: $coverage,
+            high_priority_gaps: {
+                count: ($gaps_count | tonumber),
+                gaps: $gaps_list
+            },
+            quality_gate: {
+                status: $qg_status,
+                summary: $qg_summary
+            },
+            research_plan: {
+                exists: ($plan_exists == "true"),
+                plan: $plan
+            },
+            recent_timeouts: $timeouts
         }'
 }
 
@@ -231,6 +312,21 @@ $(echo "$context_json" | jq -r '.agents | tojson')
 ## Current Knowledge Graph State
 $(echo "$context_json" | jq -r '.knowledge_graph | tojson')
 
+## Coverage Metrics
+$(echo "$context_json" | jq -r '.coverage_metrics | tojson')
+
+## High-Priority Gaps (≥8)
+Count: $(echo "$context_json" | jq -r '.high_priority_gaps.count')
+Gaps: $(echo "$context_json" | jq -r '.high_priority_gaps.gaps | tojson')
+
+## Quality Gate Status
+Status: $(echo "$context_json" | jq -r '.quality_gate.status')
+Summary: $(echo "$context_json" | jq -r '.quality_gate.summary | tojson')
+
+## Research Plan
+Exists: $(echo "$context_json" | jq -r '.research_plan.exists')
+Plan: $(echo "$context_json" | jq -r '.research_plan.plan | tojson')
+
 ## Budget Status
 $(echo "$context_json" | jq -r '.budget | tojson')
 
@@ -245,9 +341,10 @@ $(echo "$context_json" | jq -r '.iteration')
 Based on this context, decide your next action(s). Use the decision schema to structure your outputs. Think step-by-step:
 
 1. **Reflect** on the current state and what has been accomplished
-2. **Assess** progress toward success criteria
-3. **Plan** the next action(s) needed
-4. **Decide** which agent to invoke, with what task and context
+2. **Assess** progress toward success criteria and coverage completeness
+3. **Review** high-priority gaps and quality gate status
+4. **Plan** the next action(s) needed
+5. **Decide** which agent to invoke, with what task and context
 
 Respond with a JSON object following the orchestrator decision schema:
 
@@ -634,8 +731,9 @@ EOF
         
         return 0
     else
+        local exit_code=$?
         echo "  ✗ $agent_name invocation failed" >&2
-        return 1
+        return $exit_code
     fi
 }
 
@@ -807,6 +905,31 @@ process_orchestrator_decisions() {
                 }')
             log_decision "$session_dir" "agent_invocation" "$decision_log_entry"
             
+            # For synthesis-agent, run quality gate first
+            if [[ "$agent_name" == "synthesis-agent" ]]; then
+                echo "→ Running quality gate before synthesis..."
+                if ! run_quality_assurance_cycle "$session_dir"; then
+                    echo "⚠ Quality gate flagged some claims, synthesis postponed" >&2
+                    
+                    # Provide gate results to orchestrator for remediation decision
+                    local gate_results
+                    if [[ -f "$session_dir/artifacts/quality-gate-summary.json" ]]; then
+                        gate_results=$(cat "$session_dir/artifacts/quality-gate-summary.json")
+                    else
+                        gate_results='{"status": "failed", "message": "Quality gate failed but no summary available"}'
+                    fi
+                    
+                    # Log decision with gate results
+                    log_decision "$session_dir" "synthesis_blocked_quality_gate" \
+                        "$(echo "$orchestrator_output" | jq --argjson gate "$gate_results" \
+                        '. + {quality_gate_failed: $gate}')"
+                    
+                    # Return without invoking synthesis - orchestrator will adapt
+                    return 0
+                fi
+                echo "  ✓ Quality gate passed, proceeding with synthesis"
+            fi
+            
             # Actually invoke the agent - handle failures gracefully
             if _invoke_delegated_agent "$session_dir" "$agent_name" "$task" "$context" "$input_artifacts"; then
                 # Process KG artifacts if agent produced any
@@ -821,9 +944,21 @@ process_orchestrator_decisions() {
                         "$(echo "$orchestrator_output" | jq --arg reason "Outputs incomplete" '. + {failure_reason: $reason}')"
                 fi
             else
-                echo "  ⚠ Agent $agent_name failed - orchestrator will adapt" >&2
-                log_decision "$session_dir" "agent_invocation_failure" \
-                    "$(echo "$orchestrator_output" | jq --arg reason "Agent failed" '. + {failure_reason: $reason}')"
+                local exit_code=$?
+                
+                # Check for timeout (exit code 124)
+                if [[ $exit_code -eq 124 ]]; then
+                    echo "  ⚠ Agent $agent_name timed out (no activity) - orchestrator will adapt" >&2
+                    log_decision "$session_dir" "agent_timeout" \
+                        "$(echo "$orchestrator_output" | jq \
+                        --arg agent "$agent_name" \
+                        --arg reason "inactivity_timeout" \
+                        '. + {timeout: true, failed_agent: $agent, timeout_reason: $reason}')"
+                else
+                    echo "  ⚠ Agent $agent_name failed - orchestrator will adapt" >&2
+                    log_decision "$session_dir" "agent_invocation_failure" \
+                        "$(echo "$orchestrator_output" | jq --arg reason "Agent failed" '. + {failure_reason: $reason}')"
+                fi
             fi
             ;;
             
@@ -905,53 +1040,229 @@ process_orchestrator_decisions() {
     return 0
 }
 
+# Run quality gate on knowledge graph
+run_quality_gate() {
+    local session_dir="$1"
+    
+    # Check if quality gate script exists
+    if [[ ! -f "$PROJECT_ROOT/src/claude-runtime/hooks/quality-gate.sh" ]]; then
+        log_warn "Quality gate script not found, skipping quality check"
+        return 0  # Don't block if gate doesn't exist
+    fi
+    
+    # Run quality gate (always succeeds in advisory mode, so check JSON output)
+    bash "$PROJECT_ROOT/src/claude-runtime/hooks/quality-gate.sh" "$session_dir" > /dev/null 2>&1
+    
+    # Check actual status from the summary file
+    if [[ -f "$session_dir/artifacts/quality-gate-summary.json" ]]; then
+        local status
+        status=$(jq -r '.status // "unknown"' "$session_dir/artifacts/quality-gate-summary.json")
+        if [[ "$status" == "passed" ]]; then
+            return 0  # Passed
+        else
+            return 1  # Failed
+        fi
+    else
+        log_warn "Quality gate summary not found after execution"
+        return 1  # Treat as failure if no output
+    fi
+}
+
+# Run quality assurance cycle (gate + remediation if needed)
+run_quality_assurance_cycle() {
+    local session_dir="$1"
+    
+    # Load quality gate config
+    local quality_config
+    if ! quality_config=$(load_config "quality-gate" 2>/dev/null); then
+        log_warn "Quality gate config not found, skipping quality assurance"
+        return 0
+    fi
+    
+    # Check if remediation is enabled
+    local remediation_enabled
+    remediation_enabled=$(echo "$quality_config" | jq -r '.remediation.enabled // false')
+    
+    local max_attempts
+    max_attempts=$(echo "$quality_config" | jq -r '.remediation.max_attempts // 2')
+    
+    local attempt=1
+    
+    while [[ $attempt -le $max_attempts ]]; do
+        # Run quality gate
+        if run_quality_gate "$session_dir"; then
+            verbose "✓ Quality gate passed"
+            return 0
+        fi
+        
+        # Gate failed
+        if [[ "$remediation_enabled" != "true" ]] || [[ $attempt -eq $max_attempts ]]; then
+            verbose "Quality gate still flagging claims after remediation attempts"
+            return 1
+        fi
+        
+        # Check if quality-remediator agent exists
+        if [[ ! -d "$PROJECT_ROOT/src/claude-runtime/agents/quality-remediator" ]]; then
+            log_warn "Quality remediator agent not found, cannot auto-remediate"
+            return 1
+        fi
+        
+        # Invoke quality remediator
+        echo "→ Invoking quality remediator (attempt $attempt/$max_attempts)..."
+        
+        # Create remediation task
+        local gate_summary
+        if [[ -f "$session_dir/artifacts/quality-gate-summary.json" ]]; then
+            gate_summary=$(cat "$session_dir/artifacts/quality-gate-summary.json")
+        else
+            gate_summary="{}"
+        fi
+        
+        local remediation_task="Review the quality gate flagged claims and gather additional evidence to address the identified issues."
+        local remediation_context="Quality gate summary: $gate_summary"
+        
+        # Invoke remediator
+        if _invoke_delegated_agent "$session_dir" "quality-remediator" "$remediation_task" "$remediation_context" "[]"; then
+            # Process any KG artifacts from remediation
+            process_agent_kg_artifacts "$session_dir" "quality-remediator"
+            verbose "  ✓ Remediation attempt $attempt completed"
+        else
+            log_warn "Quality remediator invocation failed"
+            return 1
+        fi
+        
+        attempt=$((attempt + 1))
+    done
+    
+    # Final gate check after all attempts
+    if run_quality_gate "$session_dir"; then
+        echo "✓ Quality gate passed after remediation"
+        return 0
+    fi
+    
+    return 1
+}
+
 # Check if mission is complete
 check_mission_complete() {
     local session_dir="$1"
     local mission_profile="$2"
     local orchestrator_output="$3"
     
-    # Extract decision JSON from output
-    local decision_json
-    if decision_json=$(extract_orchestrator_decision "$orchestrator_output" 2>/dev/null); then
-        # Check if orchestrator explicitly signaled completion
-        local decision_action
-        decision_action=$(echo "$decision_json" | jq -r '.action')
+    # Initialize completion checklist
+    local planning_done=false
+    local quality_gate_passed=false
+    local high_priority_gaps_resolved=false
+    local required_outputs_present=false
+    
+    # 1. Check planning done (if research plan exists)
+    if [[ -f "$session_dir/artifacts/research-plan.json" ]]; then
+        planning_done=true
+    else
+        # Planning is optional - not all missions need explicit planning
+        planning_done=true
+    fi
+    
+    # 2. Check quality gate
+    if [[ -f "$session_dir/artifacts/quality-gate-summary.json" ]]; then
+        local gate_status
+        gate_status=$(jq -r '.status // "unknown"' "$session_dir/artifacts/quality-gate-summary.json" 2>/dev/null || echo "unknown")
+        if [[ "$gate_status" == "passed" ]]; then
+            quality_gate_passed=true
+        fi
+    else
+        # Quality gate hasn't run yet - not a failure
+        quality_gate_passed=true
+    fi
+    
+    # 3. Check high-priority gaps (≥8)
+    local unresolved_gaps
+    unresolved_gaps=$(jq -r '[.gaps[]? | select(.priority >= 8 and (.status // "unresolved") != "resolved")] | length' \
+        "$session_dir/knowledge-graph.json" 2>/dev/null || echo "0")
+    if [[ "$unresolved_gaps" -eq 0 ]]; then
+        high_priority_gaps_resolved=true
+    fi
+    
+    # 4. Check required outputs exist in artifacts
+    local required_outputs
+    required_outputs=$(echo "$mission_profile" | jq -r '.success_criteria.required_outputs[]?' 2>/dev/null)
+    
+    if [[ -z "$required_outputs" ]]; then
+        # No required outputs specified
+        required_outputs_present=true
+    else
+        # Get all artifacts
+        local artifacts
+        artifacts=$(artifact_list_all "$session_dir" 2>/dev/null || echo "[]")
         
-        if [[ "$decision_action" == "early_exit" ]]; then
-            return 0  # Complete (early)
+        # Check each required output
+        local all_found=true
+        while IFS= read -r required_output; do
+            [[ -z "$required_output" ]] && continue
+            
+            # Check if any artifact has this output type
+            local found
+            found=$(echo "$artifacts" | jq -r --arg type "$required_output" '.[]? | select(.type == $type) | .type' | head -1)
+            
+            if [[ -z "$found" ]]; then
+                all_found=false
+                break
+            fi
+        done <<< "$required_outputs"
+        
+        if [[ "$all_found" == "true" ]]; then
+            required_outputs_present=true
         fi
     fi
     
-    # Check success criteria - verify required outputs exist in artifacts
-    local required_outputs
-    required_outputs=$(echo "$mission_profile" | jq -r '.success_criteria.required_outputs[]?')
+    # 5. Check for orchestrator early_exit decision
+    local decision_json
+    if decision_json=$(extract_orchestrator_decision "$orchestrator_output" 2>/dev/null); then
+        local decision_action
+        decision_action=$(echo "$decision_json" | jq -r '.action // ""')
+        
+        if [[ "$decision_action" == "early_exit" ]]; then
+            # Orchestrator explicitly requested early exit
+            # Log completion verification with current checklist state
+            log_decision "$session_dir" "completion_verification" "$(jq -n \
+                --argjson planning "$planning_done" \
+                --argjson quality "$quality_gate_passed" \
+                --argjson gaps "$high_priority_gaps_resolved" \
+                --argjson outputs "$required_outputs_present" \
+                --arg early_exit "true" \
+                '{
+                    planning_done: $planning,
+                    quality_gate_passed: $quality,
+                    gaps_resolved: $gaps,
+                    outputs_present: $outputs,
+                    early_exit_requested: $early_exit
+                }')"
+            return 0  # Complete (early exit)
+        fi
+    fi
     
-    # If no required outputs specified, mission is complete
-    if [[ -z "$required_outputs" ]]; then
+    # Log completion verification
+    log_decision "$session_dir" "completion_verification" "$(jq -n \
+        --argjson planning "$planning_done" \
+        --argjson quality "$quality_gate_passed" \
+        --argjson gaps "$high_priority_gaps_resolved" \
+        --argjson outputs "$required_outputs_present" \
+        '{
+            planning_done: $planning,
+            quality_gate_passed: $quality,
+            gaps_resolved: $gaps,
+            outputs_present: $outputs
+        }')"
+    
+    # Mission complete only if all checks pass
+    if [[ "$planning_done" == "true" ]] && \
+       [[ "$quality_gate_passed" == "true" ]] && \
+       [[ "$high_priority_gaps_resolved" == "true" ]] && \
+       [[ "$required_outputs_present" == "true" ]]; then
         return 0
     fi
     
-    # Get all artifacts
-    local artifacts
-    artifacts=$(artifact_list_all "$session_dir")
-    
-    # Check each required output
-    while IFS= read -r required_output; do
-        [[ -z "$required_output" ]] && continue
-        
-        # Check if any artifact has this output type
-        local found
-        found=$(echo "$artifacts" | jq -r --arg type "$required_output" '.[] | select(.type == $type) | .type' | head -1)
-        
-        if [[ -z "$found" ]]; then
-            # Required output not found
-            return 1
-        fi
-    done <<< "$required_outputs"
-    
-    # All required outputs found
-    return 0
+    return 1
 }
 
 # Main mission orchestration loop
@@ -1115,7 +1426,7 @@ run_mission_orchestration() {
     else
         local final_report_missing_display
         final_report_missing_display=$(rel_path_for_display "$final_report" "$session_dir" "$MISSION_ORCH_BASE_DIR")
-        echo "  ✗ Final report missing at $final_report_missing_display" >&2
+        verbose "  (Final report not generated - synthesis may not have completed: $final_report_missing_display)"
     fi
     
     # Export research journal as markdown
@@ -1314,7 +1625,7 @@ run_mission_orchestration_resume() {
     else
         local final_report_missing_display
         final_report_missing_display=$(rel_path_for_display "$final_report" "$session_dir" "$MISSION_ORCH_BASE_DIR")
-        echo "  ✗ Final report missing at $final_report_missing_display" >&2
+        verbose "  (Final report not generated - synthesis may not have completed: $final_report_missing_display)"
     fi
     
     # Export research journal as markdown
@@ -1402,7 +1713,56 @@ prepare_orchestrator_context_resume() {
         return 1
     fi
     
-    # Build context with resume metadata
+    # Extract coverage summary from knowledge graph
+    local coverage_summary
+    coverage_summary=$(echo "$kg_json" | jq -r '
+        .claims // [] | group_by(.topic // "general") | 
+        map({
+            topic: (.[0].topic // "general"),
+            claim_count: length,
+            avg_confidence: (if length > 0 then (map(.confidence // 0) | add / length) else 0 end),
+            unique_domains: (
+                [.[] | .sources[]? | .url // "" | 
+                    sub("^https?://"; "") | sub("/.*$"; "") | sub("^www\\."; "")] 
+                | unique | length
+            )
+        })
+    ' 2>/dev/null || echo "[]")
+    
+    # Extract high-priority gaps (≥8)
+    local high_priority_gaps_count
+    high_priority_gaps_count=$(echo "$kg_json" | jq -r '
+        [.gaps[]? | select(.priority >= 8)] | length
+    ' 2>/dev/null || echo "0")
+    
+    # Get list of high-priority gaps for context
+    local high_priority_gaps_list
+    high_priority_gaps_list=$(echo "$kg_json" | jq -c '
+        [.gaps[]? | select(.priority >= 8) | {
+            description: .description,
+            priority: .priority,
+            status: (.status // "unresolved")
+        }]
+    ' 2>/dev/null || echo "[]")
+    
+    # Check if quality gate has run
+    local quality_gate_status="not_run"
+    local quality_gate_summary="{}"
+    if [[ -f "$session_dir/artifacts/quality-gate-summary.json" ]]; then
+        quality_gate_status=$(jq -r '.status // "unknown"' \
+            "$session_dir/artifacts/quality-gate-summary.json" 2>/dev/null || echo "unknown")
+        quality_gate_summary=$(cat "$session_dir/artifacts/quality-gate-summary.json" 2>/dev/null || echo "{}")
+    fi
+    
+    # Check if research plan exists
+    local research_plan_exists="false"
+    local research_plan="{}"
+    if [[ -f "$session_dir/artifacts/research-plan.json" ]]; then
+        research_plan_exists="true"
+        research_plan=$(cat "$session_dir/artifacts/research-plan.json" 2>/dev/null || echo "{}")
+    fi
+    
+    # Build context with resume metadata and enhanced diagnostics
     jq -n \
         --argjson mission "$mission_profile" \
         --argjson agents "$agents_json" \
@@ -1412,6 +1772,13 @@ prepare_orchestrator_context_resume() {
         --argjson iteration "$iteration" \
         --argjson is_resume true \
         --arg refinement "$refinement" \
+        --argjson coverage "$coverage_summary" \
+        --arg gaps_count "$high_priority_gaps_count" \
+        --argjson gaps_list "$high_priority_gaps_list" \
+        --arg qg_status "$quality_gate_status" \
+        --argjson qg_summary "$quality_gate_summary" \
+        --arg plan_exists "$research_plan_exists" \
+        --argjson plan "$research_plan" \
         '{
             mission: $mission,
             agents: $agents,
@@ -1420,6 +1787,19 @@ prepare_orchestrator_context_resume() {
             previous_decisions: $decisions,
             iteration: $iteration,
             is_resume: $is_resume,
-            refinement_guidance: (if $refinement != "" then $refinement else null end)
+            refinement_guidance: (if $refinement != "" then $refinement else null end),
+            coverage_metrics: $coverage,
+            high_priority_gaps: {
+                count: ($gaps_count | tonumber),
+                gaps: $gaps_list
+            },
+            quality_gate: {
+                status: $qg_status,
+                summary: $qg_summary
+            },
+            research_plan: {
+                exists: ($plan_exists == "true"),
+                plan: $plan
+            }
         }'
 }
