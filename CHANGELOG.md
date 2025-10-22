@@ -11,6 +11,34 @@ This release focuses on production-ready research outputs and smoother day-to-da
 
 ### Added
 
+#### Helper Function Consolidation
+
+- **NEW: Centralized Helper Modules** - Major code consolidation initiative reducing duplication and improving maintainability:
+  - Created `src/utils/core-helpers.sh` with 15+ universal helper functions (timestamps, logging, validation, locking, path utilities)
+  - Created `src/utils/json-helpers.sh` for safe JSON manipulation operations
+  - Created `src/utils/file-helpers.sh` for atomic file operations and utilities
+  - Enhanced `src/utils/validation.sh` with 3 new validation functions
+  - Enhanced `src/utils/error-messages.sh` with 5 new error wrapper functions
+
+- **NEW: Comprehensive Documentation**:
+  - `docs/HELPER_FUNCTIONS.md` - Complete API reference for all 20+ helper functions
+  - `docs/MIGRATION_HELPERS.md` - Migration guide with 11 common patterns and examples
+  - Updated `CONTRIBUTING.md` with helper function usage guidelines
+
+- **Migrated 38 Files to Use Helpers**:
+  - 10 core utilities (invoke-agent, budget-tracker, agent-registry, mission-orchestration, etc.)
+  - 6 hooks with graceful fallbacks (research-logger, citation-tracker, post-tool-use, etc.)
+  - 26 utility files across analysis, data, system, and UI categories
+  - All changes maintain backward compatibility with graceful degradation
+
+- **Adoption Metrics** (as of 2025-10-22):
+  - 34 files source `core-helpers.sh`
+  - 81 instances of `get_timestamp()` unified timestamp format
+  - 19 instances of `require_command()` consistent dependency checking
+  - 113 instances of `log_error()` standardized error logging
+
+#### Other Additions
+
 - Configurable quality gate diagnostics (`config/quality-gate.default.json`) with granular thresholds, expanded documentation, and automated tests so teams can dial rigor up or down per mission.
 - A dedicated quality remediator agent that can automatically address issues flagged by the gate before a report ships.
 - Cache-aware web research tooling: shared Library Memory guardrails, new `cache-aware web research` skill, and supporting scripts/hooks that safely reuse previously sourced material.

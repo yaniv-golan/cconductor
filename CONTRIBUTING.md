@@ -147,19 +147,84 @@ EOF
 
 ## Coding Standards
 
+### Helper Functions (NEW in v0.2.0)
+
+CConductor provides centralized helper functions to promote code reuse and consistency. **Always use these helpers instead of inline implementations.**
+
+#### Core Helper Modules
+
+1. **`core-helpers.sh`** - Universal utilities (timestamps, logging, validation)
+2. **`error-messages.sh`** - Consistent, actionable error messages
+3. **`validation.sh`** - Data validation functions
+4. **`json-helpers.sh`** - JSON manipulation utilities
+5. **`file-helpers.sh`** - Safe file operations
+6. **`shared-state.sh`** - Atomic operations and locking
+
+#### When to Use Helpers
+
+✅ **Always use helpers for:**
+- Timestamps: `get_timestamp()` instead of `date -u +...`
+- Dependency checks: `require_command()` instead of `command -v`
+- Error messages: `log_error()` / `error_missing_file()` instead of `echo "Error:" >&2`
+- JSON validation: `is_valid_json()` instead of inline `jq '.'` checks
+- File locking: `with_lock()` / `atomic_json_update()` instead of manual locking
+
+❌ **Don't use helpers for:**
+- Script-specific logic
+- One-off operations that don't benefit from abstraction
+- Tests that verify low-level behavior
+
+#### Sourcing Helpers
+
+Add at the top of your script (after shebang and `set -euo pipefail`):
+
+```bash
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# Source core helpers
+# shellcheck disable=SC1091
+source "$SCRIPT_DIR/core-helpers.sh"
+# shellcheck disable=SC1091
+source "$SCRIPT_DIR/error-messages.sh"
+```
+
+**For hooks** (must never fail):
+```bash
+source "$PROJECT_ROOT/src/utils/core-helpers.sh" 2>/dev/null || {
+    # Minimal fallbacks
+    get_timestamp() { date -u +"%Y-%m-%dT%H:%M:%SZ"; }
+    log_error() { echo "Error: $*" >&2; }
+}
+```
+
+#### Quick Reference
+
+| Instead of | Use |
+|------------|-----|
+| `date -u +"%Y-%m-%dT%H:%M:%SZ"` | `get_timestamp` |
+| `date +%s` | `get_epoch` |
+| `command -v jq` | `require_command "jq"` |
+| `echo "Error: ..." >&2` | `log_error "..."` |
+| `echo "Warning: ..." >&2` | `log_warn "..."` |
+| `jq '.' file.json` (validation) | `is_valid_json "$(cat file.json)"` |
+| `mkdir -p "$dir"` | `ensure_dir "$dir"` |
+| `flock ... { ... }` | `with_lock lock_file func` |
+
+**Full Documentation**: See [docs/HELPER_FUNCTIONS.md](docs/HELPER_FUNCTIONS.md) and [docs/MIGRATION_HELPERS.md](docs/MIGRATION_HELPERS.md)
+
 ### Error Handling Guidelines
 
-CConductor uses multiple error reporting patterns depending on the context:
+CConductor uses helper functions for consistent error reporting:
 
 1. **User-facing errors**: Use `error_*()` functions from `src/utils/error-messages.sh`
    - These provide formatted, actionable error messages with troubleshooting steps
-   - Example: `error_lock_failed "$file" "$timeout"`
+   - Example: `error_missing_file "$file" "Configuration required"`
    
-2. **Internal errors**: Use `echo "Error: message" >&2` for simple cases
-   - Quick, lightweight error reporting for internal failures
-   - Example: `echo "Error: Invalid input" >&2; return 1`
+2. **Generic errors**: Use `log_error()` from `core-helpers.sh`
+   - Quick, consistent error reporting
+   - Example: `log_error "Failed to process request"`
    
-3. **Structured errors**: Use `jq -n` for JSON error responses
+3. **Structured errors**: Use `jq -n` for JSON error responses (specialized tools only)
    - Used by tools and APIs that need machine-readable errors
    - Example: `jq -n --arg err "Invalid format" '{error: $err, result: null}'`
 
@@ -167,9 +232,7 @@ CConductor uses multiple error reporting patterns depending on the context:
 - Always return non-zero exit codes on error (`return 1`)
 - Clean up resources (locks, temp files) before returning
 - Provide context in error messages (what failed, why, how to fix)
-- Use consistent error formats within a module
-
-**Recommendation**: Standardize on pattern #1 (error_*() functions) for v0.3.0 for better user experience.
+- Use helper functions for consistency across the codebase
 
 ### Bash Style Guide
 
