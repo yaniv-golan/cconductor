@@ -5,7 +5,9 @@ All notable changes to CConductor will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.3.0] - Unreleased
+## [0.3.0] - 2025-10-22
+
+This release focuses on production-ready research outputs and smoother day-to-day workflows: configurable quality gates (with automated remediation), a fully integrated paragraph-level evidence pipeline, hardened fact-checking prompts, and a revamped caching + TUI experience that makes repeated missions faster and easier to manage.
 
 ### Added
 
@@ -21,7 +23,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Evidence generation is integrated across the orchestration pipeline; mission orchestration, hooks, and prompts were refreshed to automatically collect, merge, and render citations, and `cconductor` now defaults to `--evidence-mode render` with paragraph-level footnotes.
 - Web caching received a full overhaul: richer verbose narration, stronger library guardrails, a smarter web-search cache, and new CLI flags (`--no-cache`, `--no-web-fetch-cache`, `--no-web-search-cache`) for fine-grained control.
 - Sessions now persist the project root (`.cconductor-root`) so relocated session directories continue to resolve tools and agents correctly.
-- Interactive tooling took a big leap—session browser entries are more compact, show emoji status indicators, surface process health, and the Configure action now displays live settings output in both CLI and dialog TUIs.
+- Interactive tooling took a big leap—session browser entries are more compact, show emoji status indicators, surface process health, and the Configure action now displays live settings output in both CLI and dialog TUIs. Run ./cconductor with no args to go into Interactive mode.
 - Launcher, test runner, and related scripts now explicitly run under Bash 4 to guarantee consistent behavior across macOS and Linux.
 - Documentation was refreshed to remove hard-coded versions and to highlight the new caching and evidence flows.
 
