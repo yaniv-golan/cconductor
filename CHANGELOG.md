@@ -5,6 +5,17 @@ All notable changes to CConductor will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- Orchestrator agent I/O model understanding: Updated system prompt to clarify that research agents return JSON in responses rather than writing to files directly. Prevents confusing refinement instructions on agent reinvocation.
+- Knowledge graph integration now uses `json-parser.sh` utilities to properly handle markdown-wrapped JSON from agents. Fixes issue where agent findings weren't integrated when wrapped in markdown code fences.
+
+### Changed
+
+- Consolidated JSON parsing across `knowledge-graph.sh` and `export-journal.sh` to use shared `json-parser.sh` utilities for consistent markdown fence handling.
+
 ## [0.3.1] - 2025-10-22
 
 ### Changed
@@ -31,8 +42,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 This release focuses on production-ready research outputs and smoother day-to-day workflows: configurable quality gates (with automated remediation), a fully integrated paragraph-level evidence pipeline, hardened fact-checking prompts, and a revamped caching + TUI experience that makes repeated missions faster and easier to manage.
 
 ### Added
-
-#### Other Additions
 
 - Configurable quality gate diagnostics (`config/quality-gate.default.json`) with granular thresholds, expanded documentation, and automated tests so teams can dial rigor up or down per mission.
 - A dedicated quality remediator agent that can automatically address issues flagged by the gate before a report ships.
