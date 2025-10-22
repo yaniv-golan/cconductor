@@ -263,7 +263,7 @@ if [ "$tool_name" = "Write" ] && [ "$exit_code" = "0" ]; then
                 rm -f "$file_path" 2>/dev/null || true
             fi
             if [[ -n "$session_dir" ]]; then
-                jq -n \
+                jq -nc \
                     --arg ts "$(get_timestamp)" \
                     --arg fp "$file_path" \
                     --arg restored "$restored" \
