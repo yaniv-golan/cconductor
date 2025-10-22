@@ -312,6 +312,147 @@ $session_dir/.mcp.json  # Local scope for Claude Code
 }
 ```
 
+## Helper Function Consolidation (v0.2.1 - October 2025)
+
+**Status**: ✅ Complete - 38 files migrated, ~500 lines eliminated
+
+### Overview
+
+Comprehensive consolidation of duplicate helper code across 38 files into centralized, reusable modules.
+
+### Core Helper Modules
+
+**1. core-helpers.sh** (214 lines)
+- `require_command()` - Dependency checking with install hints
+- `get_timestamp()` / `get_epoch()` - Cross-platform timestamps  
+- `log_error()` / `log_warn()` / `log_info()` - Consistent logging
+- `is_valid_json()` / `is_valid_file()` - Quick validation
+- `ensure_dir()` / `safe_cd()` - Path utilities
+- `simple_lock_acquire()` / `simple_lock_release()` - Atomic locking (mkdir-based, macOS compatible)
+
+**2. error-messages.sh** (enhanced)
+- `error_missing_file()` - File not found errors
+- `error_dependency_missing()` - Missing dependency with install hints
+- `error_invalid_argument()` - Argument validation errors
+- `error_network_failure()` - Network operation failures
+- `error_permission_denied()` - Permission errors
+- `error_rate_limit()` - Rate limit errors
+
+**3. validation.sh** (enhanced)
+- `validate_command()` - Safe command validation
+- `validate_agent_metadata()` - Agent JSON validation
+
+**4. json-helpers.sh** (214 lines)
+- `json_get_field()` - Extract field with fallback
+- `json_has_field()` - Check field existence
+- `json_merge_files()` - Merge JSON files
+- `json_array_append()` - Append to array with locking
+
+**5. file-helpers.sh** (144 lines)
+- `create_temp_dir()` - Unique temp directories
+- `safe_write_file()` - Atomic file writes
+- `backup_file()` - Timestamped backups
+- `file_age_seconds()` - File age calculation
+- `find_files_by_pattern()` - Smart file finding
+
+**6. Hash utilities**
+- `hash-file.sh` - Cross-platform file hashing (sha256sum/shasum/openssl)
+- `hash-string.sh` - Cross-platform string hashing
+
+### Migration Pattern
+
+**Core Utilities** (14 files):
+- Orchestration: invoke-agent, budget-tracker, agent-registry, mission-orchestration, mission-loader
+- State: shared-state, digital-librarian, artifact-manager
+- Data: orchestration-logger, data-utils, kg-integrate, kg-artifact-processor, input-files-manager, pdf-reader
+
+**Hooks** (6 files) - with graceful fallbacks:
+- citation-tracker, research-logger, quality-gate
+- post-tool-use, pre-tool-use, stop-build-evidence
+
+**UI/System** (12 files) - with conditional sourcing:
+- UI: dashboard, session-manager, tui, session-commands, citation-manager
+- System: debug, init-and-update, version-manager, path-resolver, config-loader, calculate, setup-hooks
+
+**Skills** (3 files):
+- hash-url, show-digest, SKILL.md
+
+**Documentation** (3 files):
+- CONTRIBUTING.md (updated with helper guidelines)
+- CHANGELOG.md (v0.2.1 entry)
+- docs/HELPER_FUNCTIONS.md (deleted - inline docs preferred)
+
+### Key Design Decisions
+
+**1. Graceful Degradation for Hooks**
+Hooks source helpers with fallbacks to ensure they never fail:
+```bash
+source "$PROJECT_ROOT/src/utils/core-helpers.sh" 2>/dev/null || {
+    get_timestamp() { date -u +"%Y-%m-%dT%H:%M:%SZ"; }
+    log_error() { echo "Error: $*" >&2; }
+}
+```
+
+**2. Conditional Sourcing for Standalone Scripts**
+Scripts that may run independently check helper availability:
+```bash
+if command -v log_error &>/dev/null; then
+    log_error "Failed"
+else
+    echo "Error: Failed" >&2
+fi
+```
+
+**3. Variable Collision Prevention**
+`shared-state.sh` uses `_SHARED_STATE_DIR` instead of `SCRIPT_DIR` to avoid clobbering caller's variables.
+
+**4. Cross-Platform Compatibility**
+- No `flock` (not on macOS) - use `mkdir` for atomic locking
+- No Bash 4 features in hooks (Claude runs them with Bash 3.2)
+- Hash utilities detect available tools (sha256sum/shasum/openssl)
+
+### Bugs Fixed During Consolidation
+
+1. **kg-integrate.sh** - Double-path error (`$WRAPPER_ROOT` → `$WRAPPER_DIR`)
+2. **orchestration-logger.sh** - Bash syntax error with JSON parentheses in `bash -c`
+3. **shared-state.sh** - Variable collision (`$SCRIPT_DIR` clobbering)
+4. **citation-tracker.sh** - Missing stdin validation
+5. **research-logger.sh** - Missing stdin validation
+
+### Impact
+
+- **Code Reduction**: ~500 lines of duplicated code eliminated
+- **Consistency**: 38 files now use centralized patterns
+- **Maintainability**: Fix bugs once, benefit everywhere
+- **Cross-Platform**: Better macOS/Linux compatibility
+- **Documentation**: Inline docs + CONTRIBUTING.md guide
+
+### Helper Usage Guidelines
+
+**Always**:
+- Source helpers at script start
+- Quote variables: `"$var"`
+- Check return codes
+- Use fallbacks in hooks
+
+**Never**:
+- Use `flock` (not macOS compatible)
+- Assume helpers available (check or fallback)
+- Duplicate helper logic inline
+- Skip error handling
+
+**Patterns to Replace**:
+| Old | New | Module |
+|-----|-----|--------|
+| `date -u +"%Y-%m-%dT%H:%M:%SZ"` | `get_timestamp` | core-helpers |
+| `date +%s` | `get_epoch` | core-helpers |
+| `command -v jq` | `require_command "jq"` | core-helpers |
+| `echo "Error:" >&2` | `log_error` | core-helpers |
+| Manual JSON validation | `is_valid_json` | core-helpers |
+| `mkdir -p` | `ensure_dir` | core-helpers |
+| Manual locking | `atomic_json_update` | shared-state |
+| `shasum`/`sha256sum` | `hash-file.sh` | utils |
+
 ## Design Patterns
 
 ### Pattern 1: Mission-Based Orchestration (v0.2.0)
