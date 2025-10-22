@@ -188,7 +188,7 @@ The gate now defaults to **advisory mode**:
 - Reports still complete, but the top of the document shows a “Quality Issues Detected” banner when thresholds are missed.
 - Sessions end with status `completed_with_advisory`, and the full diagnostics live in `artifacts/quality-gate.json` plus a compact summary in `artifacts/quality-gate-summary.json`.
 - The orchestrator (or a manual resume) can read those files to follow the remediation checklist and rerun the gate.
-- User-facing deliverables live in `output/` (mission report, research journal); supporting diagnostics remain in `artifacts/`.
+- User-facing deliverables live in `final/` (mission report, research journal); supporting diagnostics remain in `artifacts/`.
 
 Switch the config to `mode: "enforce"` if you prefer to block finalization until every threshold is satisfied. All thresholds and mode settings live in `~/.config/cconductor/quality-gate.json`.
 
