@@ -6,6 +6,20 @@
 # from events.jsonl
 #
 
+# Get script directory for sourcing dependencies
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# Source JSON parser for robust JSON extraction
+# shellcheck disable=SC1091
+source "$SCRIPT_DIR/json-parser.sh" 2>/dev/null || {
+    # Fallback if json-parser not available - use manual extraction
+    extract_json_from_text() {
+        local text="$1"
+        # shellcheck disable=SC2016
+        echo "$text" | sed 's/^```json\s*//;s/\s*```$//'
+    }
+}
+
 # Helper function to format credibility (peer_reviewed -> Peer Reviewed, academic -> Academic)
 format_credibility() {
     local cred="$1"
@@ -677,10 +691,13 @@ export_journal() {
                             local parser_output="$session_dir/agent-output-prompt-parser.json"
                             if [ -f "$parser_output" ]; then
                                 local research_question output_spec
-                                # shellcheck disable=SC2016
-                                research_question=$(jq -r '.result' "$parser_output" 2>/dev/null | sed 's/^```json//;s/```$//' | jq -r '.research_question // .objective // empty' 2>/dev/null)
-                                # shellcheck disable=SC2016
-                                output_spec=$(jq -r '.result' "$parser_output" 2>/dev/null | sed 's/^```json//;s/```$//' | jq -r '.output_specification // empty' 2>/dev/null)
+                                # Use json-parser to extract from agent output (handles markdown fences)
+                                local parsed_result
+                                parsed_result=$(extract_json_from_agent_output "$parser_output" false 2>/dev/null || echo "")
+                                if [[ -n "$parsed_result" ]]; then
+                                    research_question=$(echo "$parsed_result" | jq -r '.research_question // .objective // empty' 2>/dev/null)
+                                    output_spec=$(echo "$parsed_result" | jq -r '.output_specification // empty' 2>/dev/null)
+                                fi
                                 
                                 if [ -n "$research_question" ]; then
                                     echo "**Research question as understood:** $research_question"
@@ -986,8 +1003,8 @@ export_journal() {
                             if [ -n "$coordinator_file" ] && [ -f "$coordinator_file" ]; then
                                 # Extract the actual result JSON from the wrapper
                                 local result_json
-                                # shellcheck disable=SC2016
-                                result_json=$(jq -r '.result // empty' "$coordinator_file" 2>/dev/null | sed 's/^```json\s*//;s/\s*```$//')
+                                # Use json-parser to extract from agent output (handles markdown fences)
+                                result_json=$(extract_json_from_agent_output "$coordinator_file" false 2>/dev/null || echo "")
                                 
                                 # Extract and show reasoning first from the parsed result
                                 if [ -n "$result_json" ] && echo "$result_json" | jq -e '.reasoning' >/dev/null 2>&1; then
@@ -1062,8 +1079,8 @@ export_journal() {
                                 
                                 # Extract the actual result JSON from the wrapper
                                 local result_json
-                                # shellcheck disable=SC2016
-                                result_json=$(jq -r '.result // empty' "$planner_file" 2>/dev/null | sed 's/^```json\s*//;s/\s*```$//')
+                                # Use json-parser to extract from agent output (handles markdown fences)
+                                result_json=$(extract_json_from_agent_output "$planner_file" false 2>/dev/null || echo "")
                                 
                                 # Extract and show reasoning from the parsed result
                                 if [ -n "$result_json" ] && echo "$result_json" | jq -e '.reasoning' >/dev/null 2>&1; then

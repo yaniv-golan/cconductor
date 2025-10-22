@@ -18,6 +18,9 @@ debug "knowledge-graph.sh: Starting to source dependencies"
 debug "knowledge-graph.sh: Sourcing shared-state.sh"
 # shellcheck disable=SC1091
 source "$SCRIPT_DIR/shared-state.sh"
+debug "knowledge-graph.sh: Sourcing json-parser.sh"
+# shellcheck disable=SC1091
+source "$SCRIPT_DIR/utils/json-parser.sh"
 debug "knowledge-graph.sh: Sourcing validation.sh"
 # shellcheck disable=SC1091
 source "$SCRIPT_DIR/utils/validation.sh"
@@ -1278,29 +1281,16 @@ kg_integrate_agent_output() {
         cp "$kg_file" "${kg_file}.backup" 2>/dev/null || true
     fi
     
-    # Tier 0: Extract structured JSON directly from agent output (NEW)
-    # This handles agents that output {entities_discovered, claims, ...} directly
-    # in their JSON output, whether at root or wrapped in 'result' field
+    # Tier 0: Extract structured JSON directly from agent output using json-parser.sh
+    # This handles agents that output {entities_discovered, claims, ...} directly,
+    # including markdown-wrapped JSON, prose before/after, etc.
     local agent_data
-    if agent_data=$(jq -e . "$agent_output_file" 2>/dev/null); then
-        # Check if data has entities_discovered/claims at root
+    agent_data=$(extract_json_from_agent_output "$agent_output_file" false 2>/dev/null || echo "")
+    
+    if [[ -n "$agent_data" ]]; then
+        # Check if data has entities_discovered/claims
         local has_structured_data
-        has_structured_data=$(echo "$agent_data" | jq 'has("entities_discovered") or has("claims")' 2>/dev/null)
-        
-        # If not at root, check if wrapped in .result field (common pattern)
-        if [[ "$has_structured_data" != "true" ]]; then
-            local result_content
-            result_content=$(echo "$agent_data" | jq -r '.result // empty' 2>/dev/null)
-            
-            # Try to parse .result as JSON
-            if [[ -n "$result_content" ]]; then
-                if echo "$result_content" | jq -e 'has("entities_discovered") or has("claims")' >/dev/null 2>&1; then
-                    # Found structured data in .result - use it
-                    agent_data=$(echo "$result_content" | jq -e . 2>/dev/null)
-                    has_structured_data="true"
-                fi
-            fi
-        fi
+        has_structured_data=$(echo "$agent_data" | jq -e 'has("entities_discovered") or has("claims")' >/dev/null 2>&1 && echo "true" || echo "false")
         
         # If we found structured data, integrate it
         if [[ "$has_structured_data" == "true" ]]; then
