@@ -330,6 +330,147 @@ ls research-sessions/session_123/*.error
 cat research-sessions/session_123/test-agent.retry-instructions.json
 ```
 
+## Appendix: Knowledge Graph Schema Reference
+
+Agents using the artifact pattern rarely touch `knowledge-graph.json` directly, but understanding its contract helps when debugging merges or consuming KG data.
+
+### Top-level Layout
+
+```json
+{
+  "claims": [],
+  "entities": [],
+  "citations": [],
+  "relationships": [],
+  "gaps": [],
+  "promising_leads": [],
+  "contradictions": [],
+  "confidence_scores": {},
+  "coverage": {},
+  "stats": {
+    "total_claims": 0,
+    "total_citations": 0,
+    "total_entities": 0,
+    "total_relationships": 0,
+    "total_gaps": 0,
+    "total_leads": 0,
+    "unresolved_gaps": 0,
+    "unresolved_contradictions": 0
+  },
+  "last_updated": "ISO-8601",
+  "started_at": "ISO-8601",
+  "iteration": 0
+}
+```
+
+Only some keys are shown here—additional namespaces (e.g., agent-specific blocks) may be added by future phases, but the core structure remains stable.
+
+### Claim Objects
+
+```json
+{
+  "id": "c0",
+  "statement": "Investors spend ~3 minutes reviewing decks.",
+  "confidence": 0.82,
+  "sources": [
+    {
+      "url": "https://example.com/report",
+      "title": "Deck Study",
+      "relevant_quote": "average time of 3 minutes and 20 seconds",
+      "deep_link": "https://example.com/report#:%7E:text=average%20time%20of%203%20minutes%20and%2020%20seconds",
+      "retrieved_at": "2025-10-19T18:58:00Z",
+      "paragraph_index": 1,
+      "char_span": [57, 104]
+    }
+  ],
+  "evidence_support": [
+    {
+      "marker": "1",
+      "why_supported": "Paragraph states the measured review time.",
+      "source_ids": ["source_1"]
+    }
+  ],
+  "evidence_marker": "1",
+  "added_at": "2025-10-20T00:01:00Z",
+  "updated_at": "2025-10-20T00:01:00Z",
+  "verified": false
+}
+```
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `sources[].deep_link` | string | Text-fragment or `#page=` URL pointing to the exact evidence paragraph. |
+| `sources[].paragraph_index` | integer | Zero-based index of the paragraph in the cached WebFetch body that contains the cited quote. |
+| `sources[].char_span` | `[start, end]` | Character offsets (within the cached body) for the quoted snippet. |
+| `evidence_support[]` | array | Captures marker/why metadata emitted by the Stop hook. |
+| `evidence_marker` | string | Inline marker associated with the claim when rendered (e.g., `1`). |
+
+### Citation Objects
+
+```json
+{
+  "id": "cite_0",
+  "url": "https://example.com/report",
+  "title": "Deck Study",
+  "quote": "average time of 3 minutes and 20 seconds",
+  "deep_link": "https://example.com/report#:%7E:text=average%20time%20of%203%20minutes%20and%2020%20seconds",
+  "retrieved_at": "2025-10-19T18:58:00Z",
+  "paragraph_index": 1,
+  "char_span": [57, 104],
+  "type": "url",
+  "cited_by_claims": ["c0", "c3"],
+  "added_at": "2025-10-20T00:01:00Z"
+}
+```
+
+- `cited_by_claims` is optional and appears when evidence is shared by multiple claims.
+- `deep_link`, `paragraph_index`, and `char_span` mirror the values stored on each claim source.
+- `type` currently defaults to `"url"` but is reserved for future DOI or document classifications.
+
+### Evidence Merge Contract
+
+The Stop hook writes `evidence/evidence.json`, which the merge routine consumes:
+
+```json
+{
+  "generated_at": "ISO-8601",
+  "mode": "collect|render",
+  "claims": [
+    {
+      "id": "claim_1",
+      "marker": "1",
+      "claim_text": "...",
+      "why_supported": "...",
+      "sources": ["source_1", "source_2"],
+      "confidence": 0.9
+    }
+  ],
+  "sources": [
+    {
+      "id": "source_1",
+      "url": "https://...",
+      "title": "...",
+      "quote": "...",
+      "deep_link": "https://...#:%7E:text=...",
+      "retrieved_at": "ISO-8601",
+      "paragraph_index": 1,
+      "char_span": [123, 180]
+    }
+  ],
+  "metadata": {
+    "transcript_path": "..."
+  }
+}
+```
+
+`kg_merge_evidence_claims` converts these records into claim sources and the global `citations` array. Missing fields are tolerated—agents should treat absent paragraph metadata as “unknown” rather than failing.
+
+### Backwards Compatibility
+
+- Existing graphs without paragraph metadata remain valid; new fields are populated only when evidence supplies them.
+- Additional namespaces may appear over time (e.g., renderer summaries). Agents consuming the graph should ignore unknown keys.
+- Downstream tooling should assume optional fields can be missing or `null` and fall back gracefully.
+
 ## Future Enhancements
 
 ### Potential Extensions
