@@ -19,10 +19,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Automatic dependency management (bash, jq, curl, bc, ripgrep)
   - Proper library directory structure initialization
   - Installation guide in `docs/HOMEBREW.md`
+  - Automated formula updates on release via GitHub Actions
+- **Release Automation**: Fully automated release workflow
+  - Automatic Docker image building and publishing
+  - Automatic Homebrew formula updates
+  - Documentation in `docs/RELEASE_AUTOMATION.md`
 - **Distribution Documentation**: Updated README.md with Docker and Homebrew installation instructions
 
 ### Changed
 - GitHub Actions release workflow now builds and pushes Docker images automatically
+- Homebrew tap formula automatically updates on release
 - Enhanced installation documentation with multiple distribution options
 
 ## [0.3.3] - 2025-10-23
