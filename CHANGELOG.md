@@ -5,6 +5,26 @@ All notable changes to CConductor will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.3] - 2025-10-23
+
+### Added
+
+- **Coverage Gap Remediation**: Missions now verify quality standards before generating final reports. Quality gate automatically triggers remediation when research doesn't meet configured thresholds for sources, domains, trust scores, or recency.
+- **Agent Timeout Protection**: Agents that become unresponsive are automatically terminated after configurable timeouts (10-20 minutes depending on agent type), allowing missions to adapt and continue.
+- **Quality Gate Modes**: Choose between "advisory" mode (flags issues but allows synthesis) or "enforce" mode (blocks synthesis until standards met) via `config/quality-gate.default.json`.
+
+### Fixed
+
+- Mission orchestration log parsing errors when starting new sessions
+- Path displays now consistently show relative paths in terminal output
+- Agents hanging indefinitely without timeout protection
+
+### Changed
+
+- **Streamlined Cache Messages**: Verbose mode now shows single-line cache notifications instead of multi-line status updates. Cache hits display as `♻️ Cache hit: <url> (from date)` and misses as `🌐 <url> (reason)`.
+- **Clearer Quality Gate Messaging**: Changed "failed" to "flagged" and "blocked" to "postponed" for more accurate, constructive terminology.
+- **Improved Cache Guidance**: Updated documentation to clarify when agents should bypass cache (only when search landscape changes, not for finding recent content).
+
 ## [0.3.2] - 2025-10-22
 
 ### Fixed
