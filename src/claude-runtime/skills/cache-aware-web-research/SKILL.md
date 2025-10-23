@@ -30,8 +30,13 @@
    - Decide whether they answer the current question.
 3. Only invoke WebSearch if:
    - No cached results exist.
-   - Cached snippets are outdated or insufficient for new requirements.
-   - You explicitly need fresher data; append `?fresh=1` (or `?refresh=1`) to the query string and explain why.
+   - Cached snippets are insufficient (missing key aspects, wrong domain focus).
+   - You need data about events that occurred AFTER the cache timestamp (breaking news, very recent developments).
+
+**IMPORTANT:** Do NOT use `?fresh=1` just because you need "recent content" (e.g., 2023-2025 papers). Cached search results already contain recent URLs - the cache stores WHICH URLs were found, not the content age. Only use `?fresh=1` when:
+   - The search landscape has changed (new sources emerged, major event happened)
+   - The cached search is >30 days old AND the topic is fast-moving (breaking news, tech releases)
+   - NOT when you simply want papers from recent years (cached searches find those just fine)
 
 ### 3. Reuse or Refresh WebFetch Targets
 1. For each candidate URL, run:
@@ -58,9 +63,15 @@ Cached search results found for canonical tokens "tam sam som venture capital be
 - Reusing LibraryMemory digest for https://a16z.com/16-more-metrics/ (last_updated 2025-09-05T11:22:08Z)
 Decision: reuse cached evidence; no fresh WebSearch/WebFetch required.
 ```
-If you must refresh:
+If you must refresh (rare):
 ```
-Cached snippets outdated (latest data 2023). Adding qualifier "2025" and issuing WebSearch?fresh=1 to fetch new guidance. Reason: Need post-2024 TAM benchmarks.
+Cached search results are from 45 days ago, before the Q4 2025 market report release. Using WebSearch?fresh=1 to capture new analyst sources. Reason: Major market event occurred after cache timestamp.
+```
+
+**Bad example (DO NOT DO THIS):**
+```
+❌ WRONG: "Need 2023-2025 papers, cached search is from June. Using ?fresh=1 to get recent content."
+✓ CORRECT: "Cached search from June already contains 2024 paper URLs. Reusing cache."
 ```
 
 ## Safety & Limits

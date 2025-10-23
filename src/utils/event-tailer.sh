@@ -136,9 +136,8 @@ tailer_process_library_check() {
         return 0
     fi
     TAILER_CACHE_ACTIVITY=1
-    if is_verbose_enabled; then
-        echo "🔁 Checking library cache for ${url}…" >&2
-    fi
+    # Removed verbose "Checking..." message - details logged to events.jsonl and hook-debug.log
+    # Users only need to see results (hits/misses), not every check
 }
 
 tailer_process_library_force_refresh() {

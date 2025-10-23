@@ -264,27 +264,16 @@ if [[ "$tool_name" == "WebSearch" ]]; then
                 match_ratio=$(echo "$lookup_json" | jq -r '.match_ratio // ""')
                 match_base_query=$(echo "$lookup_json" | jq -r '.match_base_query // ""')
                 tool_block_reason="web_search_cache_hit"
+                
+                # Simplified one-line cache hit message
+                date_part="${stored_iso:0:10}"
                 if [[ -n "$match_ratio" && "$match_ratio" != "null" ]]; then
                     tool_block_reason="web_search_cache_hit_overlap"
-                    ratio_fmt=$(printf '%.2f' "$match_ratio")
-                    base_query_display="$match_base_query"
-                    if [[ -z "$base_query_display" || "$base_query_display" == "null" ]]; then
-                        base_query_display="$display_query"
-                    fi
-                    message="♻️ Cache reuse (match $ratio_fmt) using cached query:
-  Cached query: $base_query_display
-  Requested query: $display_query
-  Cached file: ${materialized_path:-"(materialization unavailable)"}
-  Stored: $stored_iso (${result_count} results)
-Use the Read tool on the cached file. Append '?fresh=1' to the query if you need to force a fresh search."
+                    ratio_pct=$(printf '%.0f' "$(echo "$match_ratio * 100" | bc 2>/dev/null || echo "0")")
+                    echo "♻️ Cache hit: search \"$display_query\" (${ratio_pct}% match, from $date_part)" >&2
                 else
-                    message="♻️ Cache hit: reused search results for:
-  Query: $display_query
-  Cached file: ${materialized_path:-"(materialization unavailable)"}
-  Stored: $stored_iso (${result_count} results)
-Use the Read tool on the cached file. Append '?fresh=1' to the query if you need to force a fresh search."
+                    echo "♻️ Cache hit: search \"$display_query\" (from $date_part)" >&2
                 fi
-                echo "$message" >&2
 
                 if [[ -n "$session_dir" ]]; then
                     lock_file="$session_dir/.events.lock"
@@ -443,43 +432,9 @@ PY
 
                         if [[ "$is_fresh" -eq 1 ]]; then
                             stored_timestamp="${last_updated:-unknown}"
-                            digest_snippet_json="[]"
-                            if [[ -f "$digest_path" ]]; then
-                                digest_snippet_json=$(jq -c '
-                                    (.entries // [])
-                                    | sort_by(.collected_at // "") | reverse
-                                    | map({
-                                        session: (.session // ""),
-                                        collected_at: (.collected_at // ""),
-                                        text: (
-                                            if (.claim // "") != "" then .claim
-                                            elif (.quote // "") != "" then .quote
-                                            elif (.title // "") != "" then .title
-                                            else ""
-                                            end
-                                        )
-                                    })
-                                    | map(select(.text != ""))
-                                    | map(.text = (if (.text | length) > 160 then (.text[0:157] + "…") else .text end))
-                                    | .[0:2]
-                                ' "$digest_path" 2>/dev/null || echo "[]")
-                                if [[ -z "$digest_snippet_json" ]]; then
-                                    digest_snippet_json="[]"
-                                fi
-                            fi
-
-                            if ! is_verbose_enabled; then
-                                echo "♻️ Cache hit: Reused digest for $url" >&2
-                                if [[ "$digest_snippet_json" != "[]" ]]; then
-                                    snippet_preview=$(printf '%s\n' "$digest_snippet_json" | jq -r '.[] | "   - " + (if (.collected_at // "") != "" then .collected_at else "unknown time" end) + " (" + (if (.session // "") != "" then .session else "unknown session" end) + "): " + (.text // "")' 2>/dev/null || true)
-                                    if [[ -n "${snippet_preview//[[:space:]]/}" ]]; then
-                                        printf '%s\n' "$snippet_preview" >&2
-                                    fi
-                                fi
-                                echo "   Last updated: $stored_timestamp" >&2
-                                echo "   Digest: $digest_path" >&2
-                                echo "   Use Read on the digest or append '?fresh=1' for a live copy." >&2
-                            fi
+                            
+                            date_part="${stored_timestamp:0:10}"
+                            echo "♻️ Cache hit: Reused digest for $url (from $date_part)" >&2
 
                             hit_event=$(jq -nc \
                                 --arg url "$url" \
@@ -488,15 +443,13 @@ PY
                                 --arg last "$stored_timestamp" \
                                 --arg agent "$agent_name" \
                                 --argjson ttl "$ttl_days" \
-                                --argjson snippet "$digest_snippet_json" \
                                 '{
                                     url: $url,
                                     agent: $agent,
                                     url_hash: $hash,
                                     digest_path: $path,
                                     last_updated: (if $last == "" or $last == "unknown" then null else $last end),
-                                    ttl_days: $ttl,
-                                    digest_snippet: $snippet
+                                    ttl_days: $ttl
                                 }')
                             emit_event "library_digest_hit" "$hit_event"
 
