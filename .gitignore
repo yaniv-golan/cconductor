@@ -37,6 +37,14 @@ logs/
 config/*.json
 !config/*.default.json
 
+# Docker credential files (NEVER commit these)
+.env
+.env.*
+*.key
+*credentials*
+.config/
+.claude/
+
 # AI assistant memory/context (internal only, not for repo)
 memory-bank/
 

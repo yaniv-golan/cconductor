@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Mission Session Initialization
-# Simplified session setup for mission-based research (v0.2.0)
+# Simplified session setup for mission-based research 
 
 set -euo pipefail
 

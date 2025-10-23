@@ -5,6 +5,26 @@ All notable changes to CConductor will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- **Docker Distribution**: Official Docker images published to GitHub Container Registry (ghcr.io)
+  - Multi-platform support (linux/amd64, linux/arm64)
+  - Three authentication methods: volume mount, environment variable, Docker secrets
+  - Comprehensive documentation in `docs/DOCKER.md`
+  - Docker Compose example configuration
+  - Automated builds via GitHub Actions on release
+- **Homebrew Distribution**: Custom tap for macOS installation
+  - Formula: `brew tap yaniv-golan/cconductor && brew install cconductor`
+  - Automatic dependency management (bash, jq, curl, bc, ripgrep)
+  - Proper library directory structure initialization
+  - Installation guide in `docs/HOMEBREW.md`
+- **Distribution Documentation**: Updated README.md with Docker and Homebrew installation instructions
+
+### Changed
+- GitHub Actions release workflow now builds and pushes Docker images automatically
+- Enhanced installation documentation with multiple distribution options
+
 ## [0.3.3] - 2025-10-23
 
 ### Added

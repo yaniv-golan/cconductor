@@ -391,7 +391,7 @@ handle_research() {
     # Add research question
     mission_cmd+=("$question")
     
-    # Call mission system (v0.2.0)
+    # Call mission system 
     "${mission_cmd[@]}"
     
     # Show update notification after research

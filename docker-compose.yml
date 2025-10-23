@@ -1,0 +1,21 @@
+version: '3.8'
+
+services:
+  cconductor:
+    image: ghcr.io/yaniv-golan/cconductor:latest
+    volumes:
+      # Mount Claude credentials from host
+      - ~/.claude:/root/.claude:ro
+      # Mount research sessions directory
+      - ./research-sessions:/data/research-sessions
+      # Mount cache directory
+      - cconductor-cache:/data/cache
+    environment:
+      # Optionally use API key instead of mounted credentials
+      # ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
+      CCONDUCTOR_VERBOSE: ${CCONDUCTOR_VERBOSE:-0}
+    command: "${RESEARCH_QUESTION}"
+
+volumes:
+  cconductor-cache:
+

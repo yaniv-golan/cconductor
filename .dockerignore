@@ -1,0 +1,49 @@
+# Git and development
+.git/
+.github/
+.gitignore
+.history/
+
+# User data (never include)
+research-sessions/
+logs/
+cache/
+*.log
+
+# User configurations (never include)
+config/*.json
+!config/*.default.json
+
+# Credentials (CRITICAL - never include)
+.env
+.env.*
+*.key
+*credentials*
+.config/claude/
+.claude/
+
+# Test and documentation
+tests/
+test-*/
+*.md
+!README.md
+!LICENSE
+
+# Development artifacts
+memory-bank/
+obsidian/
+poc-subagent/
+internal_docs/
+reports/
+
+# macOS and IDE
+.DS_Store
+*.swp
+*.swo
+*~
+
+# Temporary files
+*.tmp
+tmp/
+temp/
+

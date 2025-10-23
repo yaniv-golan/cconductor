@@ -327,6 +327,69 @@ Then use from anywhere:
 cconductor "your research question"
 ```
 
+### Homebrew (macOS)
+
+```bash
+# Add tap
+brew tap yaniv-golan/cconductor
+
+# Install CConductor
+brew install cconductor
+
+# Install Claude Code CLI (required)
+npm install -g @anthropic-ai/claude-code
+
+# Set up authentication - create config file:
+mkdir -p ~/.config/claude
+cat > ~/.config/claude/config.json << 'EOF'
+{
+  "api_key": "your_anthropic_api_key_here"
+}
+EOF
+
+# Start researching
+cconductor "What is quantum computing?"
+```
+
+### Docker
+
+**Quick Start (with existing Claude credentials)**:
+
+```bash
+docker run -v ~/.claude:/root/.claude \
+  -v ~/research:/data/research-sessions \
+  ghcr.io/yaniv-golan/cconductor:latest \
+  "What is quantum computing?"
+```
+
+**Using API Key** (for CI/CD):
+
+```bash
+# Create .env file
+echo "ANTHROPIC_API_KEY=sk-ant-xxx" > .env
+
+# Run with env file
+docker run --env-file .env \
+  -v ~/research:/data/research-sessions \
+  ghcr.io/yaniv-golan/cconductor:latest \
+  "What is quantum computing?"
+```
+
+**Production (Docker Swarm)**:
+
+```bash
+# Create secret
+echo "sk-ant-xxx" | docker secret create anthropic_api_key -
+
+# Deploy service
+docker service create \
+  --secret anthropic_api_key \
+  --mount type=volume,source=research-data,target=/data \
+  ghcr.io/yaniv-golan/cconductor:latest
+```
+
+See [Docker Documentation](docs/DOCKER.md) for complete details.
+
 ### Verified Install (High Security)
 
 For production or security-sensitive environments:
