@@ -504,9 +504,9 @@ invoke_agent_v2() {
         # Special message for orchestrator
         if [[ "$agent_name" == "mission-orchestrator" ]]; then
             if [ "$(type -t verbose)" = "function" ]; then
-                verbose "🎯 Coordinating next research step... [mission-orchestrator with ${agent_timeout}s timeout]"
+                verbose "🚦 Coordinating next research step... [mission-orchestrator with ${agent_timeout}s timeout]"
             else
-                echo "🎯 Coordinating next research step... [mission-orchestrator with ${agent_timeout}s timeout]" >&2
+                echo "🚦 Coordinating next research step... [mission-orchestrator with ${agent_timeout}s timeout]" >&2
             fi
         else
             # Regular agents: extract first line of input file as task description

@@ -40,7 +40,7 @@ verbose_agent_start() {
         friendly_name="${agent_name//-/ }"
     fi
     
-    echo "🚀 Starting $friendly_name" >&2
+    echo "🤖 Starting $friendly_name" >&2
     
     # Only show task if it's meaningful (not system prompt preamble)
     if [[ -n "$task" ]] && \
@@ -79,7 +79,7 @@ verbose_agent_reasoning() {
     fi
     
     echo "" >&2
-    echo "💡 Research reasoning:" >&2
+    echo "🧠 Research reasoning:" >&2
     
     # Try different reasoning fields
     local synthesis_approach

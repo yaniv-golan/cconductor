@@ -1733,7 +1733,7 @@ $ ./cconductor "What is the SaaS market size?" --verbose
 🚀 Starting research coordinator
    Looking for: overall research strategy
 
-🎯 Coordinating next research step...
+🚦 Coordinating next research step...
 
 🚀 Starting web researcher
    Looking for: SaaS market size data and trends
@@ -1746,7 +1746,7 @@ $ ./cconductor "What is the SaaS market size?" --verbose
 
 💾 Saving: findings-web-001.json
 
-💡 Research reasoning:
+🧠 Research reasoning:
    - Found 3 authoritative sources on market sizing
    - Prioritizing recent data from analyst firms
    - Need additional data on growth trends
