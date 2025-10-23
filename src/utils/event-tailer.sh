@@ -18,6 +18,8 @@ TAILER_TOTAL_HITS=0
 TAILER_TOTAL_FETCHES=0
 TAILER_TOTAL_FORCE_REFRESH=0
 declare -A TAILER_CACHE_HIT_COUNTS=()
+TAILER_LAST_LIBRARY_EVENT_TIME=0
+TAILER_LAST_LIBRARY_URL=""
 TAILER_SESSION_DIR=""
 TAILER_PROJECT_ROOT=""
 
@@ -154,6 +156,11 @@ tailer_process_library_force_refresh() {
     if is_verbose_enabled; then
         echo "⟳ Fresh fetch requested for $url" >&2
     fi
+    
+    # Mark that we just displayed a library cache message
+    # This will be checked by tool_use_start to avoid duplicate WebFetch message
+    TAILER_LAST_LIBRARY_EVENT_TIME=$(date +%s)
+    TAILER_LAST_LIBRARY_URL="$url"
 }
 
 tailer_process_library_hit() {
@@ -179,43 +186,17 @@ tailer_process_library_hit() {
         return 0
     fi
 
+    # Display simplified one-line cache hit message (verbose mode only)
+    # Architecture: Hooks emit events, tailer displays them (hook stderr is captured by Claude CLI)
     if [[ "$current_count" -eq 1 ]]; then
-        echo "♻️ Cache hit: Reused digest for $url" >&2
-        local snippets_json
-        snippets_json=$(echo "$line" | jq -c '.data.digest_snippet[]?' 2>/dev/null || echo "")
-        if [[ -n "${snippets_json//[[:space:]]/}" ]]; then
-            while IFS= read -r snippet_entry; do
-                [[ -z "$snippet_entry" ]] && continue
-                local collected session text human_time
-                collected=$(echo "$snippet_entry" | jq -r '.collected_at // ""' 2>/dev/null || echo "")
-                session=$(echo "$snippet_entry" | jq -r '.session // ""' 2>/dev/null || echo "")
-                text=$(echo "$snippet_entry" | jq -r '.text // ""' 2>/dev/null || echo "")
-                human_time=$(tailer_format_timestamp "$collected")
-                if [[ -n "$session" ]]; then
-                    printf '   - %s · %s: %s\n' "$human_time" "$session" "$text" >&2
-                else
-                    printf '   - %s: %s\n' "$human_time" "$text" >&2
-                fi
-            done <<<"$snippets_json"
-        fi
-        local digest_path
-        digest_path=$(echo "$line" | jq -r '.data.digest_path // empty' 2>/dev/null || echo "")
         local last_updated
         last_updated=$(echo "$line" | jq -r '.data.last_updated // empty' 2>/dev/null || echo "")
-        if [[ "$digest_path" == "null" ]]; then
-            digest_path=""
+        if [[ "$last_updated" != "null" && -n "$last_updated" ]]; then
+            local date_part="${last_updated:0:10}"
+            echo "♻️ Cache hit: Reused digest for $url (from $date_part)" >&2
+        else
+            echo "♻️ Cache hit: Reused digest for $url" >&2
         fi
-        if [[ "$last_updated" == "null" ]]; then
-            last_updated=""
-        fi
-        if [[ -n "$digest_path" ]]; then
-            echo "   Digest: $(tailer_rel_path "$digest_path")" >&2
-        fi
-        if [[ -n "$last_updated" ]]; then
-            echo "   Updated: $last_updated" >&2
-        fi
-    else
-        echo "♻️ Cache hit (seen ×$current_count): Reused digest for $url" >&2
     fi
 }
 
@@ -231,12 +212,24 @@ tailer_process_library_allow() {
         return 0
     fi
     TAILER_CACHE_ACTIVITY=1
-    if [[ "$reason" == "allow:fresh_param" ]]; then
-        return 0
-    fi
+    
+    # Map technical reason to user-friendly message
+    local cache_reason="was not cached"
+    case "$reason" in
+        allow:digest_stale) cache_reason="cache expired" ;;
+        allow:digest_missing|allow:no_digest) cache_reason="was not cached" ;;
+        allow:fresh_param) return 0 ;;  # Already handled by library_digest_force_refresh
+        *) cache_reason="was not cached" ;;
+    esac
+    
     if is_verbose_enabled; then
-        echo "🌐 Cache miss: Fetching $url" >&2
+        echo "🌐 $url ($cache_reason)" >&2
     fi
+    
+    # Mark that we just displayed a library cache message
+    # This will be checked by tool_use_start to avoid duplicate WebFetch message
+    TAILER_LAST_LIBRARY_EVENT_TIME=$(date +%s)
+    TAILER_LAST_LIBRARY_URL="$url"
 }
 
 tailer_process_tool_start() {
@@ -253,6 +246,17 @@ tailer_process_tool_start() {
     if [[ "$tool_name" == "WebFetch" ]]; then
         TAILER_TOTAL_FETCHES=$((TAILER_TOTAL_FETCHES + 1))
         TAILER_CACHE_ACTIVITY=1
+        
+        # Check if we just showed a library cache message (< 2 seconds ago)
+        local now
+        now=$(date +%s)
+        local last_event_time="${TAILER_LAST_LIBRARY_EVENT_TIME:-0}"
+        local time_diff=$((now - last_event_time))
+        
+        # If library event was recent AND URL matches, skip duplicate message
+        if [[ $time_diff -lt 2 && "$input_summary" == "$TAILER_LAST_LIBRARY_URL" ]]; then
+            return 0
+        fi
     fi
 
     local lock_dir="$session_dir/.output.lock"
@@ -318,13 +322,24 @@ tailer_process_web_search_cache_hit() {
     if ! is_verbose_enabled; then
         return 0
     fi
+    # Display simplified one-line cache hit message (verbose mode only)
+    # Architecture: Hooks emit events, tailer displays them (hook stderr is captured by Claude CLI)
     local query
     query=$(echo "$line" | jq -r '.data.query // ""' 2>/dev/null)
-    local path
-    path=$(echo "$line" | jq -r '.data.cache_path // ""' 2>/dev/null)
-    echo "♻️ Cache hit — reused search results for: $query" >&2
-    if [[ -n "$path" ]]; then
-        echo "   Cached file: $(tailer_rel_path "$path")" >&2
+    local match_ratio
+    match_ratio=$(echo "$line" | jq -r '.data.match_ratio // ""' 2>/dev/null)
+    local event_timestamp
+    event_timestamp=$(echo "$line" | jq -r '.timestamp // ""' 2>/dev/null)
+    
+    # Extract date from event timestamp (format: 2025-10-23T08:28:06Z)
+    local date_part="${event_timestamp:0:10}"
+
+    if [[ -n "$match_ratio" && "$match_ratio" != "null" && "$match_ratio" != "" ]]; then
+        local ratio_pct
+        ratio_pct=$(printf '%.0f' "$(echo "$match_ratio * 100" | bc 2>/dev/null || echo "0")")
+        echo "♻️ Cache hit: search \"$query\" (${ratio_pct}% match, from $date_part)" >&2
+    else
+        echo "♻️ Cache hit: search \"$query\" (from $date_part)" >&2
     fi
 }
 # Start tailing events for tool use display
@@ -396,6 +411,9 @@ start_event_tailer() {
                     fi
                     TAILER_CURRENT_AGENT="$agent"
                     tailer_reset_agent_state
+                    # Reset library event tracking on agent change
+                    TAILER_LAST_LIBRARY_EVENT_TIME=0
+                    TAILER_LAST_LIBRARY_URL=""
                     ;;
                 agent_result)
                     agent=$(echo "$line" | jq -r '.data.agent // empty' 2>/dev/null || echo "")

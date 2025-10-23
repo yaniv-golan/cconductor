@@ -263,16 +263,12 @@ if [[ "$tool_name" == "WebSearch" ]]; then
                 fi
                 match_ratio=$(echo "$lookup_json" | jq -r '.match_ratio // ""')
                 match_base_query=$(echo "$lookup_json" | jq -r '.match_base_query // ""')
+                # Cache hit detected - emit event for tailer to display
+                # Note: Hook stderr is captured by Claude CLI, so we emit events instead
+                # The event tailer reads events.jsonl and displays formatted output
                 tool_block_reason="web_search_cache_hit"
-                
-                # Simplified one-line cache hit message
-                date_part="${stored_iso:0:10}"
                 if [[ -n "$match_ratio" && "$match_ratio" != "null" ]]; then
                     tool_block_reason="web_search_cache_hit_overlap"
-                    ratio_pct=$(printf '%.0f' "$(echo "$match_ratio * 100" | bc 2>/dev/null || echo "0")")
-                    echo "♻️ Cache hit: search \"$display_query\" (${ratio_pct}% match, from $date_part)" >&2
-                else
-                    echo "♻️ Cache hit: search \"$display_query\" (from $date_part)" >&2
                 fi
 
                 if [[ -n "$session_dir" ]]; then
@@ -433,8 +429,9 @@ PY
                         if [[ "$is_fresh" -eq 1 ]]; then
                             stored_timestamp="${last_updated:-unknown}"
                             
-                            date_part="${stored_timestamp:0:10}"
-                            echo "♻️ Cache hit: Reused digest for $url (from $date_part)" >&2
+                            # Cache hit detected - emit event for tailer to display
+                            # Note: Hook stderr is captured by Claude CLI, so we emit events instead
+                            # The event tailer reads events.jsonl and displays formatted output
 
                             hit_event=$(jq -nc \
                                 --arg url "$url" \
@@ -491,9 +488,7 @@ PY
                 --arg agent "$agent_name" \
                 '{url: $url, agent: $agent}')
             emit_event "library_digest_force_refresh" "$refresh_payload"
-            if ! is_verbose_enabled; then
-                echo "⟳ Fresh fetch requested for $url" >&2
-            fi
+            # Event emitted - tailer will display "⟳ Fresh fetch requested for $url"
         fi
     fi
 
@@ -665,10 +660,11 @@ if [ -n "$session_dir" ] && [ -d "$session_dir" ]; then
     done
 fi
 
-# Print to stderr for real-time visibility
-# Hooks only write to events.jsonl (event tailer displays both verbose and dots)
-# Claude Code captures hook stderr, so tailer is needed to show output
-# (no direct output from hooks)
+# Architecture Note: Claude Code CLI captures hook stderr output
+# This means any `echo ... >&2` in this hook will NOT appear in the terminal
+# Instead, we emit events to events.jsonl which are displayed by event-tailer.sh
+# The event tailer runs as a background process started by invoke-agent.sh
+# See: src/utils/event-tailer.sh and memory-bank/systemPatterns.md
 
 # Exit 0 to allow the tool to proceed
 exit 0
