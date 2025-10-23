@@ -211,19 +211,30 @@ You receive:
 
 ### Decision Logic for Synthesis
 
-**If quality gate status is "passed":**
-- Proceed with synthesis-agent invocation
+Check `quality_gate.mode` in your context to understand enforcement:
 
-**If quality gate status is "failed":**
-- DO NOT invoke synthesis-agent yet
-- Review `quality_gate.summary` for specific failures
+**If quality gate mode is "enforce":**
+- Quality gate status "failed" → DO NOT invoke synthesis-agent
+- Review `quality_gate.summary` for specific issues
 - Decide: spawn remediation research OR invoke quality-remediator agent
 - Wait for quality gate to pass before synthesis
+
+**If quality gate mode is "advisory":**
+- Quality gate status "failed" → You MAY still invoke synthesis-agent
+- Review `quality_gate.summary` to understand quality issues
+- Options:
+  - a) Invoke synthesis with instructions to note quality caveats
+  - b) Gather more research to improve quality first
+  - c) Invoke quality-remediator to attempt automatic fixes
+- Advisory mode means issues are flagged but not blocking
+- Consider mission constraints (time, budget) when deciding
+
+**If quality gate status is "passed":**
+- Proceed with synthesis-agent invocation (regardless of mode)
 
 **If quality gate status is "not_run":**
 - Quality gate will run automatically before synthesis
 - Ensure knowledge graph has sufficient claims and sources
-- If KG is sparse, gather more research first
 
 **If high-priority gaps remain:**
 - Review each gap in `high_priority_gaps.gaps` array

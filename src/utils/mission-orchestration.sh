@@ -225,10 +225,16 @@ prepare_orchestrator_context() {
     # Check if quality gate has run
     local quality_gate_status="not_run"
     local quality_gate_summary="{}"
+    local quality_gate_mode="advisory"
     if [[ -f "$session_dir/artifacts/quality-gate-summary.json" ]]; then
         quality_gate_status=$(jq -r '.status // "unknown"' \
             "$session_dir/artifacts/quality-gate-summary.json" 2>/dev/null || echo "unknown")
         quality_gate_summary=$(cat "$session_dir/artifacts/quality-gate-summary.json" 2>/dev/null || echo "{}")
+    fi
+    
+    # Load quality gate mode from config
+    if command -v load_config &>/dev/null; then
+        quality_gate_mode=$(load_config "quality-gate" 2>/dev/null | jq -r '.mode // "advisory"')
     fi
     
     # Check if research plan exists
@@ -261,6 +267,7 @@ prepare_orchestrator_context() {
         --arg gaps_count "$high_priority_gaps_count" \
         --argjson gaps_list "$high_priority_gaps_list" \
         --arg qg_status "$quality_gate_status" \
+        --arg qg_mode "$quality_gate_mode" \
         --argjson qg_summary "$quality_gate_summary" \
         --arg plan_exists "$research_plan_exists" \
         --argjson plan "$research_plan" \
@@ -279,6 +286,7 @@ prepare_orchestrator_context() {
             },
             quality_gate: {
                 status: $qg_status,
+                mode: $qg_mode,
                 summary: $qg_summary
             },
             research_plan: {
@@ -909,7 +917,19 @@ process_orchestrator_decisions() {
             if [[ "$agent_name" == "synthesis-agent" ]]; then
                 echo "→ Running quality gate before synthesis..."
                 if ! run_quality_assurance_cycle "$session_dir"; then
-                    echo "⚠ Quality gate flagged some claims, synthesis postponed" >&2
+                    # Get mode to display appropriate message
+                    local gate_mode
+                    if command -v load_config &>/dev/null; then
+                        gate_mode=$(load_config "quality-gate" 2>/dev/null | jq -r '.mode // "advisory"')
+                    else
+                        gate_mode="advisory"
+                    fi
+                    
+                    if [[ "$gate_mode" == "advisory" ]]; then
+                        echo "⚠ Quality gate flagged some claims (advisory mode - remediation attempted)" >&2
+                    else
+                        echo "⚠ Quality gate flagged some claims, synthesis blocked (enforce mode)" >&2
+                    fi
                     
                     # Provide gate results to orchestrator for remediation decision
                     local gate_results
@@ -1098,7 +1118,20 @@ run_quality_assurance_cycle() {
         # Gate failed
         if [[ "$remediation_enabled" != "true" ]] || [[ $attempt -eq $max_attempts ]]; then
             verbose "Quality gate still flagging claims after remediation attempts"
-            return 1
+            
+            # Check mode before deciding to block
+            local mode
+            mode=$(echo "$quality_config" | jq -r '.mode // "advisory"')
+            
+            if [[ "$mode" == "advisory" ]]; then
+                # Advisory mode: log issues but don't block
+                verbose "Quality gate in advisory mode - issues logged but not blocking"
+                return 0  # Allow synthesis to proceed
+            else
+                # Enforce mode: block synthesis
+                verbose "Quality gate in enforce mode - blocking synthesis"
+                return 1
+            fi
         fi
         
         # Check if quality-remediator agent exists
@@ -1748,10 +1781,14 @@ prepare_orchestrator_context_resume() {
     # Check if quality gate has run
     local quality_gate_status="not_run"
     local quality_gate_summary="{}"
+    local quality_gate_mode="advisory"
     if [[ -f "$session_dir/artifacts/quality-gate-summary.json" ]]; then
         quality_gate_status=$(jq -r '.status // "unknown"' \
             "$session_dir/artifacts/quality-gate-summary.json" 2>/dev/null || echo "unknown")
         quality_gate_summary=$(cat "$session_dir/artifacts/quality-gate-summary.json" 2>/dev/null || echo "{}")
+    fi
+    if command -v load_config &>/dev/null; then
+        quality_gate_mode=$(load_config "quality-gate" 2>/dev/null | jq -r '.mode // "advisory"')
     fi
     
     # Check if research plan exists
@@ -1776,6 +1813,7 @@ prepare_orchestrator_context_resume() {
         --arg gaps_count "$high_priority_gaps_count" \
         --argjson gaps_list "$high_priority_gaps_list" \
         --arg qg_status "$quality_gate_status" \
+        --arg qg_mode "$quality_gate_mode" \
         --argjson qg_summary "$quality_gate_summary" \
         --arg plan_exists "$research_plan_exists" \
         --argjson plan "$research_plan" \
@@ -1795,6 +1833,7 @@ prepare_orchestrator_context_resume() {
             },
             quality_gate: {
                 status: $qg_status,
+                mode: $qg_mode,
                 summary: $qg_summary
             },
             research_plan: {
