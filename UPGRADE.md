@@ -299,7 +299,7 @@ NEW_VERSION=$(cat VERSION)
 echo "Upgrading to: $NEW_VERSION"
 
 # 4. Check session compatibility
-./src/utils/version-check.sh report research-sessions/session_XXXXX
+./src/utils/version-check.sh report research-sessions/mission_XXXXX
 
 # 5. Re-run init
 ./cconductor --init --yes
@@ -398,7 +398,7 @@ ls -lt research-sessions/ | head -1
 
 # Check session metadata
 SESSION_DIR=$(ls -td research-sessions/session_* | head -1)
-cat "$SESSION_DIR/session.json" | jq '.'
+cat "$SESSION_DIR/meta/session.json" | jq '.'
 ```
 
 **3. Resume old sessions (if compatible)**:
@@ -410,10 +410,10 @@ cd /path/to/cconductor
 ls -lt research-sessions/
 
 # Check compatibility
-./src/utils/version-check.sh validate research-sessions/session_XXXXX
+./src/utils/version-check.sh validate research-sessions/mission_XXXXX
 
 # If compatible, resume
-./cconductor resume session_XXXXX
+./cconductor resume mission_XXXXX
 ```
 
 ### Git Troubleshooting
@@ -428,7 +428,7 @@ ls -lt research-sessions/
 cd /path/to/cconductor
 
 # Check versions
-./src/utils/version-check.sh report research-sessions/session_XXXXX
+./src/utils/version-check.sh report research-sessions/mission_XXXXX
 
 # Option 1: Use matching engine version (downgrade)
 # Option 2: Start new session
@@ -637,14 +637,14 @@ cconductor "What is Docker?"
 
 ```bash
 # macOS
-tar -czf my-research-backup.tar.gz ~/Library/Application\ Support/CConductor/research-sessions/session_XXXXX
+tar -czf my-research-backup.tar.gz ~/Library/Application\ Support/CConductor/research-sessions/mission_XXXXX
 
 # Linux  
-tar -czf my-research-backup.tar.gz ~/.local/share/cconductor/research-sessions/session_XXXXX
+tar -czf my-research-backup.tar.gz ~/.local/share/cconductor/research-sessions/mission_XXXXX
 
 # Or find and backup by name
 SESSION_DIR=$(./src/utils/path-resolver.sh resolve session_dir)
-tar -czf my-research-backup.tar.gz "$SESSION_DIR/session_XXXXX"
+tar -czf my-research-backup.tar.gz "$SESSION_DIR/mission_XXXXX"
 ```
 
 ---

@@ -188,7 +188,7 @@ The gate now defaults to **advisory mode**:
 - Reports still complete, but the top of the document shows a “Quality Issues Detected” banner when thresholds are missed.
 - Sessions end with status `completed_with_advisory`, and the full diagnostics live in `artifacts/quality-gate.json` plus a compact summary in `artifacts/quality-gate-summary.json`.
 - The orchestrator (or a manual resume) can read those files to follow the remediation checklist and rerun the gate.
-- User-facing deliverables live in `final/` (mission report, research journal); supporting diagnostics remain in `artifacts/`.
+- User-facing deliverables live in `report/` (mission report, research journal); supporting diagnostics remain in `artifacts/`.
 
 Switch the config to `mode: "enforce"` if you prefer to block finalization until every threshold is satisfied. All thresholds and mode settings live in `~/.config/cconductor/quality-gate.json`.
 
@@ -209,11 +209,19 @@ Switch the config to `mode: "enforce"` if you prefer to block finalization until
   - Cannot run standalone with just an API key
   - Available through Claude Pro/Max subscriptions or API/pay-as-you-go
   - See [Understanding Claude Code Access](#understanding-claude-code-access) below for details
-- **Bash shell** (4.0+)
-- **jq** (JSON processor)
-- **curl** (for web requests)
-- **bc** (for calculations, pre-installed on most systems)
-- **ripgrep** (recommended for Search tool) - `brew install ripgrep` (macOS)
+- **Python 3** - For knowledge graph operations (usually pre-installed)
+  - macOS: `brew install python3` (if needed)
+  - Linux: Usually pre-installed; if not: `sudo apt-get install python3`
+  - Windows (WSL): `sudo apt-get install python3`
+- **Standard Unix tools**
+  - **Bash shell** (4.0+)
+  - **jq** (JSON processor)
+  - **curl** (for web requests)
+  - **bc** (arbitrary-precision calculator for accurate math)
+    - macOS: Usually pre-installed; if not: `brew install bc`
+    - Linux: `sudo apt install bc` or `sudo yum install bc`
+    - Windows: Use WSL2, then `sudo apt install bc`
+  - **ripgrep** (recommended for Search tool) - `brew install ripgrep` (macOS)
 
 ### Platform Compatibility
 
@@ -529,7 +537,7 @@ curl -fsSL https://raw.githubusercontent.com/yaniv-golan/cconductor/main/install
 
 # View research dashboard (auto-launched during research)
 ./cconductor view-dashboard              # Latest session
-./cconductor view-dashboard session_123  # Specific session
+./cconductor view-dashboard mission_123  # Specific session
 
 # Export research journal as markdown
 SESSION_DIR=$(./src/utils/path-resolver.sh resolve session_dir)
@@ -559,18 +567,30 @@ bash src/utils/export-journal.sh "$SESSION_DIR/$(cat "$SESSION_DIR/.latest")"
 
 ### Session Outputs & Storage
 
-Every mission writes to a timestamped directory under `research-sessions/mission_<id>/` with:
+Every mission writes to a timestamped directory under `research-sessions/mission_<id>/` with an organized session tree (v0.5.0):
 
-- `final/mission-report.md` – user-facing research report
-- `final/research-journal.md` – chronological mission journal
-- `artifacts/` – agent-generated artifacts
-- `raw/` – intermediate findings and knowledge-graph fragments
-- `cache/` – session-local copies of shared web cache objects (safe to delete)
+- `INDEX.json` – Session manifest with file counts, checksums, and quick navigation
+- `README.md` – "start here" session map with quick links and stats
+- `meta/` – Session metadata, provenance, budgeting, and orchestrator state
+- `inputs/` – Original research question and user-provided files
+- `cache/` – Web/search cache artifacts reused within the mission
+- `work/` – Agent working directories and intermediate findings
+- `knowledge/` – Knowledge graph and session knowledge files
+- `artifacts/` – Agent-produced artifacts with manifest
+- `logs/` – Events, orchestration decisions, quality gate diagnostics, system errors
+- `report/` – Final mission report and research journal
+- `viewer/` – Interactive dashboard (HTML/JS)
+
+**Key Files**:
+- `report/mission-report.md` – User-facing research report
+- `report/research-journal.md` – Chronological mission journal
+- `knowledge/knowledge-graph.json` – Structured knowledge state
+- `viewer/index.html` – Real-time research dashboard
 
 Two additional storage locations matter for reuse:
 
 - **Platform cache** – transient WebFetch/WebSearch assets stored under the OS cache root (`~/Library/Caches/CConductor/` on macOS, `${XDG_CACHE_HOME:-~/.cache}/cconductor/` on Linux). Clearing it only forces fresh network calls next time.
-- **Library** – durable digests in the repository’s `library/` directory (or `LIBRARY_MEMORY_ROOT`). Populated by `src/utils/digital-librarian.sh` from knowledge-graph citations and reused through the LibraryMemory skill.
+- **Library** – durable digests in the repository's `library/` directory (or `LIBRARY_MEMORY_ROOT`). Populated by `src/utils/digital-librarian.sh` from knowledge-graph citations and reused through the LibraryMemory skill.
 
 ### Built-in Skills
 
