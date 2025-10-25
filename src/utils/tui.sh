@@ -364,6 +364,35 @@ resume_session_interactive() {
     echo "=============="
     show_session_details "$session_path"
     
+    # Check if session is completed/exhausted
+    local status_value
+    status_value=$(jq -r '.status // ""' "$session_path/meta/session.json" 2>/dev/null || echo "")
+    
+    local extend_iterations=""
+    local extend_time=""
+    
+    if [[ "$status_value" == "completed" ]] || [[ "$status_value" == "completed_with_advisory" ]]; then
+        echo ""
+        echo "This session has completed. You can extend it with additional resources:"
+        echo ""
+        echo "Add more iterations? [Enter number or press Enter to skip]"
+        read -r extend_iterations
+        
+        echo "Add more time (minutes)? [Enter number or press Enter to skip]"
+        read -r extend_time
+        
+        # Validate inputs
+        if [[ -n "$extend_iterations" ]] && ! [[ "$extend_iterations" =~ ^[0-9]+$ ]]; then
+            echo "Invalid iterations value, ignoring"
+            extend_iterations=""
+        fi
+        if [[ -n "$extend_time" ]] && ! [[ "$extend_time" =~ ^[0-9]+$ ]]; then
+            echo "Invalid time value, ignoring"
+            extend_time=""
+        fi
+    fi
+    
+    echo ""
     echo "Would you like to add refinement guidance? [y/N]"
     read -r add_refinement
     
@@ -374,9 +403,22 @@ resume_session_interactive() {
         refinement=$(cat)
     fi
     
-    # Extract session ID and call mission resume
-    # Note: session_id extracted inline in command below
-    "$CCONDUCTOR_ROOT/src/cconductor-mission.sh" resume --session "$session_path" ${refinement:+--refine "$refinement"}
+    # Build resume command with optional flags
+    local resume_args=("--session" "$session_path")
+    
+    if [[ -n "$extend_iterations" ]]; then
+        resume_args+=("--extend-iterations" "$extend_iterations")
+    fi
+    
+    if [[ -n "$extend_time" ]]; then
+        resume_args+=("--extend-time" "$extend_time")
+    fi
+    
+    if [[ -n "$refinement" ]]; then
+        resume_args+=("--refine" "$refinement")
+    fi
+    
+    "$CCONDUCTOR_ROOT/src/cconductor-mission.sh" resume "${resume_args[@]}"
 }
 
 # Simple interactive mode (fallback)
