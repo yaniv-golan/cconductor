@@ -296,22 +296,23 @@ PY
         --argjson unparsed_dates "$unparsed_dates" \
         --arg newest_days "${newest_source_days:-null}" \
         --arg oldest_days "${oldest_source_days:-null}" \
+        --arg evaluated_at "$(get_timestamp)" \
         '{
             id: $id,
             statement: $statement,
-            sources: {
-                count: $sources_count,
-                independent_count: $unique_domains,
-                trust_score: ($trust_score | tonumber)
-            },
-            confidence: ($confidence | tonumber),
-            recency: {
+            agent_confidence: ($confidence | tonumber),
+            confidence_surface: {
+                source_count: $sources_count,
+                independent_source_count: $unique_domains,
+                trust_score: ($trust_score | tonumber),
+                newest_source_age_days: (if $newest_days == "null" then null else ($newest_days | tonumber) end),
+                oldest_source_age_days: (if $oldest_days == "null" then null else ($oldest_days | tonumber) end),
                 parseable_dates: $parseable_dates,
                 unparsed_dates: $unparsed_dates,
-                newest_source_age_days: (if $newest_days == "null" then null else ($newest_days | tonumber) end),
-                oldest_source_age_days: (if $oldest_days == "null" then null else ($oldest_days | tonumber) end)
-            },
-            failures: $failures
+                limitation_flags: $failures,
+                last_reviewed_at: $evaluated_at,
+                status: (if ($failures | length) > 0 then "flagged" else "passed" end)
+            }
         }' >>"$tmp_claims"
 done < <(jq -c '.claims[]' "$KG_FILE")
 

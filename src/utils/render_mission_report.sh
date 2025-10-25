@@ -235,6 +235,43 @@ build_footnotes() {
     done < <(jq -c '.claims[]?' "$evidence_file")
 }
 
+generate_confidence_fallback() {
+    local session_dir="$1"
+    local gate_summary="$session_dir/artifacts/quality-gate-summary.json"
+    
+    if [[ ! -f "$gate_summary" ]]; then
+        return 0
+    fi
+    
+    local status total failed passed avg_trust
+    status=$(jq -r '.status // "unknown"' "$gate_summary" 2>/dev/null)
+    total=$(jq -r '.summary.total_claims // 0' "$gate_summary" 2>/dev/null)
+    failed=$(jq -r '.summary.failed_claims // 0' "$gate_summary" 2>/dev/null)
+    passed=$((total - failed))
+    avg_trust=$(jq -r '.summary.average_trust_score // 0' "$gate_summary" 2>/dev/null)
+    
+    if [[ "$total" -eq 0 ]]; then
+        return 0
+    fi
+    
+    local pass_rate
+    pass_rate=$((passed * 100 / total))
+    
+    cat <<EOF
+
+## Confidence & Limitations
+
+**Quality Gate Status**: ${status}
+
+- **Claims assessed**: ${total}
+- **Passed**: ${passed} (${pass_rate}%)
+- **Flagged**: ${failed}
+- **Average trust score**: ${avg_trust}
+
+**Note**: For detailed metrics and recommendations, see \`artifacts/quality-gate.json\`.
+EOF
+}
+
 main() {
     if [[ "$#" -lt 1 ]]; then
         return 0
@@ -272,7 +309,23 @@ main() {
         return 0
     fi
 
+    # Check if we need to add confidence section (before early return for existing footnotes)
+    local needs_confidence=false
+    if [[ -f "$session_dir/artifacts/quality-gate-summary.json" ]]; then
+        if ! printf '%s' "$report_text" | grep -q '^## Confidence'; then
+            needs_confidence=true
+        fi
+    fi
+    
     if [[ "$render_mode" != "fallback" ]] && printf '%s' "$report_text" | grep -q '\[\^'; then
+        # Footnotes already rendered, but might need confidence section
+        if [[ "$needs_confidence" == "true" ]]; then
+            local confidence_fallback
+            confidence_fallback="$(generate_confidence_fallback "$session_dir")"
+            if [[ -n "$confidence_fallback" ]]; then
+                printf '%s%s\n' "$report_text" "$confidence_fallback" | write_file_atomic "$report_path"
+            fi
+        fi
         return 0
     fi
 
@@ -314,6 +367,18 @@ main() {
 
     local updated_content
     updated_content="$(printf '%s\n\n## Evidence Footnotes\n\n%s\n' "$converted" "$footnote_block")"
+    
+    # Append confidence section if synthesis omitted it and quality-gate exists
+    if [[ -f "$session_dir/artifacts/quality-gate-summary.json" ]]; then
+        if ! printf '%s' "$updated_content" | grep -q '^## Confidence'; then
+            local confidence_fallback
+            confidence_fallback="$(generate_confidence_fallback "$session_dir")"
+            if [[ -n "$confidence_fallback" ]]; then
+                updated_content="${updated_content}${confidence_fallback}"
+            fi
+        fi
+    fi
+    
     printf '%s' "$updated_content" | write_file_atomic "$report_path"
 }
 

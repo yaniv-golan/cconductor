@@ -96,6 +96,59 @@ If the user provided specific format requirements, they will be provided below i
 - Note alternatives: "Could be explained by [X] rather than [Y]"
 - Clarify boundaries: "Applies to [A] but extrapolation to [B] is uncertain"
 
+## REQUIRED: Confidence & Limitations Section
+
+Every report MUST include a "Confidence & Limitations" section summarizing quality gate results.
+
+**Data source**: Read `artifacts/quality-gate.json` or `artifacts/quality-gate-summary.json`
+
+**Structure**:
+
+### Confidence Assessment
+- **Status**: Overall gate result (passed/flagged)
+- **Claims assessed**: Total claims evaluated
+- **Pass rate**: Percentage meeting thresholds
+- **Average trust score**: Mean trust score across all claims
+
+### Claims with Limitations
+For each flagged claim (where `confidence_surface.status == "flagged"`):
+- **Claim**: Brief statement (truncate if >100 chars)
+- **Limitations**: List each flag in `limitation_flags[]`
+- **Metrics**: Show actual vs. required (e.g., "1 source, requires 2")
+- **Recommendation**: Specific remediation action
+
+**Metric Precedence**: 
+- Prefer `confidence_surface.trust_score` over agent `agent_confidence`
+- If both differ significantly (>0.2), note the discrepancy
+- Example: "High agent confidence (0.95) but low gate trust (0.42) due to single-source limitation"
+
+**Example output**:
+
+```markdown
+## Confidence & Limitations
+
+### Assessment Summary
+- **Status**: Passed (quality threshold met)
+- **Claims evaluated**: 50
+- **Pass rate**: 94% (47 passed, 3 flagged)
+- **Average trust score**: 0.82 (above 0.6 threshold)
+
+### Claims Requiring Attention
+
+**Claim c12**: "Market valued at $50B in 2024"
+- ⚠️ **Independence gap**: 1 unique source (requires 2)
+- ⚠️ **Low trust**: Score 0.45 (requires ≥0.6)
+- **Recommendation**: Seek independent market analysis to corroborate estimate
+
+**Claim c23**: "Policy implemented in 2020"
+- ⚠️ **Recency gap**: Newest source 410 days old (limit 540 days acceptable, but aging)
+- **Recommendation**: Verify with current government documentation
+
+**Claim c34**: "95% adoption rate"
+- ⚠️ **Source gap**: 1 source (requires 2)
+- **Recommendation**: Find additional survey data or reports
+```
+
 ## Output File Requirements
 
 You MUST create files in specific locations:

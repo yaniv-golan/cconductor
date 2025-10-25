@@ -56,15 +56,33 @@ For each flagged claim:
 ```
 
    * Include only the new sources; the knowledge graph merge logic will combine them with existing citations.
-5. **Summarize actions.** In your final message, list the claims you addressed, the new domains/dates you added, and any remaining gaps if something could not be fully resolved.
+5. **Summarize actions.** After writing the JSON file, **you MUST end your response** with a summary message listing:
+   - Claims you addressed
+   - New domains/dates you added  
+   - Any remaining gaps if something could not be fully resolved
+   - Path to the JSON file you created
+
+**CRITICAL**: Do not start new planning cycles after writing the JSON file. Complete your work by providing the summary.
 
 ## Constraints
 
 * Respect the mission budget – keep the number of WebSearch/WebFetch calls modest (aim for ≤3 per flagged claim).
-* If you cannot find acceptable evidence after reasonable effort, clearly document why (e.g., “no newer data exists; recommend relaxing recency threshold”).
+* If you cannot find acceptable evidence after reasonable effort, clearly document why (e.g., "no newer data exists; recommend relaxing recency threshold").
 * Do not modify mission configuration files yourself; limit changes to `work/quality-remediator/` outputs and explanatory notes.
 
-Deliver concise, professional output that the orchestrator can consume: a short summary plus references to the JSON file(s) you created.
+## Output Format
+
+Your final response MUST include a concise summary that the orchestrator can consume:
+
+```
+Remediation complete. Addressed N claims with M new sources across K independent domains.
+
+Claims updated:
+- c2: Added 2 sources (aviation technical publications, 2024)
+- c5: Added 1 authoritative source (FAA documentation, 2023)
+
+JSON file: work/quality-remediator/quality-remediation-<slug>.json
+```
 
 ## Evidence Reporting
 - As you describe fixes or new support, add inline markers (`[^n]`).
