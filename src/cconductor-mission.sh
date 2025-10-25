@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # CConductor Mission-Based Research
-# Entry point for mission-based orchestration (v0.2.0)
+# Entry point for mission-based orchestration (v0.4.0)
 
 set -euo pipefail
 
@@ -27,7 +27,7 @@ source "$CCONDUCTOR_MISSION_SCRIPT_DIR/knowledge-graph.sh"
 # Print usage
 usage() {
     cat <<EOF
-CConductor Mission-Based Research (v0.2.0)
+CConductor Mission-Based Research (v0.4.0)
 
 USAGE:
   cconductor-mission run --mission <name> [OPTIONS]
@@ -279,6 +279,7 @@ cmd_run() {
     local input_dir="${2:-}"
     local research_question="${3:-}"
     local non_interactive="${4:-false}"
+    local output_dir="${5:-}"
     
     # Load mission
     echo "→ Loading mission profile..."
@@ -298,7 +299,7 @@ cmd_run() {
     # Initialize session
     echo "→ Initializing session..."
     local session_dir
-    session_dir=$(initialize_session "$mission_objective")
+    session_dir=$(initialize_session "$mission_objective" "$output_dir")
     echo "  ✓ Session: $(basename "$session_dir")"
     echo "    Path: $session_dir"
     echo ""
@@ -361,6 +362,7 @@ main() {
             local input_dir=""
             local non_interactive=false
             local research_question=""
+            local output_dir=""
             
             while [[ $# -gt 0 ]]; do
                 case "$1" in
@@ -375,6 +377,14 @@ main() {
                     --non-interactive|-y)
                         non_interactive=true
                         shift
+                        ;;
+                    --output)
+                        if [[ -z "${2:-}" ]]; then
+                            echo "Error: --output requires a directory" >&2
+                            exit 1
+                        fi
+                        output_dir="$2"
+                        shift 2
                         ;;
                     --*)
                         echo "Error: Unknown option: $1" >&2
@@ -393,7 +403,7 @@ main() {
                 exit 1
             fi
             
-            cmd_run "$mission_name" "$input_dir" "$research_question" "$non_interactive"
+            cmd_run "$mission_name" "$input_dir" "$research_question" "$non_interactive" "$output_dir"
             ;;
             
         missions)

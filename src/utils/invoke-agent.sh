@@ -329,7 +329,7 @@ extract_cost_from_output() {
 # - Extracts .result field (not .content[0].text)
 #
 # Usage:
-#   invoke_agent_v2 <agent_name> <input_file> <output_file> [timeout] <session_dir>
+#   invoke_agent_v2 <agent_name> <input_file> <output_file> [timeout] <session_dir> [resume_session_id]
 #
 # Args:
 #   agent_name: Name of agent (must exist in session_dir/.claude/agents/)
@@ -356,6 +356,7 @@ invoke_agent_v2() {
     # shellcheck disable=SC2034
     local timeout="${4:-600}"  # Legacy parameter, kept for backward compatibility
     local session_dir="${5:-}"
+    local resume_session_id="${6:-}"
 
     # Validate inputs
     if [ -z "$agent_name" ]; then
@@ -472,6 +473,10 @@ invoke_agent_v2() {
         --append-system-prompt "$system_prompt"  # VALIDATED: test-append-system-prompt.sh
     )
 
+    if [ -n "$resume_session_id" ]; then
+        claude_cmd+=(--resume "$resume_session_id")
+    fi
+
     # Add session-specific settings (hooks, etc.) if present
     # This ensures Claude uses the session's .claude/settings.json
     # rather than walking up to find the git root's settings
@@ -534,10 +539,16 @@ invoke_agent_v2() {
                 echo "🚦 Coordinating next research step... [mission-orchestrator with ${agent_timeout}s timeout]" >&2
             fi
         else
-            # Regular agents: extract first line of input file as task description
+            # Regular agents: use sanitized task from environment if available, otherwise extract from file
             local task_desc=""
-            if [ -f "$input_file" ]; then
-                task_desc=$(head -n 1 "$input_file" 2>/dev/null || echo "")
+            if [[ -n "${CCONDUCTOR_TASK_DESC:-}" ]]; then
+                task_desc="$CCONDUCTOR_TASK_DESC"
+            elif [[ -f "$input_file" ]]; then
+                # Fallback: extract first non-header, non-empty line from input file
+                task_desc=$(grep -v '^##' "$input_file" 2>/dev/null | \
+                            grep -v '^[[:space:]]*$' | \
+                            head -n 1 | \
+                            cut -c1-150)
             fi
             verbose_agent_start "$agent_name" "$task_desc"
             verbose "  [$agent_name with ${agent_timeout}s timeout]"
@@ -867,7 +878,7 @@ export -f invoke_agent_v2
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
     case "${1:-help}" in
         invoke-v2)
-            invoke_agent_v2 "$2" "$3" "$4" "${5:-600}" "$6"
+            invoke_agent_v2 "$2" "$3" "$4" "${5:-600}" "$6" "${7:-}"
             ;;
         check)
             check_claude_cli && echo "✓ Claude CLI is available"
@@ -877,7 +888,7 @@ if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
 Usage: $0 <command> [args...]
 
 Commands:
-  invoke-v2 <agent> <input_file> <output_file> [timeout] <session_dir>
+  invoke-v2 <agent> <input_file> <output_file> [timeout] <session_dir> [resume_session_id]
       Invoke agent with v2 implementation (validated patterns)
       - Injects systemPrompt via --append-system-prompt
       - Enforces tool restrictions via agent-tools.json
@@ -887,13 +898,14 @@ Commands:
       Check if Claude CLI is available
 
 Examples:
-  $0 invoke-v2 web-researcher input.txt output.json 600 /path/to/session
+  $0 invoke-v2 web-researcher input.txt output.json 600 /path/to/session session_abc123
   $0 check
 
 Notes:
   - session_dir is REQUIRED and must contain .claude/agents/ directory
   - Timeout default is 600 seconds (10 minutes)
   - All patterns validated in validation_tests/
+  - Optional resume_session_id enables Claude's --resume flow for multi-turn agents
 
 Input File Format:
   The input_file should contain the task/query and explicit JSON formatting instructions:

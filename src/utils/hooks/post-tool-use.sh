@@ -39,6 +39,23 @@ source "$PROJECT_ROOT/src/utils/web-cache.sh" 2>/dev/null || true
 # shellcheck disable=SC1091
 source "$PROJECT_ROOT/src/utils/web-search-cache.sh" 2>/dev/null || true
 
+increment_tool_usage_counter() {
+    local counter_key="$1"
+    if [[ -z "${session_dir:-}" ]]; then
+        return 0
+    fi
+
+    local budget_file="$session_dir/meta/budget.json"
+    if [[ ! -f "$budget_file" ]]; then
+        return 0
+    fi
+
+    # shellcheck disable=SC2016
+    atomic_json_update "$budget_file" \
+        --arg key "$counter_key" \
+        '.tool_usage = (.tool_usage // {}) | .tool_usage[$key] = ((.tool_usage[$key] // 0) + 1)'
+}
+
 # Read hook data from stdin
 hook_data=$(cat)
 
@@ -124,6 +141,17 @@ if [[ "${CCONDUCTOR_VERBOSE:-0}" == "1" ]]; then
 else
     # Normal/debug mode: technical format
     echo "    $status $tool_name ($duration_display)" >&2
+fi
+
+if [[ "$exit_code" = "0" ]]; then
+    case "$tool_name" in
+        WebSearch)
+            increment_tool_usage_counter "web_searches"
+            ;;
+        WebFetch)
+            increment_tool_usage_counter "web_fetches"
+            ;;
+    esac
 fi
 
 # Cache successful WebFetch results

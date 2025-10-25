@@ -85,9 +85,25 @@ link_shared_library() {
 # Returns: session_dir path on stdout
 initialize_session() {
     local mission_objective="$1"
-    
+    local output_base="${2:-$SESSION_BASE_DIR}"
+
     if [[ -z "$mission_objective" ]]; then
         echo "Error: Mission objective required" >&2
+        return 1
+    fi
+
+    if [[ -z "$output_base" ]]; then
+        output_base="$SESSION_BASE_DIR"
+    fi
+
+    mkdir -p "$output_base"
+    if [[ ! -d "$output_base" ]]; then
+        echo "Error: Unable to create session output directory: $output_base" >&2
+        return 1
+    fi
+
+    if ! output_base=$(cd "$output_base" 2>/dev/null && pwd -P); then
+        echo "Error: Unable to resolve output directory: $output_base" >&2
         return 1
     fi
     
@@ -102,8 +118,7 @@ initialize_session() {
         timestamp="$(date +%s)_$$_${RANDOM}"
     fi
     
-    mkdir -p "$SESSION_BASE_DIR"
-    local session_dir="$SESSION_BASE_DIR/mission_${timestamp}"
+    local session_dir="$output_base/mission_${timestamp}"
     
     # Prevent collision: if directory already exists (rare race condition), add suffix
     if [[ -d "$session_dir" ]]; then
@@ -162,12 +177,17 @@ initialize_session() {
     
     # Create session metadata with runtime information (stored under meta/)
     # Note: objective will be updated by orchestrator after prompt parsing
+    local cconductor_version="0.4.0"
+    if [[ -f "$PROJECT_ROOT/VERSION" ]]; then
+        cconductor_version=$(tr -d '\n' < "$PROJECT_ROOT/VERSION")
+    fi
+
     jq -n \
         --arg objective "$mission_objective" \
         --arg question "$mission_objective" \
         --arg timestamp "$(get_timestamp)" \
         --arg session_type "mission" \
-        --arg version "0.4.0" \
+        --arg version "$cconductor_version" \
         --arg claude_ver "$claude_version" \
         '{
             session_type: $session_type,
@@ -234,6 +254,11 @@ initialize_session() {
         echo "Warning: provenance-generator.sh not found at $provenance_script" >&2
     fi
     
+    local latest_marker="$output_base/.latest"
+    if ! echo "$session_id" > "$latest_marker" 2>/dev/null; then
+        echo "Warning: Failed to update latest session marker at $latest_marker" >&2
+    fi
+
     echo "$session_dir"
 }
 

@@ -35,8 +35,9 @@ EOF
     fi
 }
 
-# Log an error (critical failure)
-log_error() {
+# Log an error to session error log (critical failure)
+# Note: Different from core-helpers.sh log_error (which is for stderr)
+log_session_error() {
     local session_dir="$1"
     local operation="$2"
     local message="$3"
@@ -45,8 +46,9 @@ log_error() {
     _log_entry "$session_dir" "error" "$operation" "$message" "$context"
 }
 
-# Log a warning (non-fatal issue)
-log_warning() {
+# Log a warning to session error log (non-fatal issue)
+# Note: Different from core-helpers.sh log_warn (which is for stderr)
+log_session_warning() {
     local session_dir="$1"
     local operation="$2"
     local message="$3"
@@ -196,8 +198,8 @@ has_critical_errors() {
 
 # Export functions
 export -f init_error_log
-export -f log_error
-export -f log_warning
+export -f log_session_error
+export -f log_session_warning
 export -f get_error_summary
 export -f get_error_counts
 export -f has_critical_errors

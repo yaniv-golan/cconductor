@@ -77,6 +77,11 @@ resolve_path() {
     echo "$expanded_path"
 }
 
+# Backwards-compatible alias for older scripts
+path_resolve() {
+    resolve_path "$@"
+}
+
 # Resolve path and ensure directory exists
 # Usage: ensure_path_exists "cache_dir"
 # Returns: Expanded absolute path (creates if missing)
@@ -218,6 +223,7 @@ init_all_paths() {
 
 # Export functions for use in other scripts
 export -f resolve_path
+export -f path_resolve
 export -f ensure_path_exists
 export -f list_paths
 export -f validate_paths

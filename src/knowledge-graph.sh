@@ -5,12 +5,13 @@
 
 set -euo pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# Use file-local path variable so we don't clobber caller globals like SCRIPT_DIR
+KG_SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # Load debug utility if not already loaded
 if ! declare -F debug >/dev/null 2>&1; then
     # shellcheck disable=SC1091
-    source "$SCRIPT_DIR/utils/debug.sh" 2>/dev/null || true
+    source "$KG_SCRIPT_DIR/utils/debug.sh" 2>/dev/null || true
 fi
 
 debug "knowledge-graph.sh: Starting to source dependencies"
@@ -18,16 +19,16 @@ debug "knowledge-graph.sh: Starting to source dependencies"
 # Source shared-state for atomic operations
 debug "knowledge-graph.sh: Sourcing shared-state.sh"
 # shellcheck disable=SC1091
-source "$SCRIPT_DIR/shared-state.sh"
+source "$KG_SCRIPT_DIR/shared-state.sh"
 debug "knowledge-graph.sh: Sourcing json-parser.sh"
 # shellcheck disable=SC1091
-source "$SCRIPT_DIR/utils/json-parser.sh"
+source "$KG_SCRIPT_DIR/utils/json-parser.sh"
 debug "knowledge-graph.sh: Sourcing validation.sh"
 # shellcheck disable=SC1091
-source "$SCRIPT_DIR/utils/validation.sh"
+source "$KG_SCRIPT_DIR/utils/validation.sh"
 debug "knowledge-graph.sh: Sourcing event-logger.sh"
 # shellcheck disable=SC1091
-source "$SCRIPT_DIR/utils/event-logger.sh" || true
+source "$KG_SCRIPT_DIR/utils/event-logger.sh" || true
 debug "knowledge-graph.sh: All dependencies sourced"
 
 # Initialize a new knowledge graph
@@ -103,6 +104,7 @@ kg_recalculate_source_stats() {
     
     local kg_file
     kg_file=$(kg_get_path "$session_dir")
+    local entity_id=""
     
     # Single atomic update that counts unique sources across all collections
     # Deduplicates by: url|title|relevant_quote (for entities/claims) or url|title|excerpt (for citations)
@@ -173,7 +175,6 @@ kg_add_entity() {
                      '.entities[] | select(.name == $name) | .id' \
                      "$kg_file" 2>/dev/null | head -1)
 
-    local entity_id=""
     if [ -n "$exists" ]; then
         # Update existing entity using atomic operation
         atomic_json_update "$kg_file" \
@@ -184,14 +185,13 @@ kg_add_entity() {
              .last_updated = $date'
     else
         # Add new entity using atomic operation
-        entity_id="e$(jq '.stats.total_entities' "$kg_file" 2>/dev/null || echo "0")"
         atomic_json_update "$kg_file" \
             --argjson entity "$entity_json" \
-            --arg id "$entity_id" \
             --arg date "$(get_timestamp)" \
-            '.entities += [($entity + {id: $id, added_at: $date})] |
-             .stats.total_entities += 1 |
+            '(.stats.total_entities += 1) |
+             .entities += [($entity + {id: ("e" + (.stats.total_entities | tostring)), added_at: $date})] |
              .last_updated = $date'
+        entity_id=$(jq --arg name "$entity_name" -r '.entities[] | select(.name == $name) | .id' "$kg_file" 2>/dev/null | head -1)
     fi
     
     # Recalculate source stats after entity mutation
@@ -340,16 +340,15 @@ PY
     fi
 
     # Add new claim using atomic operation
-    local claim_id
-    claim_id="c$(jq '.stats.total_claims' "$kg_file" 2>/dev/null || echo "0")"
+    local claim_id=""
 
     atomic_json_update "$kg_file" \
         --argjson claim "$claim_json" \
-        --arg id "$claim_id" \
         --arg date "$timestamp" \
-        '.claims += [($claim + {id: $id, added_at: $date, verified: ($claim.verified // false)})] |
-         .stats.total_claims += 1 |
+        '(.stats.total_claims += 1) |
+         .claims += [($claim + {id: ("c" + (.stats.total_claims | tostring)), added_at: $date, verified: ($claim.verified // false)})] |
          .last_updated = $date'
+    claim_id=$(jq --arg stmt "$statement" -r '.claims[] | select(.statement == $stmt) | .id' "$kg_file" 2>/dev/null | head -1)
     
     # Recalculate source stats after claim mutation
     kg_recalculate_source_stats "$session_dir" || true
@@ -383,17 +382,12 @@ kg_add_relationship() {
     local kg_file
     kg_file=$(kg_get_path "$session_dir")
 
-    # Pre-compute ID
-    local rel_id
-    rel_id="r$(jq '.stats.total_relationships' "$kg_file" 2>/dev/null || echo "0")"
-
     # Use atomic_json_update for thread-safe operation
     atomic_json_update "$kg_file" \
         --argjson rel "$relationship_json" \
-        --arg id "$rel_id" \
         --arg date "$(get_timestamp)" \
-        '.relationships += [($rel + {id: $id, added_at: $date})] |
-         .stats.total_relationships += 1 |
+        '(.stats.total_relationships += 1) |
+         .relationships += [($rel + {id: ("r" + (.stats.total_relationships | tostring)), added_at: $date})] |
          .last_updated = $date'
 }
 
@@ -1281,11 +1275,14 @@ kg_integrate_agent_output() {
     fi
     
     # Backup knowledge graph before any writes
+    local backup_path=""
     if [ -f "$kg_file" ]; then
-        cp "$kg_file" "${kg_file}.backup" 2>/dev/null || true
-        local backup_path="${kg_file}.backup"
+        backup_path="${kg_file}.backup"
+        cp "$kg_file" "$backup_path" 2>/dev/null || true
         # Remove backup automatically on successful return
-        trap 'status=$?; if [ $status -eq 0 ]; then rm -f -- "$backup_path" 2>/dev/null || true; fi' RETURN
+        local backup_path_escaped
+        backup_path_escaped=$(printf '%q' "$backup_path")
+        trap 'status=$?; if [ $status -eq 0 ]; then rm -f -- '"$backup_path_escaped"' 2>/dev/null || true; fi; trap - RETURN' RETURN
     fi
     
     # Tier 0: Extract structured JSON directly from agent output using json-parser.sh

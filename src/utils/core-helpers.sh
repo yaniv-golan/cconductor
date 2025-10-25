@@ -8,6 +8,29 @@
 # This file provides lightweight, universally useful helpers that reduce
 # code duplication across the codebase.
 
+if [[ -n "${CORE_HELPERS_LOADED:-}" ]]; then
+    if [[ "${BASH_SOURCE[0]}" != "${0}" ]]; then
+        return 0
+    else
+        exit 0
+    fi
+fi
+
+if [[ -z "${CCONDUCTOR_BOOTSTRAP_LOADED:-}" ]]; then
+    CORE_HELPERS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    if [[ -f "$CORE_HELPERS_DIR/bootstrap.sh" ]]; then
+        # shellcheck disable=SC1091
+        source "$CORE_HELPERS_DIR/bootstrap.sh"
+        if [[ "${BASH_SOURCE[0]}" != "${0}" ]]; then
+            return 0
+        else
+            exit 0
+        fi
+    fi
+fi
+
+export CORE_HELPERS_LOADED=1
+
 set -euo pipefail
 
 # ============================================================================
@@ -239,4 +262,3 @@ export -f log_info
 export -f log_warn
 export -f log_error
 export -f log_debug
-

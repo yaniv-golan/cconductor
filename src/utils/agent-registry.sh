@@ -269,9 +269,8 @@ agent_registry_export_json() {
   done
   
   if [[ "$output_file" == "/dev/stdout" ]]; then
-    echo "$agents_json" | jq '.'
+    printf '%s\n' "$agents_json"
   else
     echo "$agents_json" | jq '.' > "$output_file"
   fi
 }
-

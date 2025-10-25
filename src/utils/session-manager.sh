@@ -47,6 +47,7 @@ start_agent_session() {
     local session_dir="$2"
     local initial_task="$3"
     local timeout="${4:-600}"
+    local output_override="${5:-}"
 
     # Validate inputs
     if [ -z "$agent_name" ] || [ -z "$session_dir" ] || [ -z "$initial_task" ]; then
@@ -73,15 +74,28 @@ start_agent_session() {
 
     echo "⚡ Starting new session for agent: $agent_name" >&2
 
+    # Sanitize task for display
+    local task_display
+    task_display=$(printf '%s' "$initial_task" | tr '\n' ' ' | cut -c1-150 | sed 's/[`$"\\]/\\&/g')
+    export CCONDUCTOR_TASK_DESC="$task_display"
+
     # Create temporary files for input/output
     local input_file="$sessions_dir/${agent_name}.start-input.txt"
     local output_file="$sessions_dir/${agent_name}.start-output.json"
+    if [ -n "$output_override" ]; then
+        output_file="$output_override"
+    fi
 
     # Write initial task
     echo "$initial_task" > "$input_file"
 
+    # Let user know why the session ID isn't printed immediately
+    echo "    ⏳ Establishing session (ID assigned after first response)..." >&2
+
     # Invoke agent using v2 (which handles systemPrompt, tools, JSON)
     # VALIDATED: invoke_agent_v2 returns JSON with .session_id
+    mkdir -p "$(dirname "$output_file")"
+
     if ! bash "$SCRIPT_DIR/invoke-agent.sh" invoke-v2 \
         "$agent_name" \
         "$input_file" \
@@ -99,8 +113,12 @@ start_agent_session() {
 
     if [ -z "$session_id" ] || [ "$session_id" = "null" ]; then
         log_error "Could not extract session_id from response"
-        echo "Response structure:" >&2
-        jq 'keys' "$output_file" >&2
+        if [[ -f "$output_file" ]] && [[ -s "$output_file" ]]; then
+            echo "Response structure:" >&2
+            jq 'keys' "$output_file" 2>&1 | head -20 >&2 || echo "(invalid JSON)" >&2
+        else
+            echo "Output file is missing or empty: $output_file" >&2
+        fi
         return 1
     fi
 
@@ -119,7 +137,7 @@ start_agent_session() {
 }
 EOF
 
-    echo "✓ Session started for $agent_name: $session_id" >&2
+    echo "✓ Session ready for $agent_name (ID: $session_id)" >&2
     echo "$session_id"
 }
 
@@ -169,93 +187,31 @@ continue_agent_session() {
 
     echo "⚡ Continuing session for agent: $agent_name (session: $session_id)" >&2
 
-    # Get agent definition for systemPrompt
-    local agent_file="$session_dir/.claude/agents/${agent_name}.json"
-    if [ ! -f "$agent_file" ]; then
-        error_missing_file "$agent_file" "Agent definition not found"
+    # Sanitize task for display
+    local task_display
+    task_display=$(printf '%s' "$task" | tr '\n' ' ' | cut -c1-150 | sed 's/[`$"\\]/\\&/g')
+    export CCONDUCTOR_TASK_DESC="$task_display"
+
+    local task_file="$sessions_dir/${agent_name}.continue-input.txt"
+    echo "$task" > "$task_file"
+
+    if ! bash "$SCRIPT_DIR/invoke-agent.sh" invoke-v2 \
+        "$agent_name" \
+        "$task_file" \
+        "$output_file" \
+        "$timeout" \
+        "$session_dir" \
+        "$session_id"; then
+        log_error "Failed to continue session for agent $agent_name"
         return 1
     fi
-
-    local system_prompt
-    system_prompt=$(jq -r '.systemPrompt' "$agent_file" 2>/dev/null)
-
-    if [ -z "$system_prompt" ] || [ "$system_prompt" = "null" ]; then
-        log_error "Agent $agent_name missing systemPrompt"
-        return 1
-    fi
-
-    # Get tool restrictions
-    local cconductor_root
-    if [ -n "${CCONDUCTOR_ROOT:-}" ]; then
-        cconductor_root="$CCONDUCTOR_ROOT"
-    else
-        # Walk up from session_dir to find root
-        local search_dir="$session_dir"
-        while [ "$search_dir" != "/" ]; do
-            if [ -f "$search_dir/VERSION" ] && [ -d "$search_dir/src" ]; then
-                cconductor_root="$search_dir"
-                break
-            fi
-            search_dir="$(dirname "$search_dir")"
-        done
-    fi
-
-    local allowed_tools=""
-    local disallowed_tools=""
-    local agent_tools_file="$cconductor_root/src/utils/agent-tools.json"
-
-    if [ -f "$agent_tools_file" ]; then
-        allowed_tools=$(jq -r \
-            --arg agent "$agent_name" \
-            '.[$agent].allowed // [] | join(",")' \
-            "$agent_tools_file" 2>/dev/null)
-
-        disallowed_tools=$(jq -r \
-            --arg agent "$agent_name" \
-            '.[$agent].disallowed // [] | join(",")' \
-            "$agent_tools_file" 2>/dev/null)
-    fi
-
-    # Build Claude command with --resume
-    # VALIDATED: --resume works with --append-system-prompt (test-13)
-    local claude_cmd=(
-        claude
-        --print
-        --model sonnet
-        --output-format json
-        --resume "$session_id"  # VALIDATED: Preserves context
-        --append-system-prompt "$system_prompt"
-    )
-
-    # Add MCP config if present
-    if [ -f "$session_dir/.mcp.json" ]; then
-        claude_cmd+=(--mcp-config "$session_dir/.mcp.json")
-    fi
-
-    # Add tool restrictions
-    if [ -n "$allowed_tools" ]; then
-        claude_cmd+=(--allowedTools "$allowed_tools")
-    fi
-    if [ -n "$disallowed_tools" ]; then
-        claude_cmd+=(--disallowedTools "$disallowed_tools")
-    fi
-
-    # Create output directory
-    mkdir -p "$(dirname "$output_file")"
-
-    # Change to session directory for context
-    local original_dir
-    original_dir=$(pwd)
-    cd "$session_dir" || return 1
-
-    # Invoke Claude with session continuity
-    # VALIDATED: Context is preserved from previous turns (test-13)
-    # Note: timeout command not available on macOS by default, so we run without it
-    # The claude CLI has its own timeout mechanisms
-    if echo "$task" | "${claude_cmd[@]}" > "$output_file" 2>&1; then
-        cd "$original_dir" || true
 
         # Validate JSON output
+        if [[ ! -f "$output_file" ]] || [[ ! -s "$output_file" ]]; then
+            echo "✗ Agent $agent_name produced no output file" >&2
+            return 1
+        fi
+        
         if ! jq empty "$output_file" 2>/dev/null; then
             echo "✗ Agent $agent_name returned invalid JSON" >&2
             return 1
@@ -286,17 +242,6 @@ continue_agent_session() {
 
         echo "✓ Agent $agent_name turn completed (session: $session_id)" >&2
         return 0
-    else
-        local exit_code=$?
-        cd "$original_dir" || true
-
-        if [ $exit_code -eq 124 ]; then
-            echo "✗ Agent $agent_name timed out after ${timeout}s" >&2
-        else
-            echo "✗ Agent $agent_name failed with code $exit_code" >&2
-        fi
-        return 1
-    fi
 }
 
 # Get session ID for an agent (if exists)
@@ -483,4 +428,3 @@ EOF
             ;;
     esac
 fi
-

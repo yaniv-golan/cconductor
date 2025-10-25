@@ -47,6 +47,8 @@ source "$UTILS_DIR/error-logger.sh"
 source "$UTILS_DIR/debug.sh"
 # shellcheck disable=SC1091
 source "$UTILS_DIR/web-cache.sh" 2>/dev/null || true
+# shellcheck disable=SC1091
+source "$UTILS_DIR/session-manager.sh"
 
 MISSION_ORCH_BASE_DIR="$(pwd)"
 
@@ -158,6 +160,28 @@ format_search_cache_lines() {
     printf '%s' "$output"
 }
 
+get_search_quota_state() {
+    local session_dir="$1"
+    local budget_file="$session_dir/meta/budget.json"
+    local used=0
+    if [[ -f "$budget_file" ]]; then
+        used=$(jq -r '.tool_usage.web_searches // 0' "$budget_file" 2>/dev/null || echo "0")
+    fi
+
+    local max=999
+    if command -v load_config >/dev/null 2>&1; then
+        local config_json
+        config_json=$(load_config "cconductor" 2>/dev/null || echo '{}')
+        max=$(echo "$config_json" | jq -r '.research.max_web_searches // 999' 2>/dev/null || echo "999")
+    fi
+
+    if [[ -z "$max" || "$max" == "null" ]]; then
+        max=999
+    fi
+
+    printf '%s %s' "$used" "$max"
+}
+
 # Prepare orchestrator context for invocation
 prepare_orchestrator_context() {
     local session_dir="$1"
@@ -171,131 +195,25 @@ prepare_orchestrator_context() {
         return 1
     fi
     
-    # Get knowledge graph
-    local kg_json
-    if ! kg_json=$(kg_read "$session_dir"); then
-        echo "✗ Error: Could not read knowledge graph from $session_dir" >&2
+    if ! bash "$PROJECT_ROOT/src/utils/mission-state-builder.sh" "$session_dir"; then
+        echo "✗ Error: Failed to build mission state summary" >&2
         return 1
     fi
-    
-    # Get budget status
-    local budget_json
-    if ! budget_json=$(budget_status "$session_dir"); then
-        echo "✗ Error: Could not read budget status from $session_dir" >&2
-        return 1
-    fi
-    
-    # Get previous decisions
-    local decisions_json
-    if ! decisions_json=$(get_orchestration_log "$session_dir"); then
-        echo "✗ Error: Could not read orchestration log from $session_dir" >&2
-        return 1
-    fi
-    
-    # Extract coverage summary from knowledge graph
-    local coverage_summary
-    coverage_summary=$(echo "$kg_json" | jq -r '
-        .claims // [] | group_by(.topic // "general") | 
-        map({
-            topic: (.[0].topic // "general"),
-            claim_count: length,
-            avg_confidence: (if length > 0 then (map(.confidence // 0) | add / length) else 0 end),
-            unique_domains: (
-                [.[] | .sources[]? | .url // "" | 
-                    sub("^https?://"; "") | sub("/.*$"; "") | sub("^www\\."; "")] 
-                | unique | length
-            )
-        })
-    ' 2>/dev/null || echo "[]")
-    
-    # Extract high-priority gaps (≥8)
-    local high_priority_gaps_count
-    high_priority_gaps_count=$(echo "$kg_json" | jq -r '
-        [.gaps[]? | select(.priority >= 8)] | length
-    ' 2>/dev/null || echo "0")
-    
-    # Get list of high-priority gaps for context
-    local high_priority_gaps_list
-    high_priority_gaps_list=$(echo "$kg_json" | jq -c '
-        [.gaps[]? | select(.priority >= 8) | {
-            description: .description,
-            priority: .priority,
-            status: (.status // "unresolved")
-        }]
-    ' 2>/dev/null || echo "[]")
-    
-    # Check if quality gate has run
-    local quality_gate_status="not_run"
-    local quality_gate_summary="{}"
-    local quality_gate_mode="advisory"
-    if [[ -f "$session_dir/artifacts/quality-gate-summary.json" ]]; then
-        quality_gate_status=$(jq -r '.status // "unknown"' \
-            "$session_dir/artifacts/quality-gate-summary.json" 2>/dev/null || echo "unknown")
-        quality_gate_summary=$(cat "$session_dir/artifacts/quality-gate-summary.json" 2>/dev/null || echo "{}")
-    fi
-    
-    # Load quality gate mode from config
-    if command -v load_config &>/dev/null; then
-        quality_gate_mode=$(load_config "quality-gate" 2>/dev/null | jq -r '.mode // "advisory"')
-    fi
-    
-    # Check if research plan exists
-    local research_plan_exists="false"
-    local research_plan="{}"
-    if [[ -f "$session_dir/artifacts/research-plan.json" ]]; then
-        research_plan_exists="true"
-        research_plan=$(cat "$session_dir/artifacts/research-plan.json" 2>/dev/null || echo "{}")
-    fi
-    
-    # Check for recent agent timeouts
-    local recent_timeouts
-    local timeout_lines
-    timeout_lines=$(grep -E '"agent_timeout"|"agent_invocation_failure"' "$session_dir/logs/orchestration.jsonl" 2>/dev/null | tail -10 || true)
-    if [[ -n "$timeout_lines" ]]; then
-        recent_timeouts=$(echo "$timeout_lines" | jq -s 'map(select(.type == "agent_timeout" or (.type == "agent_invocation_failure" and (.decision.failure_reason // "") | contains("timeout")))) | map({agent: (.decision.failed_agent // .decision.agent // "unknown"), reason: (.decision.timeout_reason // .decision.failure_reason // "unknown")})' 2>/dev/null || echo "[]")
-    else
-        recent_timeouts="[]"
-    fi
-    
-    # Build context JSON with enhanced diagnostics
+
+    local mission_state
+    mission_state=$(cat "$session_dir/meta/mission_state.json" 2>/dev/null || echo '{}')
+
     jq -n \
         --argjson mission "$mission_profile" \
         --argjson agents "$agents_json" \
-        --argjson kg "$kg_json" \
-        --argjson budget "$budget_json" \
-        --argjson decisions "$decisions_json" \
         --argjson iteration "$iteration" \
-        --argjson coverage "$coverage_summary" \
-        --arg gaps_count "$high_priority_gaps_count" \
-        --argjson gaps_list "$high_priority_gaps_list" \
-        --arg qg_status "$quality_gate_status" \
-        --arg qg_mode "$quality_gate_mode" \
-        --argjson qg_summary "$quality_gate_summary" \
-        --arg plan_exists "$research_plan_exists" \
-        --argjson plan "$research_plan" \
-        --argjson timeouts "$recent_timeouts" \
+        --argjson state "$mission_state" \
         '{
             mission: $mission,
             agents: $agents,
-            knowledge_graph: $kg,
-            budget: $budget,
-            previous_decisions: $decisions,
             iteration: $iteration,
-            coverage_metrics: $coverage,
-            high_priority_gaps: {
-                count: ($gaps_count | tonumber),
-                gaps: $gaps_list
-            },
-            quality_gate: {
-                status: $qg_status,
-                mode: $qg_mode,
-                summary: $qg_summary
-            },
-            research_plan: {
-                exists: ($plan_exists == "true"),
-                plan: $plan
-            },
-            recent_timeouts: $timeouts
+            state: $state,
+            note: "For full knowledge graph or orchestration log, use the paths referenced in the state object."
         }'
 }
 
@@ -319,29 +237,15 @@ $(echo "$context_json" | jq -r '.mission | tojson')
 ## Available Agents
 $(echo "$context_json" | jq -r '.agents | tojson')
 
-## Current Knowledge Graph State
-$(echo "$context_json" | jq -r '.knowledge_graph | tojson')
+## Mission State Summary
+Coverage Metrics: $(echo "$context_json" | jq -r '.state.coverage | tojson')
+Budget Summary: $(echo "$context_json" | jq -r '.state.budget_summary | tojson')
+Quality Gate Status: $(echo "$context_json" | jq -r '.state.quality_gate_status')
+Recent Decisions (last 5): $(echo "$context_json" | jq -r '.state.last_5_decisions | tojson')
 
-## Coverage Metrics
-$(echo "$context_json" | jq -r '.coverage_metrics | tojson')
-
-## High-Priority Gaps (≥8)
-Count: $(echo "$context_json" | jq -r '.high_priority_gaps.count')
-Gaps: $(echo "$context_json" | jq -r '.high_priority_gaps.gaps | tojson')
-
-## Quality Gate Status
-Status: $(echo "$context_json" | jq -r '.quality_gate.status')
-Summary: $(echo "$context_json" | jq -r '.quality_gate.summary | tojson')
-
-## Research Plan
-Exists: $(echo "$context_json" | jq -r '.research_plan.exists')
-Plan: $(echo "$context_json" | jq -r '.research_plan.plan | tojson')
-
-## Budget Status
-$(echo "$context_json" | jq -r '.budget | tojson')
-
-## Previous Decisions
-$(echo "$context_json" | jq -r '.previous_decisions | tojson')
+Important Paths (use the Read tool if you need the raw data):
+- Knowledge Graph: $(echo "$context_json" | jq -r '.state.kg_path')
+- Orchestration Log: $(echo "$context_json" | jq -r '.state.full_log_path')
 
 ## Current Iteration
 $(echo "$context_json" | jq -r '.iteration')
@@ -498,8 +402,40 @@ _invoke_delegated_agent() {
         echo "  ✗ Session directory does not exist: $session_dir" >&2
         return 1
     fi
+
+    local supports_sessions=false
+    case "$agent_name" in
+        web-researcher|academic-researcher|fact-checker|quality-remediator)
+            supports_sessions=true
+            ;;
+    esac
+
+    if [[ "$agent_name" == "web-researcher" ]]; then
+        local used_searches max_searches
+        read -r used_searches max_searches < <(get_search_quota_state "$session_dir")
+        if [[ -z "$max_searches" ]]; then
+            max_searches=999
+        fi
+        if (( used_searches >= max_searches )); then
+            echo "  ⚠ Web search quota exhausted (${used_searches}/${max_searches}) - skipping $agent_name" >&2
+            local quota_log
+            quota_log=$(jq -n \
+                --arg agent "$agent_name" \
+                --argjson used "$used_searches" \
+                --argjson max "$max_searches" \
+                '{tool: "WebSearch", skipped_agent: $agent, used: $used, max: $max}')
+            log_decision "$session_dir" "web_search_quota_exhausted" "$quota_log"
+            return 0
+        fi
+    fi
     
     # Note: verbose_agent_start is called by invoke_agent_v2, no need to call here
+    
+    # Sanitize task for safe export and display
+    # This is for verbose output only - the full task still goes to the input file
+    local task_display
+    task_display=$(printf '%s' "$task" | tr '\n' ' ' | cut -c1-150 | sed 's/[`$"\\]/\\&/g')
+    export CCONDUCTOR_TASK_DESC="$task_display"
     
     # Build agent input message
     # Process input_artifacts JSON array into readable format
@@ -537,86 +473,11 @@ SPEC_EOF
         fi
     fi
     
-    # Build instructions based on agent type
-    local instructions_section
-    
-    if [[ "$agent_name" == "web-researcher" ]]; then
-        # Web-researcher: Manifest-only output (findings go to files)
-        instructions_section=$(cat <<'INSTRUCTIONS_EOF'
-## Instructions
-Complete this task and write findings to separate JSON files in work/web-researcher/ directory.
-
-Return ONLY this JSON manifest (no markdown, no explanations):
-
-{
-  "status": "completed",
-  "tasks_completed": <number>,
-  "findings_files": [
-    "work/<agent>/findings-<task_id>.json",
-    ...
-  ]
-}
-
-CRITICAL REQUIREMENTS:
-- Response must be ONLY the JSON manifest above
-- Start with { and end with }
-- NO markdown formatting (no ```json blocks)
-- NO explanatory text
-- If any task failed, set status to "partial" and add "errors" array
-
-Example CORRECT: {"status":"completed","tasks_completed":2,"findings_files":["work/web-researcher/findings-t0.json","work/web-researcher/findings-t1.json"]}
-Example WRONG: Here's the manifest: ```json {"status":"completed"} ```
-INSTRUCTIONS_EOF
-)
-    elif [[ "$agent_name" =~ ^(academic-researcher|pdf-analyzer|code-analyzer|fact-checker|market-analyzer)$ ]]; then
-        # Other research agents: Full JSON schema output
-        instructions_section=$(cat <<'INSTRUCTIONS_EOF'
-## Instructions
-Return ONLY valid JSON matching this exact schema:
-
-{
-  "task_id": "string",
-  "status": "completed|failed",
-  "entities_discovered": [
-    {"name": "string", "type": "string", "description": "string", 
-     "confidence": 0.0-1.0, "sources": ["url"]}
-  ],
-  "claims": [
-    {"statement": "string", "confidence": 0.0-1.0, "evidence_quality": "high|medium|low",
-     "sources": [{"url": "string", "title": "string", "relevant_quote": "string"}]}
-  ],
-  "relationships_discovered": [...],
-  "gaps_identified": [{"question": "string", "priority": 1-10}]
-}
-
-CRITICAL REQUIREMENTS:
-- Return ONLY the JSON object above IN YOUR RESPONSE
-- The orchestration system will automatically integrate your findings into the knowledge graph
-- Do NOT use the Write tool to create knowledge/knowledge-graph.json or findings files
-- Do NOT attempt to write to any data files - all findings go in your JSON response
-- Start with { and end with }
-- NO markdown formatting (no ```json blocks)
-- NO explanatory text before or after the JSON
-- Validate all JSON is properly escaped
-
-Example CORRECT: {"task_id":"t0","status":"completed","entities_discovered":[...],"claims":[...]}
-Example WRONG: Here are my findings: ```json {"entities_discovered": [...]} ```
-Example WRONG: I will write the findings to knowledge/knowledge-graph.json using the Write tool.
-Example WRONG: Let me create a findings file...
-
-If you must explain something, put it in a "notes" field within the JSON.
-INSTRUCTIONS_EOF
-)
-    else
-        # Non-research agents: generic instructions
-        instructions_section=$(cat <<'INSTRUCTIONS_EOF'
-## Instructions
-Please complete this task and provide your findings in a structured format.
-Include any artifacts you create and cite all sources.
-INSTRUCTIONS_EOF
-)
+    local context_section=""
+    if [[ -n "$context" && "$context" != "null" ]]; then
+        context_section=$'\n''## Context\n'"$context"$'\n'
     fi
-    
+
     local cache_section=""
     local cache_lines=""
     if command -v web_cache_format_summary >/dev/null 2>&1; then
@@ -648,15 +509,10 @@ INSTRUCTIONS_EOF
 
     local agent_input
     agent_input=$(cat <<EOF
-$task
-
-## Context
-$context
-
+## Task
+$task${context_section}
 ## Input Artifacts
 $artifacts_section${output_spec_section}${cache_section}
-
-$instructions_section
 EOF
 )
     
@@ -713,7 +569,30 @@ EOF
     local start_time
     start_time=$(get_epoch)
     
-    if invoke_agent_v2 "$agent_name" "$agent_input_file" "$agent_output_file" 600 "$session_dir"; then
+    local invocation_status=0
+    if [[ "$supports_sessions" == "true" ]]; then
+        if has_agent_session "$agent_name" "$session_dir"; then
+            if continue_agent_session "$agent_name" "$session_dir" "$agent_input" "$agent_output_file" 600; then
+                invocation_status=0
+            else
+                invocation_status=$?
+            fi
+        else
+            if start_agent_session "$agent_name" "$session_dir" "$agent_input" 600 "$agent_output_file"; then
+                invocation_status=0
+            else
+                invocation_status=$?
+            fi
+        fi
+    else
+        if invoke_agent_v2 "$agent_name" "$agent_input_file" "$agent_output_file" 600 "$session_dir"; then
+            invocation_status=0
+        else
+            invocation_status=$?
+        fi
+    fi
+
+    if [[ $invocation_status -eq 0 ]]; then
         local end_time
         end_time=$(get_epoch)
         local duration=$((end_time - start_time))
@@ -746,7 +625,7 @@ EOF
         
         return 0
     else
-        local exit_code=$?
+        local exit_code=$invocation_status
         echo "  ✗ $agent_name invocation failed" >&2
         return $exit_code
     fi
@@ -1136,7 +1015,9 @@ run_quality_assurance_cycle() {
     # Check if remediation is enabled
     local remediation_enabled
     remediation_enabled=$(echo "$quality_config" | jq -r '.remediation.enabled // false')
-
+    local remediation_config
+    remediation_config=$(echo "$quality_config" | jq '.remediation // {}')
+    
     local gate_mode
     gate_mode=$(echo "$quality_config" | jq -r '.mode // "advisory"')
     
@@ -1193,7 +1074,55 @@ run_quality_assurance_cycle() {
                 return 1
             fi
         fi
-        
+
+        local min_budget
+        min_budget=$(echo "$remediation_config" | jq -r '.min_remaining_budget_usd // 0')
+        local min_invocations
+        min_invocations=$(echo "$remediation_config" | jq -r '.min_remaining_invocations // 0')
+        local min_minutes
+        min_minutes=$(echo "$remediation_config" | jq -r '.min_remaining_minutes // 0')
+
+        local budget_state
+        if ! budget_state=$(budget_status "$session_dir"); then
+            log_warn "Unable to read budget state for remediation"
+            return 1
+        fi
+
+        local remaining_budget
+        remaining_budget=$(echo "$budget_state" | jq -r '((.limits.budget_usd // 0) - (.spent.cost_usd // 0))')
+        local remaining_invocations
+        remaining_invocations=$(echo "$budget_state" | jq -r '((.limits.max_agent_invocations // 0) - (.spent.agent_invocations // 0))')
+        local remaining_minutes
+        remaining_minutes=$(echo "$budget_state" | jq -r '((.limits.max_time_minutes // 0) - (.spent.elapsed_minutes // 0))')
+
+        if awk -v rem="$remaining_budget" -v min="$min_budget" 'BEGIN { if (min > 0 && rem < min) exit 0; exit 1 }'; then
+            log_warn "Insufficient budget for remediation (need $min_budget USD, have $remaining_budget USD)"
+            return 1
+        fi
+
+        if [[ ${min_invocations:-0} -gt 0 ]] && [[ ${remaining_invocations:-0} -lt ${min_invocations:-0} ]]; then
+            log_warn "Insufficient agent invocations left for remediation (need $min_invocations, have $remaining_invocations)"
+            return 1
+        fi
+
+        if [[ ${min_minutes:-0} -gt 0 ]] && [[ ${remaining_minutes:-0} -lt ${min_minutes:-0} ]]; then
+            log_warn "Insufficient time remaining for remediation (need $min_minutes minutes, have $remaining_minutes minutes)"
+            return 1
+        fi
+
+        local failure_reason=""
+        if [[ -f "$session_dir/artifacts/quality-gate-summary.json" ]]; then
+            failure_reason=$(jq -r '.primary_issue // ""' "$session_dir/artifacts/quality-gate-summary.json" 2>/dev/null || echo "")
+            local failure_reason_lower
+            failure_reason_lower=$(echo "$failure_reason" | tr '[:upper:]' '[:lower:]')
+            case "$failure_reason_lower" in
+                *"peer-reviewed sources"*|*"no sources available"*)
+                    log_warn "Quality gate failure is non-actionable: $failure_reason"
+                    return 1
+                    ;;
+            esac
+        fi
+
         # Check if quality-remediator agent exists
         if [[ ! -d "$PROJECT_ROOT/src/claude-runtime/agents/quality-remediator" ]]; then
             log_warn "Quality remediator agent not found, cannot auto-remediate"
@@ -1601,7 +1530,13 @@ run_mission_orchestration() {
     if command -v stop_event_tailer &>/dev/null || source "$UTILS_DIR/event-tailer.sh" 2>/dev/null; then
         stop_event_tailer "$session_dir" 2>/dev/null || true
     fi
-    
+
+    local latest_marker_path
+    latest_marker_path="$(dirname "$session_dir")/.latest"
+    if ! printf '%s\n' "$(basename "$session_dir")" > "$latest_marker_path" 2>/dev/null; then
+        log_warn "Failed to update latest session marker at $latest_marker_path"
+    fi
+
     local session_display
     session_display=$(rel_path_for_display "$session_dir" "" "$MISSION_ORCH_BASE_DIR")
     echo ""
@@ -1869,7 +1804,13 @@ run_mission_orchestration_resume() {
     if command -v stop_event_tailer &>/dev/null || source "$UTILS_DIR/event-tailer.sh" 2>/dev/null; then
         stop_event_tailer "$session_dir" 2>/dev/null || true
     fi
-    
+
+    local latest_marker_path
+    latest_marker_path="$(dirname "$session_dir")/.latest"
+    if ! printf '%s\n' "$(basename "$session_dir")" > "$latest_marker_path" 2>/dev/null; then
+        log_warn "Failed to update latest session marker at $latest_marker_path"
+    fi
+
     local session_display
     session_display=$(rel_path_for_display "$session_dir" "" "$MISSION_ORCH_BASE_DIR")
     echo ""
@@ -1947,7 +1888,8 @@ prepare_orchestrator_context_resume() {
     if [[ -f "$session_dir/artifacts/quality-gate-summary.json" ]]; then
         quality_gate_status=$(jq -r '.status // "unknown"' \
             "$session_dir/artifacts/quality-gate-summary.json" 2>/dev/null || echo "unknown")
-        quality_gate_summary=$(cat "$session_dir/artifacts/quality-gate-summary.json" 2>/dev/null || echo "{}")
+        # Ensure we get valid JSON, default to empty object if file is invalid
+        quality_gate_summary=$(cat "$session_dir/artifacts/quality-gate-summary.json" 2>/dev/null | jq -c '.' 2>/dev/null || echo "{}")
     fi
     if command -v load_config &>/dev/null; then
         quality_gate_mode=$(load_config "quality-gate" 2>/dev/null | jq -r '.mode // "advisory"')

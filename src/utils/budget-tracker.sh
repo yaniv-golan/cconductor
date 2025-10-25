@@ -4,10 +4,15 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="${PROJECT_ROOT:-$(cd "$SCRIPT_DIR/../.." && pwd)}"
 
-# Source core helpers first
-# shellcheck disable=SC1091
-source "$SCRIPT_DIR/core-helpers.sh"
+if [[ -f "$SCRIPT_DIR/bootstrap.sh" ]]; then
+    # shellcheck disable=SC1091
+    source "$SCRIPT_DIR/bootstrap.sh"
+else
+    # shellcheck disable=SC1091
+    source "$PROJECT_ROOT/src/utils/bootstrap.sh"
+fi
 
 # Load shared state utilities for atomic JSON updates
 # shellcheck disable=SC1091
@@ -51,7 +56,11 @@ budget_init() {
         elapsed_minutes: 0
       },
       start_time: $start_time,
-      invocations: []
+      invocations: [],
+      tool_usage: {
+        web_searches: 0,
+        web_fetches: 0
+      }
     }' > "$budget_file"
 }
 
@@ -112,12 +121,11 @@ budget_check() {
   local elapsed_seconds=$((current_time - start_time))
   local elapsed_minutes=$((elapsed_seconds / 60))
   
-  # Update elapsed time
-  jq \
+  # Update elapsed time atomically (prevents clobbering concurrent writes)
+  # shellcheck disable=SC2016
+  atomic_json_update "$budget_file" \
     --argjson elapsed "$elapsed_minutes" \
-    '.spent.elapsed_minutes = $elapsed' \
-    "$budget_file" > "$budget_file.tmp"
-  mv "$budget_file.tmp" "$budget_file"
+    '.spent.elapsed_minutes = $elapsed'
   
   # Check limits
   local cost_spent
@@ -258,4 +266,3 @@ budget_extend_limits() {
     )
     '
 }
-

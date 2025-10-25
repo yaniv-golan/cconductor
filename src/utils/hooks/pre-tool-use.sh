@@ -57,6 +57,73 @@ debug_log() {
     } >> "$log_file" 2>/dev/null || true
 }
 
+safe_realpath() {
+    local target="$1"
+
+    if command -v realpath >/dev/null 2>&1; then
+        realpath "$target" 2>/dev/null && return 0
+    fi
+
+    if command -v python3 >/dev/null 2>&1; then
+        python3 - "$target" <<'PY' 2>/dev/null && return 0
+import os
+import sys
+
+try:
+    print(os.path.realpath(sys.argv[1]))
+except Exception:
+    sys.exit(1)
+PY
+    fi
+
+    local dir_part
+    dir_part=$(dirname -- "$target" 2>/dev/null || echo ".")
+    local base_part
+    base_part=$(basename -- "$target" 2>/dev/null || echo "$target")
+    if resolved_dir=$(cd "$dir_part" 2>/dev/null && pwd -P); then
+        printf '%s/%s\n' "$resolved_dir" "$base_part"
+    else
+        printf '%s\n' "$target"
+    fi
+}
+
+is_path_allowed_for_orchestrator() {
+    local abs_target="$1"
+    local session_path="$2"
+
+    local abs_session=""
+    if [[ -n "$session_path" ]]; then
+        abs_session=$(safe_realpath "$session_path")
+    fi
+
+    local -a allowlist=()
+    if [[ -n "$abs_session" ]]; then
+        allowlist+=("$abs_session")
+    fi
+
+    local candidate
+    for candidate in \
+        "$PROJECT_ROOT/config" \
+        "$PROJECT_ROOT/knowledge-base" \
+        "$PROJECT_ROOT/knowledge-base-custom"; do
+        if [[ -n "$candidate" ]]; then
+            allowlist+=("$(safe_realpath "$candidate")")
+        fi
+    done
+
+    local allowed_dir
+    for allowed_dir in "${allowlist[@]}"; do
+        if [[ -z "$allowed_dir" ]]; then
+            continue
+        fi
+        if [[ "$abs_target" == "$allowed_dir" ]] || [[ "$abs_target" == "$allowed_dir"/* ]]; then
+            return 0
+        fi
+    done
+
+    return 1
+}
+
 debug_log "hook_project_root_init $PROJECT_ROOT"
 
 # Read hook data from stdin
@@ -77,19 +144,14 @@ if [[ "$agent_name" == "mission-orchestrator" ]]; then
             file_path=$(echo "$hook_data" | jq -r '.tool_input.file_path // ""')
             if [[ -n "$file_path" ]]; then
                 # Get absolute path
-                abs_path=$(cd "$(dirname "$file_path")" 2>/dev/null && pwd)/$(basename "$file_path") || abs_path="$file_path"
-                
-                # Check if path is within session directory
+                abs_path=$(safe_realpath "$file_path")
+
+                # Check if path is within the allowlist
                 if [[ -n "$session_dir" ]]; then
-                    abs_session=$(cd "$session_dir" 2>/dev/null && pwd)
-                    # Allow session directory, config directory, and knowledge-base
-                    if [[ "$abs_path" != "$abs_session"* ]] && \
-                       [[ "$abs_path" != *"/config/"* ]] && \
-                       [[ "$abs_path" != *"/knowledge-base/"* ]] && \
-                       [[ "$abs_path" != *"/knowledge-base-custom/"* ]]; then
-                        echo "ERROR: Orchestrator cannot access files outside session directory" >&2
+                    if ! is_path_allowed_for_orchestrator "$abs_path" "$session_dir"; then
+                        echo "ERROR: Orchestrator cannot access files outside allowed directories" >&2
                         echo "  Blocked: $file_path" >&2
-                        echo "  Session: $session_dir" >&2
+                        echo "  Resolved to: $abs_path" >&2
                         exit 1
                     fi
                 fi
@@ -333,6 +395,23 @@ if [[ "$tool_name" == "WebSearch" ]]; then
                 fi
 
                 debug_log "web_search_guard_hit path=${materialized_path:-none}"
+                payload_file="$materialized_path"
+                if [[ -z "$payload_file" ]]; then
+                    payload_file=$(echo "$lookup_json" | jq -r '.object_path // empty')
+                fi
+                if [[ -n "$payload_file" && -f "$payload_file" ]]; then
+                    jq -n \
+                        --arg status "$status" \
+                        --arg stored "$stored_iso" \
+                        --argfile payload "$payload_file" \
+                        '{
+                            cache_hit: true,
+                            cache_status: $status,
+                            stored_at: (if $stored == "" then null else $stored end),
+                            tool_output: $payload
+                        }'
+                    exit 0
+                fi
                 exit 2
                 ;;
             stale)
@@ -618,7 +697,25 @@ Use the Read tool on the cached file. Append '?fresh=1' to the URL if you must f
                                 rmdir "$lock_file" 2>/dev/null || true
                             fi
                         fi
-                        exit 2
+                        status_code=$(echo "$lookup_json" | jq -r '.metadata.status_code // 200')
+                        content_type=$(echo "$lookup_json" | jq -r '.metadata.content_type // ""')
+                        headers_json=$(echo "$lookup_json" | jq '.metadata.headers // {}')
+                        jq -n \
+                            --arg path "$materialized_path" \
+                            --arg status "$status_code" \
+                            --arg content_type "$content_type" \
+                            --argjson headers "$headers_json" \
+                            '{
+                                cache_hit: true,
+                                tool_output: {
+                                    body: null,
+                                    body_file: $path,
+                                    content_type: (if $content_type == "" then null else $content_type end),
+                                    status_code: ($status | tonumber),
+                                    headers: $headers
+                                }
+                            }'
+                        exit 0
                     fi
                 elif [[ "$status" == "stale" ]]; then
                     echo "⚠️  Cached copy for $url is older than the configured TTL; proceeding with fresh fetch." >&2

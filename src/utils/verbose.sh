@@ -42,9 +42,16 @@ verbose_agent_start() {
     
     echo "🤖 Starting $friendly_name" >&2
     
+    # Skip task display for system/orchestration agents (their tasks are internal instructions)
+    local system_agents="prompt-parser|mission-orchestrator"
+    if [[ "$agent_name" =~ ^($system_agents)$ ]]; then
+        return 0
+    fi
+    
     # Only show task if it's meaningful (not system prompt preamble)
     if [[ -n "$task" ]] && \
        [[ ! "$task" =~ ^"I am providing" ]] && \
+       [[ ! "$task" =~ ^"Parse the user prompt" ]] && \
        [[ ${#task} -lt 150 ]]; then
         # Try to get action verb from agent metadata
         local action_verb=""
