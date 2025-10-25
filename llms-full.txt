@@ -437,7 +437,7 @@ ls -la config/cconductor-config.json
 ./cconductor sessions list
 
 # Find report 
-ls research-sessions/mission_*/final/mission-report.md
+ls research-sessions/mission_*/report/mission-report.md
 
 # Check .latest marker
 cat research-sessions/.latest
@@ -487,21 +487,36 @@ Repository includes pre-commit hook that runs ShellCheck automatically.
 
 ```
 research-sessions/mission_TIMESTAMP/
-├── session.json                 # Session metadata with mission info
-├── budget.json                  # Budget tracking (USD, time, invocations)
-├── orchestration-log.jsonl      # Orchestrator decisions and reasoning
-├── artifacts/                   # Content-addressed artifacts
-│   ├── manifest.json
-│   └── [SHA256-hash files]
-├── raw/                         # Initial research data
-│   └── agent-findings/
-├── intermediate/                # Processing artifacts
-│   └── knowledge-graph.json
-├── final/                       # Final outputs
-│   ├── mission-report.md        # Main research report
-│   ├── research-journal.md      # Detailed research journal
-│   └── evidence/                # Evidence artifacts with citations
-├── events.jsonl                 # Event log for dashboard
+├── INDEX.json                   # Session manifest with navigation
+├── .mcp.json                    # MCP configuration
+├── meta/                     # Session metadata and provenance
+│   ├── session.json             # Session state and objectives
+│   └── provenance.json          # Environment and config hashes
+├── inputs/                   # User-provided inputs
+│   ├── prompt.txt               # Research question
+│   └── input-files.json         # Input manifest
+├── cache/                    # Live mission cache artifacts
+│   ├── web/                     # Cached web content
+│   └── pdf/                     # Downloaded PDFs
+├── work/                     # Agent working directories
+│   └── <agent>/
+│       ├── input.txt
+│       ├── output.json
+│       └── findings-*.json
+├── knowledge/                # Knowledge graph and session knowledge
+│   └── knowledge-graph.json     # Central knowledge state
+├── artifacts/                # Agent-produced artifacts
+│   ├── manifest.json            # Artifact registry
+│   └── <agent>/
+│       └── *.json
+├── logs/                     # Structured logs
+│   ├── events.jsonl             # All system events
+│   ├── orchestration.jsonl      # Orchestrator decisions
+│   └── quality-gate.json        # Quality evaluation
+├── report/                   # Final deliverables
+│   ├── mission-report.md        # Synthesized research report
+│   └── research-journal.md      # Chronological journal
+└── viewer/                   # Interactive dashboard
 ├── dashboard-metrics.json       # Real-time metrics
 ├── .cconductor-root             # Project root marker for relocated sessions
 └── .claude/                     # Per-session Claude config

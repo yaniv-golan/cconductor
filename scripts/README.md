@@ -24,7 +24,7 @@ Comprehensive cleanup script for CConductor development and testing.
    - HTTP server processes (from dashboard)
 
 2. **Research Sessions**
-   - All `research-sessions/session_*` directories
+   - All `research-sessions/mission_*` directories
    - `.latest` symlink
    - Interactive confirmation before deletion
 

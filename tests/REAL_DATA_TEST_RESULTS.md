@@ -16,7 +16,7 @@ The utility scripts were tested on an actual research session about maternal bon
 
 ### Command
 ```bash
-./src/utils/kg-utils.sh stats research-sessions/mission_1760225639069883000/knowledge-graph.json
+./src/utils/kg-utils.sh stats research-sessions/mission_1760225639069883000/knowledge/knowledge-graph.json
 ```
 
 ### Results
@@ -247,13 +247,13 @@ Based on the system prompt (`mission-orchestrator/system-prompt.md`):
 # Mission orchestrator can call these utilities during research:
 
 # Get overview of research progress
-Bash: src/utils/kg-utils.sh stats knowledge-graph.json
+Bash: src/utils/kg-utils.sh stats knowledge/knowledge-graph.json
 
 # Find high-confidence claims for synthesis
-Bash: src/utils/kg-utils.sh filter-confidence knowledge-graph.json 0.8
+Bash: src/utils/kg-utils.sh filter-confidence knowledge/knowledge-graph.json 0.8
 
 # Identify gaps by category
-Bash: src/utils/kg-utils.sh list-categories knowledge-graph.json
+Bash: src/utils/kg-utils.sh list-categories knowledge/knowledge-graph.json
 
 # Consolidate multi-agent findings
 Bash: src/utils/data-utils.sh consolidate "findings-*.json"

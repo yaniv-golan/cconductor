@@ -24,7 +24,7 @@ fi
 if [ "${CCONDUCTOR_DEBUG:-0}" = "1" ]; then
     echo "🐛 Debug mode enabled" >&2
     echo "   All errors will be logged and displayed" >&2
-    echo "   Check system-errors.log in session directory for details" >&2
+    echo "   Check logs/system-errors.log in the session directory for details" >&2
     echo "" >&2
     set -x  # Enable bash trace mode
 fi

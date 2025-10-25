@@ -5,9 +5,26 @@ All notable changes to CConductor will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.4.0] - 2025-10-23
+
+**⚠️ BREAKING CHANGES**: This release introduces a new session directory structure that is incompatible with previous versions. Old sessions cannot be resumed or viewed with v0.4.0.
 
 ### Added
+
+- **Session README Generator**: new `src/utils/session-readme-generator.sh` produces the user-facing root `README.md` with direct links to the final report, research journal, dashboard, and supporting directories.
+- **Structured Session Layout**: Replaced the flat session structure with an organized directory tree:
+  - `meta/` - Session metadata, provenance, and configuration
+  - `inputs/` - Original research question and input files
+  - `cache/` - Live mission web/search caches for reuse
+  - `work/` - Agent working directories (replaces `raw/`)
+  - `knowledge/` - Knowledge graph and session knowledge files
+  - `artifacts/` - Agent artifacts and manifest (replaces `artifacts/`)
+  - `logs/` - Events, orchestration decisions, quality gate results
+  - `report/` - Final mission report and research journal (replaces `final/`)
+  - `viewer/` - Interactive dashboard (moved from root)
+- **Session Manifest**: `INDEX.json` at session root provides quick navigation, file counts, and SHA-256 checksums for all deliverables
+- **Provenance Tracking**: `meta/provenance.json` captures environment details (tool versions, git commit, system info, configuration checksums) for reproducibility
+- **Session README**: `README.md` at the session root provides quick navigation, statistics, and usage examples for each session
 - **Docker Distribution**: Official Docker images published to GitHub Container Registry (ghcr.io)
   - Multi-platform support (linux/amd64, linux/arm64)
   - Three authentication methods: volume mount, environment variable, Docker secrets
@@ -20,16 +37,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Proper library directory structure initialization
   - Installation guide in `docs/HOMEBREW.md`
   - Automated formula updates on release via GitHub Actions
-- **Release Automation**: Fully automated release workflow
-  - Automatic Docker image building and publishing
-  - Automatic Homebrew formula updates
-  - Documentation in `docs/RELEASE_AUTOMATION.md`
-- **Distribution Documentation**: Updated README.md with Docker and Homebrew installation instructions
 
 ### Changed
-- GitHub Actions release workflow now builds and pushes Docker images automatically
-- Homebrew tap formula automatically updates on release
-- Enhanced installation documentation with multiple distribution options
+
+- **Meta README Flow**: `manifest-generator.sh` has been renamed to `meta-manifest-generator.sh` and now targets the `meta/` directory exclusively.
+- **Session File Paths** (breaking): All file references updated to use the new session directory structure
+  - Knowledge graph: `knowledge-graph.json` → `knowledge/knowledge-graph.json`
+  - Final report: `final/mission-report.md` → `report/mission-report.md`
+  - Events log: `events.jsonl` → `logs/events.jsonl`
+  - Artifacts: `artifacts/<agent>/` → `artifacts/<agent>/`
+  - Dashboard: `dashboard.html` → `viewer/index.html`
+- **Session Metadata Files**: `budget.json`, `mission-metrics.json`, and `orchestrator-*.json` now live under `meta/`, and per-session error logs write to `logs/system-errors.log`.
+- **MCP Configuration**: `.mcp.json` remains at session root (Claude Code requirement) with organizational symlink in `meta/`
+- **Agent Prompts**: Updated synthesis-agent, mission-orchestrator, and quality-remediator system prompts with new file paths
+- **Dashboard**: Moved to `viewer/` directory, updated file references to use relative paths to parent directories
+
+### Migration
+
+**No automatic migration is provided.** To work with v0.4.0:
+- Old sessions remain readable but cannot be resumed or viewed with the new dashboard
+- New missions automatically use the v0.4.0 structure
+- Manual migration: copy files from old structure to the corresponding new directories if needed
+
+### Documentation
+
+- Updated `USAGE.md` with new file path examples
+- Updated `README.md` with new structure overview
+- Added `memory-bank/systemPatterns.md` documentation for new architecture
 
 ## [0.3.3] - 2025-10-23
 
@@ -97,7 +131,7 @@ This release focuses on production-ready research outputs and smoother day-to-da
 
 ### Changed
 
-- Mission outputs (mission report, research journal, evidence artifacts) now live in each session’s `final/` directory, with dashboards, CLI helpers, and docs updated accordingly.
+- Mission outputs (mission report, research journal, evidence artifacts) now live in each session's `report/` directory, with dashboards, CLI helpers, and docs updated accordingly.
 - Evidence generation is integrated across the orchestration pipeline; mission orchestration, hooks, and prompts were refreshed to automatically collect, merge, and render citations, and `cconductor` now defaults to `--evidence-mode render` with paragraph-level footnotes.
 - Web caching received a full overhaul: richer verbose narration, stronger library guardrails, a smarter web-search cache, and new CLI flags (`--no-cache`, `--no-web-fetch-cache`, `--no-web-search-cache`) for fine-grained control.
 - Sessions now persist the project root (`.cconductor-root`) so relocated session directories continue to resolve tools and agents correctly.
@@ -112,7 +146,9 @@ This release focuses on production-ready research outputs and smoother day-to-da
 
 ### Removed
 
+- **Session Layout Migrator Utility**: deleted `session-layout-migrator.sh`; the codebase now assumes the current session layout everywhere.
 - Deleted `RELEASE_NOTES_v0.2.0.md`; ongoing release notes will live exclusively alongside GitHub Releases.
+- Removed the unused `cache_snapshots/` placeholder; future reproducibility snapshots will be reconsidered when the feature is implemented.
 
 ## [0.2.3] - 2025-10-13
 
@@ -172,7 +208,7 @@ This release focuses on production-ready research outputs and smoother day-to-da
 - **Mission Types**: Use `--mission` flag to specify research type (academic-research, market-research, competitive-analysis, technical-analysis)
 - **Autonomous Agent Selection**: System dynamically selects best agents based on research needs
 - **Budget Tracking**: Monitor and control research costs with soft warnings and hard limits
-- **Decision Logging**: Structured orchestration decisions in `orchestration-log.jsonl`
+- **Decision Logging**: Structured orchestration decisions in `logs/orchestration.jsonl`
 
 ### Interactive Mode
 
