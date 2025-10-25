@@ -183,7 +183,7 @@ USAGE:
   cconductor sessions list              List all research sessions
   cconductor sessions latest            Show latest session details
   cconductor sessions viewer [id]       View research journal (auto-launched during research)
-  cconductor sessions resume <id>       Resume a session with optional refinement
+  cconductor sessions resume <id>       Resume a session with optional extensions and refinement
   cconductor status                     Check running research processes
   cconductor configure                  Show configuration files
   cconductor --update                   Update to latest version
@@ -222,6 +222,8 @@ SESSIONS SUBCOMMANDS:
   latest                                Show latest session with status and findings
   viewer [session_id]                   Launch research journal viewer for a session
   resume <session_id>                   Resume a previous session
+    --extend-iterations N               Add N additional iterations to the session
+    --extend-time M                     Add M additional minutes to the session
     --refine "guidance"                 Add refinement guidance when resuming
     --refine-file path/to/file.md       Load refinement from file
 
@@ -257,7 +259,9 @@ EXAMPLES:
   cconductor sessions latest
   cconductor sessions viewer mission_123
   cconductor sessions resume mission_123
-  cconductor sessions resume mission_123 --refine "Focus more on Constitutional AI"
+  cconductor sessions resume mission_123 --extend-iterations 5
+  cconductor sessions resume mission_123 --extend-time 30
+  cconductor sessions resume mission_123 --extend-iterations 10 --refine "Focus more on Constitutional AI"
   
   # System commands
   cconductor status
@@ -496,7 +500,12 @@ main() {
             source "$CCONDUCTOR_ROOT/src/utils/session-commands.sh"
             local subcommand
             subcommand=$(get_arg 1)
-            handle_sessions_command "$subcommand"
+            # Pass subcommand and all remaining arguments
+            local session_args=()
+            for ((i=2; i<$(get_arg_count); i++)); do
+                session_args+=("$(get_arg "$i")")
+            done
+            handle_sessions_command "$subcommand" "${session_args[@]}"
             ;;
         status)
             echo "Checking for running research sessions..."

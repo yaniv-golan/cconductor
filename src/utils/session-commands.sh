@@ -237,8 +237,30 @@ sessions_resume_handler() {
         else
             echo "Error: Session ID required" >&2
         fi
-        echo "Usage: cconductor sessions resume <session_id> [--refine \"guidance\" | --refine-file path]" >&2
+        echo "Usage: cconductor sessions resume <session_id> [--extend-iterations N] [--extend-time M] [--refine \"guidance\" | --refine-file path]" >&2
         exit 1
+    fi
+    
+    # Get extension iterations if provided
+    local extend_iterations=""
+    if has_flag "extend-iterations"; then
+        extend_iterations=$(get_flag "extend-iterations")
+        # Validate it's a positive integer
+        if ! [[ "$extend_iterations" =~ ^[0-9]+$ ]] || [[ "$extend_iterations" -eq 0 ]]; then
+            echo "Error: --extend-iterations must be a positive integer" >&2
+            exit 1
+        fi
+    fi
+    
+    # Get extension time if provided
+    local extend_time=""
+    if has_flag "extend-time"; then
+        extend_time=$(get_flag "extend-time")
+        # Validate it's a positive integer (minutes)
+        if ! [[ "$extend_time" =~ ^[0-9]+$ ]] || [[ "$extend_time" -eq 0 ]]; then
+            echo "Error: --extend-time must be a positive integer (minutes)" >&2
+            exit 1
+        fi
     fi
     
     # Get refinement if provided
@@ -298,11 +320,21 @@ sessions_resume_handler() {
     fi
     
     # Call mission resume
-    if [ -n "$refinement" ]; then
-        "$CCONDUCTOR_ROOT/src/cconductor-mission.sh" resume --session "$session_path" --refine "$refinement"
-    else
-        "$CCONDUCTOR_ROOT/src/cconductor-mission.sh" resume --session "$session_path"
+    local resume_args=("--session" "$session_path")
+    
+    if [ -n "$extend_iterations" ]; then
+        resume_args+=("--extend-iterations" "$extend_iterations")
     fi
+    
+    if [ -n "$extend_time" ]; then
+        resume_args+=("--extend-time" "$extend_time")
+    fi
+    
+    if [ -n "$refinement" ]; then
+        resume_args+=("--refine" "$refinement")
+    fi
+    
+    "$CCONDUCTOR_ROOT/src/cconductor-mission.sh" resume "${resume_args[@]}"
 }
 
 # Main sessions router
@@ -331,6 +363,8 @@ handle_sessions_command() {
             echo "  latest                     Show latest session" >&2
             echo "  viewer [session_id]        View research journal" >&2
             echo "  resume <session_id>        Resume a session" >&2
+            echo "    --extend-iterations N    Add N additional iterations" >&2
+            echo "    --extend-time M          Add M additional minutes" >&2
             echo "    --refine \"guidance\"       Add refinement when resuming" >&2
             echo "    --refine-file path       Load refinement from file" >&2
             exit 1

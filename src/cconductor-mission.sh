@@ -148,6 +148,8 @@ cmd_agents_describe() {
 cmd_resume() {
     local session_dir="$1"
     local refinement="${2:-}"
+    local extend_iterations="${3:-}"
+    local extend_time="${4:-}"
     
     # Load session metadata
     if [ ! -f "$session_dir/meta/session.json" ]; then
@@ -159,6 +161,14 @@ cmd_resume() {
     objective=$(jq -r '.objective' "$session_dir/meta/session.json")
     echo "→ Resuming session..."
     echo "  Original objective: $objective"
+    
+    if [ -n "$extend_iterations" ]; then
+        echo "  Extending by $extend_iterations additional iterations"
+    fi
+    
+    if [ -n "$extend_time" ]; then
+        echo "  Extending by $extend_time additional minutes"
+    fi
     
     if [ -n "$refinement" ]; then
         echo "  With refinement: ${refinement:0:60}..."
@@ -191,7 +201,7 @@ cmd_resume() {
     fi
     
     # Continue orchestration with resume flag
-    run_mission_orchestration_resume "$mission_profile" "$session_dir" "$refinement"
+    run_mission_orchestration_resume "$mission_profile" "$session_dir" "$refinement" "$extend_iterations" "$extend_time"
 }
 
 # Command: dry-run
@@ -456,11 +466,31 @@ main() {
             # Parse resume options
             local session_path=""
             local refinement=""
+            local extend_iterations=""
+            local extend_time=""
             
             while [[ $# -gt 0 ]]; do
                 case "$1" in
                     --session)
                         session_path="$2"
+                        shift 2
+                        ;;
+                    --extend-iterations)
+                        extend_iterations="$2"
+                        # Validate it's a positive integer
+                        if ! [[ "$extend_iterations" =~ ^[0-9]+$ ]] || [[ "$extend_iterations" -eq 0 ]]; then
+                            echo "Error: --extend-iterations must be a positive integer" >&2
+                            exit 1
+                        fi
+                        shift 2
+                        ;;
+                    --extend-time)
+                        extend_time="$2"
+                        # Validate it's a positive integer (minutes)
+                        if ! [[ "$extend_time" =~ ^[0-9]+$ ]] || [[ "$extend_time" -eq 0 ]]; then
+                            echo "Error: --extend-time must be a positive integer (minutes)" >&2
+                            exit 1
+                        fi
                         shift 2
                         ;;
                     --refine)
@@ -487,7 +517,7 @@ main() {
                 exit 1
             fi
             
-            cmd_resume "$session_path" "$refinement"
+            cmd_resume "$session_path" "$refinement" "$extend_iterations" "$extend_time"
             ;;
             
         help|--help|-h)
