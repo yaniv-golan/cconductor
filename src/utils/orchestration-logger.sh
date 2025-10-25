@@ -48,7 +48,7 @@ log_decision() {
     fi
     
     local entry
-    entry=$(jq -cn \
+    if ! entry=$(jq -cn \
         --arg timestamp "$timestamp" \
         --arg type "$decision_type" \
         --argjson data "$validated_data" \
@@ -56,12 +56,21 @@ log_decision() {
             timestamp: $timestamp,
             type: $type,
             decision: $data
-        }')
+        }' 2>/dev/null); then
+        # Fallback: create minimal entry
+        entry=$(jq -cn \
+            --arg timestamp "$timestamp" \
+            --arg type "$decision_type" \
+            --arg error "Failed to format decision data" \
+            '{timestamp: $timestamp, type: $type, error: $error}')
+    fi
     
     # Use with_lock for thread-safe JSONL append
     # Use printf to safely handle JSON with special characters
     # shellcheck disable=SC2016
-    with_lock "$log_file" bash -c 'printf "%s\n" "$0" >> "$1"' "$entry" "$log_file"
+    if ! with_lock "$log_file" bash -c 'printf "%s\n" "$0" >> "$1"' "$entry" "$log_file" 2>/dev/null; then
+        log_warn "Failed to write decision log entry (type: $decision_type)"
+    fi
 }
 
 # Log agent handoff

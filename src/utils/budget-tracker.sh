@@ -22,7 +22,7 @@ budget_init() {
   
   # Extract constraints from mission profile
   local budget_usd
-  budget_usd=$(echo "$mission_profile" | jq -r '.constraints.budget_usd // 0')
+  budget_usd=$(echo "$mission_profile" | jq -r '.constraints.max_cost_usd // 0')
   
   local max_invocations
   max_invocations=$(echo "$mission_profile" | jq -r '.constraints.max_agent_invocations // 9999')
@@ -217,5 +217,45 @@ budget_status() {
   fi
   
   cat "$budget_file"
+}
+
+# Update budget limits (for session extension)
+budget_extend_limits() {
+  local session_dir="$1"
+  local extend_iterations="${2:-0}"
+  local extend_time="${3:-0}"
+  
+  local budget_file="$session_dir/meta/budget.json"
+  
+  if [[ ! -f "$budget_file" ]]; then
+    echo "Error: Budget file not found" >&2
+    return 1
+  fi
+  
+  # Validate inputs are numbers
+  if ! [[ "$extend_iterations" =~ ^[0-9]+$ ]]; then
+    extend_iterations=0
+  fi
+  if ! [[ "$extend_time" =~ ^[0-9]+$ ]]; then
+    extend_time=0
+  fi
+  
+  # Update limits atomically
+  # shellcheck disable=SC2016
+  atomic_json_update "$budget_file" \
+    --argjson extend_invocations "$extend_iterations" \
+    --argjson extend_time "$extend_time" \
+    '
+    .limits.max_agent_invocations = (
+      if .limits.max_agent_invocations == 9999 then 9999
+      else .limits.max_agent_invocations + $extend_invocations
+      end
+    ) |
+    .limits.max_time_minutes = (
+      if .limits.max_time_minutes == 9999 then 9999
+      else .limits.max_time_minutes + $extend_time
+      end
+    )
+    '
 }
 

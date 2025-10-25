@@ -180,7 +180,7 @@ kg_add_entity() {
             --argjson entity "$entity_json" \
             --arg name "$entity_name" \
             --arg date "$(get_timestamp)" \
-            '(.entities[] | select(.name == $name)) |= ($entity + {last_updated: $date}) |
+            '(.entities[] | select(.name == $name)) |= (. + $entity + {last_updated: $date}) |
              .last_updated = $date'
     else
         # Add new entity using atomic operation
@@ -1056,6 +1056,7 @@ next_claim_id = max((claim_numeric_id(c.get("id", "")) for c in existing_claims)
 
 claims_by_citation = {}
 citation_inputs = {}
+source_to_citation_map = {}
 modified = False
 
 for evidence_claim in claims_data:
@@ -1081,6 +1082,7 @@ for evidence_claim in claims_data:
     if not claim_sources:
         continue
 
+    # Build support entry - will translate source_ids to citation IDs after citations are created
     support_entry = {
         "marker": evidence_claim.get("marker"),
         "why_supported": evidence_claim.get("why_supported"),
@@ -1183,6 +1185,10 @@ for key, src in citation_inputs.items():
         if combined:
             updated["cited_by_claims"] = combined
         existing_map[key] = updated
+        # Map all source_ids for this key to this citation ID
+        for sid, s in sources_by_id.items():
+            if source_key(s) == key:
+                source_to_citation_map[sid] = citation.get("id")
     else:
         max_cite_id += 1
         citation_id = f"cite_{max_cite_id}"
@@ -1193,6 +1199,10 @@ for key, src in citation_inputs.items():
             new_citation["cited_by_claims"] = claims_for_key
         existing_map[key] = new_citation
         order_keys.append(key)
+        # Map all source_ids for this key to this citation ID
+        for sid, s in sources_by_id.items():
+            if source_key(s) == key:
+                source_to_citation_map[sid] = citation_id
 
 updated_citations = []
 seen = set()
@@ -1206,6 +1216,15 @@ for key in order_keys:
 
 kg["citations"] = updated_citations
 stats["total_citations"] = len(updated_citations)
+
+# Now translate source_ids in evidence_support to citation IDs
+for claim in existing_claims:
+    evidence_support = claim.get("evidence_support", [])
+    for support in evidence_support:
+        if "source_ids" in support:
+            translated_ids = [source_to_citation_map.get(sid, sid) for sid in support["source_ids"]]
+            support["source_ids"] = translated_ids
+
 kg["last_updated"] = now
 
 kg_path.write_text(json.dumps(kg, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
