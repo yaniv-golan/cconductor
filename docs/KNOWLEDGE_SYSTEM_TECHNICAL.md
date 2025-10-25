@@ -630,6 +630,49 @@ The domain-specific entities and relationships enhance the knowledge graph:
 }
 ```
 
+**Optional Quality Gate Assessment Field (v0.4.0+)**
+
+Claims may include an optional `quality_gate_assessment` field when quality gate has run:
+
+```json
+{
+  "claims": [
+    {
+      "id": "c0",
+      "statement": "Medicaid expansion adopted by 40 states",
+      "confidence": 0.95,
+      "sources": [...],
+      "quality_gate_assessment": {
+        "source_count": 3,
+        "independent_source_count": 2,
+        "trust_score": 0.85,
+        "newest_source_age_days": 30,
+        "oldest_source_age_days": 90,
+        "parseable_dates": 3,
+        "unparsed_dates": 0,
+        "limitation_flags": [],
+        "last_reviewed_at": "2024-10-25T10:30:00Z",
+        "status": "passed"
+      }
+    }
+  ]
+}
+```
+
+**Field Semantics**:
+- **Field name**: `quality_gate_assessment` (clearly indicates audit source)
+- **Optional**: Present only when quality gate has assessed the claim
+- **Structure**: Matches `confidence_surface` from quality gate reports
+- **Absence meaning**: Claim not yet assessed by quality gate
+- **Session tracking**: Gate runs logged in `meta/session-metadata.json`
+
+**Integration Pattern**:
+- Quality gate runs after research completes
+- `sync_quality_surfaces_to_kg()` merges gate results into KG
+- Uses `atomic_json_update` for thread-safe writes
+- Fails gracefully - sync errors don't block research
+- Agents can check for field presence to know if gate has run
+
 **Step 6.2: Citation Quality Enhancement**
 
 Citations are more authoritative and healthcare-specific:

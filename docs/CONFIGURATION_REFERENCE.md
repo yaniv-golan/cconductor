@@ -910,6 +910,85 @@ Three built-in profiles:
 - Detailed findings live in `artifacts/quality-gate.json` (full report) and `artifacts/quality-gate-summary.json` (compact summary).
 - Fix the flagged issues (add sources, resolve contradictions, refresh stale evidence) and rerun or resume the session to re-check quality.
 
+### Quality Gate Output Schema (v0.4.0+)
+
+The quality gate emits structured confidence surfaces for each claim in `artifacts/quality-gate.json`:
+
+```json
+{
+  "status": "passed",
+  "mode": "advisory",
+  "evaluated_at": "2024-10-25T10:30:00Z",
+  "summary": {
+    "total_claims": 50,
+    "failed_claims": 3,
+    "low_confidence_claims": 2,
+    "unresolved_contradictions": 0,
+    "average_trust_score": 0.82
+  },
+  "claim_results": [
+    {
+      "id": "c0",
+      "statement": "Market valued at $50B in 2024",
+      "agent_confidence": 0.85,
+      "confidence_surface": {
+        "source_count": 3,
+        "independent_source_count": 2,
+        "trust_score": 0.72,
+        "newest_source_age_days": 45,
+        "oldest_source_age_days": 120,
+        "parseable_dates": 3,
+        "unparsed_dates": 0,
+        "limitation_flags": [],
+        "last_reviewed_at": "2024-10-25T10:30:00Z",
+        "status": "passed"
+      }
+    },
+    {
+      "id": "c12",
+      "statement": "Policy implemented in 2020",
+      "agent_confidence": 0.90,
+      "confidence_surface": {
+        "source_count": 1,
+        "independent_source_count": 1,
+        "trust_score": 0.45,
+        "newest_source_age_days": 410,
+        "oldest_source_age_days": 410,
+        "parseable_dates": 1,
+        "unparsed_dates": 0,
+        "limitation_flags": [
+          "Insufficient sources: require at least 2, found 1",
+          "Not enough independent sources: require 2 unique domains, found 1"
+        ],
+        "last_reviewed_at": "2024-10-25T10:30:00Z",
+        "status": "flagged"
+      }
+    }
+  ]
+}
+```
+
+**Field Descriptions**:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `agent_confidence` | float | Agent's subjective belief in claim validity (0-1) |
+| `confidence_surface.source_count` | int | Total number of sources supporting claim |
+| `confidence_surface.independent_source_count` | int | Number of unique domains (independence check) |
+| `confidence_surface.trust_score` | float | Computed trust score from source credibility weights (0-1) |
+| `confidence_surface.newest_source_age_days` | int/null | Age of most recent source in days |
+| `confidence_surface.oldest_source_age_days` | int/null | Age of oldest source in days |
+| `confidence_surface.parseable_dates` | int | Number of sources with valid publication dates |
+| `confidence_surface.unparsed_dates` | int | Number of sources with missing/invalid dates |
+| `confidence_surface.limitation_flags` | array | Human-readable issues found during assessment |
+| `confidence_surface.last_reviewed_at` | string | ISO 8601 timestamp of assessment |
+| `confidence_surface.status` | string | "passed" or "flagged" |
+
+**Usage**:
+- Synthesis agent reads this data to include "Confidence & Limitations" section in reports
+- Render fallback uses summary to generate table if synthesis omits the section
+- Optional KG integration can store `confidence_surface` as `quality_gate_assessment` field in claims
+
 ---
 
 ## Paths Configuration (paths.json)

@@ -137,6 +137,43 @@ When using CConductor for research:
 4. **Note alternative explanations** when evaluating causality
 5. **Check generalizability boundaries** before applying findings to new contexts
 
+## Confidence Metric Precedence
+
+CConductor maintains two confidence indicators for claims:
+
+### Agent Confidence (Research Phase)
+- **Field**: `.confidence` (0-1 scale)
+- **Source**: Research agents during discovery
+- **Represents**: Agent's subjective belief in claim validity
+- **Available**: Immediately when claim is added
+
+### Gate Trust Score (Audit Phase)
+- **Field**: `confidence_surface.trust_score` (0-1 scale) in quality gate reports
+- **Field**: `quality_gate_assessment.trust_score` (0-1 scale) when stored in knowledge graph
+- **Source**: Quality gate hook after research completes
+- **Represents**: Objective computation from source quality, independence, recency
+- **Available**: After quality gate runs
+
+### For End Users (Reports)
+**Precedence**:
+1. **Primary**: Use `confidence_surface.trust_score` (from quality gate) if present
+2. **Fallback**: Use `.confidence` (from agent) if gate assessment unavailable
+3. **Discrepancies**: Note when agent confidence and gate trust differ significantly (>0.2)
+
+**Example**: "This claim has high agent confidence (0.95) but was flagged by quality gate (trust score 0.42) due to single-source limitation."
+
+### For Agents (Research/Synthesis)
+- **During research**: Use `.confidence` (gate hasn't run yet)
+- **During synthesis**: Prefer `confidence_surface.trust_score` from quality gate reports
+- **Highlight conflicts**: When high agent confidence meets low gate trust, investigate why
+
+### Implementation
+- Synthesis agent system prompt enforces precedence (v0.4.0+)
+- Render fallback ensures visibility in reports (v0.4.0+)
+- Gate trust score is objective, agent confidence is subjective—both have value
+- Quality gate results stored in `artifacts/quality-gate.json`
+- Optional KG integration stores as `quality_gate_assessment` field
+
 ## Future Enhancements
 
 Planned improvements to the framework:

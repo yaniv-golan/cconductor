@@ -25,6 +25,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Session Manifest**: `INDEX.json` at session root provides quick navigation, file counts, and SHA-256 checksums for all deliverables
 - **Provenance Tracking**: `meta/provenance.json` captures environment details (tool versions, git commit, system info, configuration checksums) for reproducibility
 - **Session README**: `README.md` at the session root provides quick navigation, statistics, and usage examples for each session
+- **Automated Release Pipeline**: GitHub Actions now build multi-arch Docker images, publish release artifacts, and update the Homebrew tap automatically (see `docs/RELEASE_AUTOMATION.md`)
+- **Agent Watchdog & Cost Tracking**: Long-running agents are monitored by `agent-watchdog.sh`, cost data is extracted directly from Claude outputs, and a manual `tests/manual/cost-capture-validation` suite plus `tests/cost-extraction-test.sh` guard the budget tooling
 - **Docker Distribution**: Official Docker images published to GitHub Container Registry (ghcr.io)
   - Multi-platform support (linux/amd64, linux/arm64)
   - Three authentication methods: volume mount, environment variable, Docker secrets
@@ -37,11 +39,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Proper library directory structure initialization
   - Installation guide in `docs/HOMEBREW.md`
   - Automated formula updates on release via GitHub Actions
+- **Confidence Surface**: Quality gate results now visible in every report
+  - Gate output includes structured `confidence_surface` with source counts, trust scores, limitation flags
+  - Synthesis agent mandated to include "Confidence & Limitations" section in reports
+  - Render fallback ensures visibility even if synthesis omits section
+  - Optional KG integration stores `quality_gate_assessment` in claims
+  - Session-level tracking records all gate runs in `meta/session-metadata.json`
+  - Documented in `docs/RESEARCH_QUALITY_FRAMEWORK.md` and `docs/KNOWLEDGE_SYSTEM_TECHNICAL.md`
+- **Quality Remediator Improvements**:
+  - Increased timeout from 600s to 900s (15 minutes) to accommodate heavy remediation workloads
+  - QA cycle now distinguishes timeout (124) from other failures, allowing retry on timeout instead of immediately failing
+  - Better logging: "timed out" vs "failed (exit code: N)" for clearer diagnostics
+  - Strengthened prompt to prevent planning loops: agent must complete with summary after writing JSON
+  - Added explicit output format template to ensure consistent response structure
 
 ### Changed
 
 - **Meta README Flow**: `manifest-generator.sh` has been renamed to `meta-manifest-generator.sh` and now targets the `meta/` directory exclusively.
 - **Session File Paths** (breaking): All file references updated to use the new session directory structure
+
+### Fixed
+
+- **Session Resume Bug**: Fixed `cconductor sessions resume` command not passing session ID and arguments to handler, causing "Session ID required" error. The command now correctly forwards all arguments after the subcommand.
+- **Resume UX**: Added helpful message when attempting to resume a session that has exhausted its iterations/time, with actionable suggestions including the new extension flags.
+- **Session Extension**: Added `--extend-iterations N` and `--extend-time M` flags to `cconductor sessions resume` command:
+  - `--extend-iterations N`: Add N additional iterations to completed sessions
+  - `--extend-time M`: Add M additional minutes to the time budget
+  - Preserves all accumulated knowledge, sources, and research context
+  - Both flags can be used together for comprehensive session extension
+  - **Budget Tracking**: Extension flags now properly update the persisted `meta/budget.json` file via new `budget_extend_limits` function, ensuring budget checks respect extended limits
   - Knowledge graph: `knowledge-graph.json` → `knowledge/knowledge-graph.json`
   - Final report: `final/mission-report.md` → `report/mission-report.md`
   - Events log: `events.jsonl` → `logs/events.jsonl`
@@ -51,6 +77,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **MCP Configuration**: `.mcp.json` remains at session root (Claude Code requirement) with organizational symlink in `meta/`
 - **Agent Prompts**: Updated synthesis-agent, mission-orchestrator, and quality-remediator system prompts with new file paths
 - **Dashboard**: Moved to `viewer/` directory, updated file references to use relative paths to parent directories
+- **Budget Tracking**: `invoke-agent.sh` now records real Claude spend per agent invocation, and mission logs/events moved under `logs/` for consistent auditing
+- **Documentation**: Every guide (README, USAGE, TROUBLESHOOTING, SESSION_RESUME, etc.) now reflects the new directory layout and agent workflow paths
 
 ### Migration
 
@@ -61,9 +89,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Documentation
 
-- Updated `USAGE.md` with new file path examples
-- Updated `README.md` with new structure overview
+- Added dedicated guides for Docker (`docs/DOCKER.md`), Homebrew (`docs/HOMEBREW.md`), and release automation (`docs/RELEASE_AUTOMATION.md`)
+- Updated `USAGE.md`, `README.md`, `TROUBLESHOOTING.md`, and session continuity/resume guides with the new session structure
 - Added `memory-bank/systemPatterns.md` documentation for new architecture
+
+### Removed
+
+- Retired the legacy `docs/KG_ARTIFACT_PATTERN.md` guide; its schema details now live inside the new session knowledge tooling
 
 ## [0.3.3] - 2025-10-23
 
