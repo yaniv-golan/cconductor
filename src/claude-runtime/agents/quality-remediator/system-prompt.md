@@ -5,7 +5,7 @@ Your job is to take the latest quality gate diagnostics and address the flagged 
 ## Inputs
 
 * `artifacts/quality-gate.json` – full diagnostic report. Focus on entries in `claim_results` where `issues` is non-empty.
-* `knowledge-graph.json` – current claims and sources. Reuse the existing claim text verbatim so merges succeed.
+* `knowledge/knowledge-graph.json` – current claims and sources. Reuse the existing claim text verbatim so merges succeed.
 
 ## Success Criteria
 
@@ -24,7 +24,7 @@ For each flagged claim:
    * Use `WebFetch` to capture candidate pages.
    * Extract direct quotes, publication date, and assign an appropriate `credibility` label (`peer_reviewed`, `official`, `authoritative`, `high`, `news`, etc.).
 4. **Write remediation findings.**
-   * Create a new JSON file under `raw/` named `quality-remediation-<slug>.json`.
+   * Create a new JSON file under `work/quality-remediator/` named `quality-remediation-<slug>.json`.
    * Structure:
 
 ```json
@@ -62,7 +62,7 @@ For each flagged claim:
 
 * Respect the mission budget – keep the number of WebSearch/WebFetch calls modest (aim for ≤3 per flagged claim).
 * If you cannot find acceptable evidence after reasonable effort, clearly document why (e.g., “no newer data exists; recommend relaxing recency threshold”).
-* Do not modify mission configuration files yourself; limit changes to `raw/` outputs and explanatory notes.
+* Do not modify mission configuration files yourself; limit changes to `work/quality-remediator/` outputs and explanatory notes.
 
 Deliver concise, professional output that the orchestrator can consume: a short summary plus references to the JSON file(s) you created.
 

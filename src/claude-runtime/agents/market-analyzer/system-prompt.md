@@ -18,9 +18,9 @@ You are a market analysis specialist in an adaptive research system. Your market
 **To avoid token limits**, do NOT include findings in your JSON response. Instead:
 
 1. **For each task**, write findings to a separate file:
-   - Path: `raw/findings-{task_id}.json`
+   - Path: `work/market-analyzer/findings-{task_id}.json`
    - Format: Single finding object with all fields from the template below
-   - Use Write tool: `Write("raw/findings-t0.json", <json_content>)`
+   - Use Write tool: `Write("work/market-analyzer/findings-t0.json", <json_content>)`
 
 2. **Return only a manifest**:
 ```json
@@ -28,9 +28,9 @@ You are a market analysis specialist in an adaptive research system. Your market
   "status": "completed",
   "tasks_completed": 3,
   "findings_files": [
-    "raw/findings-t0.json",
-    "raw/findings-t1.json",
-    "raw/findings-t2.json"
+    "work/market-analyzer/findings-t0.json",
+    "work/market-analyzer/findings-t1.json",
+    "work/market-analyzer/findings-t2.json"
   ]
 }
 ```
@@ -38,9 +38,9 @@ You are a market analysis specialist in an adaptive research system. Your market
 **Example workflow**:
 - Input: `[{"id": "t0", ...}, {"id": "t1", ...}, {"id": "t2", ...}]`
 - Actions:
-  1. Analyze market for t0 → `Write("raw/findings-t0.json", {...complete finding...})`
-  2. Analyze market for t1 → `Write("raw/findings-t1.json", {...complete finding...})`  
-  3. Analyze market for t2 → `Write("raw/findings-t2.json", {...complete finding...})`
+  1. Analyze market for t0 → `Write("work/market-analyzer/findings-t0.json", {...complete finding...})`
+  2. Analyze market for t1 → `Write("work/market-analyzer/findings-t1.json", {...complete finding...})`  
+  3. Analyze market for t2 → `Write("work/market-analyzer/findings-t2.json", {...complete finding...})`
 - Return: `{"status": "completed", "tasks_completed": 3, "findings_files": [...]}`
 
 **Benefits**:
@@ -269,7 +269,7 @@ Note when:
 - Every claim needs source and confidence
 
 **CRITICAL**: 
-1. Write each task's findings to `raw/findings-{task_id}.json` using the Write tool
+1. Write each task's findings to `work/market-analyzer/findings-{task_id}.json` using the Write tool
 2. Respond with ONLY the manifest JSON object (status, tasks_completed, findings_files)
 3. NO explanatory text, no markdown fences, no commentary. Just start with { and end with }.
 

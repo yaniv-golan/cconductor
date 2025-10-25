@@ -37,10 +37,10 @@ Research agents use a **response-based** I/O model, NOT a file-based model:
 1. **Input**: Agents receive task instructions via input text file
 2. **Processing**: Agents perform research and structure findings
 3. **Output**: Agents return JSON findings in their `.result` field
-4. **Integration**: The orchestration system automatically reads the agent's JSON response and integrates findings into `knowledge-graph.json`
+4. **Integration**: The orchestration system automatically reads the agent's JSON response and integrates findings into `knowledge/knowledge-graph.json`
 
 **Agents do NOT and CANNOT**:
-- Write directly to `knowledge-graph.json`
+- Write directly to `knowledge/knowledge-graph.json`
 - Create findings files themselves (except web-researcher's manifest pattern)
 - Modify any system data files
 
@@ -58,9 +58,9 @@ If an agent invocation completes but the knowledge graph remains empty, the issu
 - Clarify the expected JSON schema fields
 
 **DO NOT**:
-- Instruct agents to "write to knowledge-graph.json"
+- Instruct agents to "write to knowledge/knowledge-graph.json"
 - Ask agents to use the Write tool for findings
-- Tell agents to create files in raw/ directory (except web-researcher)
+- Tell agents to create files in work/ directory (except web-researcher)
 - Provide file-operation instructions
 
 ### Example Refinements
@@ -69,13 +69,13 @@ If an agent invocation completes but the knowledge graph remains empty, the issu
 > "Your previous research identified entities but no claims about treatment efficacy. Please expand your analysis to include specific claims about success rates with confidence scores and proper source citations. Ensure your JSON response includes both entities_discovered and claims arrays."
 
 **BAD Refinement** (file operation instructions):
-> "Please write your findings directly to knowledge-graph.json using the Write tool."
+> "Please write your findings directly to knowledge/knowledge-graph.json using the Write tool."
 
 **GOOD Refinement** (addresses JSON structure):
 > "Your previous response contained markdown formatting. Please return ONLY the raw JSON object starting with { and ending with }, with no markdown code fences or explanatory text."
 
 **BAD Refinement** (misunderstands architecture):
-> "The knowledge graph integration failed. Please create a findings file in the raw/ directory."
+> "The knowledge graph integration failed. Please create a findings file in the work/<agent>/ directory."
 
 ### Why This Matters
 
@@ -104,11 +104,11 @@ Bash: src/utils/calculate.sh cagr 1000000 10000000 5
 
 #### Knowledge Graph Utilities
 ```bash
-Bash: src/utils/kg-utils.sh stats knowledge-graph.json
-Bash: src/utils/kg-utils.sh filter-confidence knowledge-graph.json 0.8
-Bash: src/utils/kg-utils.sh filter-category knowledge-graph.json "efficacy"
-Bash: src/utils/kg-utils.sh list-categories knowledge-graph.json
-Bash: src/utils/kg-utils.sh extract-claims knowledge-graph.json
+Bash: src/utils/kg-utils.sh stats knowledge/knowledge-graph.json
+Bash: src/utils/kg-utils.sh filter-confidence knowledge/knowledge-graph.json 0.8
+Bash: src/utils/kg-utils.sh filter-category knowledge/knowledge-graph.json "efficacy"
+Bash: src/utils/kg-utils.sh list-categories knowledge/knowledge-graph.json
+Bash: src/utils/kg-utils.sh extract-claims knowledge/knowledge-graph.json
 ```
 
 #### Data Transformation
@@ -477,7 +477,7 @@ When mission is complete, generate mission report with:
 6. Required sections from mission profile
 7. Decision log summary
 
-Store as `session_dir/final/mission-report.md`.
+Store as `session_dir/report/mission-report.md`.
 
 ## Critical Rules
 

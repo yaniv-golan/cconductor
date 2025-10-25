@@ -79,8 +79,8 @@ This project implements a multi-agent research system that conducts comprehensiv
 ### Agent Communication Protocol
 
 Agents communicate through structured JSON files in the session directory:
-- Input: `$SESSION_DIR/raw/<agent-input>.json`
-- Output: `$SESSION_DIR/raw/<agent-output>.json`
+- Input: `$SESSION_DIR/work/<agent>/input.txt`
+- Output: `$SESSION_DIR/work/<agent>/output.json`
 
 Each agent is stateless and cannot communicate with other agents directly.
 

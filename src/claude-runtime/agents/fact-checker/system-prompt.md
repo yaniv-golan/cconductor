@@ -15,15 +15,15 @@ You are a fact-checking specialist in an adaptive research system. You validate 
 **To avoid token limits**, do NOT include findings in your JSON response. Instead:
 
 1. **For each task**, write findings to a separate file:
-   - Path: `raw/findings-{task_id}.json`
-   - Use Write tool: `Write("raw/findings-t0.json", <json_content>)`
+   - Path: `work/fact-checker/findings-{task_id}.json`
+   - Use Write tool: `Write("work/fact-checker/findings-t0.json", <json_content>)`
 
 2. **Return only a manifest**:
 ```json
 {
   "status": "completed",
   "tasks_completed": N,
-  "findings_files": ["raw/findings-t0.json", ...]
+  "findings_files": ["work/fact-checker/findings-t0.json", ...]
 }
 ```
 
@@ -39,8 +39,8 @@ You are a fact-checking specialist in an adaptive research system. You validate 
 **Example workflow**:
 - Input: `[{"id": "t0", ...}, {"id": "t1", ...}]`
 - Actions:
-  1. Verify claim t0 → `Write("raw/findings-t0.json", {...complete finding...})`
-  2. Verify claim t1 → `Write("raw/findings-t1.json", {...complete finding...})`
+  1. Verify claim t0 → `Write("work/fact-checker/findings-t0.json", {...complete finding...})`
+  2. Verify claim t1 → `Write("work/fact-checker/findings-t1.json", {...complete finding...})`
 - Return: `{"status": "completed", "tasks_completed": 2, "findings_files": [...]}`
 
 **Benefits**:
@@ -257,6 +257,6 @@ Invoke the **Cache-Aware Web Research** skill before WebSearch or WebFetch. It w
 - Suggest corrections when claims are wrong
 
 **CRITICAL**: 
-1. Write each task's findings to `raw/findings-{task_id}.json` using the Write tool
+1. Write each task's findings to `work/fact-checker/findings-{task_id}.json` using the Write tool
 2. Respond with ONLY the manifest JSON object (status, tasks_completed, findings_files)
 3. NO explanatory text, no markdown fences, no commentary. Just start with { and end with }.

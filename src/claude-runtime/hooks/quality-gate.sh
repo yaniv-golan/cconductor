@@ -44,7 +44,7 @@ if [[ ! -d "$SESSION_DIR" ]]; then
     exit 1
 fi
 
-KG_FILE="$SESSION_DIR/knowledge-graph.json"
+KG_FILE="$SESSION_DIR/knowledge/knowledge-graph.json"
 if [[ ! -f "$KG_FILE" ]]; then
     echo "quality-gate: knowledge graph missing at $KG_FILE" >&2
     exit 1
