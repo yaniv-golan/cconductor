@@ -90,13 +90,13 @@ sessions_latest_handler() {
             echo ""
             
             # Show session metadata if available
-            if [ -f "$LATEST_PATH/session.json" ]; then
+            if [ -f "$LATEST_PATH/meta/session.json" ]; then
                 local question
-                question=$(jq -r '.research_question // "N/A"' "$LATEST_PATH/session.json" 2>/dev/null || echo "N/A")
+                question=$(jq -r '.research_question // "N/A"' "$LATEST_PATH/meta/session.json" 2>/dev/null || echo "N/A")
                 local status
-                status=$(jq -r '.status // "unknown"' "$LATEST_PATH/session.json" 2>/dev/null || echo "unknown")
+                status=$(jq -r '.status // "unknown"' "$LATEST_PATH/meta/session.json" 2>/dev/null || echo "unknown")
                 local created
-                created=$(jq -r '.created_at // "N/A"' "$LATEST_PATH/session.json" 2>/dev/null || echo "N/A")
+                created=$(jq -r '.created_at // "N/A"' "$LATEST_PATH/meta/session.json" 2>/dev/null || echo "N/A")
                 
                 echo "Question: $question"
                 echo "Status: $status"
@@ -105,15 +105,15 @@ sessions_latest_handler() {
             fi
             
             # Show knowledge graph summary if available
-            if [ -f "$LATEST_PATH/knowledge-graph.json" ]; then
+            if [ -f "$LATEST_PATH/knowledge/knowledge-graph.json" ]; then
                 local entities
                 local claims
                 local confidence
                 local gaps
-                entities=$(jq -r '.stats.total_entities // 0' "$LATEST_PATH/knowledge-graph.json" 2>/dev/null)
-                claims=$(jq -r '.stats.total_claims // 0' "$LATEST_PATH/knowledge-graph.json" 2>/dev/null)
-                confidence=$(jq -r '.confidence_scores.overall // 0' "$LATEST_PATH/knowledge-graph.json" 2>/dev/null)
-                gaps=$(jq -r '.stats.unresolved_gaps // 0' "$LATEST_PATH/knowledge-graph.json" 2>/dev/null)
+                entities=$(jq -r '.stats.total_entities // 0' "$LATEST_PATH/knowledge/knowledge-graph.json" 2>/dev/null)
+                claims=$(jq -r '.stats.total_claims // 0' "$LATEST_PATH/knowledge/knowledge-graph.json" 2>/dev/null)
+                confidence=$(jq -r '.confidence_scores.overall // 0' "$LATEST_PATH/knowledge/knowledge-graph.json" 2>/dev/null)
+                gaps=$(jq -r '.stats.unresolved_gaps // 0' "$LATEST_PATH/knowledge/knowledge-graph.json" 2>/dev/null)
                 
                 echo "Progress:"
                 echo "  • Entities: $entities"
@@ -124,12 +124,12 @@ sessions_latest_handler() {
             fi
             
             # Show report if exists
-            if [ -f "$LATEST_PATH/final/mission-report.md" ]; then
-                echo "✓ Report available: $LATEST_PATH/final/mission-report.md"
+            if [ -f "$LATEST_PATH/report/mission-report.md" ]; then
+                echo "✓ Report available: $LATEST_PATH/report/mission-report.md"
                 echo ""
                 echo "View with:"
-                echo "  cat $LATEST_PATH/final/mission-report.md"
-                echo "  open $LATEST_PATH/final/mission-report.md"
+                echo "  cat $LATEST_PATH/report/mission-report.md"
+                echo "  open $LATEST_PATH/report/mission-report.md"
                 echo ""
                 echo "Resume with:"
                 echo "  ./cconductor resume $LATEST_SESSION"

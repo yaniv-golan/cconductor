@@ -18,9 +18,9 @@ class Dashboard {
     async loadAndRender() {
         try {
             const [metrics, events, session] = await Promise.all([
-                this.fetchJSON('dashboard-metrics.json'),
-                this.fetchJSONL('events.jsonl'),
-                this.fetchJSON('session.json')
+                this.fetchJSON('./dashboard-metrics.json'),
+                this.fetchJSONL('../logs/events.jsonl'),
+                this.fetchJSON('../meta/session.json')
             ]);
 
             // Store metrics for use in journal rendering (completion messages)
@@ -262,7 +262,7 @@ class Dashboard {
 
         const completionEvent = this.currentEvents?.find(e =>
             e.type === 'research_complete' || e.type === 'mission_completed');
-        const reportFile = completionEvent?.data?.report_file || 'final/mission-report.md';
+        const reportFile = completionEvent?.data?.report_file || 'report/mission-report.md';
         const qualityGate = session?.quality_gate || null;
 
         const stopRuntime = () => {
@@ -777,7 +777,7 @@ class Dashboard {
         }
         
         // Entry 2-N: Agent invocations
-        const agentNames = ['mission-orchestrator', 'research-planner', 'academic-researcher', 'web-researcher', 'synthesis-agent'];
+        const agentNames = ['mission-orchestrator', 'research-planner', 'academic-researcher', 'web-researcher', 'synthesis-agent', 'quality-remediator'];
         
         agentNames.forEach(agentName => {
             const invocations = events.filter(e => e.type === 'agent_invocation' && e.data.agent === agentName);
@@ -826,7 +826,7 @@ class Dashboard {
         // Entry N+2: Research completion (support both old and new event types)
         const researchComplete = events.find(e => e.type === 'research_complete' || e.type === 'mission_completed');
         if (researchComplete) {
-            const reportFile = researchComplete.data?.report_file || 'final/mission-report.md';
+            const reportFile = researchComplete.data?.report_file || 'report/mission-report.md';
             
             // For mission_completed events, we need to enrich data from metrics
             // The formatResearchComplete function expects claims_synthesized, entities_integrated, report_sections
@@ -884,6 +884,49 @@ class Dashboard {
                 });
             }
         });
+
+        // Track quality gate runs as their own entries
+        const gateStarts = events.filter(e => e.type === 'quality_gate_started');
+        const gateResults = events.filter(e => e.type === 'quality_gate_completed');
+        const usedGateResults = new Set();
+
+        gateStarts.forEach(start => {
+            const attempt = start.data?.attempt ?? gateResults.length + 1;
+            const result = gateResults.find(res => !usedGateResults.has(res.timestamp) && (res.data?.attempt ?? null) === attempt && new Date(res.timestamp) >= new Date(start.timestamp));
+
+            if (result) {
+                usedGateResults.add(result.timestamp);
+                const status = result.data?.status || 'unknown';
+                const passed = status === 'passed';
+                entries.push({
+                    type: passed ? 'milestone' : 'warning',
+                    icon: passed ? '🛡️' : '⚠️',
+                    title: passed ? `Quality Gate Passed (Attempt ${attempt})` : `Quality Gate Flagged Issues (Attempt ${attempt})`,
+                    startTime: start.timestamp,
+                    endTime: result.timestamp,
+                    content: this.formatQualityGateContent(result.data || start.data),
+                    agent: 'quality-gate',
+                    metadata: result.data || {},
+                    events: [start, result],
+                    tasks: [],
+                    tools: []
+                });
+            } else {
+                entries.push({
+                    type: 'in_progress',
+                    icon: '🛡️',
+                    title: `Quality Gate Running (Attempt ${attempt})`,
+                    startTime: start.timestamp,
+                    endTime: null,
+                    content: 'Evaluating claims against trust, recency, and coverage thresholds...',
+                    agent: 'quality-gate',
+                    metadata: start.data || {},
+                    events: [start],
+                    tasks: [],
+                    tools: []
+                });
+            }
+        });
         
         // Also check for in-progress tasks
         const taskStarts = events.filter(e => e.type === 'task_started');
@@ -923,7 +966,8 @@ class Dashboard {
             'academic-researcher': 'research',
             'web-researcher': 'research',
             'synthesis-agent': 'finding',
-            'research-coordinator': 'analysis'
+            'research-coordinator': 'analysis',
+            'quality-remediator': 'analysis'
         };
         return types[agentName] || 'research';
     }
@@ -934,7 +978,8 @@ class Dashboard {
             'academic-researcher': '🔍',
             'web-researcher': '🌐',
             'synthesis-agent': '✨',
-            'research-coordinator': '🧭'
+            'research-coordinator': '🧭',
+            'quality-remediator': '🛡️'
         };
         return icons[agentName] || '🤖';
     }
@@ -946,7 +991,8 @@ class Dashboard {
             'academic-researcher': 'Searching Academic Literature',
             'web-researcher': 'Searching Web Sources',
             'synthesis-agent': 'Synthesizing Findings',
-            'research-coordinator': 'Coordinating Research'
+            'research-coordinator': 'Coordinating Research',
+            'quality-remediator': 'Quality Remediation'
         };
         return titles[agentName] || 'Working';
     }
@@ -971,6 +1017,9 @@ class Dashboard {
                 const claims = resultData.claims_synthesized || 0;
                 const gaps = resultData.gaps_found || 0;
                 return `I synthesized ${claims} claim${claims !== 1 ? 's' : ''} from all gathered sources and identified ${gaps} knowledge gap${gaps !== 1 ? 's' : ''} requiring further investigation.`;
+            },
+            'quality-remediator': () => {
+                return 'I reviewed the quality gate diagnostics and gathered additional evidence for the flagged claims. See work/quality-remediator/ for remediation notes.';
             },
             'research-coordinator': () => {
                 const entities = resultData.entities_discovered || 0;
@@ -997,7 +1046,7 @@ class Dashboard {
         const claims = data.claims_synthesized || 0;
         const entities = data.entities_integrated || 0;
         const sections = data.report_sections || 0;
-        const reportFile = data.report_file || 'final/mission-report.md';
+        const reportFile = data.report_file || 'report/mission-report.md';
         
         // Build message based on whether we have section count
         const sectionText = sections > 0 
@@ -1008,7 +1057,33 @@ class Dashboard {
         
 📄 <strong><a href="${reportFile}" target="_blank">View Research Report</a></strong>
 
-📖 <strong><a href="final/research-journal.md" target="_blank">View Research Journal</a></strong> (Sequential timeline with full details)`;
+📖 <strong><a href="report/research-journal.md" target="_blank">View Research Journal</a></strong> (Sequential timeline with full details)`;
+    }
+
+    formatQualityGateContent(data) {
+        const status = data?.status || 'running';
+        const mode = (data?.mode || 'advisory').toUpperCase();
+        const summaryLink = data?.summary_file ? `<a href="${data.summary_file}" target="_blank">Summary</a>` : null;
+        const reportLink = data?.report_file ? `<a href="${data.report_file}" target="_blank">Full diagnostics</a>` : null;
+        let base;
+
+        if (status === 'passed') {
+            base = `Quality gate passed (${mode} mode).`;
+        } else if (status === 'failed') {
+            base = `Quality gate flagged issues (${mode} mode).`;
+            if (mode === 'ADVISORY') {
+                base += ' Issues are advisory and do not block completion.';
+            }
+        } else {
+            base = `Quality gate evaluation running (${mode} mode).`;
+        }
+
+        const links = [summaryLink, reportLink].filter(Boolean).join(' · ');
+        if (links) {
+            base += ` ${links}`;
+        }
+
+        return base;
     }
 
     getTasksForAgent(agentName, events) {
@@ -1515,7 +1590,7 @@ class Dashboard {
                 const objective = event.data.objective || 'Research mission';
                 return `🚀 Starting research: ${objective}`;
             case 'mission_completed':
-                const reportFile = event.data.report_file || 'final/mission-report.md';
+                const reportFile = event.data.report_file || 'report/mission-report.md';
                 return `✅ Research complete! Report: ${reportFile}`;
             case 'agent_invocation':
                 return `⚡ Invoking ${event.data.agent}`;
@@ -1527,6 +1602,12 @@ class Dashboard {
                     ? ` ${(event.data.duration_ms / 1000).toFixed(1)}s`
                     : '';
                 return `✓ ${event.data.agent}${duration}${agentCost}`;
+            case 'quality_gate_started':
+                return `🛡️ Quality gate attempt ${event.data?.attempt || 1} started (${(event.data?.mode || 'advisory').toUpperCase()})`;
+            case 'quality_gate_completed':
+                const gateStatus = event.data?.status || 'completed';
+                const gateIcon = gateStatus === 'passed' ? '✅' : '⚠️';
+                return `${gateIcon} Quality gate ${gateStatus} (attempt ${event.data?.attempt || 1})`;
             case 'system_observation':
                 const severityIcon = {
                     critical: '🔴',
@@ -1554,7 +1635,7 @@ class Dashboard {
     
     async showEntities() {
         // Fetch knowledge graph
-        const kg = await this.fetchJSON('knowledge-graph.json');
+        const kg = await this.fetchJSON('../knowledge/knowledge-graph.json');
         if (!kg || !kg.entities) {
             alert('No entities data available');
             return;
@@ -1582,7 +1663,7 @@ class Dashboard {
     
     async showClaims() {
         // Fetch knowledge graph
-        const kg = await this.fetchJSON('knowledge-graph.json');
+        const kg = await this.fetchJSON('../knowledge/knowledge-graph.json');
         if (!kg || !kg.claims) {
             alert('No claims data available');
             return;

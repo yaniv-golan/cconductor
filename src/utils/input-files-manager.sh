@@ -6,7 +6,7 @@
 # - Discovers PDFs, markdown, and text files
 # - Caches PDFs using content-addressed storage
 # - Copies markdown/text to session knowledge directory
-# - Creates session manifest (input-files.json) for tracking
+# - Creates session manifest (inputs/input-files.json) for tracking
 
 set -euo pipefail
 
@@ -30,7 +30,7 @@ source "$SCRIPT_DIR/pdf-cache.sh"
 # Usage: init_input_manifest session_dir
 init_input_manifest() {
     local session_dir="$1"
-    local manifest="$session_dir/input-files.json"
+    local manifest="$session_dir/inputs/input-files.json"
     
     cat > "$manifest" <<EOF
 {
@@ -48,7 +48,7 @@ EOF
 finalize_input_manifest() {
     local session_dir="$1"
     local input_dir="$2"
-    local manifest="$session_dir/input-files.json"
+    local manifest="$session_dir/inputs/input-files.json"
     
     jq --arg dir "$input_dir" \
        '.input_dir = $dir' "$manifest" > "$manifest.tmp" && \
@@ -65,7 +65,7 @@ add_pdf_to_manifest() {
     local cache_path="$5"
     local file_size="$6"
     
-    local manifest="$session_dir/input-files.json"
+    local manifest="$session_dir/inputs/input-files.json"
     
     jq --arg name "$original_name" \
        --arg path "$original_path" \
@@ -95,7 +95,7 @@ add_text_to_manifest() {
     local session_path="$5"
     local file_size="$6"
     
-    local manifest="$session_dir/input-files.json"
+    local manifest="$session_dir/inputs/input-files.json"
     
     jq --arg name "$original_name" \
        --arg path "$original_path" \

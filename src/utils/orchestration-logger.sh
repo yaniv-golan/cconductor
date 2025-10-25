@@ -30,7 +30,7 @@ log_decision() {
     local decision_type="$2"
     local decision_data="$3"
     
-    local log_file="$session_dir/orchestration-log.jsonl"
+    local log_file="$session_dir/logs/orchestration.jsonl"
     local timestamp
     timestamp=$(get_timestamp)
     
@@ -124,7 +124,7 @@ log_plan_change() {
 # Get orchestration log
 get_orchestration_log() {
     local session_dir="$1"
-    local log_file="$session_dir/orchestration-log.jsonl"
+    local log_file="$session_dir/logs/orchestration.jsonl"
     
     if [[ ! -f "$log_file" ]] || [[ ! -s "$log_file" ]]; then
         # File doesn't exist or is empty
@@ -139,7 +139,7 @@ get_orchestration_log() {
 # Get orchestration log summary
 get_orchestration_summary() {
     local session_dir="$1"
-    local log_file="$session_dir/orchestration-log.jsonl"
+    local log_file="$session_dir/logs/orchestration.jsonl"
     
     if [[ ! -f "$log_file" ]]; then
         echo "No orchestration log found"
@@ -161,7 +161,7 @@ get_orchestration_summary() {
 # Initialize orchestration log
 init_orchestration_log() {
     local session_dir="$1"
-    local log_file="$session_dir/orchestration-log.jsonl"
+    local log_file="$session_dir/logs/orchestration.jsonl"
     
     # Create empty file
     touch "$log_file"

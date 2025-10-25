@@ -26,7 +26,7 @@ if [[ -z "$session_dir" || ! -d "$session_dir" ]]; then
     exit 1
 fi
 
-kg_file="$session_dir/knowledge-graph.json"
+kg_file="$session_dir/knowledge/knowledge-graph.json"
 if [[ ! -f "$kg_file" ]]; then
     # Nothing to archive
     exit 0

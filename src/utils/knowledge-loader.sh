@@ -371,7 +371,7 @@ Commands:
       Show this help
 
 Priority Order:
-  1. Session Override    → research-sessions/session_X/knowledge/
+  1. Session Override    → research-sessions/mission_X/knowledge/
   2. User Custom         → knowledge-base-custom/
   3. Core Default        → knowledge-base/
 

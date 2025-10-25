@@ -23,7 +23,7 @@ echo ""
 
 # Step 1: Check dependencies
 echo "1. Checking dependencies..."
-echo "   (claude, jq, curl, bash, bc)"
+echo "   (claude, python3, jq, curl, bash, bc)"
 echo ""
 
 missing_deps=()
@@ -72,6 +72,29 @@ if ! command -v claude &> /dev/null; then
     exit 1
 fi
 
+# Check for Python3 (required for knowledge graph operations)
+if ! command -v python3 &> /dev/null; then
+    echo "   ✗ Python 3 not found"
+    echo ""
+    echo "   CConductor requires Python 3 for knowledge graph operations."
+    echo ""
+    echo "   Install Python 3:"
+    echo ""
+    echo "     macOS:"
+    echo "       brew install python3"
+    echo ""
+    echo "     Ubuntu/Debian:"
+    echo "       sudo apt-get install python3"
+    echo ""
+    echo "     Windows (WSL):"
+    echo "       sudo apt-get install python3"
+    echo ""
+    missing_deps+=("python3")
+else
+    echo "   ✓ python3 found: $(python3 --version 2>&1 | head -1)"
+fi
+echo ""
+
 # Check for required utility commands
 if ! command -v jq &> /dev/null; then
     missing_deps+=("jq")
@@ -86,6 +109,13 @@ if ! command -v bash &> /dev/null; then
 fi
 
 if ! command -v bc &> /dev/null; then
+    echo "   ✗ bc not found" >&2
+    echo "" >&2
+    echo "   Install bc (arbitrary-precision calculator):" >&2
+    echo "     macOS:   brew install bc" >&2
+    echo "     Linux:   sudo apt install bc  (or yum install bc)" >&2
+    echo "     Windows: Use WSL2 and install via apt" >&2
+    echo "" >&2
     missing_deps+=("bc")
 fi
 

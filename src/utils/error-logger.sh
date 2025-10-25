@@ -10,7 +10,9 @@ source "$SCRIPT_DIR/../shared-state.sh"
 # Initialize error log for a session
 init_error_log() {
     local session_dir="$1"
-    local log_file="$session_dir/system-errors.log"
+    local log_file="$session_dir/logs/system-errors.log"
+
+    mkdir -p "$session_dir/logs"
     
     # Create empty log file if it doesn't exist
     if [ ! -f "$log_file" ]; then
@@ -64,7 +66,7 @@ _log_entry() {
     # Ensure log file exists
     init_error_log "$session_dir"
     
-    local log_file="$session_dir/system-errors.log"
+    local log_file="$session_dir/logs/system-errors.log"
     local lock_file="$session_dir/.error-log.lock"
     
     # Get timestamp
@@ -125,7 +127,7 @@ _log_entry() {
 # Get error summary for dashboard
 get_error_summary() {
     local session_dir="$1"
-    local log_file="$session_dir/system-errors.log"
+    local log_file="$session_dir/logs/system-errors.log"
     
     if [ ! -f "$log_file" ]; then
         echo "[]"
@@ -148,7 +150,7 @@ get_error_summary() {
 # Get error counts
 get_error_counts() {
     local session_dir="$1"
-    local log_file="$session_dir/system-errors.log"
+    local log_file="$session_dir/logs/system-errors.log"
     
     if [ ! -f "$log_file" ]; then
         jq -n '{errors: 0, warnings: 0}'
@@ -179,7 +181,7 @@ get_error_counts() {
 # Check if there are any critical errors
 has_critical_errors() {
     local session_dir="$1"
-    local log_file="$session_dir/system-errors.log"
+    local log_file="$session_dir/logs/system-errors.log"
     
     if [ ! -f "$log_file" ]; then
         return 1  # No errors
@@ -199,4 +201,3 @@ export -f log_warning
 export -f get_error_summary
 export -f get_error_counts
 export -f has_critical_errors
-

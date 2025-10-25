@@ -176,13 +176,13 @@ is_research_file() {
         synthesis-*.json|synthesis-*.md)
             return 0
             ;;
-        # Exclude internal/system files
-        events.jsonl|system-errors.log|orchestration-log.jsonl)
-            return 1
-            ;;
-        agent-input-*|agent-output-*|agent-result-*)
-            return 1
-            ;;
+    # Exclude internal/system files
+    events.jsonl|system-errors.log|orchestration.jsonl)
+        return 1
+        ;;
+    input.txt|output.json)
+        return 1
+        ;;
         .*)
             return 1
             ;;
@@ -247,7 +247,7 @@ verbose_completion() {
     local duration_display
     if [[ "$duration_ms" -gt 1000 ]]; then
         local duration_sec
-        duration_sec=$(echo "scale=1; $duration_ms / 1000" | bc 2>/dev/null || echo "?")
+        duration_sec=$(awk -v ms="$duration_ms" 'BEGIN { printf "%.1f", ms / 1000 }')
         duration_display="${duration_sec}s"
     else
         duration_display="${duration_ms}ms"

@@ -90,7 +90,8 @@ run_hook() {
     local session_dir
     session_dir="$(mktemp -d)"
     tmp_dirs+=("$session_dir")
-    touch "$session_dir/events.jsonl"
+    mkdir -p "$session_dir/logs"
+    touch "$session_dir/logs/events.jsonl"
 
     local payload
     payload=$(jq -n --arg url "$url" '{tool_name:"WebFetch", tool_input:{url:$url}}')
@@ -136,12 +137,12 @@ if ! grep -q "mission_test_1" "$stderr_file"; then
     exit 1
 fi
 
-if ! jq -e 'select(.type=="library_digest_check") | .data.url' "$session_dir/events.jsonl" >/dev/null; then
+if ! jq -e 'select(.type=="library_digest_check") | .data.url' "$session_dir/logs/events.jsonl" >/dev/null; then
     echo "library_digest_check event missing" >&2
     exit 1
 fi
 
-library_hit_event=$(jq -s 'map(select(.type=="library_digest_hit")) | .[0]' "$session_dir/events.jsonl")
+library_hit_event=$(jq -s 'map(select(.type=="library_digest_hit")) | .[0]' "$session_dir/logs/events.jsonl")
 if [[ -z "$library_hit_event" || "$library_hit_event" == "null" ]]; then
     echo "library_digest_hit event missing" >&2
     exit 1
@@ -163,7 +164,7 @@ if ! printf '%s' "$library_hit_event" | jq -e '.data.agent == "web-researcher"' 
     exit 1
 fi
 
-if ! jq -e 'select(.type=="tool_use_blocked") | .data.reason == "library_digest_fresh"' "$session_dir/events.jsonl" >/dev/null; then
+if ! jq -e 'select(.type=="tool_use_blocked") | .data.reason == "library_digest_fresh"' "$session_dir/logs/events.jsonl" >/dev/null; then
     echo "tool_use_blocked event missing or has unexpected reason" >&2
     exit 1
 fi
@@ -181,17 +182,17 @@ if [[ "$exit_code" -ne 0 ]]; then
     exit 1
 fi
 
-if ! jq -e 'select(.type=="library_digest_check")' "$session_dir/events.jsonl" >/dev/null; then
+if ! jq -e 'select(.type=="library_digest_check")' "$session_dir/logs/events.jsonl" >/dev/null; then
     echo "library_digest_check event missing for stale digest case" >&2
     exit 1
 fi
 
-if ! jq -e 'select(.type=="library_digest_allow") | .data.reason == "allow:digest_stale"' "$session_dir/events.jsonl" >/dev/null; then
+if ! jq -e 'select(.type=="library_digest_allow") | .data.reason == "allow:digest_stale"' "$session_dir/logs/events.jsonl" >/dev/null; then
     echo "Expected allow:digest_stale reason not found" >&2
     exit 1
 fi
 
-if jq -e 'select(.type=="library_digest_hit")' "$session_dir/events.jsonl" >/dev/null; then
+if jq -e 'select(.type=="library_digest_hit")' "$session_dir/logs/events.jsonl" >/dev/null; then
     echo "Unexpected library_digest_hit event for stale digest" >&2
     exit 1
 fi
@@ -213,17 +214,17 @@ if ! grep -q "Fresh fetch requested" "$stderr_file"; then
     exit 1
 fi
 
-if ! jq -e 'select(.type=="library_digest_force_refresh")' "$session_dir/events.jsonl" >/dev/null; then
+if ! jq -e 'select(.type=="library_digest_force_refresh")' "$session_dir/logs/events.jsonl" >/dev/null; then
     echo "library_digest_force_refresh event missing" >&2
     exit 1
 fi
 
-if ! jq -e 'select(.type=="library_digest_allow") | .data.reason == "allow:fresh_param"' "$session_dir/events.jsonl" >/dev/null; then
+if ! jq -e 'select(.type=="library_digest_allow") | .data.reason == "allow:fresh_param"' "$session_dir/logs/events.jsonl" >/dev/null; then
     echo "allow:fresh_param reason missing after forced refresh" >&2
     exit 1
 fi
 
-if jq -e 'select(.type=="library_digest_hit")' "$session_dir/events.jsonl" >/dev/null; then
+if jq -e 'select(.type=="library_digest_hit")' "$session_dir/logs/events.jsonl" >/dev/null; then
     echo "Unexpected cache hit recorded during forced refresh" >&2
     exit 1
 fi

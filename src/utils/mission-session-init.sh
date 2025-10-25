@@ -114,13 +114,19 @@ initialize_session() {
         done
     fi
     
-    # Create directory structure
+    # Create new directory structure without numeric prefixes (v0.5.0)
+    mkdir -p "$session_dir/meta"
+    mkdir -p "$session_dir/inputs"
+    mkdir -p "$session_dir/cache"
+    mkdir -p "$session_dir/work"
+    mkdir -p "$session_dir/knowledge"
     mkdir -p "$session_dir/artifacts"
-    mkdir -p "$session_dir/final"
-    mkdir -p "$session_dir/raw"  # For agent findings files
+    mkdir -p "$session_dir/logs"
+    mkdir -p "$session_dir/report/assets"
+    mkdir -p "$session_dir/viewer"
     mkdir -p "$session_dir/.claude/agents"
     
-    # Initialize error log
+    # Initialize error log in new location
     if command -v init_error_log &>/dev/null; then
         init_error_log "$session_dir"
     fi
@@ -154,14 +160,14 @@ initialize_session() {
     # Store raw prompt - parsing will be done by orchestrator
     # This ensures prompt-parser is invoked through the proper agent infrastructure
     
-    # Create session metadata with runtime information
+    # Create session metadata with runtime information (stored under meta/)
     # Note: objective will be updated by orchestrator after prompt parsing
     jq -n \
         --arg objective "$mission_objective" \
         --arg question "$mission_objective" \
         --arg timestamp "$(get_timestamp)" \
         --arg session_type "mission" \
-        --arg version "0.3.0" \
+        --arg version "0.4.0" \
         --arg claude_ver "$claude_version" \
         '{
             session_type: $session_type,
@@ -175,17 +181,58 @@ initialize_session() {
                 cconductor_version: $version,
                 claude_code_version: $claude_ver
             }
-        }' > "$session_dir/session.json"
+        }' > "$session_dir/meta/session.json"
 
     # Record evidence configuration (mode only for now)
-    local tmp_session="$session_dir/session.json.tmp"
+    local tmp_session="$session_dir/meta/session.json.tmp"
     jq --arg mode "${CCONDUCTOR_EVIDENCE_MODE:-render}" \
        --arg render "${CCONDUCTOR_EVIDENCE_RENDER:-footnotes}" '
         .evidence = (.evidence // {}) |
         .evidence.mode = $mode |
         .evidence.render = $render
-    ' "$session_dir/session.json" > "$tmp_session"
-    mv "$tmp_session" "$session_dir/session.json"
+    ' "$session_dir/meta/session.json" > "$tmp_session"
+    mv "$tmp_session" "$session_dir/meta/session.json"
+    
+    # Create symlink for .mcp.json in meta/ (real file stays at root for Claude Code)
+    if [ -f "$session_dir/.mcp.json" ]; then
+        ln -sf "../.mcp.json" "$session_dir/meta/.mcp.json"
+    fi
+    
+    # Generate initial INDEX.json at session root
+    local session_id
+    session_id=$(basename "$session_dir")
+    jq -n \
+        --arg id "$session_id" \
+        --arg created "$(get_timestamp)" \
+        --arg objective "$mission_objective" \
+        '{
+            id: $id,
+            created_at: $created,
+            mission: "research",
+            objective: $objective,
+            status: "initializing",
+            paths: {
+                meta: "meta/",
+                inputs: "inputs/",
+                cache: "cache/",
+                work: "work/",
+                knowledge: "knowledge/",
+                artifacts: "artifacts/",
+                logs: "logs/",
+                report: "report/",
+                viewer: "viewer/"
+            }
+        }' > "$session_dir/INDEX.json"
+    
+    # Generate provenance.json
+    local provenance_script="$PROJECT_ROOT/src/utils/provenance-generator.sh"
+    if [ -f "$provenance_script" ]; then
+        if ! "$provenance_script" "$session_dir" >/dev/null; then
+            echo "Warning: Failed to generate provenance.json" >&2
+        fi
+    else
+        echo "Warning: provenance-generator.sh not found at $provenance_script" >&2
+    fi
     
     echo "$session_dir"
 }

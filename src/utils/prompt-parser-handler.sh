@@ -12,7 +12,7 @@ source "$SCRIPT_DIR/json-parser.sh" 2>/dev/null || true
 # Check if prompt needs parsing
 needs_prompt_parsing() {
     local session_dir="$1"
-    local session_file="$session_dir/session.json"
+    local session_file="$session_dir/meta/session.json"
     
     if [ ! -f "$session_file" ]; then
         return 1
@@ -31,7 +31,7 @@ needs_prompt_parsing() {
 # Parse the prompt and update session
 parse_prompt() {
     local session_dir="$1"
-    local session_file="$session_dir/session.json"
+    local session_file="$session_dir/meta/session.json"
     
     echo "→ Parsing research prompt..." >&2
     
@@ -59,7 +59,7 @@ parse_prompt() {
         echo "  ✓ Prompt parsed successfully" >&2
         
         # Extract parsed results from agent output
-        local agent_output="$session_dir/agent-output-prompt-parser.json"
+        local agent_output="$session_dir/work/prompt-parser/output.json"
         if [ -f "$agent_output" ]; then
             local result
             result=$(jq -r '.result // empty' "$agent_output" 2>/dev/null || echo "")
@@ -81,7 +81,7 @@ parse_prompt() {
                     output_spec=$(echo "$parsed_json" | jq -r '.output_specification // "null"' 2>/dev/null)
                     
                     if [ -n "$clean_objective" ]; then
-                        # Update session.json
+                        # Update meta/session.json
                         local temp_session="${session_file}.tmp"
                         jq --arg obj "$clean_objective" \
                            --arg spec "$output_spec" \
@@ -93,7 +93,7 @@ parse_prompt() {
                         mv "$temp_session" "$session_file"
                         
                         # Update knowledge graph with clean objective
-                        local kg_file="$session_dir/knowledge-graph.json"
+                        local kg_file="$session_dir/knowledge/knowledge-graph.json"
                         if [ -f "$kg_file" ]; then
                             local temp_kg="${kg_file}.tmp"
                             jq --arg obj "$clean_objective" \

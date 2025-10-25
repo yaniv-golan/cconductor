@@ -6,7 +6,7 @@ set -euo pipefail
 
 # Extract all claims from knowledge graph
 extract_claims() {
-    local kg_file="${1:-knowledge-graph.json}"
+    local kg_file="${1:-knowledge/knowledge-graph.json}"
     
     if [[ ! -f "$kg_file" ]]; then
         jq -n --arg err "Knowledge graph file not found: $kg_file" \
@@ -19,7 +19,7 @@ extract_claims() {
 
 # Extract entities from knowledge graph
 extract_entities() {
-    local kg_file="${1:-knowledge-graph.json}"
+    local kg_file="${1:-knowledge/knowledge-graph.json}"
     
     if [[ ! -f "$kg_file" ]]; then
         jq -n --arg err "Knowledge graph file not found: $kg_file" \
@@ -32,7 +32,7 @@ extract_entities() {
 
 # Compute knowledge graph statistics
 compute_kg_stats() {
-    local kg_file="${1:-knowledge-graph.json}"
+    local kg_file="${1:-knowledge/knowledge-graph.json}"
     
     if [[ ! -f "$kg_file" ]]; then
         jq -n --arg err "Knowledge graph file not found: $kg_file" \
@@ -56,7 +56,7 @@ compute_kg_stats() {
 
 # Filter claims by confidence threshold
 filter_by_confidence() {
-    local kg_file="${1:-knowledge-graph.json}"
+    local kg_file="${1:-knowledge/knowledge-graph.json}"
     local threshold="${2:-0.7}"
     
     if [[ ! -f "$kg_file" ]]; then
@@ -73,7 +73,7 @@ filter_by_confidence() {
 
 # Find claims by category
 filter_by_category() {
-    local kg_file="${1:-knowledge-graph.json}"
+    local kg_file="${1:-knowledge/knowledge-graph.json}"
     local category="$2"
     
     if [[ ! -f "$kg_file" ]]; then
@@ -90,7 +90,7 @@ filter_by_category() {
 
 # Get unique categories from knowledge graph
 list_categories() {
-    local kg_file="${1:-knowledge-graph.json}"
+    local kg_file="${1:-knowledge/knowledge-graph.json}"
     
     if [[ ! -f "$kg_file" ]]; then
         jq -n --arg err "Knowledge graph file not found: $kg_file" \
@@ -113,22 +113,22 @@ export -f list_categories
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
     case "${1:-help}" in
         extract-claims)
-            extract_claims "${2:-knowledge-graph.json}"
+            extract_claims "${2:-knowledge/knowledge-graph.json}"
             ;;
         extract-entities)
-            extract_entities "${2:-knowledge-graph.json}"
+            extract_entities "${2:-knowledge/knowledge-graph.json}"
             ;;
         stats)
-            compute_kg_stats "${2:-knowledge-graph.json}"
+            compute_kg_stats "${2:-knowledge/knowledge-graph.json}"
             ;;
         filter-confidence)
-            filter_by_confidence "${2:-knowledge-graph.json}" "${3:-0.7}"
+            filter_by_confidence "${2:-knowledge/knowledge-graph.json}" "${3:-0.7}"
             ;;
         filter-category)
-            filter_by_category "${2:-knowledge-graph.json}" "$3"
+            filter_by_category "${2:-knowledge/knowledge-graph.json}" "$3"
             ;;
         list-categories)
-            list_categories "${2:-knowledge-graph.json}"
+            list_categories "${2:-knowledge/knowledge-graph.json}"
             ;;
         *)
             cat <<EOF
@@ -149,16 +149,16 @@ Commands:
 
 Examples:
   # Get statistics
-  $0 stats knowledge-graph.json
+  $0 stats knowledge/knowledge-graph.json
   
   # Extract high-confidence claims
-  $0 filter-confidence knowledge-graph.json 0.8
+  $0 filter-confidence knowledge/knowledge-graph.json 0.8
   
   # Get all claims in a specific category
-  $0 filter-category knowledge-graph.json "efficacy"
+  $0 filter-category knowledge/knowledge-graph.json "efficacy"
   
   # List all categories
-  $0 list-categories knowledge-graph.json
+  $0 list-categories knowledge/knowledge-graph.json
 
 Output: JSON format for easy parsing
 EOF

@@ -57,15 +57,15 @@ if [ -z "$SESSION_DIR" ]; then
     exit 1
 fi
 
-if [ -f "$SESSION_DIR/final/mission-report.md" ]; then
+if [ -f "$SESSION_DIR/70_report/mission-report.md" ]; then
     echo "✓ Report generated successfully"
 
     # Basic validation
-    if grep -q "Executive Summary" "$SESSION_DIR/final/mission-report.md"; then
+    if grep -q "Executive Summary" "$SESSION_DIR/70_report/mission-report.md"; then
         echo "✓ Report contains executive summary"
     fi
 
-    if grep -q "Sources" "$SESSION_DIR/final/mission-report.md"; then
+    if grep -q "Sources" "$SESSION_DIR/70_report/mission-report.md"; then
         echo "✓ Report contains sources"
     fi
 else

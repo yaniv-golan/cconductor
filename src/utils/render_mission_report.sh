@@ -245,7 +245,7 @@ main() {
     if [[ "$#" -ge 2 ]]; then
         report_path="$2"
     else
-        report_path="$session_dir/final/mission-report.md"
+        report_path="$session_dir/report/mission-report.md"
     fi
     local evidence_path="$session_dir/evidence/evidence.json"
 

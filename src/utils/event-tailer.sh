@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Event Tailer - Real-time verbose display of tool use from events.jsonl
-# Tails events.jsonl and displays tool activity in user-friendly format
+# Event Tailer - Real-time verbose display of tool use from logs/events.jsonl
+# Tails logs/events.jsonl and displays tool activity in user-friendly format
 
 set -euo pipefail
 
@@ -67,25 +67,20 @@ tailer_format_timestamp() {
         echo "unknown time"
         return 0
     fi
-    python3 - "$iso" <<'PY'
-import sys
-from datetime import datetime, timezone
-
-iso = sys.argv[1]
-if not iso or iso == "null":
-    print("unknown time")
-    raise SystemExit
-
-try:
-    iso = iso.replace("Z", "+00:00")
-    dt = datetime.fromisoformat(iso)
-    if dt.tzinfo is None:
-        dt = dt.replace(tzinfo=timezone.utc)
-    local_dt = dt.astimezone()
-    print(local_dt.strftime("%b %d %Y, %I:%M %p %Z"))
-except Exception:
-    print(sys.argv[1])
-PY
+    
+    # Convert Z to +00:00 for date parsing
+    local iso_fixed="${iso//Z/+00:00}"
+    
+    # Try GNU date first (Linux), then BSD date (macOS)
+    local formatted
+    if formatted=$(date -d "$iso_fixed" "+%b %d %Y, %I:%M %p %Z" 2>/dev/null); then
+        echo "$formatted"
+    elif formatted=$(date -j -f "%Y-%m-%dT%H:%M:%S%z" "$iso_fixed" "+%b %d %Y, %I:%M %p %Z" 2>/dev/null); then
+        echo "$formatted"
+    else
+        # Fallback: return original if parsing fails
+        echo "$iso"
+    fi
 }
 
 tailer_reset_agent_state() {
@@ -138,7 +133,7 @@ tailer_process_library_check() {
         return 0
     fi
     TAILER_CACHE_ACTIVITY=1
-    # Removed verbose "Checking..." message - details logged to events.jsonl and hook-debug.log
+    # Removed verbose "Checking..." message - details logged to logs/events.jsonl and logs/hook-debug.log
     # Users only need to see results (hits/misses), not every check
 }
 
@@ -346,7 +341,7 @@ tailer_process_web_search_cache_hit() {
 # Usage: start_event_tailer SESSION_DIR
 start_event_tailer() {
     local session_dir="$1"
-    local events_file="$session_dir/events.jsonl"
+    local events_file="$session_dir/logs/events.jsonl"
     
     # Run in both verbose and non-verbose modes
     # In verbose mode: show detailed messages
@@ -565,7 +560,7 @@ display_tool_complete() {
     local duration_display
     if [[ "$duration_ms" -gt 1000 ]]; then
         local duration_sec
-        duration_sec=$(echo "scale=1; $duration_ms / 1000" | bc 2>/dev/null || echo "?")
+        duration_sec=$(awk -v ms="$duration_ms" 'BEGIN { printf "%.1f", ms / 1000 }')
         duration_display="${duration_sec}s"
     else
         duration_display="${duration_ms}ms"

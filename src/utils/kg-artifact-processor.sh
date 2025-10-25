@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Knowledge Graph Artifact Processor
-# Processes agent-produced artifacts and merges them into knowledge-graph.json
+# Processes agent-produced artifacts and merges them into knowledge/knowledge-graph.json
 
 set -euo pipefail
 
@@ -125,7 +125,7 @@ merge_artifacts_to_kg() {
     local session_dir="$1"
     local agent_name="$2"
     local artifact_dir="$session_dir/artifacts/$agent_name"
-    local kg_file="$session_dir/knowledge-graph.json"
+    local kg_file="$session_dir/knowledge/knowledge-graph.json"
     local lock_dir="$session_dir/.kg-merge.lock"
     
     debug "Merging artifacts from $agent_name into knowledge graph"
@@ -162,7 +162,7 @@ merge_artifacts_to_kg() {
     fi
     
     # Merge artifacts under agent namespace into KG
-    local temp_kg="$session_dir/knowledge-graph.json.tmp"
+    local temp_kg="$session_dir/knowledge/knowledge-graph.json.tmp"
     if ! jq --arg agent "$agent_name" \
             --argjson artifacts "$merged_artifacts" \
             '. + {($agent): $artifacts}' \

@@ -246,7 +246,7 @@ build_evidence_from_findings() {
     local claim_count=0
 
     shopt -s nullglob
-    for finding_file in "$session_dir"/raw/findings-*.json; do
+    for finding_file in "$session_dir"/work/*/findings-*.json; do
         while IFS= read -r claim_json; do
             local statement
             statement=$(jq -r '.statement // ""' <<<"$claim_json")

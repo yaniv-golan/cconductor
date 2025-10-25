@@ -73,21 +73,14 @@ web_search_cache_index_path() {
 }
 
 web_search_cache_hash_string() {
-    python3 - "$1" <<'PY'
-import hashlib, sys
-print(hashlib.sha256(sys.argv[1].encode("utf-8")).hexdigest())
-PY
+    "$SCRIPT_DIR/hash-string.sh" "$1"
 }
 
 web_search_cache_hash_json() {
     local json_payload="$1"
-    python3 - "$json_payload" <<'PY'
-import hashlib, json, sys
-payload = sys.argv[1]
-data = json.loads(payload)
-canonical = json.dumps(data, sort_keys=True, ensure_ascii=False).encode("utf-8")
-print(hashlib.sha256(canonical).hexdigest())
-PY
+    local canonical
+    canonical=$(echo "$json_payload" | jq -S -c '.')
+    "$SCRIPT_DIR/hash-string.sh" "$canonical"
 }
 
 web_search_cache_timestamp() {
@@ -112,39 +105,47 @@ web_search_cache_prepare_query() {
     local query="$1"
     local config
     config=$(web_search_cache_load_config)
-    python3 - "$query" "$config" <<'PY'
-import json, re, sys
-
-raw_query = sys.argv[1]
-config = json.loads(sys.argv[2])
-
-markers = [m for m in config.get("fresh_query_markers", []) if isinstance(m, str) and m]
-normalized_display = raw_query.replace("\r", " ").replace("\n", " ")
-normalized_display = re.sub(r'\s+', ' ', normalized_display).strip()
-normalized_lower = normalized_display.lower()
-
-force = False
-for marker in markers:
-    marker_lower = marker.lower()
-    if marker_lower and marker_lower in normalized_lower:
-        pattern = r'(?:\s*' + re.escape(marker_lower) + r'\s*)$'
-        if re.search(pattern, normalized_lower):
-            force = True
-            normalized_lower = re.sub(pattern, '', normalized_lower)
-            normalized_display = re.sub(r'(?:\s*' + re.escape(marker) + r'\s*)$', '', normalized_display, flags=re.IGNORECASE)
-
-normalized_lower = re.sub(r'[\s\?&]+$', '', normalized_lower).strip()
-normalized_display = re.sub(r'[\s\?&]+$', '', normalized_display).strip()
-normalized_lower = re.sub(r'\s+', ' ', normalized_lower)
-normalized_display = re.sub(r'\s+', ' ', normalized_display)
-
-result = {
-    "normalized": normalized_lower,
-    "display": normalized_display,
-    "force": force
-}
-print(json.dumps(result))
-PY
+    
+    # Normalize whitespace: replace \r\n with spaces, collapse multiple spaces
+    local normalized
+    normalized=$(echo "$query" | tr '\n\r' '  ' | tr -s ' ' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+    local normalized_lower
+    normalized_lower=$(echo "$normalized" | tr '[:upper:]' '[:lower:]')
+    local normalized_display="$normalized"
+    
+    # Check for fresh query markers
+    local force="false"
+    local markers
+    markers=$(echo "$config" | jq -r '.fresh_query_markers[]? // empty')
+    if [[ -n "$markers" ]]; then
+        while IFS= read -r marker; do
+            [[ -z "$marker" ]] && continue
+            local marker_lower
+            marker_lower=$(echo "$marker" | tr '[:upper:]' '[:lower:]')
+            # Check if marker appears at end of query
+            if [[ "$normalized_lower" =~ [[:space:]]*"$marker_lower"[[:space:]]*$ ]]; then
+                force="true"
+                # Remove marker from end of both versions
+                normalized_lower=$(echo "$normalized_lower" | sed -E "s/[[:space:]]*$(echo "$marker_lower" | sed 's/[]\/$*.^[]/\\&/g')[[:space:]]*$//")
+                normalized_display=$(echo "$normalized_display" | sed -E "s/[[:space:]]*$(echo "$marker" | sed 's/[]\/$*.^[]/\\&/g')[[:space:]]*$//i")
+            fi
+        done <<< "$markers"
+    fi
+    
+    # Remove trailing punctuation and whitespace
+    normalized_lower=$(echo "$normalized_lower" | sed -E 's/[[:space:]\?&]+$//' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+    normalized_display=$(echo "$normalized_display" | sed -E 's/[[:space:]\?&]+$//' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+    
+    # Final whitespace collapse
+    normalized_lower=$(echo "$normalized_lower" | tr -s ' ')
+    normalized_display=$(echo "$normalized_display" | tr -s ' ')
+    
+    # Output JSON result
+    jq -n \
+        --arg norm "$normalized_lower" \
+        --arg disp "$normalized_display" \
+        --argjson force "$force" \
+        '{normalized: $norm, display: $disp, force: $force}'
 }
 
 web_search_cache_canonicalize_query() {
@@ -190,41 +191,37 @@ web_search_cache_find_overlap_entry() {
 
     local index_path
     index_path=$(web_search_cache_index_path)
-
-    python3 - "$canonical" "$index_path" <<'PY'
-import json, sys
-
-canonical = sys.argv[1].split()
-index_path = sys.argv[2]
-
-with open(index_path, 'r', encoding='utf-8') as fh:
-    index = json.load(fh)
-
-if not canonical:
-    sys.exit(0)
-
-best = None
-best_score = 0.0
-canonical_set = set(canonical)
-
-for entry in index.values():
-    token_sig = entry.get('token_signature')
-    if not token_sig:
-        continue
-    tokens = [tok for tok in token_sig.split('|') if tok]
-    if not tokens:
-        continue
-    token_set = set(tokens)
-    overlap = len(canonical_set & token_set)
-    denom = max(len(canonical_set), len(token_set), 1)
-    score = overlap / denom
-    if score > best_score:
-        best_score = score
-        best = entry
-
-if best and best_score >= 0.75:
-    print(json.dumps({"entry": best, "overlap": best_score}))
-PY
+    
+    # Convert canonical space-separated tokens to array for jq
+    local canonical_tokens
+    canonical_tokens=$(echo "$canonical" | tr ' ' '\n' | jq -R . | jq -s .)
+    
+    # Use jq to find best matching entry
+    jq -r --argjson tokens "$canonical_tokens" '
+        # Build set of canonical tokens
+        ($tokens | unique) as $canonical_set |
+        ($canonical_set | length) as $canonical_len |
+        
+        # Find best overlap
+        [ 
+            .[] | 
+            select(.token_signature != null) |
+            (.token_signature | split("|") | map(select(. != ""))) as $entry_tokens |
+            ($entry_tokens | unique) as $entry_set |
+            ($entry_set | length) as $entry_len |
+            
+            # Calculate overlap
+            ([$canonical_set[], $entry_set[]] | group_by(.) | map(select(length > 1) | .[0]) | length) as $overlap |
+            (if $canonical_len > $entry_len then $canonical_len else $entry_len end) as $denom |
+            ($overlap / (if $denom > 0 then $denom else 1 end)) as $score |
+            
+            select($score > 0) |
+            {entry: ., overlap: $score}
+        ] |
+        sort_by(-.overlap) |
+        .[0] |
+        select(.overlap >= 0.75)
+    ' "$index_path" 2>/dev/null
 }
 
 web_search_cache_normalize_query() {

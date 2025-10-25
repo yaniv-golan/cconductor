@@ -23,8 +23,8 @@ log_event() {
     local event_type="$2"
     local event_data="$3"  # JSON string
     
-    local events_file="$session_dir/events.jsonl"
-    local lock_file="$session_dir/.events.lock"
+    local events_file="$session_dir/logs/events.jsonl"
+    local lock_file="$session_dir/logs/.events.lock"
     local timestamp
     
     # Use microseconds for precision (avoids ID collisions)
@@ -219,7 +219,8 @@ log_agent_result() {
 # Initialize events file for new session
 init_events() {
     local session_dir="$1"
-    touch "$session_dir/events.jsonl"
+    mkdir -p "$session_dir/logs"
+    touch "$session_dir/logs/events.jsonl"
 }
 
 # Get recent events
@@ -227,12 +228,12 @@ get_recent_events() {
     local session_dir="$1"
     local count="${2:-10}"
     
-    if [ ! -f "$session_dir/events.jsonl" ]; then
+    if [ ! -f "$session_dir/logs/events.jsonl" ]; then
         echo "[]"
         return
     fi
     
-    tail -n "$count" "$session_dir/events.jsonl" | jq -s '.'
+    tail -n "$count" "$session_dir/logs/events.jsonl" | jq -s '.'
 }
 
 # Export functions for use in subprocesses

@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# shellcheck disable=SC2016  # jq program strings intentionally use single quotes for literal $vars
 # Knowledge Graph Manager
 # Manages the shared knowledge graph for adaptive research
 
@@ -38,7 +39,7 @@ kg_init() {
     validate_directory "session_dir" "$session_dir" || return 1
     validate_required "research_objective" "$research_objective" || return 1
 
-    local kg_file="$session_dir/knowledge-graph.json"
+    local kg_file="$session_dir/knowledge/knowledge-graph.json"
 
     # Use jq to safely construct JSON (prevents injection attacks)
     jq -n \
@@ -78,7 +79,8 @@ kg_init() {
                 total_contradictions: 0,
                 unresolved_contradictions: 0,
                 total_leads: 0,
-                explored_leads: 0
+                explored_leads: 0,
+                total_sources: 0
             }
         }' > "$kg_file"
 
@@ -88,7 +90,35 @@ kg_init() {
 # Get knowledge graph path
 kg_get_path() {
     local session_dir="$1"
-    echo "$session_dir/knowledge-graph.json"
+    echo "$session_dir/knowledge/knowledge-graph.json"
+}
+
+# Recalculate stats.total_sources from all entities, claims, and citations
+# Called after any mutation that can affect source lists
+# Returns: 0 on success, 1 on error
+kg_recalculate_source_stats() {
+    local session_dir="$1"
+    
+    validate_session_dir "$session_dir" || return 1
+    
+    local kg_file
+    kg_file=$(kg_get_path "$session_dir")
+    
+    # Single atomic update that counts unique sources across all collections
+    # Deduplicates by: url|title|relevant_quote (for entities/claims) or url|title|excerpt (for citations)
+    # Handles both string sources (URLs) and object sources (full metadata)
+    atomic_json_update "$kg_file" \
+        '.stats.total_sources = (
+            [
+                ((.entities // [])[]?.sources[]? |
+                    if type == "string" then . else ((.url // "") + "|" + (.title // "") + "|" + (.relevant_quote // "")) end),
+                ((.claims // [])[]?.sources[]? |
+                    if type == "string" then . else ((.url // "") + "|" + (.title // "") + "|" + (.relevant_quote // "")) end),
+                ((.citations // [])[]? |
+                    ((.url // "") + "|" + (.title // "") + "|" + (.excerpt // "")))
+            ]
+            | map(select(. != "")) | unique | length
+        )'
 }
 
 # Read entire knowledge graph
@@ -102,7 +132,7 @@ kg_read() {
         return 1
     fi
 
-    cat "$kg_file"
+    atomic_read "$kg_file"
 }
 
 # Update iteration number
@@ -135,43 +165,37 @@ kg_add_entity() {
     local kg_file
     kg_file=$(kg_get_path "$session_dir")
 
-    # Acquire lock for atomic operation
-    lock_acquire "$kg_file" || {
-        echo "Error: Failed to acquire lock for adding entity" >&2
-        return 1
-    }
-
-    # Check if entity already exists (by name)
+    # Check if entity already exists (by name) - read-only check
     local entity_name
     entity_name=$(echo "$entity_json" | jq -r '.name')
     local exists
     exists=$(jq --arg name "$entity_name" \
                      '.entities[] | select(.name == $name) | .id' \
-                     "$kg_file" | head -1)
+                     "$kg_file" 2>/dev/null | head -1)
 
+    local entity_id=""
     if [ -n "$exists" ]; then
-        # Update existing entity
-        jq --argjson entity "$entity_json" \
-           --arg name "$entity_name" \
-           --arg date "$(get_timestamp)" \
-           '(.entities[] | select(.name == $name)) |= ($entity + {last_updated: $date}) |
-            .last_updated = $date' \
-           "$kg_file" > "${kg_file}.tmp"
+        # Update existing entity using atomic operation
+        atomic_json_update "$kg_file" \
+            --argjson entity "$entity_json" \
+            --arg name "$entity_name" \
+            --arg date "$(get_timestamp)" \
+            '(.entities[] | select(.name == $name)) |= ($entity + {last_updated: $date}) |
+             .last_updated = $date'
     else
-        # Add new entity
-        local entity_id
-        entity_id="e$(jq '.stats.total_entities' "$kg_file")"
-        jq --argjson entity "$entity_json" \
-           --arg id "$entity_id" \
-           --arg date "$(get_timestamp)" \
-           '.entities += [($entity + {id: $id, added_at: $date})] |
-            .stats.total_entities += 1 |
-            .last_updated = $date' \
-           "$kg_file" > "${kg_file}.tmp"
+        # Add new entity using atomic operation
+        entity_id="e$(jq '.stats.total_entities' "$kg_file" 2>/dev/null || echo "0")"
+        atomic_json_update "$kg_file" \
+            --argjson entity "$entity_json" \
+            --arg id "$entity_id" \
+            --arg date "$(get_timestamp)" \
+            '.entities += [($entity + {id: $id, added_at: $date})] |
+             .stats.total_entities += 1 |
+             .last_updated = $date'
     fi
-
-    mv "${kg_file}.tmp" "$kg_file"
-    lock_release "$kg_file"
+    
+    # Recalculate source stats after entity mutation
+    kg_recalculate_source_stats "$session_dir" || true
     
     # Phase 2: Log entity added (only for new entities)
     if [ -z "$exists" ] && command -v log_entity_added &>/dev/null; then
@@ -192,12 +216,7 @@ kg_add_claim() {
     local kg_file
     kg_file=$(kg_get_path "$session_dir")
 
-    # Acquire lock for atomic operation
-    lock_acquire "$kg_file" || {
-        echo "Error: Failed to acquire lock for adding claim" >&2
-        return 1
-    }
-
+    # Check for existing similar claim - read operation
     local statement
     statement=$(echo "$claim_json" | jq -r '.statement // empty')
     local existing_id=""
@@ -255,83 +274,85 @@ PY
         existing_id=${existing_id//$'\r'/}
         existing_id=${existing_id//$'\n'/}
         if [[ -z "$existing_id" ]]; then
-            existing_id=$(jq -r --arg stmt "$statement" '.claims[]? | select(.statement == $stmt) | .id' "$kg_file" | head -n 1)
+            existing_id=$(jq -r --arg stmt "$statement" '.claims[]? | select(.statement == $stmt) | .id' "$kg_file" 2>/dev/null | head -n 1)
         fi
     fi
 
     local timestamp
     timestamp="$(get_timestamp)"
-    local tmp_file="${kg_file}.tmp"
 
     if [[ -n "$existing_id" ]]; then
-        jq --arg id "$existing_id" \
-           --argjson claim "$claim_json" \
-           --arg date "$timestamp" \
-           '
-           .claims = (.claims | map(
-             if .id == $id then
-               ( . as $old |
-                 $claim as $incoming |
-                 (
-                   $old + ($incoming | del(.id, .added_at, .updated_at))
-                 )
-                 | .sources = (
-                     (
-                       (($old.sources // []) + ($incoming.sources // []))
-                       | map(select(. != null))
-                       | unique_by((.url // "") + "|" + (.title // "") + "|" + (.relevant_quote // ""))
-                     )
-                   )
-                 | .related_entities = (
-                     (
-                       (($old.related_entities // []) + ($incoming.related_entities // []))
-                       | map(select(. != null))
-                       | unique
-                     )
-                   )
-                 | .confidence = (
-                     ([
-                         ($old.confidence // null),
-                         ($incoming.confidence // null)
-                       ]
-                       | map(select(. != null))
-                       | if length > 0 then max else ($old.confidence // 0) end)
-                   )
-                 | .evidence_quality = ($incoming.evidence_quality // $old.evidence_quality)
-                 | .verification_type = ($incoming.verification_type // $old.verification_type)
-                 | .verified = ((($old.verified // false) or ($incoming.verified // false)))
-                 | .source_context = (
-                     if ($incoming.source_context // null) != null
-                     then $incoming.source_context
-                     else $old.source_context
-                     end
-                   )
-                 | .updated_at = $date
-               )
-            else .
-            end
-           )) |
-           .last_updated = $date
-           ' "$kg_file" > "$tmp_file"
-        mv "$tmp_file" "$kg_file"
+        # Update existing claim using atomic operation
+        atomic_json_update "$kg_file" \
+            --arg id "$existing_id" \
+            --argjson claim "$claim_json" \
+            --arg date "$timestamp" \
+            '
+            .claims = (.claims | map(
+              if .id == $id then
+                ( . as $old |
+                  $claim as $incoming |
+                  (
+                    $old + ($incoming | del(.id, .added_at, .updated_at))
+                  )
+                  | .sources = (
+                      (
+                        (($old.sources // []) + ($incoming.sources // []))
+                        | map(select(. != null))
+                        | unique_by((.url // "") + "|" + (.title // "") + "|" + (.relevant_quote // ""))
+                      )
+                    )
+                  | .related_entities = (
+                      (
+                        (($old.related_entities // []) + ($incoming.related_entities // []))
+                        | map(select(. != null))
+                        | unique
+                      )
+                    )
+                  | .confidence = (
+                      ([
+                          ($old.confidence // null),
+                          ($incoming.confidence // null)
+                        ]
+                        | map(select(. != null))
+                        | if length > 0 then max else ($old.confidence // 0) end)
+                    )
+                  | .evidence_quality = ($incoming.evidence_quality // $old.evidence_quality)
+                  | .verification_type = ($incoming.verification_type // $old.verification_type)
+                  | .verified = ((($old.verified // false) or ($incoming.verified // false)))
+                  | .source_context = (
+                      if ($incoming.source_context // null) != null
+                      then $incoming.source_context
+                      else $old.source_context
+                      end
+                    )
+                  | .updated_at = $date
+                )
+             else .
+             end
+            )) |
+            .last_updated = $date
+            '
+        # Recalculate source stats after claim mutation
+        kg_recalculate_source_stats "$session_dir" || true
         kg_merge_similar_claims_locked "$session_dir" "$existing_id" "$statement" "$timestamp" || true
-        lock_release "$kg_file"
         return 0
     fi
 
+    # Add new claim using atomic operation
     local claim_id
-    claim_id="c$(jq '.stats.total_claims' "$kg_file")"
+    claim_id="c$(jq '.stats.total_claims' "$kg_file" 2>/dev/null || echo "0")"
 
-    jq --argjson claim "$claim_json" \
-       --arg id "$claim_id" \
-       --arg date "$timestamp" \
-       '.claims += [($claim + {id: $id, added_at: $date, verified: ($claim.verified // false)})] |
-        .stats.total_claims += 1 |
-        .last_updated = $date' \
-       "$kg_file" > "$tmp_file"
-
-    mv "$tmp_file" "$kg_file"
-    lock_release "$kg_file"
+    atomic_json_update "$kg_file" \
+        --argjson claim "$claim_json" \
+        --arg id "$claim_id" \
+        --arg date "$timestamp" \
+        '.claims += [($claim + {id: $id, added_at: $date, verified: ($claim.verified // false)})] |
+         .stats.total_claims += 1 |
+         .last_updated = $date'
+    
+    # Recalculate source stats after claim mutation
+    kg_recalculate_source_stats "$session_dir" || true
     
     # Phase 2: Log claim added
     if command -v log_claim_added &>/dev/null; then
@@ -362,24 +383,18 @@ kg_add_relationship() {
     local kg_file
     kg_file=$(kg_get_path "$session_dir")
 
-    lock_acquire "$kg_file" || {
-        echo "Error: Failed to acquire lock for adding relationship" >&2
-        return 1
-    }
-
+    # Pre-compute ID
     local rel_id
-    rel_id="r$(jq '.stats.total_relationships' "$kg_file")"
+    rel_id="r$(jq '.stats.total_relationships' "$kg_file" 2>/dev/null || echo "0")"
 
-    jq --argjson rel "$relationship_json" \
-       --arg id "$rel_id" \
-       --arg date "$(get_timestamp)" \
-       '.relationships += [($rel + {id: $id, added_at: $date})] |
-        .stats.total_relationships += 1 |
-        .last_updated = $date' \
-       "$kg_file" > "${kg_file}.tmp"
-
-    mv "${kg_file}.tmp" "$kg_file"
-    lock_release "$kg_file"
+    # Use atomic_json_update for thread-safe operation
+    atomic_json_update "$kg_file" \
+        --argjson rel "$relationship_json" \
+        --arg id "$rel_id" \
+        --arg date "$(get_timestamp)" \
+        '.relationships += [($rel + {id: $id, added_at: $date})] |
+         .stats.total_relationships += 1 |
+         .last_updated = $date'
 }
 
 # Add gap
@@ -395,28 +410,22 @@ kg_add_gap() {
     local kg_file
     kg_file=$(kg_get_path "$session_dir")
 
-    lock_acquire "$kg_file" || {
-        echo "Error: Failed to acquire lock for adding gap" >&2
-        return 1
-    }
-
+    # Pre-compute ID and iteration
     local gap_id
-    gap_id="g$(jq '.stats.total_gaps' "$kg_file")"
+    gap_id="g$(jq '.stats.total_gaps' "$kg_file" 2>/dev/null || echo "0")"
     local iteration
-    iteration=$(jq '.iteration' "$kg_file")
+    iteration=$(jq '.iteration' "$kg_file" 2>/dev/null || echo "0")
 
-    jq --argjson gap "$gap_json" \
-       --arg id "$gap_id" \
-       --arg iter "$iteration" \
-       --arg date "$(get_timestamp)" \
-       '.gaps += [($gap + {id: $id, detected_at_iteration: ($iter | tonumber), status: "pending", added_at: $date})] |
-        .stats.total_gaps += 1 |
-        .stats.unresolved_gaps += 1 |
-        .last_updated = $date' \
-       "$kg_file" > "${kg_file}.tmp"
-
-    mv "${kg_file}.tmp" "$kg_file"
-    lock_release "$kg_file"
+    # Use atomic_json_update for thread-safe operation
+    atomic_json_update "$kg_file" \
+        --argjson gap "$gap_json" \
+        --arg id "$gap_id" \
+        --arg iter "$iteration" \
+        --arg date "$(get_timestamp)" \
+        '.gaps += [($gap + {id: $id, detected_at_iteration: ($iter | tonumber), status: "pending", added_at: $date})] |
+         .stats.total_gaps += 1 |
+         .stats.unresolved_gaps += 1 |
+         .last_updated = $date'
     
     # Phase 2: Log gap detected
     if command -v log_gap_detected &>/dev/null; then
@@ -440,36 +449,29 @@ kg_update_gap_status() {
     local kg_file
     kg_file=$(kg_get_path "$session_dir")
 
-    lock_acquire "$kg_file" || {
-        echo "Error: Failed to acquire lock for updating gap status" >&2
-        return 1
-    }
-
+    # Check if gap was unresolved - read operation
     local was_unresolved
     was_unresolved=$(jq --arg id "$gap_id" \
                               '.gaps[] | select(.id == $id and .status != "resolved") | .id' \
-                              "$kg_file" | wc -l | xargs)
+                              "$kg_file" 2>/dev/null | wc -l | xargs)
 
-    # Combine both updates in one jq command to maintain atomicity
+    # Use atomic_json_update with conditional logic
     if [ "$status" = "resolved" ] && [ "$was_unresolved" -gt 0 ]; then
-        jq --arg id "$gap_id" \
-           --arg status "$status" \
-           --arg date "$(get_timestamp)" \
-           '(.gaps[] | select(.id == $id)) |= (. + {status: $status, updated_at: $date}) |
-            .stats.unresolved_gaps -= 1 |
-            .last_updated = $date' \
-           "$kg_file" > "${kg_file}.tmp"
+        atomic_json_update "$kg_file" \
+            --arg id "$gap_id" \
+            --arg status "$status" \
+            --arg date "$(get_timestamp)" \
+            '(.gaps[] | select(.id == $id)) |= (. + {status: $status, updated_at: $date}) |
+             .stats.unresolved_gaps -= 1 |
+             .last_updated = $date'
     else
-        jq --arg id "$gap_id" \
-           --arg status "$status" \
-           --arg date "$(get_timestamp)" \
-           '(.gaps[] | select(.id == $id)) |= (. + {status: $status, updated_at: $date}) |
-            .last_updated = $date' \
-           "$kg_file" > "${kg_file}.tmp"
+        atomic_json_update "$kg_file" \
+            --arg id "$gap_id" \
+            --arg status "$status" \
+            --arg date "$(get_timestamp)" \
+            '(.gaps[] | select(.id == $id)) |= (. + {status: $status, updated_at: $date}) |
+             .last_updated = $date'
     fi
-
-    mv "${kg_file}.tmp" "$kg_file"
-    lock_release "$kg_file"
 }
 
 # Add contradiction
@@ -485,28 +487,22 @@ kg_add_contradiction() {
     local kg_file
     kg_file=$(kg_get_path "$session_dir")
 
-    lock_acquire "$kg_file" || {
-        echo "Error: Failed to acquire lock for adding contradiction" >&2
-        return 1
-    }
-
+    # Pre-compute ID and iteration
     local con_id
-    con_id="con$(jq '.stats.total_contradictions' "$kg_file")"
+    con_id="con$(jq '.stats.total_contradictions' "$kg_file" 2>/dev/null || echo "0")"
     local iteration
-    iteration=$(jq '.iteration' "$kg_file")
+    iteration=$(jq '.iteration' "$kg_file" 2>/dev/null || echo "0")
 
-    jq --argjson con "$contradiction_json" \
-       --arg id "$con_id" \
-       --arg iter "$iteration" \
-       --arg date "$(get_timestamp)" \
-       '.contradictions += [($con + {id: $id, detected_at_iteration: ($iter | tonumber), status: "unresolved", added_at: $date})] |
-        .stats.total_contradictions += 1 |
-        .stats.unresolved_contradictions += 1 |
-        .last_updated = $date' \
-       "$kg_file" > "${kg_file}.tmp"
-
-    mv "${kg_file}.tmp" "$kg_file"
-    lock_release "$kg_file"
+    # Use atomic_json_update for thread-safe operation
+    atomic_json_update "$kg_file" \
+        --argjson con "$contradiction_json" \
+        --arg id "$con_id" \
+        --arg iter "$iteration" \
+        --arg date "$(get_timestamp)" \
+        '.contradictions += [($con + {id: $id, detected_at_iteration: ($iter | tonumber), status: "unresolved", added_at: $date})] |
+         .stats.total_contradictions += 1 |
+         .stats.unresolved_contradictions += 1 |
+         .last_updated = $date'
 }
 
 # Resolve contradiction
@@ -523,21 +519,14 @@ kg_resolve_contradiction() {
     local kg_file
     kg_file=$(kg_get_path "$session_dir")
 
-    lock_acquire "$kg_file" || {
-        echo "Error: Failed to acquire lock for resolving contradiction" >&2
-        return 1
-    }
-
-    jq --arg id "$con_id" \
-       --arg resolution "$resolution" \
-       --arg date "$(get_timestamp)" \
-       '(.contradictions[] | select(.id == $id)) |= (. + {status: "resolved", resolution: $resolution, resolved_at: $date}) |
-        .stats.unresolved_contradictions -= 1 |
-        .last_updated = $date' \
-       "$kg_file" > "${kg_file}.tmp"
-
-    mv "${kg_file}.tmp" "$kg_file"
-    lock_release "$kg_file"
+    # Use atomic_json_update for thread-safe operation
+    atomic_json_update "$kg_file" \
+        --arg id "$con_id" \
+        --arg resolution "$resolution" \
+        --arg date "$(get_timestamp)" \
+        '(.contradictions[] | select(.id == $id)) |= (. + {status: "resolved", resolution: $resolution, resolved_at: $date}) |
+         .stats.unresolved_contradictions -= 1 |
+         .last_updated = $date'
 }
 
 # Add promising lead
@@ -553,27 +542,21 @@ kg_add_lead() {
     local kg_file
     kg_file=$(kg_get_path "$session_dir")
 
-    lock_acquire "$kg_file" || {
-        echo "Error: Failed to acquire lock for adding lead" >&2
-        return 1
-    }
-
+    # Pre-compute ID and iteration
     local lead_id
-    lead_id="l$(jq '.stats.total_leads' "$kg_file")"
+    lead_id="l$(jq '.stats.total_leads' "$kg_file" 2>/dev/null || echo "0")"
     local iteration
-    iteration=$(jq '.iteration' "$kg_file")
+    iteration=$(jq '.iteration' "$kg_file" 2>/dev/null || echo "0")
 
-    jq --argjson lead "$lead_json" \
-       --arg id "$lead_id" \
-       --arg iter "$iteration" \
-       --arg date "$(get_timestamp)" \
-       '.promising_leads += [($lead + {id: $id, detected_at_iteration: ($iter | tonumber), status: "pending", added_at: $date})] |
-        .stats.total_leads += 1 |
-        .last_updated = $date' \
-       "$kg_file" > "${kg_file}.tmp"
-
-    mv "${kg_file}.tmp" "$kg_file"
-    lock_release "$kg_file"
+    # Use atomic_json_update for thread-safe operation
+    atomic_json_update "$kg_file" \
+        --argjson lead "$lead_json" \
+        --arg id "$lead_id" \
+        --arg iter "$iteration" \
+        --arg date "$(get_timestamp)" \
+        '.promising_leads += [($lead + {id: $id, detected_at_iteration: ($iter | tonumber), status: "pending", added_at: $date})] |
+         .stats.total_leads += 1 |
+         .last_updated = $date'
 }
 
 # Mark lead as explored
@@ -588,20 +571,13 @@ kg_mark_lead_explored() {
     local kg_file
     kg_file=$(kg_get_path "$session_dir")
 
-    lock_acquire "$kg_file" || {
-        echo "Error: Failed to acquire lock for marking lead explored" >&2
-        return 1
-    }
-
-    jq --arg id "$lead_id" \
-       --arg date "$(get_timestamp)" \
-       '(.promising_leads[] | select(.id == $id)) |= (. + {status: "explored", explored_at: $date}) |
-        .stats.explored_leads += 1 |
-        .last_updated = $date' \
-       "$kg_file" > "${kg_file}.tmp"
-
-    mv "${kg_file}.tmp" "$kg_file"
-    lock_release "$kg_file"
+    # Use atomic_json_update for thread-safe operation
+    atomic_json_update "$kg_file" \
+        --arg id "$lead_id" \
+        --arg date "$(get_timestamp)" \
+        '(.promising_leads[] | select(.id == $id)) |= (. + {status: "explored", explored_at: $date}) |
+         .stats.explored_leads += 1 |
+         .last_updated = $date'
 }
 
 # Update confidence scores
@@ -616,18 +592,11 @@ kg_update_confidence() {
     local kg_file
     kg_file=$(kg_get_path "$session_dir")
 
-    lock_acquire "$kg_file" || {
-        echo "Error: Failed to acquire lock for updating confidence" >&2
-        return 1
-    }
-
-    jq --argjson conf "$confidence_json" \
-       --arg date "$(get_timestamp)" \
-       '.confidence_scores = $conf | .last_updated = $date' \
-       "$kg_file" > "${kg_file}.tmp"
-
-    mv "${kg_file}.tmp" "$kg_file"
-    lock_release "$kg_file"
+    # Use atomic_json_update for thread-safe operation
+    atomic_json_update "$kg_file" \
+        --argjson conf "$confidence_json" \
+        --arg date "$(get_timestamp)" \
+        '.confidence_scores = $conf | .last_updated = $date'
 }
 
 # Update coverage
@@ -642,18 +611,11 @@ kg_update_coverage() {
     local kg_file
     kg_file=$(kg_get_path "$session_dir")
 
-    lock_acquire "$kg_file" || {
-        echo "Error: Failed to acquire lock for updating coverage" >&2
-        return 1
-    }
-
-    jq --argjson cov "$coverage_json" \
-       --arg date "$(get_timestamp)" \
-       '.coverage = $cov | .last_updated = $date' \
-       "$kg_file" > "${kg_file}.tmp"
-
-    mv "${kg_file}.tmp" "$kg_file"
-    lock_release "$kg_file"
+    # Use atomic_json_update for thread-safe operation
+    atomic_json_update "$kg_file" \
+        --argjson cov "$coverage_json" \
+        --arg date "$(get_timestamp)" \
+        '.coverage = $cov | .last_updated = $date'
 }
 
 # Get high-priority gaps
@@ -902,6 +864,17 @@ kg_bulk_update() {
        .stats.unresolved_contradictions = ([.contradictions[] | select(.status == "unresolved")] | length) |
        .stats.total_leads = (.promising_leads | length) |
        .stats.explored_leads = ([.promising_leads[] | select(.status == "explored")] | length) |
+       .stats.total_sources = (
+           [
+               ((.entities // [])[]?.sources[]? |
+                   if type == "string" then . else ((.url // "") + "|" + (.title // "") + "|" + (.relevant_quote // "")) end),
+               ((.claims // [])[]?.sources[]? |
+                   if type == "string" then . else ((.url // "") + "|" + (.title // "") + "|" + (.relevant_quote // "")) end),
+               ((.citations // [])[]? |
+                   ((.url // "") + "|" + (.title // "") + "|" + (.excerpt // "")))
+           ]
+           | map(select(. != "")) | unique | length
+       ) |
 
        # Update timestamp
        .last_updated = $date
@@ -926,7 +899,7 @@ kg_find_source_by_url() {
     local session_dir="$1"
     local url="$2"
 
-    local kg_file="$session_dir/knowledge-graph.json"
+    local kg_file="$session_dir/knowledge/knowledge-graph.json"
     if [ ! -f "$kg_file" ]; then
         echo ""
         return 0
@@ -1236,12 +1209,24 @@ stats["total_citations"] = len(updated_citations)
 kg["last_updated"] = now
 
 kg_path.write_text(json.dumps(kg, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+
+# Shell out to recalculate source stats using the canonical helper
+# This keeps the dedupe logic in one place (jq) rather than reimplementing in Python
+import subprocess
+session_dir = str(kg_path.parent.parent)
+script_dir = str(kg_path.parent.parent.parent / "src")
+subprocess.run(
+    ["bash", "-c", f"source '{script_dir}/knowledge-graph.sh' && kg_recalculate_source_stats '{session_dir}'"],
+    capture_output=True,
+    check=False
+)
 PY
 }
 
 # Export functions
 export -f kg_init
 export -f kg_get_path
+export -f kg_recalculate_source_stats
 export -f kg_read
 export -f kg_increment_iteration
 export -f kg_add_entity
@@ -1269,7 +1254,7 @@ export -f kg_merge_evidence_claims
 kg_integrate_agent_output() {
     local session_dir="$1"
     local agent_output_file="$2"
-    local kg_file="$session_dir/knowledge-graph.json"
+    local kg_file="$session_dir/knowledge/knowledge-graph.json"
     
     if [ ! -f "$kg_file" ]; then
         echo "Error: Knowledge graph not found at $kg_file" >&2
@@ -1279,6 +1264,9 @@ kg_integrate_agent_output() {
     # Backup knowledge graph before any writes
     if [ -f "$kg_file" ]; then
         cp "$kg_file" "${kg_file}.backup" 2>/dev/null || true
+        local backup_path="${kg_file}.backup"
+        # Remove backup automatically on successful return
+        trap 'status=$?; if [ $status -eq 0 ]; then rm -f -- "$backup_path" 2>/dev/null || true; fi' RETURN
     fi
     
     # Tier 0: Extract structured JSON directly from agent output using json-parser.sh
@@ -1372,13 +1360,13 @@ kg_integrate_agent_output() {
     fi
     
     if [ -z "$findings_files" ]; then
-        # Tier 2: Filesystem fallback - look in raw/ and session root
-        # Look for patterns: raw/findings-*.json, *-findings.json, *findings*.json
+        # Tier 2: Filesystem fallback - look in work/ and session root
+        # Look for patterns: work/*/findings-*.json, *-findings.json, *findings*.json
         local found_files=""
         
-        # Check raw/ directory
-        if [ -d "$session_dir/raw" ]; then
-            for f in "$session_dir/raw"/findings-*.json "$session_dir/raw"/*findings*.json; do
+        # Check work/ directory (v0.4.0 structure)
+        if [ -d "$session_dir/work" ]; then
+            for f in "$session_dir/work"/*/findings-*.json "$session_dir/work"/*/*findings*.json; do
                 [ -f "$f" ] && found_files="${found_files}${f}"$'\n'
             done
         fi

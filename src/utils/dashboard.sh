@@ -26,19 +26,19 @@ source "$SCRIPT_DIR/error-logger.sh" 2>/dev/null || true
 # Generate dashboard metrics
 dashboard_generate_metrics() {
     local session_dir="$1"
-    local metrics_file="$session_dir/dashboard-metrics.json"
+    local metrics_file="$session_dir/viewer/dashboard-metrics.json"
     
     # Read current state from files with locking to prevent partial reads
     local kg
-    if [ -f "$session_dir/knowledge-graph.json" ]; then
-        kg=$(atomic_read "$session_dir/knowledge-graph.json" 2>/dev/null || echo '{}')
+    if [ -f "$session_dir/knowledge/knowledge-graph.json" ]; then
+        kg=$(atomic_read "$session_dir/knowledge/knowledge-graph.json" 2>/dev/null || echo '{}')
     else
         kg='{}'
     fi
     
     local session
-    if [ -f "$session_dir/session.json" ]; then
-        session=$(atomic_read "$session_dir/session.json" 2>/dev/null || echo '{}')
+    if [ -f "$session_dir/meta/session.json" ]; then
+        session=$(atomic_read "$session_dir/meta/session.json" 2>/dev/null || echo '{}')
     else
         session='{}'
     fi
@@ -51,14 +51,14 @@ dashboard_generate_metrics() {
     
     # NEW: Get agent invocation stats from events (v0.2.0 mission system)
     local total_invocations=0
-    if [ -f "$session_dir/events.jsonl" ]; then
-        total_invocations=$(grep -c '"agent_invocation"' "$session_dir/events.jsonl" 2>/dev/null || true)
+    if [ -f "$session_dir/logs/events.jsonl" ]; then
+        total_invocations=$(grep -c '"agent_invocation"' "$session_dir/logs/events.jsonl" 2>/dev/null || true)
         total_invocations=${total_invocations:-0}
     fi
     
     local completed_invocations=0
-    if [ -f "$session_dir/events.jsonl" ]; then
-        completed_invocations=$(grep -c '"agent_result"' "$session_dir/events.jsonl" 2>/dev/null || true)
+    if [ -f "$session_dir/logs/events.jsonl" ]; then
+        completed_invocations=$(grep -c '"agent_result"' "$session_dir/logs/events.jsonl" 2>/dev/null || true)
         completed_invocations=${completed_invocations:-0}
     fi
     
@@ -66,8 +66,8 @@ dashboard_generate_metrics() {
     in_progress=$((total_invocations - completed_invocations))
     
     local failed=0
-    if [ -f "$session_dir/events.jsonl" ]; then
-        failed=$(grep '"agent_result"' "$session_dir/events.jsonl" 2>/dev/null | grep -c '"status":"failed"' 2>/dev/null || true)
+    if [ -f "$session_dir/logs/events.jsonl" ]; then
+        failed=$(grep '"agent_result"' "$session_dir/logs/events.jsonl" 2>/dev/null | grep -c '"status":"failed"' 2>/dev/null || true)
         failed=${failed:-0}
     fi
     
@@ -106,15 +106,15 @@ dashboard_generate_metrics() {
     # NEW: Get active agents from recent orchestration decisions (v0.2.0)
     local active_agents
     active_agents='[]'
-    if [ -f "$session_dir/orchestration-log.jsonl" ]; then
-        active_agents=$(tail -20 "$session_dir/orchestration-log.jsonl" 2>/dev/null | \
+    if [ -f "$session_dir/logs/orchestration.jsonl" ]; then
+        active_agents=$(tail -20 "$session_dir/logs/orchestration.jsonl" 2>/dev/null | \
             jq -s '[.[] | select(.type == "invoke" or .type == "reinvoke") | .decision.agent] | unique' 2>/dev/null || echo '[]')
     fi
     
     # Get system observations (last 20, most recent first)
     # Exclude resolved observations by checking for matching observation_resolved events
     local observations
-    observations=$(cat "$session_dir/events.jsonl" 2>/dev/null | \
+    observations=$(cat "$session_dir/logs/events.jsonl" 2>/dev/null | \
         jq -s '
             # Get all observations
             (map(select(.type == "system_observation"))) as $all_obs |
@@ -136,9 +136,9 @@ dashboard_generate_metrics() {
     # Get error/warning counts from system-errors.log
     local error_count=0
     local warning_count=0
-    if [ -f "$session_dir/system-errors.log" ]; then
-        error_count=$(grep -c '"severity": "error"' "$session_dir/system-errors.log" 2>/dev/null || true)
-        warning_count=$(grep -c '"severity": "warning"' "$session_dir/system-errors.log" 2>/dev/null || true)
+    if [ -f "$session_dir/logs/system-errors.log" ]; then
+        error_count=$(grep -c '"severity": "error"' "$session_dir/logs/system-errors.log" 2>/dev/null || true)
+        warning_count=$(grep -c '"severity": "warning"' "$session_dir/logs/system-errors.log" 2>/dev/null || true)
         
         # Sanitize counts (ensure single numeric value)
         error_count=${error_count:-0}
@@ -239,7 +239,7 @@ dashboard_generate_metrics() {
 # Calculate total cost from events
 calculate_total_cost() {
     local session_dir="$1"
-    local events_file="$session_dir/events.jsonl"
+    local events_file="$session_dir/logs/events.jsonl"
     
     if [ ! -f "$events_file" ] || [ ! -s "$events_file" ]; then
         echo "0"
@@ -313,19 +313,22 @@ dashboard_generate_html() {
         return 1
     fi
     
-    # Copy JS to session directory
-    cp "$js_template" "$session_dir/dashboard.js"
+    # Ensure viewer directory exists
+    mkdir -p "$session_dir/viewer"
+    
+    # Copy JS to viewer directory
+    cp "$js_template" "$session_dir/viewer/dashboard.js"
     
     # Generate HTML with cache-busting timestamp for JS file
     # This forces browser to reload JS on each dashboard generation (critical for file:// protocol)
     local js_version
     js_version="v=$(get_epoch)"
     sed "s|<script src=\"./dashboard.js\"></script>|<script src=\"./dashboard.js?${js_version}\"></script>|" \
-        "$template" > "$session_dir/dashboard.html"
+        "$template" > "$session_dir/viewer/index.html"
     
     # Only output file path in verbose mode (session-relative)
     if [[ "${CCONDUCTOR_VERBOSE:-0}" == "1" ]]; then
-        echo "session/dashboard.html"
+        echo "viewer/index.html"
     fi
 }
 
@@ -344,7 +347,7 @@ dashboard_serve() {
     fi
     
     # Check if dashboard exists, generate if needed
-    local dashboard_file="$session_dir/dashboard.html"
+    local dashboard_file="$session_dir/viewer/index.html"
     if [ ! -f "$dashboard_file" ]; then
         dashboard_generate_html "$session_dir" >/dev/null 2>&1 || return 1
     fi
@@ -418,7 +421,7 @@ dashboard_serve() {
     # Add session ID to URL to prevent caching
     local session_id
     session_id=$(basename "$session_dir")
-    local viewer_url="http://localhost:$dashboard_port/dashboard.html?session=$session_id"
+    local viewer_url="http://localhost:$dashboard_port/viewer/index.html?session=$session_id"
     
     echo "  ✓ Research Journal Viewer: $viewer_url"
     # Only show server details in verbose mode
@@ -500,7 +503,7 @@ dashboard_get_url() {
     
     local session_id
     session_id=$(basename "$session_dir")
-    echo "http://localhost:$port/dashboard.html?session=$session_id"
+    echo "http://localhost:$port/viewer/index.html?session=$session_id"
     return 0
 }
 
@@ -544,9 +547,9 @@ dashboard_cleanup_orphans() {
             is_stale=true
             reason="process not running"
         # Check if session is completed
-        elif [ -f "$session_dir/session.json" ]; then
+        elif [ -f "$session_dir/meta/session.json" ]; then
             local status
-            status=$(jq -r '.status // "active"' "$session_dir/session.json" 2>/dev/null || echo "active")
+            status=$(jq -r '.status // "active"' "$session_dir/meta/session.json" 2>/dev/null || echo "active")
             if [ "$status" = "completed" ]; then
                 is_stale=true
                 reason="session completed"

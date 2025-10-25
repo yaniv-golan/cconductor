@@ -13,7 +13,9 @@ PROJECT_ROOT="$(cd "$HOOK_DIR/../../../.." && pwd)"
 # shellcheck disable=SC1091
 source "$PROJECT_ROOT/src/utils/core-helpers.sh" 2>/dev/null || {
     # Minimal fallbacks if core-helpers unavailable
+    # shellcheck disable=SC2329
     get_timestamp() { date -u +"%Y-%m-%dT%H:%M:%S.%6NZ" 2>/dev/null || date -u +"%Y-%m-%dT%H:%M:%SZ"; }
+    # shellcheck disable=SC2329
     get_epoch() { date +%s; }
 }
 
@@ -56,7 +58,7 @@ fi
 
 # Format duration
 if [ "$duration_ms" -gt 1000 ]; then
-    duration_sec=$(echo "scale=1; $duration_ms / 1000" | bc 2>/dev/null || echo "?")
+    duration_sec=$(awk -v ms="$duration_ms" 'BEGIN { printf "%.1f", ms / 1000 }')
     duration_display="${duration_sec}s"
 else
     duration_display="${duration_ms}ms"
@@ -65,7 +67,7 @@ fi
 # Get session directory from environment or derive it
 session_dir="${CCONDUCTOR_SESSION_DIR:-}"
 if [ -z "$session_dir" ]; then
-    if [ -f "events.jsonl" ]; then
+    if [ -f "logs/events.jsonl" ]; then
         session_dir=$(pwd)
     else
         session_dir=""
@@ -81,10 +83,10 @@ event_data=$(jq -n \
     --arg exit_code "$exit_code" \
     '{tool: $tool, status: $status, duration_ms: ($duration | tonumber), exit_code: ($exit_code | tonumber)}')
 
-# Log to events.jsonl if session directory is available
+# Log to logs/events.jsonl if session directory is available
 if [ -n "$session_dir" ] && [ -d "$session_dir" ]; then
     # Use atomic mkdir for locking (portable, works on all platforms)
-    lock_file="$session_dir/.events.lock"
+    lock_file="$session_dir/logs/.events.lock"
     start_time=$(get_epoch)
     timeout=5
     
@@ -96,7 +98,7 @@ if [ -n "$session_dir" ] && [ -d "$session_dir" ]; then
                 --arg type "tool_use_complete" \
                 --argjson data "$event_data" \
                 '{timestamp: $ts, type: $type, data: $data}' \
-                >> "$session_dir/events.jsonl" 2>/dev/null
+                >> "$session_dir/logs/events.jsonl" 2>/dev/null
             
             # Release lock
             rmdir "$lock_file" 2>/dev/null || true
@@ -137,7 +139,7 @@ if [ "$tool_name" = "WebFetch" ] && [ "$exit_code" = "0" ]; then
         status_code=$(echo "$hook_data" | jq -r '.tool_output.status_code // empty')
 
         if [[ -n "$url" ]]; then
-            url_hash=$(printf '%s' "$url" | shasum -a 256 | awk '{print $1}')
+            url_hash=$("$PROJECT_ROOT/src/utils/hash-string.sh" "$url")
             body_path="$cache_root/${url_hash}.txt"
             metadata_path="$cache_root/${url_hash}.json"
 
@@ -253,7 +255,7 @@ if [ "$tool_name" = "Write" ] && [ "$exit_code" = "0" ]; then
             restored="false"
             backup=""
             if [[ -n "$session_dir" ]]; then
-                hash=$(printf '%s' "$file_path" | shasum -a 256 | awk '{print $1}')
+                hash=$("$PROJECT_ROOT/src/utils/hash-string.sh" "$file_path")
                 backup="$session_dir/.claude/write-backups/$hash.bak"
             fi
             if [[ -n "$backup" && -f "$backup" ]]; then
@@ -275,12 +277,12 @@ if [ "$tool_name" = "Write" ] && [ "$exit_code" = "0" ]; then
                             file_path: $fp,
                             restored: ($restored == "true")
                         }
-                    }' >> "$session_dir/events.jsonl" 2>/dev/null || true
+                    }' >> "$session_dir/logs/events.jsonl" 2>/dev/null || true
             fi
             echo "⚠️ Invalid JSON detected in $file_path; previous content restored." >&2
         else
             if [[ -n "$session_dir" ]]; then
-                hash=$(printf '%s' "$file_path" | shasum -a 256 | awk '{print $1}')
+                hash=$("$PROJECT_ROOT/src/utils/hash-string.sh" "$file_path")
                 rm -f "$session_dir/.claude/write-backups/$hash.bak" 2>/dev/null || true
             fi
         fi

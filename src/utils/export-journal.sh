@@ -3,7 +3,7 @@
 # export-journal.sh - Export research journal as markdown
 #
 # Generates a sequential, detailed markdown timeline of the research session
-# from events.jsonl
+# from logs/events.jsonl
 #
 
 # Get script directory for sourcing dependencies
@@ -77,24 +77,24 @@ get_findings_stats() {
     local session_dir="$1"
     local stat_type="$2"  # entities, claims, or sources
     
-    if [ ! -d "$session_dir/raw" ]; then
+    if [ ! -d "$session_dir/work" ]; then
         echo "0"
         return
     fi
     
     case "$stat_type" in
         entities)
-            find "$session_dir/raw" -name "findings-*.json" -type f -print0 2>/dev/null | \
+            find "$session_dir/work" -name "findings-*.json" -type f -print0 2>/dev/null | \
                 xargs -0 jq -r '[.entities_discovered // [] | .[]] | length' 2>/dev/null | \
                 awk '{sum+=$1} END {print sum+0}'
             ;;
         claims)
-            find "$session_dir/raw" -name "findings-*.json" -type f -print0 2>/dev/null | \
+            find "$session_dir/work" -name "findings-*.json" -type f -print0 2>/dev/null | \
                 xargs -0 jq -r '[.claims // [] | .[]] | length' 2>/dev/null | \
                 awk '{sum+=$1} END {print sum+0}'
             ;;
         sources)
-            find "$session_dir/raw" -name "findings-*.json" -type f -print0 2>/dev/null | \
+            find "$session_dir/work" -name "findings-*.json" -type f -print0 2>/dev/null | \
                 xargs -0 jq -r '.claims[]?.sources[]?.url // empty' 2>/dev/null | \
                 sort -u | wc -l | tr -d ' '
             ;;
@@ -317,13 +317,13 @@ render_evidence_section() {
 
 export_journal() {
     local session_dir="$1"
-    local output_file="${2:-$session_dir/final/research-journal.md}"
+    local output_file="${2:-$session_dir/report/research-journal.md}"
 
     mkdir -p "$(dirname "$output_file")"
     
-    local events_file="$session_dir/events.jsonl"
+    local events_file="$session_dir/logs/events.jsonl"
     if [ ! -f "$events_file" ]; then
-        echo "Error: events.jsonl not found in $session_dir" >&2
+        echo "Error: logs/events.jsonl not found in $session_dir" >&2
         return 1
     fi
     
@@ -340,18 +340,18 @@ export_journal() {
     local NEED_TASK_SECTION_HEADER=false
     
     # Get session metadata
-    local session_file="$session_dir/session.json"
+    local session_file="$session_dir/meta/session.json"
     local question="Unknown"
     local objective="Unknown"
     local session_created=""
     if [ -f "$session_file" ]; then
         question=$(jq -r '.question // "Unknown"' "$session_file" 2>/dev/null || echo "Unknown")
-        objective=$(jq -r '.objective // .question // "Unknown"' "$session_dir/session.json" 2>/dev/null || echo "Unknown")
+        objective=$(jq -r '.objective // .question // "Unknown"' "$session_dir/meta/session.json" 2>/dev/null || echo "Unknown")
         session_created=$(jq -r '.created_at // "unknown"' "$session_file" 2>/dev/null || echo "unknown")
     fi
     
     # Load orchestration log for decision lookups
-    local orchestration_log="$session_dir/orchestration-log.jsonl"
+    local orchestration_log="$session_dir/logs/orchestration.jsonl"
     local has_orchestration_log=false
     if [ -f "$orchestration_log" ]; then
         has_orchestration_log=true
@@ -443,7 +443,7 @@ export_journal() {
         fi
         
         # Get iteration count from dashboard metrics
-        local dashboard_metrics="$session_dir/dashboard-metrics.json"
+        local dashboard_metrics="$session_dir/viewer/dashboard-metrics.json"
         if [ -f "$dashboard_metrics" ]; then
             total_iterations=$(jq -r '.iteration // 0' "$dashboard_metrics" 2>/dev/null || echo "0")
         fi
@@ -454,8 +454,8 @@ export_journal() {
         total_sources=$(get_findings_stats "$session_dir" "sources")
         
         # Calculate average confidence
-        if [ -d "$session_dir/raw" ] && [ "$total_claims" -gt 0 ]; then
-            avg_confidence=$(find "$session_dir/raw" -name "findings-*.json" -type f -print0 2>/dev/null | \
+        if [ -d "$session_dir/work" ] && [ "$total_claims" -gt 0 ]; then
+            avg_confidence=$(find "$session_dir/work" -name "findings-*.json" -type f -print0 2>/dev/null | \
                 xargs -0 jq -r '[.claims[]?.confidence // 0] | add / length * 100 | floor' 2>/dev/null | \
                 head -1)
             avg_confidence=${avg_confidence:-0}
@@ -496,7 +496,7 @@ export_journal() {
         fi
         
         # Display input materials if provided
-        local input_manifest="$session_dir/input-files.json"
+        local input_manifest="$session_dir/inputs/input-files.json"
         if [ -f "$input_manifest" ]; then
             local input_dir_path
             input_dir_path=$(jq -r '.input_dir // ""' "$input_manifest" 2>/dev/null)
@@ -688,7 +688,7 @@ export_journal() {
                             echo ""
                             
                             # Extract prompt parser findings if available
-                            local parser_output="$session_dir/agent-output-prompt-parser.json"
+                            local parser_output="$session_dir/work/prompt-parser/output.json"
                             if [ -f "$parser_output" ]; then
                                 local research_question output_spec
                                 # Use json-parser to extract from agent output (handles markdown fences)
@@ -998,7 +998,7 @@ export_journal() {
                         mission-orchestrator)
                             # Look for coordinator output with gap analysis in intermediate directory
                             local coordinator_file
-                            coordinator_file=$(find "$session_dir/intermediate" "$session_dir/raw" -name "*coordinator*output*.json" 2>/dev/null | tail -1)
+                            coordinator_file=$(find "$session_dir/knowledge" "$session_dir/work" -name "*coordinator*output*.json" 2>/dev/null | tail -1)
                             
                             if [ -n "$coordinator_file" ] && [ -f "$coordinator_file" ]; then
                                 # Extract the actual result JSON from the wrapper
@@ -1071,7 +1071,7 @@ export_journal() {
                         research-planner)
                             # Show the initial research plan
                             local planner_file
-                            planner_file=$(find "$session_dir/raw" -name "*planner*output*.json" -o -name "planning-output.json" 2>/dev/null | tail -1)
+                            planner_file=$(find "$session_dir/work" -name "*planner*output*.json" -o -name "planning-output.json" 2>/dev/null | tail -1)
                             
                             if [ -n "$planner_file" ] && [ -f "$planner_file" ]; then
                                 echo "#### 📋 Research Plan"
@@ -1127,7 +1127,7 @@ export_journal() {
                         synthesis-agent)
                             # Show synthesis output
                             local synthesis_file
-                            synthesis_file=$(find "$session_dir/raw" -name "*synthesis*output*.json" 2>/dev/null | tail -1)
+                            synthesis_file=$(find "$session_dir/work" -name "*synthesis*output*.json" 2>/dev/null | tail -1)
                             
                             if [ -n "$synthesis_file" ] && [ -f "$synthesis_file" ]; then
                                 echo "#### 📝 Synthesis Analysis"
@@ -1186,8 +1186,9 @@ export_journal() {
                     echo "*Completed after ${duration}s*"
                     echo ""
                     
-                    # Look for findings file for this specific task
-                    local findings_file="$session_dir/raw/findings-${task_id}.json"
+                    # Look for findings file for this specific task (search in all agent work dirs)
+                    local findings_file
+                    findings_file=$(find "$session_dir/work" -name "findings-${task_id}.json" 2>/dev/null | head -1)
                     
                     if [ -f "$findings_file" ]; then
                         # Check if this file has any content
@@ -1287,7 +1288,7 @@ export_journal() {
                     local sections
                     sections=$(echo "$line" | jq -r '.data.report_sections // 0')
                     local report_file
-                    report_file=$(echo "$line" | jq -r '.data.report_file // "final/mission-report.md"')
+                    report_file=$(echo "$line" | jq -r '.data.report_file // "report/mission-report.md"')
                     
                     echo "## 🎉 Research Complete"
                     echo ""
@@ -1306,10 +1307,10 @@ export_journal() {
                 
                 mission_completed)
                     local report_file
-                    report_file=$(echo "$line" | jq -r '.data.report_file // "final/mission-report.md"')
+                    report_file=$(echo "$line" | jq -r '.data.report_file // "report/mission-report.md"')
                     
                     # Get final stats from knowledge graph
-                    local kg_file="$session_dir/knowledge-graph.json"
+                    local kg_file="$session_dir/knowledge/knowledge-graph.json"
                     local claims=0 entities=0 citations=0
                     if [ -f "$kg_file" ]; then
                         claims=$(jq -r '.stats.total_claims // 0' "$kg_file" 2>/dev/null || echo "0")
@@ -1420,12 +1421,12 @@ export_journal() {
         # Find findings files and calculate statistics
         local total_entities=0 total_claims=0 total_sources=0 total_gaps=0
         
-        if [ -d "$session_dir/raw" ]; then
+        if [ -d "$session_dir/work" ]; then
             # Count totals
             total_entities=$(get_findings_stats "$session_dir" "entities")
             total_claims=$(get_findings_stats "$session_dir" "claims")
             total_sources=$(get_findings_stats "$session_dir" "sources")
-            total_gaps=$(find "$session_dir/raw" -name "findings-*.json" -type f -print0 2>/dev/null | \
+            total_gaps=$(find "$session_dir/work" -name "findings-*.json" -type f -print0 2>/dev/null | \
                 xargs -0 jq -r '[.gaps_identified // [] | .[]] | length' 2>/dev/null | \
                 awk '{sum+=$1} END {print sum+0}')
             
@@ -1444,11 +1445,11 @@ export_journal() {
                 
                 # Detect coverage areas from entity types
                 local has_concepts has_papers has_technology
-                has_concepts=$(find "$session_dir/raw" -name "findings-*.json" -type f -print0 2>/dev/null | \
+                has_concepts=$(find "$session_dir/work" -name "findings-*.json" -type f -print0 2>/dev/null | \
                     xargs -0 jq -r '.entities_discovered[]? | select(.type == "concept") | .name' 2>/dev/null | head -1)
-                has_papers=$(find "$session_dir/raw" -name "findings-*.json" -type f -print0 2>/dev/null | \
+                has_papers=$(find "$session_dir/work" -name "findings-*.json" -type f -print0 2>/dev/null | \
                     xargs -0 jq -r '.entities_discovered[]? | select(.type == "paper") | .name' 2>/dev/null | head -1)
-                has_technology=$(find "$session_dir/raw" -name "findings-*.json" -type f -print0 2>/dev/null | \
+                has_technology=$(find "$session_dir/work" -name "findings-*.json" -type f -print0 2>/dev/null | \
                     xargs -0 jq -r '.entities_discovered[]? | select(.type == "technology") | .name' 2>/dev/null | head -1)
                 
                 [ -n "$has_concepts" ] && echo "✓ Theoretical foundations documented"
@@ -1467,7 +1468,7 @@ export_journal() {
             if [ "$total_gaps" -gt 0 ]; then
                 echo "**Top Priority Research Gaps:**"
                 echo ""
-                find "$session_dir/raw" -name "findings-*.json" -type f -print0 2>/dev/null | \
+                find "$session_dir/work" -name "findings-*.json" -type f -print0 2>/dev/null | \
                     xargs -0 jq -r '.gaps_identified // [] | .[]' 2>/dev/null | \
                     jq -sr 'sort_by(.priority // 0) | reverse | .[0:10] | .[] | 
                         "\(.priority // 0). **\(.question // .gap_description // .description)**\n   - \(.reason // .rationale // "No rationale provided")\n"' 2>/dev/null
@@ -1476,7 +1477,7 @@ export_journal() {
                     echo ""
                     echo "> [!note]- View all gaps identified ($total_gaps total)"
                     echo ">"
-                    find "$session_dir/raw" -name "findings-*.json" -type f -print0 2>/dev/null | \
+                    find "$session_dir/work" -name "findings-*.json" -type f -print0 2>/dev/null | \
                         xargs -0 jq -r '.gaps_identified // [] | .[] | 
                             "> - **\(.question // .gap_description // .description)**\n>   - Priority: \(.priority // 0), Reason: \(.reason // .rationale // \"Not specified\")\n>"' 2>/dev/null
                 fi
@@ -1491,7 +1492,7 @@ export_journal() {
                 if [ "$total_entities" -gt 0 ]; then
                     echo "### Entities Discovered"
                     echo ""
-                    find "$session_dir/raw" -name "findings-*.json" -type f -print0 2>/dev/null | xargs -0 jq -r '
+                    find "$session_dir/work" -name "findings-*.json" -type f -print0 2>/dev/null | xargs -0 jq -r '
                         .entities_discovered // [] | .[] | 
                         "- **\(.name)** (\(.type)): \(.description)\n  _Confidence: \((.confidence // 0) * 100 | floor)%_\n"
                     ' 2>/dev/null
@@ -1506,7 +1507,7 @@ export_journal() {
                     if [ "$total_claims" -le 20 ]; then
                         # Show all claims if 20 or fewer
                         # shellcheck disable=SC2016
-                        find "$session_dir/raw" -name "findings-*.json" -type f -print0 2>/dev/null | xargs -0 jq -r '
+                        find "$session_dir/work" -name "findings-*.json" -type f -print0 2>/dev/null | xargs -0 jq -r '
                             def format_credibility:
                                 gsub("_"; " ") | split(" ") | map(.[0:1] as $first | .[1:] as $rest | ($first | ascii_upcase) + $rest) | join(" ");
                             .claims // [] | .[] | 
@@ -1515,7 +1516,7 @@ export_journal() {
                     else
                         # Show first 20, collapse the rest
                         # shellcheck disable=SC2016
-                        find "$session_dir/raw" -name "findings-*.json" -type f -print0 2>/dev/null | xargs -0 jq -r '
+                        find "$session_dir/work" -name "findings-*.json" -type f -print0 2>/dev/null | xargs -0 jq -r '
                             def format_credibility:
                                 gsub("_"; " ") | split(" ") | map(.[0:1] as $first | .[1:] as $rest | ($first | ascii_upcase) + $rest) | join(" ");
                             .claims // [] | .[] | 
@@ -1526,7 +1527,7 @@ export_journal() {
                         echo "> [!note]- View all claims ($total_claims total)"
                         echo ">"
                         # shellcheck disable=SC2016
-                        find "$session_dir/raw" -name "findings-*.json" -type f -print0 2>/dev/null | xargs -0 jq -r '
+                        find "$session_dir/work" -name "findings-*.json" -type f -print0 2>/dev/null | xargs -0 jq -r '
                             def format_credibility:
                                 gsub("_"; " ") | split(" ") | map(.[0:1] as $first | .[1:] as $rest | ($first | ascii_upcase) + $rest) | join(" ");
                             .claims // [] | .[] | 
@@ -1541,7 +1542,7 @@ export_journal() {
                     echo "### Key Sources"
                     echo ""
                     local temp_sources="/tmp/sources-$$.json"
-                    find "$session_dir/raw" -name "findings-*.json" -type f -print0 2>/dev/null | \
+                    find "$session_dir/work" -name "findings-*.json" -type f -print0 2>/dev/null | \
                         xargs -0 jq -s '[.[] | .claims // [] | .[].sources // [] | .[]] | unique_by(.title)' > "$temp_sources" 2>/dev/null
                     
                     if [ "$total_sources" -le 30 ]; then
@@ -1610,8 +1611,8 @@ export_journal() {
         echo ""
         
         # Load metrics from various sources
-        local dashboard_metrics="$session_dir/dashboard-metrics.json"
-        local kg_file="$session_dir/knowledge-graph.json"
+        local dashboard_metrics="$session_dir/viewer/dashboard-metrics.json"
+        local kg_file="$session_dir/knowledge/knowledge-graph.json"
         
         # Calculate duration
         local start_time end_time duration_minutes
@@ -1627,7 +1628,7 @@ export_journal() {
         fi
         
         # Get iteration count and entity/claim counts
-        local iterations entities claims sources
+        local iterations=0 entities=0 claims=0 sources=0
         if [ -f "$dashboard_metrics" ]; then
             iterations=$(jq -r '.iteration // 0' "$dashboard_metrics" 2>/dev/null)
             entities=$(jq -r '.knowledge.entities // 0' "$dashboard_metrics" 2>/dev/null)
@@ -1638,9 +1639,8 @@ export_journal() {
         fi
         
         # Count unique sources from findings files
-        sources=0
-        if [ -d "$session_dir/raw" ]; then
-            sources=$(find "$session_dir/raw" -name "findings-*.json" -type f -print0 2>/dev/null | \
+        if [ -d "$session_dir/work" ]; then
+            sources=$(find "$session_dir/work" -name "findings-*.json" -type f -print0 2>/dev/null | \
                 xargs -0 jq -r '.claims[]?.sources[]?.url // empty' 2>/dev/null | sort -u | wc -l | tr -d ' ')
         fi
         
@@ -1674,9 +1674,9 @@ export_journal() {
         echo ""
         
         # Quality assessment from findings
-        if [ -d "$session_dir/raw" ]; then
+        if [ -d "$session_dir/work" ]; then
             local avg_confidence
-            avg_confidence=$(find "$session_dir/raw" -name "findings-*.json" -type f -print0 2>/dev/null | \
+            avg_confidence=$(find "$session_dir/work" -name "findings-*.json" -type f -print0 2>/dev/null | \
                 xargs -0 jq -r '[.claims[]?.confidence // 0] | add / length * 100 | floor' 2>/dev/null | head -1)
             
             if [ -n "$avg_confidence" ] && [ "$avg_confidence" -gt 0 ]; then
@@ -1685,7 +1685,7 @@ export_journal() {
                 
                 # Check evidence quality
                 local high_quality_count
-                high_quality_count=$(find "$session_dir/raw" -name "findings-*.json" -type f -print0 2>/dev/null | \
+                high_quality_count=$(find "$session_dir/work" -name "findings-*.json" -type f -print0 2>/dev/null | \
                     xargs -0 jq -r '[.claims[]? | select(.evidence_quality == "high")] | length' 2>/dev/null | head -1)
                 if [ -n "$high_quality_count" ] && [ "$high_quality_count" -gt 0 ]; then
                     echo "- Evidence quality: High"
@@ -1693,9 +1693,9 @@ export_journal() {
                 
                 # List source types
                 local has_official has_academic
-                has_official=$(find "$session_dir/raw" -name "findings-*.json" -type f -print0 2>/dev/null | \
+                has_official=$(find "$session_dir/work" -name "findings-*.json" -type f -print0 2>/dev/null | \
                     xargs -0 jq -r '.claims[]?.sources[]? | select(.credibility == "official") | .credibility' 2>/dev/null | head -1)
-                has_academic=$(find "$session_dir/raw" -name "findings-*.json" -type f -print0 2>/dev/null | \
+                has_academic=$(find "$session_dir/work" -name "findings-*.json" -type f -print0 2>/dev/null | \
                     xargs -0 jq -r '.claims[]?.sources[]? | select(.credibility == "academic") | .credibility' 2>/dev/null | head -1)
                 
                 if [ -n "$has_official" ] || [ -n "$has_academic" ]; then
@@ -1734,7 +1734,7 @@ export_journal() {
         fi
         
         # Process observations based on measurable metrics
-        if [ -f "$dashboard_metrics" ] || [ -d "$session_dir/raw" ]; then
+        if [ -f "$dashboard_metrics" ] || [ -d "$session_dir/work" ]; then
             echo "**Process Observations:**"
             echo ""
             
@@ -1789,8 +1789,8 @@ export_journal() {
         fi
         
         # Link to final report
-        if [ -f "$session_dir/final/mission-report.md" ]; then
-            echo "**Final Report:** [final/mission-report.md](final/mission-report.md)"
+        if [ -f "$session_dir/report/mission-report.md" ]; then
+            echo "**Final Report:** [report/mission-report.md](report/mission-report.md)"
             echo ""
         fi
         
@@ -1833,7 +1833,7 @@ if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
     if [ $# -lt 1 ]; then
         echo "Usage: $0 <session_dir> [output_file]" >&2
         echo "  session_dir: Path to research session directory" >&2
-        echo "  output_file: Optional output path (default: <session_dir>/final/research-journal.md)" >&2
+        echo "  output_file: Optional output path (default: <session_dir>/report/research-journal.md)" >&2
         exit 1
     fi
     

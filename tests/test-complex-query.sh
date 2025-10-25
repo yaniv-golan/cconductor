@@ -56,11 +56,11 @@ if [ -z "$SESSION_DIR" ]; then
     exit 1
 fi
 
-if [ -f "$SESSION_DIR/final/mission-report.md" ]; then
+if [ -f "$SESSION_DIR/70_report/mission-report.md" ]; then
     echo "✓ Complex query handled successfully"
 
     # Check for depth
-    LINE_COUNT=$(wc -l < "$SESSION_DIR/final/mission-report.md")
+    LINE_COUNT=$(wc -l < "$SESSION_DIR/70_report/mission-report.md")
     if [ "$LINE_COUNT" -gt 100 ]; then
         echo "✓ Report has sufficient depth ($LINE_COUNT lines)"
     else
@@ -68,7 +68,7 @@ if [ -f "$SESSION_DIR/final/mission-report.md" ]; then
     fi
 
     # Check for multiple sources
-    SOURCE_COUNT=$(grep -c "^\- \[.*\](http" "$SESSION_DIR/final/mission-report.md" || true)
+    SOURCE_COUNT=$(grep -c "^\- \[.*\](http" "$SESSION_DIR/70_report/mission-report.md" || true)
     if [ "$SOURCE_COUNT" -gt 5 ]; then
         echo "✓ Multiple sources cited ($SOURCE_COUNT sources)"
     else

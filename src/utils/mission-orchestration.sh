@@ -248,7 +248,7 @@ prepare_orchestrator_context() {
     # Check for recent agent timeouts
     local recent_timeouts
     local timeout_lines
-    timeout_lines=$(grep -E '"agent_timeout"|"agent_invocation_failure"' "$session_dir/orchestration-log.jsonl" 2>/dev/null | tail -10 || true)
+    timeout_lines=$(grep -E '"agent_timeout"|"agent_invocation_failure"' "$session_dir/logs/orchestration.jsonl" 2>/dev/null | tail -10 || true)
     if [[ -n "$timeout_lines" ]]; then
         recent_timeouts=$(echo "$timeout_lines" | jq -s 'map(select(.type == "agent_timeout" or (.type == "agent_invocation_failure" and (.decision.failure_reason // "") | contains("timeout")))) | map({agent: (.decision.failed_agent // .decision.agent // "unknown"), reason: (.decision.timeout_reason // .decision.failure_reason // "unknown")})' 2>/dev/null || echo "[]")
     else
@@ -303,7 +303,7 @@ invoke_mission_orchestrator() {
     local context_json="$2"
     
     # Write context to temp file
-    local context_file="$session_dir/orchestrator-context.json"
+    local context_file="$session_dir/meta/orchestrator-context.json"
     echo "$context_json" > "$context_file"
     
     # Create user message with context
@@ -385,7 +385,7 @@ EOF
 )
     
     # Write user message to input file
-    local input_file="$session_dir/orchestrator-input.txt"
+    local input_file="$session_dir/meta/orchestrator-input.txt"
     echo "$user_message" > "$input_file"
     
     # Setup orchestrator agent in session if not already there
@@ -415,7 +415,7 @@ EOF
     fi
     
     # Invoke agent
-    local output_file="$session_dir/orchestrator-output.json"
+    local output_file="$session_dir/meta/orchestrator-output.json"
     
     # Source invoke-agent utility
     # shellcheck disable=SC1091
@@ -524,7 +524,7 @@ _invoke_delegated_agent() {
     local output_spec_section=""
     if [[ "$agent_name" == "synthesis-agent" ]]; then
         local output_spec
-        output_spec=$(jq -r '.output_specification // ""' "$session_dir/session.json" 2>/dev/null)
+        output_spec=$(jq -r '.output_specification // ""' "$session_dir/meta/session.json" 2>/dev/null)
         if [[ -n "$output_spec" && "$output_spec" != "null" ]]; then
             output_spec_section=$(cat <<SPEC_EOF
 
@@ -542,7 +542,7 @@ SPEC_EOF
         # Web-researcher: Manifest-only output (findings go to files)
         instructions_section=$(cat <<'INSTRUCTIONS_EOF'
 ## Instructions
-Complete this task and write findings to separate JSON files in raw/ directory.
+Complete this task and write findings to separate JSON files in work/web-researcher/ directory.
 
 Return ONLY this JSON manifest (no markdown, no explanations):
 
@@ -550,7 +550,7 @@ Return ONLY this JSON manifest (no markdown, no explanations):
   "status": "completed",
   "tasks_completed": <number>,
   "findings_files": [
-    "raw/findings-<task_id>.json",
+    "work/<agent>/findings-<task_id>.json",
     ...
   ]
 }
@@ -562,7 +562,7 @@ CRITICAL REQUIREMENTS:
 - NO explanatory text
 - If any task failed, set status to "partial" and add "errors" array
 
-Example CORRECT: {"status":"completed","tasks_completed":2,"findings_files":["raw/findings-t0.json","raw/findings-t1.json"]}
+Example CORRECT: {"status":"completed","tasks_completed":2,"findings_files":["work/web-researcher/findings-t0.json","work/web-researcher/findings-t1.json"]}
 Example WRONG: Here's the manifest: ```json {"status":"completed"} ```
 INSTRUCTIONS_EOF
 )
@@ -590,7 +590,7 @@ Return ONLY valid JSON matching this exact schema:
 CRITICAL REQUIREMENTS:
 - Return ONLY the JSON object above IN YOUR RESPONSE
 - The orchestration system will automatically integrate your findings into the knowledge graph
-- Do NOT use the Write tool to create knowledge-graph.json or findings files
+- Do NOT use the Write tool to create knowledge/knowledge-graph.json or findings files
 - Do NOT attempt to write to any data files - all findings go in your JSON response
 - Start with { and end with }
 - NO markdown formatting (no ```json blocks)
@@ -599,7 +599,7 @@ CRITICAL REQUIREMENTS:
 
 Example CORRECT: {"task_id":"t0","status":"completed","entities_discovered":[...],"claims":[...]}
 Example WRONG: Here are my findings: ```json {"entities_discovered": [...]} ```
-Example WRONG: I will write the findings to knowledge-graph.json using the Write tool.
+Example WRONG: I will write the findings to knowledge/knowledge-graph.json using the Write tool.
 Example WRONG: Let me create a findings file...
 
 If you must explain something, put it in a "notes" field within the JSON.
@@ -658,8 +658,9 @@ $instructions_section
 EOF
 )
     
-    # Write input
-    local agent_input_file="$session_dir/agent-input-${agent_name}.txt"
+    # Write input to agent-specific work directory
+    mkdir -p "$session_dir/work/$agent_name"
+    local agent_input_file="$session_dir/work/$agent_name/input.txt"
     echo "$agent_input" > "$agent_input_file"
     
     # Setup agent in session if not already there
@@ -700,8 +701,8 @@ EOF
         fi
     fi
     
-    # Invoke agent
-    local agent_output_file="$session_dir/agent-output-${agent_name}.json"
+    # Invoke agent - output to agent-specific work directory
+    local agent_output_file="$session_dir/work/$agent_name/output.json"
     
     # Source invoke-agent utility
     # shellcheck disable=SC1091
@@ -717,6 +718,10 @@ EOF
         
         echo "  ✓ $agent_name completed ($duration seconds)"
         
+        # Extract cost from agent output
+        local cost
+        cost=$(extract_cost_from_output "$agent_output_file")
+        
         # Extract result
         local result
         result=$(jq -r '.result // empty' "$agent_output_file" 2>/dev/null)
@@ -724,8 +729,8 @@ EOF
         # Register output as artifact
         local artifact_file=""
         if [[ -n "$result" ]]; then
-            artifact_file="$session_dir/artifacts/${agent_name}-output.md"
-            mkdir -p "$session_dir/artifacts"
+            mkdir -p "$session_dir/artifacts/$agent_name"
+            artifact_file="$session_dir/artifacts/$agent_name/output.md"
             echo "$result" > "$artifact_file"
             
             # Register artifact (capture ID but don't display it)
@@ -734,8 +739,8 @@ EOF
             artifact_id=$(artifact_register "$session_dir" "$artifact_file" "agent_output" "$agent_name")
         fi
         
-        # Record budget (invocation tracking is done via orchestration log)
-        budget_record_invocation "$session_dir" "$agent_name" 0 "$duration"
+        # Record budget with real cost
+        budget_record_invocation "$session_dir" "$agent_name" "$cost" "$duration"
         
         return 0
     else
@@ -772,7 +777,7 @@ process_agent_kg_artifacts() {
 }
 
 # Validate synthesis agent outputs
-# Ensures final/mission-report.md is created
+# Ensures report/mission-report.md is created
 validate_synthesis_outputs() {
     local session_dir="$1"
     local agent="$2"
@@ -782,15 +787,15 @@ validate_synthesis_outputs() {
         return 0
     fi
     
-    local mission_report="$session_dir/final/mission-report.md"
+    local mission_report="$session_dir/report/mission-report.md"
     
     # Check mission report exists
     if [ ! -f "$mission_report" ]; then
-        echo "  ⚠️  Warning: synthesis-agent did not create final/mission-report.md" >&2
+        echo "  ⚠️  Warning: synthesis-agent did not create report/mission-report.md" >&2
         return 1
     fi
     
-    echo "  ✓ Synthesis outputs validated (final/mission-report.md)" >&2
+    echo "  ✓ Synthesis outputs validated (report/mission-report.md)" >&2
     return 0
 }
 
@@ -1088,6 +1093,40 @@ run_quality_gate() {
     fi
 }
 
+log_quality_gate_event() {
+    local session_dir="$1"
+    local event_type="$2"
+    local attempt_value="${3:-0}"
+    local mode_value="${4:-advisory}"
+    local status_value="${5:-}"
+    local summary_file="${6:-}"
+    local report_file="${7:-}"
+
+    # Ensure attempt is numeric for jq --argjson
+    if ! [[ "$attempt_value" =~ ^[0-9]+$ ]]; then
+        attempt_value=0
+    fi
+
+    if command -v log_event &>/dev/null; then
+        local event_payload
+        event_payload=$(jq -n \
+            --argjson attempt "$attempt_value" \
+            --arg mode "$mode_value" \
+            --arg status "$status_value" \
+            --arg summary "$summary_file" \
+            --arg report "$report_file" \
+            '{
+                attempt: $attempt,
+                mode: $mode,
+                status: $status,
+                summary_file: ($summary | select(. != "")),
+                report_file: ($report | select(. != ""))
+            }')
+
+        log_event "$session_dir" "$event_type" "$event_payload"
+    fi
+}
+
 # Run quality assurance cycle (gate + remediation if needed)
 run_quality_assurance_cycle() {
     local session_dir="$1"
@@ -1102,6 +1141,9 @@ run_quality_assurance_cycle() {
     # Check if remediation is enabled
     local remediation_enabled
     remediation_enabled=$(echo "$quality_config" | jq -r '.remediation.enabled // false')
+
+    local gate_mode
+    gate_mode=$(echo "$quality_config" | jq -r '.mode // "advisory"')
     
     local max_attempts
     max_attempts=$(echo "$quality_config" | jq -r '.remediation.max_attempts // 2')
@@ -1109,21 +1151,21 @@ run_quality_assurance_cycle() {
     local attempt=1
     
     while [[ $attempt -le $max_attempts ]]; do
+        log_quality_gate_event "$session_dir" "quality_gate_started" "$attempt" "$gate_mode" "running"
         # Run quality gate
         if run_quality_gate "$session_dir"; then
             verbose "✓ Quality gate passed"
+            log_quality_gate_event "$session_dir" "quality_gate_completed" "$attempt" "$gate_mode" "passed" "artifacts/quality-gate-summary.json" "artifacts/quality-gate.json"
             return 0
         fi
-        
+        log_quality_gate_event "$session_dir" "quality_gate_completed" "$attempt" "$gate_mode" "failed" "artifacts/quality-gate-summary.json" "artifacts/quality-gate.json"
+
         # Gate failed
         if [[ "$remediation_enabled" != "true" ]] || [[ $attempt -eq $max_attempts ]]; then
             verbose "Quality gate still flagging claims after remediation attempts"
             
             # Check mode before deciding to block
-            local mode
-            mode=$(echo "$quality_config" | jq -r '.mode // "advisory"')
-            
-            if [[ "$mode" == "advisory" ]]; then
+            if [[ "$gate_mode" == "advisory" ]]; then
                 # Advisory mode: log issues but don't block
                 verbose "Quality gate in advisory mode - issues logged but not blocking"
                 return 0  # Allow synthesis to proceed
@@ -1166,13 +1208,7 @@ run_quality_assurance_cycle() {
         
         attempt=$((attempt + 1))
     done
-    
-    # Final gate check after all attempts
-    if run_quality_gate "$session_dir"; then
-        echo "✓ Quality gate passed after remediation"
-        return 0
-    fi
-    
+
     return 1
 }
 
@@ -1211,7 +1247,7 @@ check_mission_complete() {
     # 3. Check high-priority gaps (≥8)
     local unresolved_gaps
     unresolved_gaps=$(jq -r '[.gaps[]? | select(.priority >= 8 and (.status // "unresolved") != "resolved")] | length' \
-        "$session_dir/knowledge-graph.json" 2>/dev/null || echo "0")
+        "$session_dir/knowledge/knowledge-graph.json" 2>/dev/null || echo "0")
     if [[ "$unresolved_gaps" -eq 0 ]]; then
         high_priority_gaps_resolved=true
     fi
@@ -1323,7 +1359,7 @@ run_mission_orchestration() {
     
     # Log mission start event for journal
     local objective
-    objective=$(cat "$session_dir/session.json" | jq -r '.objective // "Unknown"')
+    objective=$(cat "$session_dir/meta/session.json" | jq -r '.objective // "Unknown"')
     log_event "$session_dir" "mission_started" "$(jq -n \
         --arg mission "$mission_name" \
         --arg objective "$objective" \
@@ -1347,7 +1383,7 @@ run_mission_orchestration() {
             echo "  ✓ Dashboard viewer launched"
         else
             log_error "$session_dir" "dashboard_launch" "Dashboard viewer failed to launch"
-            echo "  ⚠ Dashboard viewer failed (check system-errors.log)" >&2
+            echo "  ⚠ Dashboard viewer failed (check logs/system-errors.log)" >&2
         fi
     else
         log_error "$session_dir" "dashboard_source" "Failed to source dashboard.sh"
@@ -1365,7 +1401,7 @@ run_mission_orchestration() {
         # Sync KG iteration with mission iteration FIRST (before any work)
         # This ensures dashboard always shows the current iteration number
         local kg_current
-        kg_current=$(jq -r '.iteration // 0' "$session_dir/knowledge-graph.json" 2>/dev/null || echo "0")
+        kg_current=$(jq -r '.iteration // 0' "$session_dir/knowledge/knowledge-graph.json" 2>/dev/null || echo "0")
         if [[ "$kg_current" -lt "$iteration" ]]; then
             kg_increment_iteration "$session_dir"
             # Update dashboard metrics immediately so dashboard shows current iteration
@@ -1407,8 +1443,18 @@ run_mission_orchestration() {
         # (invoke_agent.sh handles the invocation message)
         local orchestrator_output
         local orchestrator_output_file="$session_dir/.orchestrator-output.tmp"
+        local orch_start_time
+        orch_start_time=$(get_epoch)
         invoke_mission_orchestrator "$session_dir" "$context_json" > "$orchestrator_output_file"
         orchestrator_output=$(cat "$orchestrator_output_file")
+        
+        # Record orchestrator cost in budget
+        local orchestrator_cost
+        orchestrator_cost=$(extract_cost_from_output "$session_dir/meta/orchestrator-output.json")
+        local orch_duration
+        orch_duration=$(($(get_epoch) - orch_start_time))
+        budget_record_invocation "$session_dir" "mission-orchestrator" "$orchestrator_cost" "$orch_duration"
+        
         rm -f "$orchestrator_output_file"
         
         echo ""
@@ -1446,11 +1492,11 @@ run_mission_orchestration() {
     completed_at=$(get_timestamp)
     jq --arg completed "$completed_at" \
         '.completed_at = $completed | .status = "completed"' \
-        "$session_dir/session.json" > "$session_dir/session.json.tmp" && \
-        mv "$session_dir/session.json.tmp" "$session_dir/session.json"
+        "$session_dir/meta/session.json" > "$session_dir/meta/session.json.tmp" && \
+        mv "$session_dir/meta/session.json.tmp" "$session_dir/meta/session.json"
     
     # Announce final report status from synthesis agent
-    local final_report="$session_dir/final/mission-report.md"
+    local final_report="$session_dir/report/mission-report.md"
     echo "→ Final report status..."
     if [ -f "$final_report" ]; then
         local final_report_display
@@ -1466,13 +1512,13 @@ run_mission_orchestration() {
     # shellcheck source=/dev/null
     if command -v export_journal &>/dev/null || source "$UTILS_DIR/export-journal.sh" 2>/dev/null; then
         echo "→ Generating research journal..."
-        export_journal "$session_dir" "$session_dir/final/research-journal.md" 2>&1 || echo "  ⚠️  Warning: Could not generate research journal"
+        export_journal "$session_dir" "$session_dir/report/research-journal.md" 2>&1 || echo "  ⚠️  Warning: Could not generate research journal"
     fi
     
     # Log mission completion event for journal
     local report_relative=""
     if [ -f "$final_report" ]; then
-        report_relative="final/mission-report.md"
+        report_relative="report/mission-report.md"
     fi
     log_event "$session_dir" "mission_completed" "$(jq -n \
         --arg completed "$completed_at" \
@@ -1485,9 +1531,9 @@ run_mission_orchestration() {
     
     # Generate mission metrics file for easy analysis
     local started_at
-    started_at=$(jq -r '.created_at' "$session_dir/session.json")
+    started_at=$(jq -r '.created_at' "$session_dir/meta/session.json")
     local total_cost
-    total_cost=$(grep '"type":"agent_result"' "$session_dir/events.jsonl" 2>/dev/null | \
+    total_cost=$(grep '"type":"agent_result"' "$session_dir/logs/events.jsonl" 2>/dev/null | \
                  jq -s 'map(.data.cost_usd) | add' 2>/dev/null || echo "0")
     
     jq -n \
@@ -1501,12 +1547,22 @@ run_mission_orchestration() {
             completed_at: $end,
             duration_seconds: (($end | fromdateiso8601) - ($start | fromdateiso8601)),
             total_cost_usd: ($cost | tonumber)
-        }' > "$session_dir/mission-metrics.json"
+        }' > "$session_dir/meta/mission-metrics.json"
 
     # Persist findings into the shared digital library
     if [ -x "$UTILS_DIR/digital-librarian.sh" ]; then
         "$UTILS_DIR/digital-librarian.sh" "$session_dir" 2>/dev/null || \
             echo "  ⚠️  Warning: Digital librarian update failed" >&2
+    fi
+    
+    # Generate session manifests and user README
+    if [ -x "$UTILS_DIR/meta-manifest-generator.sh" ]; then
+        "$UTILS_DIR/meta-manifest-generator.sh" "$session_dir" >/dev/null 2>&1 || \
+            echo "  ⚠️  Warning: Meta manifest generation failed" >&2
+    fi
+    if [ -x "$UTILS_DIR/session-readme-generator.sh" ]; then
+        "$UTILS_DIR/session-readme-generator.sh" "$session_dir" >/dev/null 2>&1 || \
+            echo "  ⚠️  Warning: Session README generation failed" >&2
     fi
 
     # Stop event tailer if running
@@ -1539,15 +1595,15 @@ run_mission_orchestration_resume() {
     
     # Get current iteration from orchestration log (robust method)
     local current_iteration=0
-    if [ -f "$session_dir/orchestration-log.jsonl" ]; then
+    if [ -f "$session_dir/logs/orchestration.jsonl" ]; then
         # Try to get last iteration from decision entries
-        current_iteration=$(awk 'NF{print}' "$session_dir/orchestration-log.jsonl" | \
+        current_iteration=$(awk 'NF{print}' "$session_dir/logs/orchestration.jsonl" | \
             jq -r 'select(.decision.iteration!=null) | .decision.iteration' 2>/dev/null | \
             tail -1)
         
         # Fallback to line count if no iteration found
         if [ -z "$current_iteration" ] || [ "$current_iteration" = "null" ]; then
-            current_iteration=$(wc -l < "$session_dir/orchestration-log.jsonl" | tr -d ' ')
+            current_iteration=$(wc -l < "$session_dir/logs/orchestration.jsonl" | tr -d ' ')
         fi
     fi
     
@@ -1577,7 +1633,7 @@ run_mission_orchestration_resume() {
         # Sync KG iteration with mission iteration FIRST (before any work)
         # This ensures dashboard always shows the current iteration number
         local kg_current
-        kg_current=$(jq -r '.iteration // 0' "$session_dir/knowledge-graph.json" 2>/dev/null || echo "0")
+        kg_current=$(jq -r '.iteration // 0' "$session_dir/knowledge/knowledge-graph.json" 2>/dev/null || echo "0")
         if [[ "$kg_current" -lt "$iteration" ]]; then
             kg_increment_iteration "$session_dir"
             # Update dashboard metrics immediately so dashboard shows current iteration
@@ -1607,8 +1663,18 @@ run_mission_orchestration_resume() {
         # (invoke_agent.sh handles the invocation message)
         local orchestrator_output
         local orchestrator_output_file="$session_dir/.orchestrator-output.tmp"
+        local orch_start_time
+        orch_start_time=$(get_epoch)
         invoke_mission_orchestrator "$session_dir" "$context_json" > "$orchestrator_output_file"
         orchestrator_output=$(cat "$orchestrator_output_file")
+        
+        # Record orchestrator cost in budget
+        local orchestrator_cost
+        orchestrator_cost=$(extract_cost_from_output "$session_dir/meta/orchestrator-output.json")
+        local orch_duration
+        orch_duration=$(($(get_epoch) - orch_start_time))
+        budget_record_invocation "$session_dir" "mission-orchestrator" "$orchestrator_cost" "$orch_duration"
+        
         rm -f "$orchestrator_output_file"
         
         echo ""
@@ -1645,11 +1711,11 @@ run_mission_orchestration_resume() {
     completed_at=$(get_timestamp)
     jq --arg completed "$completed_at" \
         '.completed_at = $completed | .status = "completed"' \
-        "$session_dir/session.json" > "$session_dir/session.json.tmp" && \
-        mv "$session_dir/session.json.tmp" "$session_dir/session.json"
+        "$session_dir/meta/session.json" > "$session_dir/meta/session.json.tmp" && \
+        mv "$session_dir/meta/session.json.tmp" "$session_dir/meta/session.json"
     
     # Announce final report status from synthesis agent
-    local final_report="$session_dir/final/mission-report.md"
+    local final_report="$session_dir/report/mission-report.md"
     echo "→ Final report status..."
     if [ -f "$final_report" ]; then
         local final_report_display
@@ -1665,13 +1731,13 @@ run_mission_orchestration_resume() {
     # shellcheck source=/dev/null
     if command -v export_journal &>/dev/null || source "$UTILS_DIR/export-journal.sh" 2>/dev/null; then
         echo "→ Generating research journal..."
-        export_journal "$session_dir" "$session_dir/final/research-journal.md" 2>&1 || echo "  ⚠️  Warning: Could not generate research journal"
+        export_journal "$session_dir" "$session_dir/report/research-journal.md" 2>&1 || echo "  ⚠️  Warning: Could not generate research journal"
     fi
     
     # Log mission completion event for journal
     local report_relative=""
     if [ -f "$final_report" ]; then
-        report_relative="final/mission-report.md"
+        report_relative="report/mission-report.md"
     fi
     log_event "$session_dir" "mission_completed" "$(jq -n \
         --arg completed "$completed_at" \
@@ -1684,9 +1750,9 @@ run_mission_orchestration_resume() {
     
     # Generate mission metrics file for easy analysis
     local started_at
-    started_at=$(jq -r '.created_at' "$session_dir/session.json")
+    started_at=$(jq -r '.created_at' "$session_dir/meta/session.json")
     local total_cost
-    total_cost=$(grep '"type":"agent_result"' "$session_dir/events.jsonl" 2>/dev/null | \
+    total_cost=$(grep '"type":"agent_result"' "$session_dir/logs/events.jsonl" 2>/dev/null | \
                  jq -s 'map(.data.cost_usd) | add' 2>/dev/null || echo "0")
     
     jq -n \
@@ -1700,7 +1766,17 @@ run_mission_orchestration_resume() {
             completed_at: $end,
             duration_seconds: (($end | fromdateiso8601) - ($start | fromdateiso8601)),
             total_cost_usd: ($cost | tonumber)
-        }' > "$session_dir/mission-metrics.json"
+        }' > "$session_dir/meta/mission-metrics.json"
+    
+    # Generate session manifests and user README
+    if [ -x "$UTILS_DIR/meta-manifest-generator.sh" ]; then
+        "$UTILS_DIR/meta-manifest-generator.sh" "$session_dir" >/dev/null 2>&1 || \
+            echo "  ⚠️  Warning: Meta manifest generation failed" >&2
+    fi
+    if [ -x "$UTILS_DIR/session-readme-generator.sh" ]; then
+        "$UTILS_DIR/session-readme-generator.sh" "$session_dir" >/dev/null 2>&1 || \
+            echo "  ⚠️  Warning: Session README generation failed" >&2
+    fi
     
     # Stop event tailer if running
     # shellcheck disable=SC1091

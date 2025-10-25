@@ -18,7 +18,7 @@ budget_init() {
   local session_dir="$1"
   local mission_profile="$2"
   
-  local budget_file="$session_dir/budget.json"
+  local budget_file="$session_dir/meta/budget.json"
   
   # Extract constraints from mission profile
   local budget_usd
@@ -63,7 +63,7 @@ budget_record_invocation() {
   local cost_usd="${3:-0}"
   local duration_seconds="${4:-0}"
   
-  local budget_file="$session_dir/budget.json"
+  local budget_file="$session_dir/meta/budget.json"
   
   if [[ ! -f "$budget_file" ]]; then
     echo "Error: Budget file not found" >&2
@@ -96,7 +96,7 @@ budget_record_invocation() {
 # Check if budget allows operation
 budget_check() {
   local session_dir="$1"
-  local budget_file="$session_dir/budget.json"
+  local budget_file="$session_dir/meta/budget.json"
   
   if [[ ! -f "$budget_file" ]]; then
     echo "Error: Budget file not found" >&2
@@ -178,7 +178,7 @@ budget_check() {
 # Get budget report
 budget_report() {
   local session_dir="$1"
-  local budget_file="$session_dir/budget.json"
+  local budget_file="$session_dir/meta/budget.json"
   
   if [[ ! -f "$budget_file" ]]; then
     echo "No budget data available"
@@ -209,7 +209,7 @@ budget_report() {
 # Get budget status as JSON
 budget_status() {
   local session_dir="$1"
-  local budget_file="$session_dir/budget.json"
+  local budget_file="$session_dir/meta/budget.json"
   
   if [[ ! -f "$budget_file" ]]; then
     echo "{}"

@@ -28,7 +28,9 @@ ROOT="$PROJECT_ROOT"
 # shellcheck disable=SC1091
 source "$PROJECT_ROOT/src/utils/core-helpers.sh" 2>/dev/null || {
     # Minimal fallbacks if core-helpers unavailable
+    # shellcheck disable=SC2329
     get_timestamp() { date -u +"%Y-%m-%dT%H:%M:%S.%6NZ" 2>/dev/null || date -u +"%Y-%m-%dT%H:%M:%SZ"; }
+    # shellcheck disable=SC2329
     get_epoch() { date +%s; }
 }
 
@@ -40,7 +42,16 @@ debug_log() {
     local msg="$1"
     local ts
     ts=$(get_timestamp)
-    local log_file="${HOOK_DEBUG_LOG:-$PROJECT_ROOT/hook-debug.log}"
+    # Use session_dir if set, otherwise fall back to PROJECT_ROOT
+        local log_file="${HOOK_DEBUG_LOG:-}"
+        if [[ -z "$log_file" ]]; then
+            if [[ -n "${session_dir:-}" && -d "${session_dir:-}" ]]; then
+                log_file="$session_dir/logs/hook-debug.log"
+            else
+                # Skip logging when session_dir is not set to avoid root file
+                return 0
+            fi
+        fi
     {
         printf '%s %s\n' "$ts" "$msg"
     } >> "$log_file" 2>/dev/null || true
@@ -106,7 +117,7 @@ if [[ "$agent_name" == "mission-orchestrator" ]]; then
     esac
 fi
 
-# Extract tool input (summary only, full data in events.jsonl)
+# Extract tool input (summary only, full data lives in logs/events.jsonl)
 tool_input_summary=""
 tool_input_details=""
 case "$tool_name" in
@@ -158,14 +169,14 @@ if [[ -z "$session_dir" ]]; then
     transcript_path=$(echo "$hook_data" | jq -r '.transcript_path // ""')
     if [[ -n "$transcript_path" && "$transcript_path" != "null" ]]; then
         session_dir="$(dirname "$transcript_path")"
-    elif [[ -f "events.jsonl" ]]; then
+    elif [[ -f "logs/events.jsonl" ]]; then
         session_dir=$(pwd)
     else
         session_dir=""
     fi
 fi
 if [[ -n "$session_dir" ]]; then
-    HOOK_DEBUG_LOG="$session_dir/hook-debug.log"
+    HOOK_DEBUG_LOG="$session_dir/logs/hook-debug.log"
     debug_log "hook_session_dir $session_dir"
 else
     debug_log "hook_session_dir_unset"
@@ -193,7 +204,7 @@ emit_event() {
         return 0
     fi
 
-    local lock_file="$session_dir/.events.lock"
+    local lock_file="$session_dir/logs/.events.lock"
     local start_time
     start_time=$(get_epoch)
     local timeout=5
@@ -205,7 +216,7 @@ emit_event() {
                 --arg type "$event_type" \
                 --argjson data "$event_data_json" \
                 '{timestamp: $ts, type: $type, data: $data}' \
-                >> "$session_dir/events.jsonl" 2>/dev/null
+                >> "$session_dir/logs/events.jsonl" 2>/dev/null
             rmdir "$lock_file" 2>/dev/null || true
             break
         fi
@@ -265,14 +276,14 @@ if [[ "$tool_name" == "WebSearch" ]]; then
                 match_base_query=$(echo "$lookup_json" | jq -r '.match_base_query // ""')
                 # Cache hit detected - emit event for tailer to display
                 # Note: Hook stderr is captured by Claude CLI, so we emit events instead
-                # The event tailer reads events.jsonl and displays formatted output
+                # The event tailer reads logs/events.jsonl and displays formatted output
                 tool_block_reason="web_search_cache_hit"
                 if [[ -n "$match_ratio" && "$match_ratio" != "null" ]]; then
                     tool_block_reason="web_search_cache_hit_overlap"
                 fi
 
                 if [[ -n "$session_dir" ]]; then
-                    lock_file="$session_dir/.events.lock"
+                    lock_file="$session_dir/logs/.events.lock"
                     if mkdir "$lock_file" 2>/dev/null; then
                         jq -cn \
                             --arg ts "$(get_timestamp)" \
@@ -296,7 +307,7 @@ if [[ "$tool_name" == "WebSearch" ]]; then
                                     match_ratio: (if $match == "" or $match == "null" then null else ($match | tonumber) end),
                                     match_base_query: (if $base == "" or $base == "null" then null else $base end)
                                 }
-                            }' >> "$session_dir/events.jsonl" 2>/dev/null
+                            }' >> "$session_dir/logs/events.jsonl" 2>/dev/null
 
                         jq -cn \
                             --arg ts "$(get_timestamp)" \
@@ -316,7 +327,7 @@ if [[ "$tool_name" == "WebSearch" ]]; then
                                     reason: $reason,
                                     details: (if $details == "" then null else $details end)
                                 }
-                            }' >> "$session_dir/events.jsonl" 2>/dev/null
+                            }' >> "$session_dir/logs/events.jsonl" 2>/dev/null
                         rmdir "$lock_file" 2>/dev/null || true
                     fi
                 fi
@@ -493,7 +504,7 @@ PY
     fi
 
     if [[ -n "$session_dir" && -n "$guard_detail" && "$guard_reason" != "allow:no_url" ]]; then
-        lock_file="$session_dir/.events.lock"
+        lock_file="$session_dir/logs/.events.lock"
         if mkdir "$lock_file" 2>/dev/null; then
             jq -cn \
                 --arg ts "$(get_timestamp)" \
@@ -513,7 +524,7 @@ PY
                         hash_script: (if $hash == "" then null else $hash end),
                         library_sources_dir: (if $libdir == "" then null else $libdir end)
                     }
-                }' >> "$session_dir/events.jsonl" 2>/dev/null
+                }' >> "$session_dir/logs/events.jsonl" 2>/dev/null
             rmdir "$lock_file" 2>/dev/null || true
         fi
     fi
@@ -531,7 +542,7 @@ if [[ "$tool_name" == "Write" ]]; then
         fi
         if [[ -n "$backup_root" ]]; then
             mkdir -p "$backup_root"
-            hash=$(printf '%s' "$file_path" | shasum -a 256 | awk '{print $1}')
+            hash=$("$PROJECT_ROOT/src/utils/hash-string.sh" "$file_path")
             cp "$file_path" "$backup_root/$hash.bak" 2>/dev/null || true
         fi
     fi
@@ -583,7 +594,7 @@ Use the Read tool on the cached file. Append '?fresh=1' to the URL if you must f
                         echo "$message" >&2
 
                         if [[ -n "$session_dir" ]]; then
-                            lock_file="$session_dir/.events.lock"
+                            lock_file="$session_dir/logs/.events.lock"
                             if mkdir "$lock_file" 2>/dev/null; then
                                 jq -cn \
                                     --arg ts "$(get_timestamp)" \
@@ -603,7 +614,7 @@ Use the Read tool on the cached file. Append '?fresh=1' to the URL if you must f
                                             status: $status,
                                             kg_summary: (if $summary == "" then null else $summary end)
                                         }
-                                    }' >> "$session_dir/events.jsonl"
+                                    }' >> "$session_dir/logs/events.jsonl"
                                 rmdir "$lock_file" 2>/dev/null || true
                             fi
                         fi
@@ -628,10 +639,10 @@ event_data=$(jq -n \
     --arg details "$tool_input_details" \
     '{tool: $tool, agent: $agent, input_summary: $summary, details: (if $details == "" then null else $details end)}')
 
-# Log to events.jsonl if session directory is available
+# Log to logs/events.jsonl if session directory is available
 if [ -n "$session_dir" ] && [ -d "$session_dir" ]; then
     # Use atomic mkdir for locking (portable, works on all platforms)
-    lock_file="$session_dir/.events.lock"
+    lock_file="$session_dir/logs/.events.lock"
     start_time=$(get_epoch)
     timeout=5
     
@@ -643,7 +654,7 @@ if [ -n "$session_dir" ] && [ -d "$session_dir" ]; then
                 --arg type "tool_use_start" \
                 --argjson data "$event_data" \
                 '{timestamp: $ts, type: $type, data: $data}' \
-                >> "$session_dir/events.jsonl" 2>/dev/null
+                >> "$session_dir/logs/events.jsonl" 2>/dev/null
             
             # Release lock
             rmdir "$lock_file" 2>/dev/null || true
@@ -662,7 +673,7 @@ fi
 
 # Architecture Note: Claude Code CLI captures hook stderr output
 # This means any `echo ... >&2` in this hook will NOT appear in the terminal
-# Instead, we emit events to events.jsonl which are displayed by event-tailer.sh
+# Instead, we emit events to logs/events.jsonl which are displayed by event-tailer.sh
 # The event tailer runs as a background process started by invoke-agent.sh
 # See: src/utils/event-tailer.sh and memory-bank/systemPatterns.md
 

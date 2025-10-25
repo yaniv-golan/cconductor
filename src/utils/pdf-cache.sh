@@ -115,7 +115,7 @@ init_pdf_cache() {
 # Generate cache key from URL (hash)
 get_cache_key() {
     local url="$1"
-    echo -n "$url" | shasum -a 256 | cut -d' ' -f1
+    "$SCRIPT_DIR/hash-string.sh" "$url"
 }
 
 # Check if PDF is already cached
@@ -337,7 +337,7 @@ cache_pdf() {
     local file_size
     file_size=$(stat -f%z "$cached_pdf" 2>/dev/null || stat -c%s "$cached_pdf" 2>/dev/null || echo 0)
     local sha256
-    sha256=$(shasum -a 256 "$cached_pdf" | cut -d' ' -f1)
+    sha256=$("$SCRIPT_DIR/hash-file.sh" "$cached_pdf")
 
     # Create metadata using jq (prevents injection attacks)
     if ! jq -n \
@@ -660,7 +660,7 @@ verify_cache_integrity() {
             stored_hash=$(jq -r '.sha256' "$metadata_file" 2>/dev/null || echo "")
             if [ -n "$stored_hash" ]; then
                 local actual_hash
-                actual_hash=$(shasum -a 256 "$pdf_file" | cut -d' ' -f1)
+                actual_hash=$("$SCRIPT_DIR/hash-file.sh" "$pdf_file")
                 
                 if [ "$stored_hash" != "$actual_hash" ]; then
                     echo "  ✗ Hash mismatch: $cache_key" >&2

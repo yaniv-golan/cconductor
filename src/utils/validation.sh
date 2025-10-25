@@ -123,9 +123,9 @@ validate_session_dir() {
     fi
 
     # Check for knowledge graph file
-    local kg_file="$session_dir/knowledge-graph.json"
+    local kg_file="$session_dir/knowledge/knowledge-graph.json"
     if [ ! -f "$kg_file" ]; then
-        echo "Error: session_dir missing knowledge-graph.json: $session_dir" >&2
+        echo "Error: session_dir missing knowledge/knowledge-graph.json: $session_dir" >&2
         return 1
     fi
 

@@ -150,13 +150,13 @@ cmd_resume() {
     local refinement="${2:-}"
     
     # Load session metadata
-    if [ ! -f "$session_dir/session.json" ]; then
+    if [ ! -f "$session_dir/meta/session.json" ]; then
         echo "Error: Invalid session directory" >&2
         exit 1
     fi
     
     local objective
-    objective=$(jq -r '.objective' "$session_dir/session.json")
+    objective=$(jq -r '.objective' "$session_dir/meta/session.json")
     echo "→ Resuming session..."
     echo "  Original objective: $objective"
     
@@ -169,20 +169,20 @@ cmd_resume() {
         jq --arg ref "$refinement" \
            --arg time "$(get_timestamp)" \
            '.refinements = (.refinements // []) | .refinements += [{refinement: $ref, added_at: $time}]' \
-           "$session_dir/session.json" > "$temp_file"
-        mv "$temp_file" "$session_dir/session.json"
+           "$session_dir/meta/session.json" > "$temp_file"
+        mv "$temp_file" "$session_dir/meta/session.json"
     fi
     
     # Load mission profile from original session
     local mission_name
-    mission_name=$(jq -r '.mission_name // "general-research"' "$session_dir/session.json" 2>/dev/null || echo "general-research")
+    mission_name=$(jq -r '.mission_name // "general-research"' "$session_dir/meta/session.json" 2>/dev/null || echo "general-research")
     
     # Store mission_name in session if not present
-    if ! jq -e '.mission_name' "$session_dir/session.json" >/dev/null 2>&1; then
+    if ! jq -e '.mission_name' "$session_dir/meta/session.json" >/dev/null 2>&1; then
         local temp_file
         temp_file=$(mktemp)
-        jq --arg mn "$mission_name" '.mission_name = $mn' "$session_dir/session.json" > "$temp_file"
-        mv "$temp_file" "$session_dir/session.json"
+        jq --arg mn "$mission_name" '.mission_name = $mn' "$session_dir/meta/session.json" > "$temp_file"
+        mv "$temp_file" "$session_dir/meta/session.json"
     fi
     
     local mission_profile
@@ -296,7 +296,7 @@ cmd_run() {
     # Initialize knowledge graph with clean objective
     echo "→ Initializing knowledge graph..."
     local clean_objective
-    clean_objective=$(jq -r '.objective' "$session_dir/session.json")
+    clean_objective=$(jq -r '.objective' "$session_dir/meta/session.json")
     kg_init "$session_dir" "$clean_objective" >/dev/null
     echo "  ✓ Knowledge graph ready"
     echo ""
@@ -312,11 +312,11 @@ cmd_run() {
             echo "  ✓ Input files processed"
             
             # Store input_dir reference in session metadata
-            local temp_session="$session_dir/session.json.tmp"
+            local temp_session="$session_dir/meta/session.json.tmp"
             jq --arg input_dir "$input_dir" \
                '.input_dir = $input_dir' \
-               "$session_dir/session.json" > "$temp_session" && \
-               mv "$temp_session" "$session_dir/session.json"
+               "$session_dir/meta/session.json" > "$temp_session" && \
+               mv "$temp_session" "$session_dir/meta/session.json"
         else
             echo "  ⚠  Warning: Failed to process some input files"
         fi
@@ -324,11 +324,11 @@ cmd_run() {
     fi
     
     # Store mission name in session metadata for journal
-    local temp_session="$session_dir/session.json.tmp"
+    local temp_session="$session_dir/meta/session.json.tmp"
     jq --arg mission "$mission_name" \
        '.mission_name = $mission' \
-       "$session_dir/session.json" > "$temp_session" && \
-       mv "$temp_session" "$session_dir/session.json"
+       "$session_dir/meta/session.json" > "$temp_session" && \
+       mv "$temp_session" "$session_dir/meta/session.json"
     
     # Run mission orchestration
     run_mission_orchestration "$mission_profile" "$session_dir"

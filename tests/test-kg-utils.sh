@@ -45,7 +45,7 @@ setup_test_kg() {
     mkdir -p "$test_dir"
     
     # Create a sample knowledge graph
-    cat > "$test_dir/knowledge-graph.json" <<'EOF'
+    cat > "$test_dir/40_knowledge/knowledge-graph.json" <<'EOF'
 {
   "entities": [
     {"id": "e1", "name": "Entity 1", "type": "concept"},
@@ -92,7 +92,7 @@ test_extract_claims() {
     setup_test_kg "$test_dir"
     
     local output
-    output=$("$KG_UTILS" extract-claims "$test_dir/knowledge-graph.json")
+    output=$("$KG_UTILS" extract-claims "$test_dir/40_knowledge/knowledge-graph.json")
     
     # Check if output is valid JSON
     if ! echo "$output" | jq -e . > /dev/null 2>&1; then
@@ -120,7 +120,7 @@ test_extract_entities() {
     setup_test_kg "$test_dir"
     
     local output
-    output=$("$KG_UTILS" extract-entities "$test_dir/knowledge-graph.json")
+    output=$("$KG_UTILS" extract-entities "$test_dir/40_knowledge/knowledge-graph.json")
     
     # Check if output is valid JSON
     if ! echo "$output" | jq -e . > /dev/null 2>&1; then
@@ -148,7 +148,7 @@ test_compute_stats() {
     setup_test_kg "$test_dir"
     
     local output
-    output=$("$KG_UTILS" stats "$test_dir/knowledge-graph.json")
+    output=$("$KG_UTILS" stats "$test_dir/40_knowledge/knowledge-graph.json")
     
     # Check if output is valid JSON
     if ! echo "$output" | jq -e . > /dev/null 2>&1; then
@@ -181,7 +181,7 @@ test_filter_confidence() {
     setup_test_kg "$test_dir"
     
     local output
-    output=$("$KG_UTILS" filter-confidence "$test_dir/knowledge-graph.json" 0.8)
+    output=$("$KG_UTILS" filter-confidence "$test_dir/40_knowledge/knowledge-graph.json" 0.8)
     
     # Check if output is valid JSON
     if ! echo "$output" | jq -e . > /dev/null 2>&1; then
@@ -209,7 +209,7 @@ test_filter_category() {
     setup_test_kg "$test_dir"
     
     local output
-    output=$("$KG_UTILS" filter-category "$test_dir/knowledge-graph.json" "efficacy")
+    output=$("$KG_UTILS" filter-category "$test_dir/40_knowledge/knowledge-graph.json" "efficacy")
     
     # Check if output is valid JSON
     if ! echo "$output" | jq -e . > /dev/null 2>&1; then
@@ -237,7 +237,7 @@ test_list_categories() {
     setup_test_kg "$test_dir"
     
     local output
-    output=$("$KG_UTILS" list-categories "$test_dir/knowledge-graph.json")
+    output=$("$KG_UTILS" list-categories "$test_dir/40_knowledge/knowledge-graph.json")
     
     # Check if output is valid JSON
     if ! echo "$output" | jq -e . > /dev/null 2>&1; then

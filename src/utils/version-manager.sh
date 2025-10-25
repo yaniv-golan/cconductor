@@ -193,7 +193,7 @@ get_engine_version() {
 # Returns: Version string from session metadata
 get_session_version() {
     local session_dir="$1"
-    local metadata_file="$session_dir/session.json"
+    local metadata_file="$session_dir/meta/session.json"
 
     if [ ! -f "$metadata_file" ]; then
         if command -v error_missing_file &>/dev/null; then

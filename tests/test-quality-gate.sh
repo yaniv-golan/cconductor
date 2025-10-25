@@ -11,7 +11,8 @@ trap 'rm -rf "$tmp_root"' EXIT
 
 create_session_json() {
     local session_dir="$1"
-    cat >"$session_dir/session.json" <<'EOF'
+    mkdir -p "$session_dir/meta"
+    cat >"$session_dir/meta/session.json" <<'EOF'
 {
     "created_at": "2025-10-14T00:00:00Z",
     "objective": "Test quality gate"
@@ -21,7 +22,9 @@ EOF
 
 mkdir -p "$tmp_root/pass"
 create_session_json "$tmp_root/pass"
-cat >"$tmp_root/pass/knowledge-graph.json" <<'EOF'
+mkdir -p "$tmp_root/pass/knowledge"
+mkdir -p "$tmp_root/pass/artifacts"
+cat >"$tmp_root/pass/knowledge/knowledge-graph.json" <<'EOF'
 {
     "claims": [
         {
@@ -81,7 +84,9 @@ fi
 
 mkdir -p "$tmp_root/fail"
 create_session_json "$tmp_root/fail"
-cat >"$tmp_root/fail/knowledge-graph.json" <<'EOF'
+mkdir -p "$tmp_root/fail/knowledge"
+mkdir -p "$tmp_root/fail/artifacts"
+cat >"$tmp_root/fail/knowledge/knowledge-graph.json" <<'EOF'
 {
     "claims": [
         {

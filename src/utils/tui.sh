@@ -144,7 +144,7 @@ load_sessions_into_arrays() {
 session_details_collect() {
     local session_path="$1"
 
-    if [ ! -f "$session_path/session.json" ]; then
+    if [ ! -f "$session_path/meta/session.json" ]; then
         return 1
     fi
 
@@ -152,13 +152,13 @@ session_details_collect() {
     session_id=$(basename "$session_path")
 
     local objective
-    objective=$(jq -r '.objective // "N/A"' "$session_path/session.json" 2>/dev/null)
+    objective=$(jq -r '.objective // "N/A"' "$session_path/meta/session.json" 2>/dev/null)
     local created
-    created=$(jq -r '.created_at // "N/A"' "$session_path/session.json" 2>/dev/null)
+    created=$(jq -r '.created_at // "N/A"' "$session_path/meta/session.json" 2>/dev/null)
     local mission
-    mission=$(jq -r '.mission_name // "general-research"' "$session_path/session.json" 2>/dev/null)
+    mission=$(jq -r '.mission_name // "general-research"' "$session_path/meta/session.json" 2>/dev/null)
     local status_value
-    status_value=$(jq -r '.status // ""' "$session_path/session.json" 2>/dev/null || echo "")
+    status_value=$(jq -r '.status // ""' "$session_path/meta/session.json" 2>/dev/null || echo "")
 
     local created_display
     created_display=$(session_utils_pretty_timestamp "$created")
@@ -179,17 +179,17 @@ session_details_collect() {
     [ -n "$status_display" ] || status_display="Unknown"
 
     local total_cost=""
-    if [ -f "$session_path/mission-metrics.json" ]; then
-        total_cost=$(jq -r '.total_cost_usd // empty' "$session_path/mission-metrics.json" 2>/dev/null || echo "")
+    if [ -f "$session_path/meta/mission-metrics.json" ]; then
+        total_cost=$(jq -r '.total_cost_usd // empty' "$session_path/meta/mission-metrics.json" 2>/dev/null || echo "")
     fi
 
     local budget_cost=""
     local invocations=""
     local elapsed_minutes=""
-    if [ -f "$session_path/budget.json" ]; then
-        budget_cost=$(jq -r '.spent.cost_usd // empty' "$session_path/budget.json" 2>/dev/null || echo "")
-        invocations=$(jq -r '.spent.agent_invocations // empty' "$session_path/budget.json" 2>/dev/null || echo "")
-        elapsed_minutes=$(jq -r '.spent.elapsed_minutes // empty' "$session_path/budget.json" 2>/dev/null || echo "")
+    if [ -f "$session_path/meta/budget.json" ]; then
+        budget_cost=$(jq -r '.spent.cost_usd // empty' "$session_path/meta/budget.json" 2>/dev/null || echo "")
+        invocations=$(jq -r '.spent.agent_invocations // empty' "$session_path/meta/budget.json" 2>/dev/null || echo "")
+        elapsed_minutes=$(jq -r '.spent.elapsed_minutes // empty' "$session_path/meta/budget.json" 2>/dev/null || echo "")
     fi
 
     local cost_display=""
@@ -224,8 +224,8 @@ session_details_collect() {
     fi
 
     local iterations=""
-    if [ -f "$session_path/dashboard-metrics.json" ]; then
-        iterations=$(jq -r '.iteration // empty' "$session_path/dashboard-metrics.json" 2>/dev/null || echo "")
+    if [ -f "$session_path/viewer/dashboard-metrics.json" ]; then
+        iterations=$(jq -r '.iteration // empty' "$session_path/viewer/dashboard-metrics.json" 2>/dev/null || echo "")
     fi
     local iterations_display="$iterations"
     if [ -z "$iterations_display" ] || [ "$iterations_display" = "null" ]; then
@@ -234,8 +234,8 @@ session_details_collect() {
 
     local report_path=""
     local report_status="Not yet available"
-    if [ -f "$session_path/final/mission-report.md" ]; then
-        report_path="$session_path/final/mission-report.md"
+    if [ -f "$session_path/report/mission-report.md" ]; then
+        report_path="$session_path/report/mission-report.md"
         if [ "$status_value" = "completed_with_advisory" ]; then
             report_status="Complete (quality advisory)"
         else
@@ -244,10 +244,8 @@ session_details_collect() {
     fi
 
     local journal_path=""
-    if [ -f "$session_path/final/research-journal.md" ]; then
-        journal_path="$session_path/final/research-journal.md"
-    elif [ -f "$session_path/research-journal.md" ]; then
-        journal_path="$session_path/research-journal.md"
+    if [ -f "$session_path/report/research-journal.md" ]; then
+        journal_path="$session_path/report/research-journal.md"
     fi
 
     local lines=()
@@ -329,7 +327,7 @@ show_session_process_status() {
     if [ "$found" -eq 0 ]; then
         report+="No active mission process for $session_id."$'\n'
         local status_value
-        status_value=$(jq -r '.status // ""' "$session_path/session.json" 2>/dev/null || echo "")
+        status_value=$(jq -r '.status // ""' "$session_path/meta/session.json" 2>/dev/null || echo "")
         if [ "$status_value" = "in_progress" ] || [ -z "$status_value" ] || [ "$status_value" = "running" ]; then
             report+="Session metadata indicates it may still be in progress."$'\n'
         fi

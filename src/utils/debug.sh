@@ -87,7 +87,7 @@ setup_error_trap() {
 # Execute command with error capture for logging
 # Usage: debug_exec SESSION_DIR OPERATION COMMAND [ARGS...]
 # Returns: exit code of command
-# Side effects: Logs errors to system-errors.log if command fails
+# Side effects: Logs errors to logs/system-errors.log if command fails
 debug_exec() {
     local session_dir="$1"
     local operation="$2"

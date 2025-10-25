@@ -37,7 +37,7 @@ run_case() {
         "$BASH_RUNTIME" "$BASH_RENDER" "$tmp_dir" >/dev/null
     )
 
-    if ! diff -u "$expected_file" "$tmp_dir/final/mission-report.md"; then
+    if ! diff -u "$expected_file" "$tmp_dir/report/mission-report.md"; then
         echo "Render parity failed for case: $case_name" >&2
         exit 1
     fi

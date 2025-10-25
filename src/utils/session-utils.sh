@@ -156,10 +156,10 @@ session_utils_emit_row() {
     local objective=""
     local status="In progress"
 
-    if [ -f "$path/session.json" ]; then
-        created=$(jq -r '.created_at // .started_at // ""' "$path/session.json" 2>/dev/null || echo "")
-        objective=$(jq -r '.objective // .research_question // ""' "$path/session.json" 2>/dev/null || echo "")
-        status=$(jq -r '.status // ""' "$path/session.json" 2>/dev/null || echo "")
+    if [ -f "$path/meta/session.json" ]; then
+        created=$(jq -r '.created_at // .started_at // ""' "$path/meta/session.json" 2>/dev/null || echo "")
+        objective=$(jq -r '.objective // .research_question // ""' "$path/meta/session.json" 2>/dev/null || echo "")
+        status=$(jq -r '.status // ""' "$path/meta/session.json" 2>/dev/null || echo "")
     fi
 
     if [ -z "$created" ] || [ "$created" = "null" ]; then
@@ -175,7 +175,7 @@ session_utils_emit_row() {
         status="In progress"
     fi
 
-    if [ -f "$path/final/mission-report.md" ] && [ "$status" != "Complete (advisory)" ]; then
+    if [ -f "$path/report/mission-report.md" ] && [ "$status" != "Complete (advisory)" ]; then
         status="Complete"
     fi
 

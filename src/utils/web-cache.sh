@@ -54,23 +54,11 @@ web_cache_index_path() {
 }
 
 web_cache_hash_string() {
-    python3 - "$1" <<'PY'
-import hashlib, sys
-data = sys.argv[1].encode("utf-8")
-print(hashlib.sha256(data).hexdigest())
-PY
+    "$SCRIPT_DIR/hash-string.sh" "$1"
 }
 
 web_cache_hash_file() {
-    python3 - "$1" <<'PY'
-import hashlib, sys, pathlib
-path = pathlib.Path(sys.argv[1])
-hasher = hashlib.sha256()
-with path.open("rb") as fh:
-    for chunk in iter(lambda: fh.read(1024 * 1024), b""):
-        hasher.update(chunk)
-print(hasher.hexdigest())
-PY
+    "$SCRIPT_DIR/hash-file.sh" "$1"
 }
 
 web_cache_object_path() {

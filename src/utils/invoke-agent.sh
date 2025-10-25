@@ -137,9 +137,9 @@ extract_agent_metadata() {
                 done <<< "$findings_files"
             else
                 # TIER 2: Filesystem fallback - look for findings files
-                # Check raw/ directory (standard location)
-                if [ -d "$session_dir/raw" ]; then
-                    for findings_file in "$session_dir/raw"/findings-*.json "$session_dir/raw"/*findings*.json; do
+                # Check work/ directory (standard location)
+                if [ -d "$session_dir/work" ]; then
+                    for findings_file in "$session_dir/work"/*/findings-*.json "$session_dir/work"/*/findings*.json; do
                         [ -f "$findings_file" ] || continue
                         local file_entities
                         file_entities=$(jq '[.entities_discovered[]? // empty] | length' "$findings_file" 2>/dev/null || echo "0")
@@ -167,9 +167,9 @@ extract_agent_metadata() {
             
             # TIER 3: KG validation - verify findings were actually integrated
             # (This provides observability - we can log if numbers don't match)
-            if [ -f "$session_dir/knowledge-graph.json" ]; then
+            if [ -f "$session_dir/knowledge/knowledge-graph.json" ]; then
                 local kg_entities
-                kg_entities=$(jq '.entities | length' "$session_dir/knowledge-graph.json" 2>/dev/null || echo "0")
+                kg_entities=$(jq '.entities | length' "$session_dir/knowledge/knowledge-graph.json" 2>/dev/null || echo "0")
                 
                 # If we found findings but KG is still low, log warning
                 if [ "$entities" -gt 5 ] && [ "$kg_entities" -lt 5 ]; then
@@ -177,9 +177,9 @@ extract_agent_metadata() {
                 fi
             fi
             
-            # Count WebSearch tool uses from events.jsonl
-            if [ -f "$session_dir/events.jsonl" ]; then
-                searches=$(grep '"academic-researcher"' "$session_dir/events.jsonl" | \
+            # Count WebSearch tool uses from logs/events.jsonl
+            if [ -f "$session_dir/logs/events.jsonl" ]; then
+                searches=$(grep '"academic-researcher"' "$session_dir/logs/events.jsonl" | \
                           grep '"type":"tool_use_start"' | \
                           grep -c '"tool":"WebSearch"' 2>/dev/null || echo "0")
             fi
@@ -213,9 +213,9 @@ extract_agent_metadata() {
                 done <<< "$findings_files"
             else
                 # TIER 2: Filesystem fallback - look for findings files
-                # Check raw/ directory (standard location)
-                if [ -d "$session_dir/raw" ]; then
-                    for findings_file in "$session_dir/raw"/findings-*.json "$session_dir/raw"/*findings*.json; do
+                # Check work/ directory (standard location)
+                if [ -d "$session_dir/work" ]; then
+                    for findings_file in "$session_dir/work"/*/findings-*.json "$session_dir/work"/*/findings*.json; do
                         [ -f "$findings_file" ] || continue
                         local file_entities
                         file_entities=$(jq '[.entities_discovered[]? // empty] | length' "$findings_file" 2>/dev/null || echo "0")
@@ -243,9 +243,9 @@ extract_agent_metadata() {
             
             # TIER 3: KG validation - verify findings were actually integrated
             # (This provides observability - we can log if numbers don't match)
-            if [ -f "$session_dir/knowledge-graph.json" ]; then
+            if [ -f "$session_dir/knowledge/knowledge-graph.json" ]; then
                 local kg_entities
-                kg_entities=$(jq '.entities | length' "$session_dir/knowledge-graph.json" 2>/dev/null || echo "0")
+                kg_entities=$(jq '.entities | length' "$session_dir/knowledge/knowledge-graph.json" 2>/dev/null || echo "0")
                 
                 # If we found findings but KG is still low, log warning
                 if [ "$entities" -gt 5 ] && [ "$kg_entities" -lt 5 ]; then
@@ -253,9 +253,9 @@ extract_agent_metadata() {
                 fi
             fi
             
-            # Count WebSearch tool uses from events.jsonl
-            if [ -f "$session_dir/events.jsonl" ]; then
-                searches=$(grep '"web-researcher"' "$session_dir/events.jsonl" | \
+            # Count WebSearch tool uses from logs/events.jsonl
+            if [ -f "$session_dir/logs/events.jsonl" ]; then
+                searches=$(grep '"web-researcher"' "$session_dir/logs/events.jsonl" | \
                           grep '"type":"tool_use_start"' | \
                           grep -c '"tool":"WebSearch"' 2>/dev/null || echo "0")
             fi
@@ -292,6 +292,31 @@ extract_agent_metadata() {
         # Return empty object if metadata is invalid
         echo "{}"
     fi
+}
+
+# Extract cost from Claude CLI output.json
+# Returns numeric cost or 0 if missing
+# Usage: extract_cost_from_output "$output_file"
+extract_cost_from_output() {
+    local output_file="$1"
+    
+    if [[ ! -f "$output_file" ]]; then
+        echo "0"
+        return 0
+    fi
+    
+    # Try common paths: .usage.total_cost_usd, .total_cost_usd
+    local cost
+    cost=$(jq -r '.usage.total_cost_usd // .total_cost_usd // 0 | tonumber? // 0' "$output_file" 2>/dev/null || echo "0")
+    
+    # Optional: Log warning if file exists but has no cost field (verbose mode only)
+    if is_verbose_enabled 2>/dev/null && [[ "$cost" == "0" ]] && [[ -s "$output_file" ]]; then
+        if ! jq -e '.usage.total_cost_usd // .total_cost_usd' "$output_file" >/dev/null 2>&1; then
+            echo "  ⚠ No cost field found in $output_file" >&2
+        fi
+    fi
+    
+    echo "$cost"
 }
 
 # Invoke agent with v2 implementation (uses validated patterns)
@@ -484,9 +509,9 @@ invoke_agent_v2() {
     # Load agent timeout from config (before showing start message)
     load_agent_timeout() {
         local agent_name="$1"
-        if [[ -f "$PROJECT_ROOT/src/utils/config-loader.sh" ]]; then
+        if [[ -f "$cconductor_root/src/utils/config-loader.sh" ]]; then
             # shellcheck disable=SC1091
-            source "$PROJECT_ROOT/src/utils/config-loader.sh" 2>/dev/null || { echo "600"; return; }
+            source "$cconductor_root/src/utils/config-loader.sh" 2>/dev/null || { echo "600"; return; }
             local config
             config=$(load_config "agent-timeouts" 2>/dev/null || echo "{}")
             echo "$config" | jq -r ".per_agent_timeouts.\"$agent_name\" // .default_timeout_seconds // 600"
@@ -553,8 +578,10 @@ invoke_agent_v2() {
     # Set agent name for hooks (enables heartbeat tracking)
     export CCONDUCTOR_AGENT_NAME="$agent_name"
 
+    local heartbeat_file="$session_dir/.agent-heartbeat"
+
     # Initialize heartbeat file
-    echo "${agent_name}:$(get_epoch)" > "$session_dir/.agent-heartbeat" 2>/dev/null || true
+    echo "${agent_name}:$(get_epoch)" > "$heartbeat_file" 2>/dev/null || true
 
     # Read task from input file
     local task
@@ -568,8 +595,8 @@ invoke_agent_v2() {
 
     # Start watchdog in background to monitor for inactivity
     local watchdog_pid=""
-    if [[ -f "$PROJECT_ROOT/src/utils/agent-watchdog.sh" ]]; then
-        bash "$PROJECT_ROOT/src/utils/agent-watchdog.sh" \
+    if [[ -f "$cconductor_root/src/utils/agent-watchdog.sh" ]]; then
+        bash "$cconductor_root/src/utils/agent-watchdog.sh" \
             "$session_dir" "$agent_pid" "$agent_timeout" "$agent_name" &
         watchdog_pid=$!
     fi
@@ -583,6 +610,9 @@ invoke_agent_v2() {
         kill "$watchdog_pid" 2>/dev/null || true
         wait "$watchdog_pid" 2>/dev/null || true
     fi
+
+    # Clean up heartbeat file (no stale state between agents)
+    rm -f "$heartbeat_file" 2>/dev/null || true
 
     # Check if agent timed out (exit code 124 = timeout, 143 = SIGTERM)
     if [[ $agent_exit_code -eq 124 ]] || [[ $agent_exit_code -eq 143 ]]; then
@@ -605,9 +635,9 @@ invoke_agent_v2() {
         # Check if output file is empty (synthesis-agent may produce artifacts without JSON)
         if [ ! -s "$output_file" ]; then
             # For synthesis-agent, check if expected artifacts were created
-            if [[ "$agent_name" == "synthesis-agent" ]] && [ -f "$session_dir/final/mission-report.md" ]; then
+            if [[ "$agent_name" == "synthesis-agent" ]] && [ -f "$session_dir/report/mission-report.md" ]; then
                 # Create minimal success JSON for validation
-                echo '{"type":"result","subtype":"success","result":"Mission report generated at final/mission-report.md"}' > "$output_file"
+                echo '{"type":"result","subtype":"success","result":"Mission report generated at report/mission-report.md"}' > "$output_file"
             else
                 # Empty output is a failure for other agents
                 echo "✗ Agent $agent_name produced no output" >&2
@@ -692,10 +722,9 @@ invoke_agent_v2() {
         end_time=$(($(get_epoch) * 1000))
         local duration=$((end_time - start_time))
         
-        # Try to extract cost from Claude's response
-        # Common paths: .usage.total_cost_usd, .total_cost_usd
+        # Extract cost from Claude's response using shared helper
         local cost
-        cost=$(jq -r '.usage.total_cost_usd // .total_cost_usd // 0' "$output_file" 2>/dev/null || echo "0")
+        cost=$(extract_cost_from_output "$output_file")
         
         # Extract agent-specific metadata for research journal view
         local metadata
@@ -711,7 +740,7 @@ invoke_agent_v2() {
         # Integrate findings into knowledge graph for research agents
         if [[ "$agent_name" =~ ^(web-researcher|academic-researcher|pdf-analyzer|code-analyzer|fact-checker|market-analyzer)$ ]]; then
             if [ -n "${session_dir:-}" ]; then
-                local agent_output_file="$session_dir/agent-output-${agent_name}.json"
+                local agent_output_file="$session_dir/work/${agent_name}/output.json"
                 if [ -f "$agent_output_file" ]; then
                     # Call standalone wrapper via subprocess (handles all dependencies internally)
                     # Use cconductor_root (not PROJECT_ROOT) - it's the reliable variable discovered earlier
@@ -831,6 +860,7 @@ invoke_agent_v2() {
 # Export functions
 export -f check_claude_cli
 export -f extract_agent_metadata
+export -f extract_cost_from_output
 export -f invoke_agent_v2
 
 # CLI interface

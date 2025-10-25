@@ -42,19 +42,19 @@ tmp_dir() {
 # Case 1: New path already created by synthesis-agent
 session_new=$(tmp_dir)
 trap 'rm -rf "$session_new" "$session_legacy" "$session_missing"' EXIT
-mkdir -p "$session_new/final"
-echo "# Sample Report" > "$session_new/final/mission-report.md"
+mkdir -p "$session_new/report"
+echo "# Sample Report" > "$session_new/report/mission-report.md"
 
 if validate_synthesis_outputs "$session_new" "synthesis-agent" >/dev/null 2>&1; then
-    assert_success "validate_synthesis_outputs accepts final/mission-report.md"
+    assert_success "validate_synthesis_outputs accepts report/mission-report.md"
 else
-    assert_failure "validate_synthesis_outputs rejected valid final/mission-report.md"
+    assert_failure "validate_synthesis_outputs rejected valid report/mission-report.md"
 fi
 
-if [ -f "$session_new/final/mission-report.md" ]; then
-    assert_success "final/mission-report.md exists for new session"
+if [ -f "$session_new/report/mission-report.md" ]; then
+    assert_success "report/mission-report.md exists for new session"
 else
-    assert_failure "final/mission-report.md missing after successful validation"
+    assert_failure "report/mission-report.md missing after successful validation"
 fi
 
 # Case 2: Legacy path should be rejected
@@ -67,10 +67,10 @@ else
     assert_success "validate_synthesis_outputs rejects legacy mission-report.md"
 fi
 
-if [ ! -f "$session_legacy/final/mission-report.md" ]; then
+if [ ! -f "$session_legacy/report/mission-report.md" ]; then
     assert_success "No final report created when only legacy file exists"
 else
-    assert_failure "Legacy validation created unexpected final/mission-report.md"
+    assert_failure "Legacy validation created unexpected report/mission-report.md"
 fi
 
 # Case 3: Missing report should fail validation and return empty relative path
@@ -81,10 +81,10 @@ else
     assert_success "validate_synthesis_outputs fails when report is missing"
 fi
 
-if [ ! -f "$session_missing/final/mission-report.md" ]; then
+if [ ! -f "$session_missing/report/mission-report.md" ]; then
     assert_success "No final report present when validation fails"
 else
-    assert_failure "Unexpected final/mission-report.md created for missing report"
+    assert_failure "Unexpected report/mission-report.md created for missing report"
 fi
 
 echo ""
