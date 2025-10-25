@@ -8,6 +8,18 @@ set -euo pipefail
 CCONDUCTOR_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 VERSION="$(cat "$CCONDUCTOR_ROOT/VERSION" 2>/dev/null | tr -d '\n' || echo "unknown")"
 
+# Prefer Homebrew/USR local bin so subprocesses (hooks, agents, tests) pick up
+# modern bash by default. This runs before we spawn any child shells.
+prepend_path_if_exists() {
+    local dir="$1"
+    if [[ -d "$dir" && ":$PATH:" != *":$dir:"* ]]; then
+        export PATH="$dir:$PATH"
+    fi
+}
+
+prepend_path_if_exists "/opt/homebrew/bin"
+prepend_path_if_exists "/usr/local/bin"
+
 # Ensure we run with Bash 4+ by preferring Homebrew bash if available
 if [ "${BASH_VERSINFO[0]}" -lt 4 ]; then
     if command -v /opt/homebrew/bin/bash >/dev/null 2>&1; then
