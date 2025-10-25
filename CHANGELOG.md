@@ -52,6 +52,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Better logging: "timed out" vs "failed (exit code: N)" for clearer diagnostics
   - Strengthened prompt to prevent planning loops: agent must complete with summary after writing JSON
   - Added explicit output format template to ensure consistent response structure
+- **TUI Session Extension**: Interactive mode now prompts for session extension when resuming completed sessions
+  - Automatically detects completed sessions and offers extension options
+  - Interactive prompts for additional iterations and time
+  - Input validation ensures only positive integers accepted
+  - Works seamlessly with refinement guidance
 
 ### Changed
 
@@ -60,6 +65,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Critical Production Bugs**:
+  - **Budget limits always zero (CRITICAL)**: Fixed field name mismatch (`budget_usd` → `max_cost_usd`) that silently disabled all budget enforcement
+  - **Entity updates dropping metadata (HIGH)**: Fixed merge order in `kg_add_entity` to preserve IDs, timestamps, and system fields during updates
+  - **Evidence citation mismatch (HIGH)**: Added source-to-citation ID translation mapping so `evidence_support.source_ids` correctly reference actual citation IDs
+  - **Orchestration completion (CRITICAL)**: Fixed missions looping indefinitely after quality gate failures in advisory mode; synthesis now proceeds and completion check accepts advisory failures
+  - **Orchestration logging resilience**: Added error handling and fallback entries to ensure audit trail continuity even when JSON operations fail
 - **Session Resume Bug**: Fixed `cconductor sessions resume` command not passing session ID and arguments to handler, causing "Session ID required" error. The command now correctly forwards all arguments after the subcommand.
 - **Resume UX**: Added helpful message when attempting to resume a session that has exhausted its iterations/time, with actionable suggestions including the new extension flags.
 - **Session Extension**: Added `--extend-iterations N` and `--extend-time M` flags to `cconductor sessions resume` command:
