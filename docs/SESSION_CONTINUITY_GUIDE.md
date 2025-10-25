@@ -141,7 +141,7 @@ stateDiagram-v2
 Sessions are tracked in:
 
 ```
-research-sessions/session_<id>/
+research-sessions/mission_<id>/
   .agent-sessions/
     research-coordinator.session    # Contains session_id
     research-coordinator.metadata   # Turn count, timestamps

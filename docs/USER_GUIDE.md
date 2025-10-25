@@ -465,14 +465,14 @@ If you have PDFs, documents, or notes to analyze alongside web research:
 1. **Session Created**:
 
 ```
-Latest session marker: session_1759420487
+Latest session marker: mission_1759420487
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
  Deep CConductor
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 Research Question: What causes climate change?
-Session: session_1759420487
+Session: mission_1759420487
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ```
 
@@ -496,7 +496,7 @@ Claude Code will now orchestrate the research agents...
 ```
 Research Complete!
 
-Report: research-sessions/session_1759420487/final/mission-report.md
+Report: research-sessions/mission_1759420487/report/mission-report.md
 Quality Score: 82/100 - VERY GOOD
 ```
 
@@ -506,12 +506,12 @@ After research completes:
 
 ```
 research-sessions/
-  session_1759420487/           ← Your session directory
-    final/mission-report.md          ← Main report (read this!)
-    metadata.json               ← Session info
-    raw/                        ← Raw research data
-    intermediate/               ← Processing files
-    final/                      ← Final outputs
+  mission_1759420487/           ← Your session directory
+    report/mission-report.md      ← Main report (read this!)
+    meta/session.json        ← Session info
+    work/                         ← Agent working directories
+    artifacts/                    ← Agent outputs
+    report/                       ← Final deliverables
 ```
 
 **Quick access**:
@@ -522,7 +522,7 @@ research-sessions/
 
 ### Understanding Output
 
-Your `final/mission-report.md` contains:
+Your `report/mission-report.md` contains:
 
 #### 1. Header
 
@@ -587,7 +587,7 @@ A **session** is one research execution. Each time you run `./cconductor "questi
 **Default naming**:
 
 ```
-session_1759420487  ← Timestamp-based ID
+mission_1759420487  ← Timestamp-based ID
 ```
 
 **Why timestamps**: Ensures unique names, sorts chronologically.
@@ -605,14 +605,14 @@ session_1759420487  ← Timestamp-based ID
 **Output**:
 
 ```
-Latest session: session_1759420487
-Location: /Users/you/cconductor/research-sessions/session_1759420487
+Latest session: mission_1759420487
+Location: /Users/you/cconductor/research-sessions/mission_1759420487
 
-✓ Report available: .../final/mission-report.md
+✓ Report available: .../report/mission-report.md
 
 View with:
-  cat /path/to/final/mission-report.md
-  open /path/to/final/mission-report.md
+  cat /path/to/report/mission-report.md
+  open /path/to/report/mission-report.md
 ```
 
 #### Method 2: List all sessions
@@ -628,8 +628,8 @@ View with:
 ```bash
 cd research-sessions/
 ls -lt  # Shows newest first
-cd session_1759420487/
-cat final/mission-report.md
+cd mission_1759420487/
+cat report/mission-report.md
 ```
 
 ### The `.latest` Marker
@@ -648,7 +648,7 @@ cat research-sessions/.latest
 cd research-sessions/$(cat research-sessions/.latest)/
 
 # Open latest report
-cat research-sessions/$(cat research-sessions/.latest)/final/mission-report.md
+cat research-sessions/$(cat research-sessions/.latest)/report/mission-report.md
 
 # Or just use
 ./cconductor sessions latest  # Simpler!
@@ -736,10 +736,10 @@ CConductor supports different approaches (configured in `config/cconductor-modes
 ls research-sessions/
 
 # Navigate to session
-cd research-sessions/session_1759420487/
+cd research-sessions/mission_1759420487/
 
 # Read report
-cat final/mission-report.md
+cat report/mission-report.md
 ```
 
 ### Viewing the Research Journal
@@ -778,7 +778,7 @@ bash src/utils/export-journal.sh "$SESSION_DIR/$(cat "$SESSION_DIR/.latest")"
 bash src/utils/export-journal.sh research-sessions/mission_123
 ```
 
-The exported journal (`final/research-journal.md`) includes:
+The exported journal (`report/research-journal.md`) includes:
 - Complete timeline of all research activities
 - Agent reasoning and decision-making process
 - All entities discovered with descriptions
@@ -829,7 +829,7 @@ Docker uses container technology [1]. Released in 2013 [2].
 
 ```bash
 # Copy latest report
-cp research-sessions/$(cat research-sessions/.latest)/final/mission-report.md ~/Documents/
+cp research-sessions/$(cat research-sessions/.latest)/report/mission-report.md ~/Documents/
 ```
 
 ---
@@ -863,7 +863,7 @@ ls -ltr research-sessions/ # Oldest first
 **By content**:
 
 ```bash
-grep -r "keyword" research-sessions/*/final/mission-report.md
+grep -r "keyword" research-sessions/*/report/mission-report.md
 ```
 
 ### Resuming Research

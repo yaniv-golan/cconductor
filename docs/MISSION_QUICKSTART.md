@@ -120,12 +120,12 @@ The orchestrator will:
 ### 5. Review Results
 
 Outputs in session directory:
-- `final/mission-report.md` - Comprehensive mission report
-- `orchestration-log.jsonl` - Decision log with rationale
+- `report/mission-report.md` - Comprehensive mission report
+- `logs/orchestration.jsonl` - Decision log with rationale
+- `logs/events.jsonl` - Event stream
 - `artifacts/manifest.json` - All artifacts produced
-- `knowledge-graph.json` - Entities, claims, handoffs
-- `budget.json` - Budget tracking
-- `events.jsonl` - Event stream
+- `knowledge/knowledge-graph.json` - Entities, claims, handoffs
+- `meta/session.json` - Session metadata and budget tracking
 
 ## Creating Custom Missions
 
@@ -269,7 +269,7 @@ Your agent should appear in the "User agents" section.
 
 ### Decision Log
 
-The orchestrator logs every major decision to `orchestration-log.jsonl`:
+The orchestrator logs every major decision to `logs/orchestration.jsonl`:
 
 ```json
 {
@@ -290,13 +290,13 @@ The orchestrator logs every major decision to `orchestration-log.jsonl`:
 
 ```bash
 # Pretty-print decisions
-cat session/orchestration-log.jsonl | jq '.'
+cat session/logs/orchestration.jsonl | jq '.'
 
 # Filter by type
-cat session/orchestration-log.jsonl | jq 'select(.type == "agent_invocation")'
+cat session/logs/orchestration.jsonl | jq 'select(.type == "agent_invocation")'
 
 # Extract rationale
-cat session/orchestration-log.jsonl | jq -r '.decision.rationale'
+cat session/logs/orchestration.jsonl | jq -r '.decision.rationale'
 ```
 
 ## Mission Templates
@@ -346,7 +346,7 @@ Provide strategic hints without micromanaging:
 ### 5. Monitor Budget
 Check budget status during execution:
 ```bash
-cat session/budget.json | jq '.spent'
+cat session/meta/budget.json | jq '.spent'
 ```
 
 ## Troubleshooting

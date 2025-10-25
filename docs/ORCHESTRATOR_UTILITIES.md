@@ -93,19 +93,19 @@ Bash: src/utils/calculate.sh growth 10000000 15000000
 **Examples**:
 ```bash
 # Get comprehensive stats
-Bash: src/utils/kg-utils.sh stats knowledge-graph.json
+Bash: src/utils/kg-utils.sh stats knowledge/knowledge-graph.json
 # Output: {total_claims: 42, avg_confidence: 0.85, claims_by_status: {...}, ...}
 
 # Get high-confidence claims
-Bash: src/utils/kg-utils.sh filter-confidence knowledge-graph.json 0.8
+Bash: src/utils/kg-utils.sh filter-confidence knowledge/knowledge-graph.json 0.8
 # Output: {filtered_claims: [...], total: 28}
 
 # Get claims in specific category
-Bash: src/utils/kg-utils.sh filter-category knowledge-graph.json "efficacy"
+Bash: src/utils/kg-utils.sh filter-category knowledge/knowledge-graph.json "efficacy"
 # Output: {filtered_claims: [...], total: 15}
 
 # List all categories
-Bash: src/utils/kg-utils.sh list-categories knowledge-graph.json
+Bash: src/utils/kg-utils.sh list-categories knowledge/knowledge-graph.json
 # Output: {categories: ["efficacy", "safety", "dosage", ...]}
 ```
 
@@ -156,7 +156,7 @@ Bash: src/utils/data-utils.sh group-by findings.json "category"
 ### Pattern 1: Assess Progress
 ```bash
 # Check knowledge graph state
-Bash: src/utils/kg-utils.sh stats knowledge-graph.json
+Bash: src/utils/kg-utils.sh stats knowledge/knowledge-graph.json
 
 # Read the output (saved to a file)
 Read: kg-stats.json
@@ -181,7 +181,7 @@ Bash: src/utils/calculate.sh percentage 2500000 10000000
 Bash: src/utils/data-utils.sh consolidate > all-findings.json
 
 # Extract high-confidence claims
-Bash: src/utils/kg-utils.sh filter-confidence knowledge-graph.json 0.8 > high-conf.json
+Bash: src/utils/kg-utils.sh filter-confidence knowledge/knowledge-graph.json 0.8 > high-conf.json
 
 # Pass to synthesis agent as artifacts
 ```
@@ -189,10 +189,10 @@ Bash: src/utils/kg-utils.sh filter-confidence knowledge-graph.json 0.8 > high-co
 ### Pattern 4: Gap Analysis
 ```bash
 # List categories
-Bash: src/utils/kg-utils.sh list-categories knowledge-graph.json
+Bash: src/utils/kg-utils.sh list-categories knowledge/knowledge-graph.json
 
 # Get claims per category
-Bash: src/utils/kg-utils.sh filter-category knowledge-graph.json "safety"
+Bash: src/utils/kg-utils.sh filter-category knowledge/knowledge-graph.json "safety"
 
 # Identify: "Safety category only has 3 claims, need more research"
 ```
@@ -204,7 +204,7 @@ The `pre-tool-use.sh` hook validates all Bash commands from the orchestrator:
 ```bash
 # ✅ ALLOWED
 Bash: src/utils/calculate.sh calc "123 * 456"
-Bash: src/utils/kg-utils.sh stats knowledge-graph.json
+Bash: src/utils/kg-utils.sh stats knowledge/knowledge-graph.json
 Bash: src/utils/data-utils.sh consolidate
 
 # ❌ BLOCKED

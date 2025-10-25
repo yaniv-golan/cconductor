@@ -74,7 +74,7 @@
 - Provide docs for contributors describing librarian pipeline, directory layout, and how to manually refresh digests.
 
 ### 3.6 Observability & Testing
-- Telemetry: Record counts of library hits vs. fresh WebFetch in `dashboard-metrics.json`.
+- Telemetry: Record counts of library hits vs. fresh WebFetch in `viewer/dashboard-metrics.json`.
 - Tests:
   - Unit tests for manifest writer & diff logic (`tests/test-digital-librarian.sh`).
   - Integration test running a fake mission twice; second run should consume only library digests.

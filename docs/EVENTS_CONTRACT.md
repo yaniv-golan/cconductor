@@ -2,7 +2,7 @@
 
 ## Overview
 
-CConductor logs structured events to `session/events.jsonl` for real-time monitoring, research journal generation, and dashboard display.
+CConductor logs structured events to `session/logs/events.jsonl` for real-time monitoring, research journal generation, and dashboard display.
 
 This document defines the event schema contract, ensuring backward compatibility and enabling extensions.
 
@@ -350,19 +350,19 @@ All events follow this base schema:
 ## Event Stream Files
 
 ### Primary Stream
-- **Path**: `session/events.jsonl`
+- **Path**: `session/logs/events.jsonl`
 - **Format**: JSONL (one JSON object per line)
 - **Rotation**: At 10MB, rotate to `events.1.jsonl`, `events.2.jsonl`, etc.
 - **Consumers**: Dashboard, journal exporter, TUI
 
 ### Orchestration Log
-- **Path**: `session/orchestration-log.jsonl`
+- **Path**: `session/logs/orchestration.jsonl`
 - **Format**: JSONL
 - **Content**: High-level orchestrator decisions
 - **Purpose**: Separate detailed orchestration reasoning from event stream
 
 ### Dashboard Metrics
-- **Path**: `session/dashboard-metrics.json`
+- **Path**: `session/viewer/dashboard-metrics.json`
 - **Format**: JSON
 - **Purpose**: Aggregated metrics for dashboard display
 - **Update**: Real-time as events occur
@@ -387,14 +387,14 @@ Event types for mission system are added incrementally. Old consumers can ignore
 
 ### Tailing Events
 ```bash
-tail -f session/events.jsonl | while read line; do
+tail -f session/logs/events.jsonl | while read line; do
   echo "$line" | jq -r '.message'
 done
 ```
 
 ### Dashboard Integration
 ```bash
-# Dashboard polls events.jsonl every second
+# Dashboard polls logs/events.jsonl every second
 # Parses new lines and updates UI
 ```
 
@@ -408,16 +408,16 @@ cconductor export journal <session_dir>
 
 ```bash
 # Validate event schema
-cat session/events.jsonl | while read line; do
+cat session/logs/events.jsonl | while read line; do
   echo "$line" | jq -e '.timestamp and .type and .message' >/dev/null || \
     echo "Invalid event: $line"
 done
 
 # Count event types
-cat session/events.jsonl | jq -r '.type' | sort | uniq -c
+cat session/logs/events.jsonl | jq -r '.type' | sort | uniq -c
 
 # Filter by agent
-cat session/events.jsonl | jq 'select(.agent == "market-analyzer")'
+cat session/logs/events.jsonl | jq 'select(.agent == "market-analyzer")'
 ```
 
 ## Migration Notes

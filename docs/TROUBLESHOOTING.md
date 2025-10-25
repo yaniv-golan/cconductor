@@ -19,7 +19,8 @@
 8. [Configuration Problems](#configuration-problems)
 9. [Session & File Issues](#session--file-issues)
 10. [Dashboard & Observability Issues](#dashboard--observability-issues)
-11. [Getting Help](#getting-help)
+11. [Hook Debugging](#hook-debugging)
+12. [Getting Help](#getting-help)
 
 ---
 
@@ -616,7 +617,7 @@ find research-sessions -name "*.lock"
 find research-sessions -name "*.lock" -exec rm -rf {} +
 
 # Or for specific session
-rm -rf research-sessions/session_*/knowledge-graph.json.lock
+rm -rf research-sessions/session_*/knowledge/knowledge-graph.json.lock
 rm -rf research-sessions/session_*/task-queue.json.lock  # Legacy sessions only
 ```
 
@@ -666,10 +667,10 @@ ls -la research-sessions/ | grep my-session
 ls research-sessions/my-session/
 
 # Should have:
-# - raw/ directory
+# - work/ directory
 # - intermediate/ directory
-# - research-question.txt (in raw/)
-# - research-plan.json (in raw/)
+# - research-question.txt (in inputs/)
+# - research-plan.json (in work/)
 ```
 
 **4. If session is corrupted**:
@@ -862,8 +863,8 @@ Add known good sources to `knowledge-base-custom/`:
 **2. Check what mode was used**:
 
 ```bash
-# Look in research-sessions/[session]/raw/research-plan.json
-jq '.mode' research-sessions/[session]/raw/research-plan.json
+# Look in research-sessions/[session]/work/research-plan.json
+jq '.mode' research-sessions/[session]/work/*/research-plan.json
 ```
 
 **3. Specify domain in question**:
@@ -1339,10 +1340,10 @@ unset CCONDUCTOR_SECURITY_PROFILE
 
 ```bash
 # Report is always here:
-ls research-sessions/*/final/mission-report.md
+ls research-sessions/*/report/mission-report.md
 
 # Or for specific session:
-cat research-sessions/session_*/final/mission-report.md
+cat research-sessions/session_*/report/mission-report.md
 ```
 
 **4. Check .latest marker**:
@@ -1352,7 +1353,7 @@ cat research-sessions/.latest
 # Shows latest session ID
 
 # View that report:
-cat research-sessions/$(cat research-sessions/.latest)/final/mission-report.md
+cat research-sessions/$(cat research-sessions/.latest)/report/mission-report.md
 ```
 
 ---
@@ -1375,8 +1376,8 @@ du -sh research-sessions/*
 du -sh research-sessions/* | sort -h | tail -5
 
 # Check what's using space
-du -sh research-sessions/session_*/raw
-du -sh research-sessions/session_*/intermediate
+du -sh research-sessions/mission_*/work
+du -sh research-sessions/mission_*/cache
 ```
 
 **Common causes**:
@@ -1424,9 +1425,9 @@ rm -rf research-sessions/session_old*
 # Keep only final reports, remove intermediate data
 # WARNING: Can't resume these sessions afterward
 for session in research-sessions/session_*; do
-  # Keep: final/mission-report.md, research-question.txt
-  # Remove: raw/, intermediate/ (large)
-  rm -rf "$session/raw"
+  # Keep: report/mission-report.md, inputs/prompt.txt
+  # Remove: work/, cache/ (large)
+  rm -rf "$session/work"
   rm -rf "$session/intermediate"
 done
 ```
@@ -1447,11 +1448,12 @@ jq parse error
 
 ```bash
 # Check which file is corrupted
-jq empty research-sessions/session_*/knowledge-graph.json
-jq empty research-sessions/session_*/task-queue.json  # Legacy sessions only
+jq empty research-sessions/mission_*/knowledge/knowledge-graph.json
+jq empty research-sessions/mission_*/meta/session.json
 
 # Check file sizes (0 bytes = corrupted)
-ls -lh research-sessions/session_*/*.json
+ls -lh research-sessions/mission_*/knowledge/*.json
+ls -lh research-sessions/mission_*/meta/*.json
 ```
 
 **Solutions**:
@@ -1464,10 +1466,10 @@ ls -lh research-sessions/session_*/*.json
 
 **If research completed but files corrupted**:
 
-1. Check if `final/mission-report.md` is intact:
+1. Check if `report/mission-report.md` is intact:
 
    ```bash
-   cat research-sessions/session_*/final/mission-report.md
+   cat research-sessions/session_*/report/mission-report.md
    ```
 
 2. If report is good, you have your results (other files don't matter)
@@ -1490,7 +1492,7 @@ ls -lh research-sessions/session_*/*.json
 
 - Dashboard loads but "Tool Activity" panel is empty
 - No tool events in timeline
-- events.jsonl file is empty or missing
+- logs/events.jsonl file is empty or missing
 
 **Root Cause (Fixed in October 2025)**:
 
@@ -1536,17 +1538,17 @@ cat research-sessions/session_XXXXX/.claude/settings.json | jq .hooks
 #                  ✓ WebSearch (1.2s)
 
 # 4. Check events logged
-cat research-sessions/session_*/events.jsonl | head -5
+cat research-sessions/session_*/logs/events.jsonl | head -5
 # Should show tool_use_start and tool_use_complete events
 ```
 
 ---
 
-### Events Not Logging to events.jsonl
+### Events Not Logging to logs/events.jsonl
 
 **Symptoms**:
 
-- Research runs but events.jsonl is empty
+- Research runs but logs/events.jsonl is empty
 - Hooks don't appear to fire
 - No real-time tool visibility
 
@@ -1595,7 +1597,7 @@ export CCONDUCTOR_SESSION_DIR=$(pwd)
 echo '{"tool_name":"TestTool"}' | .claude/hooks/pre-tool-use.sh
 
 # Should output: 🔧 PRE-HOOK: TestTool
-# And create entry in events.jsonl
+# And create entry in logs/events.jsonl
 ```
 
 ---
@@ -1625,7 +1627,7 @@ JavaScript auto-refresh may be disabled or browser may be blocking it.
 ./cconductor view-dashboard --regenerate
 
 # 4. Verify metrics file exists
-ls -lh research-sessions/session_*/dashboard-metrics.json
+ls -lh research-sessions/mission_*/viewer/dashboard-metrics.json
 ```
 
 ---
@@ -1805,7 +1807,7 @@ CCONDUCTOR_DEBUG=1 ./cconductor resume session_XXX
    - Prints errors to stderr in real-time
    - Includes timing information
 
-3. **Logs everything to system-errors.log**
+3. **Logs everything to logs/system-errors.log**
    - All errors and warnings captured
    - Available for post-mortem analysis
    - Includes full context
@@ -1816,7 +1818,7 @@ CCONDUCTOR_DEBUG=1 ./cconductor resume session_XXX
 $ CCONDUCTOR_DEBUG=1 ./cconductor "test query"
 🐛 Debug mode enabled
    All errors will be logged and displayed
-   Check system-errors.log in session directory for details
+   Check logs/system-errors.log in session directory for details
 
 + CCONDUCTOR_ROOT=/path/to/cconductor
 + source /path/to/cconductor/src/utils/cli-parser.sh
@@ -1833,17 +1835,17 @@ After running with debug mode (or without), check the error log:
 
 ```bash
 # View all errors
-cat research-sessions/mission_XXX/system-errors.log
+cat research-sessions/mission_XXX/logs/system-errors.log
 
 # View recent errors (skip header comments)
-tail -20 research-sessions/mission_XXX/system-errors.log | grep -v '^#' | jq .
+tail -20 research-sessions/mission_XXX/logs/system-errors.log | grep -v '^#' | jq .
 
 # Count errors by type
-grep '"severity": "error"' research-sessions/mission_XXX/system-errors.log | \
+grep '"severity": "error"' research-sessions/mission_XXX/logs/system-errors.log | \
     jq -r '.operation' | sort | uniq -c
 
 # Watch errors in real-time
-tail -f research-sessions/mission_XXX/system-errors.log | grep -v '^#' | jq .
+tail -f research-sessions/mission_XXX/logs/system-errors.log | grep -v '^#' | jq .
 ```
 
 ### Common Debug Scenarios
@@ -1853,7 +1855,7 @@ tail -f research-sessions/mission_XXX/system-errors.log | grep -v '^#' | jq .
 ```bash
 CCONDUCTOR_DEBUG=1 ./cconductor "test"
 # Look for dashboard_launch errors in output
-# Check system-errors.log for details
+# Check logs/system-errors.log for details
 ```
 
 **Scenario 2: Agent returning invalid JSON**
@@ -1893,6 +1895,100 @@ unset CCONDUCTOR_DEBUG
 - [Error Log Format](ERROR_LOG_FORMAT.md) - Error log structure and patterns
 - [Dashboard Guide](DASHBOARD_GUIDE.md) - Dashboard shows error counts
 - Configuration Reference - Configure error logging behavior
+
+---
+
+## Hook Debugging
+
+### What are Hooks?
+
+Hooks are scripts that run automatically before and after each tool use (web search, file read, etc.) to:
+- Log tool activity to `logs/events.jsonl`
+- Display real-time tool messages in verbose mode
+- Track cache usage and performance
+
+### When to Check Hook Debug Logs
+
+Check hook debug logs if you experience:
+- Missing tool messages in verbose mode
+- No events appearing in `logs/events.jsonl`
+- Tool tracking not working
+- Cache behavior issues
+- Hook-related errors
+
+### Viewing Hook Debug Logs
+
+Hook debug information is automatically logged to:
+
+```bash
+research-sessions/mission_XXX/logs/hook-debug.log
+```
+
+**To view hook debug log:**
+
+```bash
+# View entire log
+cat research-sessions/mission_*/logs/hook-debug.log
+
+# Watch in real-time
+tail -f research-sessions/mission_*/logs/hook-debug.log
+
+# Search for specific issues
+grep "error\|fail\|session_dir" research-sessions/mission_*/logs/hook-debug.log
+```
+
+### What Hook Debug Logs Show
+
+The debug log includes:
+- Hook invocation timestamps
+- Tool names and agents being invoked
+- Session directory detection
+- Project root resolution
+- Library directory detection
+- Event logging attempts
+- Lock acquisition status
+
+### Common Hook Issues
+
+**Issue: Hook debug log is empty or missing**
+
+This usually means:
+- Session hasn't started any tool usage yet
+- Hooks aren't being called by Claude Code (rare)
+- Session directory wasn't properly detected
+
+**Solution:**
+```bash
+# Check if logs/events.jsonl is being populated
+ls -lh research-sessions/mission_*/logs/events.jsonl
+
+# If logs/events.jsonl exists but hook-debug.log doesn't, hooks may be failing silently
+# Check for any session-level errors
+ls -la research-sessions/mission_*/logs/
+```
+
+**Issue: "session_dir unbound variable" error**
+
+Fixed in v0.4.0. Update cconductor if you see this.
+
+**Issue: Events logging to wrong location**
+
+Fixed in v0.4.0. All events now log to `logs/events.jsonl`.
+
+### Hook Architecture
+
+Hooks write to multiple locations:
+- `logs/events.jsonl` - Structured event log (main output)
+- `logs/hook-debug.log` - Diagnostic information
+- `logs/.events.lock` - Lock file for atomic writes
+
+The event-tailer process reads `logs/events.jsonl` and displays tool activity in your terminal in verbose mode.
+
+### See Also
+
+- [Events Contract](EVENTS_CONTRACT.md) - Event structure and types
+- [Dashboard Guide](DASHBOARD_GUIDE.md) - Dashboard reads from logs/events.jsonl
+- Verbose Mode (above) - See tool messages in real-time
 
 ---
 
@@ -1995,7 +2091,7 @@ config/security-config.json
 config/cconductor-modes.json
 
 # Session data
-research-sessions/[session-name]/final/mission-report.md
+research-sessions/[session-name]/report/mission-report.md
 
 # Logs
 logs/research.log

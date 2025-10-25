@@ -17,19 +17,19 @@ Each research session creates a directory with complete state in your OS-appropr
 
 **Session locations**:
 
-- **macOS**: `~/Library/Application Support/CConductor/research-sessions/session_XXXXX/`
-- **Linux**: `~/.local/share/cconductor/research-sessions/session_XXXXX/`
+- **macOS**: `~/Library/Application Support/CConductor/research-sessions/mission_XXXXX/`
+- **Linux**: `~/.local/share/cconductor/research-sessions/mission_XXXXX/`
 
 **Session structure**:
 
 ```
 session_1234567890/
-├── session.json              # Metadata (question, timestamps, version, status)
-├── knowledge-graph.json      # All findings (entities, claims, citations, gaps)
+├── meta/session.json              # Metadata (question, timestamps, version, status)
+├── knowledge/knowledge-graph.json      # All findings (entities, claims, citations, gaps)
 ├── task-queue.json           # Tasks (legacy - replaced by orchestration)
-├── raw/                      # Raw research data from agents
-├── intermediate/             # Processing artifacts
-└── final/mission-report.md        # Final report (when complete)
+├── work/                      # Raw research data from agents
+# (intermediate/ removed in v0.4.0)             # Processing artifacts
+└── report/mission-report.md        # Final report (when complete)
 ```
 
 ### Session State
@@ -132,7 +132,7 @@ Find your latest session:
 The system:
 
 1. **Locates session** - Searches your OS-appropriate sessions directory
-2. **Validates structure** - Checks for required files (session.json, knowledge-graph.json)
+2. **Validates structure** - Checks for required files (meta/session.json, knowledge/knowledge-graph.json)
 3. **Checks compatibility** - Verifies engine version matches session version
 4. **Updates metadata** - Sets `last_opened` timestamp and status to `resumed`
 
@@ -261,6 +261,16 @@ All session state updates use file locking:
 - Detects and removes stale locks (from crashed processes)
 - 30-second timeout on lock acquisition
 
+### Budget Tracking
+
+CConductor automatically tracks spending in `meta/budget.json`:
+
+- **Per-invocation costs**: Each Claude API call's actual cost is recorded
+- **Cumulative totals**: Running sum of all invocations
+- **Agent attribution**: Cost broken down by agent type
+
+The budget file is updated in real-time as agents complete their work.
+
 ### State Preservation
 
 **What's preserved:**
@@ -270,6 +280,7 @@ All session state updates use file locking:
 - ✅ Citations and sources
 - ✅ Identified gaps and contradictions
 - ✅ Iteration count and confidence scores
+- ✅ Budget tracking (cost per invocation)
 
 **What's regenerated:**
 
@@ -311,7 +322,7 @@ Continue anyway? [y/N]
 ### Corrupted Session
 
 ```bash
-❌ Error: Invalid session (missing knowledge-graph.json)
+❌ Error: Invalid session (missing knowledge/knowledge-graph.json)
 ```
 
 **Causes**:
@@ -332,14 +343,14 @@ Continue anyway? [y/N]
 ❌ Research session is locked
 
 Waited: 30 seconds
-File: knowledge-graph.json
+File: knowledge/knowledge-graph.json
 
 What to do:
 1. Check for running research:
    ps aux | grep cconductor
 2. If no process found, remove stale lock from your sessions directory:
    SESSION_DIR=$(./src/utils/path-resolver.sh resolve session_dir)
-   rm -rf "$SESSION_DIR"/session_*/knowledge-graph.json.lock
+   rm -rf "$SESSION_DIR"/mission_*/knowledge/knowledge-graph.json.lock
 ```
 
 ## Best Practices
@@ -413,7 +424,7 @@ Session state is all JSON - you can query programmatically:
 SESSION_DIR=$(./src/utils/path-resolver.sh resolve session_dir)
 
 # Get session metadata
-jq '.' "$SESSION_DIR/session_1234567890/session.json"
+jq '.' "$SESSION_DIR/session_1234567890/meta/session.json"
 
 # Get knowledge graph summary
 jq '{
@@ -421,7 +432,7 @@ jq '{
   claims: .stats.total_claims,
   confidence: .confidence_scores.overall,
   gaps: .stats.unresolved_gaps
-}' "$SESSION_DIR/session_1234567890/knowledge-graph.json"
+}' "$SESSION_DIR/session_1234567890/knowledge/knowledge-graph.json"
 
 # Get task statistics (if available in legacy sessions)
 jq '.stats' "$SESSION_DIR/session_1234567890/task-queue.json"

@@ -32,7 +32,7 @@ When you provide local files with `--input-dir`:
    - Different files with identical content reuse cache
    - Version tracking (content change = new cache entry)
 
-3. **Session Manifest**: Track all input files in `input-files.json`
+3. **Session Manifest**: Track all input files in `inputs/input-files.json`
 
    ```json
    {
@@ -82,7 +82,7 @@ When you provide local files with `--input-dir`:
 | **Cache Key** | Content hash (SHA-256) | URL hash |
 | **Deduplication** | By content | By URL |
 | **Source** | `source: "local"` | `source: "download"` |
-| **Manifest** | `input-files.json` | Standard session tracking |
+| **Manifest** | `inputs/input-files.json` | Standard session tracking |
 | **Priority** | Analyzed FIRST | Standard priority |
 | **Version Tracking** | Hash change = new version | Same URL = same file |
 

@@ -194,7 +194,7 @@ When research begins, CConductor creates a session:
 
 ```bash
 # In src/cconductor-mission.sh
-local session_dir="$PROJECT_ROOT/research-sessions/session_${timestamp}"
+local session_dir="$PROJECT_ROOT/research-sessions/mission_${timestamp}"
 mkdir -p "$session_dir"
 ```
 

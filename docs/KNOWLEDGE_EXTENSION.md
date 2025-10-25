@@ -23,7 +23,7 @@ research-engine/
 │   └── crypto-markets.md
 │
 └── research-sessions/
-    └── session_X/knowledge/     # Session-specific overrides (ephemeral)
+    └── mission_X/knowledge/     # Session-specific overrides (ephemeral)
         └── temporary-methodology.md
 ```
 
@@ -31,7 +31,7 @@ research-engine/
 
 When loading knowledge, the system checks in this order:
 
-1. **Session Override** (highest priority) - `research-sessions/session_X/knowledge/`
+1. **Session Override** (highest priority) - `research-sessions/mission_X/knowledge/`
 2. **User Custom** - `knowledge-base-custom/`
 3. **Core Default** (lowest priority) - `knowledge-base/`
 
@@ -512,7 +512,7 @@ Test custom knowledge with simple queries before using in important research:
 ./cconductor "Simple test question about my domain"
 
 # Review output for knowledge integration
-cat research-sessions/session_*/final/mission-report.md
+cat research-sessions/session_*/report/mission-report.md
 ```
 
 ## Examples
@@ -623,7 +623,7 @@ A: No limit! Add as many as needed. Auto-discovery handles them all.
 
 **Q: Can I use custom knowledge for just one research session?**
 
-A: Yes! Use session overrides in `research-sessions/session_X/knowledge/`.
+A: Yes! Use session overrides in `research-sessions/mission_X/knowledge/`.
 
 ## Command Reference
 

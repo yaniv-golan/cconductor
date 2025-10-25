@@ -4,12 +4,12 @@
 
 ## Overview
 
-CConductor now includes comprehensive error logging to capture issues that would otherwise be silenced. All errors and warnings are logged to `system-errors.log` in each session directory.
+CConductor now includes comprehensive error logging to capture issues that would otherwise be silenced. All errors and warnings are logged to `logs/system-errors.log` in each session directory.
 
 ## Log Location
 
 ```
-research-sessions/mission_<timestamp>/system-errors.log
+research-sessions/mission_<timestamp>/logs/system-errors.log
 ```
 
 ## Log Format
@@ -115,13 +115,13 @@ The error log uses **JSONL format** (JSON Lines): one JSON object per line.
 
 ```bash
 # View raw log
-cat research-sessions/mission_XXX/system-errors.log
+cat research-sessions/mission_XXX/logs/system-errors.log
 
 # View only error entries (skip comments)
-grep -v '^#' research-sessions/mission_XXX/system-errors.log | jq .
+grep -v '^#' research-sessions/mission_XXX/logs/system-errors.log | jq .
 
 # Count errors by operation
-grep '"severity": "error"' research-sessions/mission_XXX/system-errors.log | \
+grep '"severity": "error"' research-sessions/mission_XXX/logs/system-errors.log | \
     jq -r '.operation' | sort | uniq -c | sort -rn
 ```
 
@@ -129,21 +129,21 @@ grep '"severity": "error"' research-sessions/mission_XXX/system-errors.log | \
 
 ```bash
 # Last 10 entries
-tail -10 research-sessions/mission_XXX/system-errors.log | jq .
+tail -10 research-sessions/mission_XXX/logs/system-errors.log | jq .
 
 # Errors from last hour
 jq -r 'select(.timestamp > "'$(date -u -v-1H +%Y-%m-%dT%H:%M:%SZ)'")' \
-    research-sessions/mission_XXX/system-errors.log
+    research-sessions/mission_XXX/logs/system-errors.log
 ```
 
 ### Filter by Severity
 
 ```bash
 # Errors only
-grep '"severity": "error"' research-sessions/mission_XXX/system-errors.log | jq .
+grep '"severity": "error"' research-sessions/mission_XXX/logs/system-errors.log | jq .
 
 # Warnings only
-grep '"severity": "warning"' research-sessions/mission_XXX/system-errors.log | jq .
+grep '"severity": "warning"' research-sessions/mission_XXX/logs/system-errors.log | jq .
 ```
 
 ## Integration with Dashboard
@@ -191,12 +191,12 @@ Most errors are handled gracefully:
 
 1. **Check error log after failed missions**:
    ```bash
-   grep '"severity": "error"' research-sessions/mission_XXX/system-errors.log
+   grep '"severity": "error"' research-sessions/mission_XXX/logs/system-errors.log
    ```
 
 2. **Monitor warnings during long research**:
    ```bash
-   tail -f research-sessions/mission_XXX/system-errors.log
+   tail -f research-sessions/mission_XXX/logs/system-errors.log
    ```
 
 3. **Use debug mode for troubleshooting**:
@@ -206,7 +206,7 @@ Most errors are handled gracefully:
 
 4. **Archive error logs for debugging**:
    ```bash
-   cp research-sessions/mission_XXX/system-errors.log ~/error-logs/
+   cp research-sessions/mission_XXX/logs/system-errors.log ~/error-logs/
    ```
 
 ## API for Scripts
@@ -242,7 +242,7 @@ fi
 
 ### Log file not created
 
-**Symptom**: No `system-errors.log` in session directory  
+**Symptom**: No `logs/system-errors.log` in session directory  
 **Cause**: `init_error_log()` not called during session init  
 **Fix**: Normal for old sessions created before error logging was introduced
 
@@ -266,8 +266,8 @@ fi
 
 ## Version History
 
-- **0.2.0** (2025-10): Initial implementation
-  - Added `system-errors.log` to session structure
+- Initial implementation (2025-10):
+  - Added `logs/system-errors.log` to session structure
   - Implemented error/warning logging
   - Integrated with dashboard metrics
   - Added debug mode support

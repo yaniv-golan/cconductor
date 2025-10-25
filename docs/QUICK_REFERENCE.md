@@ -79,7 +79,7 @@ CConductor automatically launches a **Research Journal Viewer** when research st
 ```bash
 # Auto-launched during research, or view manually:
 ./cconductor view-dashboard              # Latest session
-./cconductor view-dashboard session_123  # Specific session
+./cconductor view-dashboard mission_123  # Specific session
 ```
 
 ### Export Research Journal
@@ -92,9 +92,9 @@ SESSION_DIR=$(./src/utils/path-resolver.sh resolve session_dir)
 bash src/utils/export-journal.sh "$SESSION_DIR/$(cat "$SESSION_DIR/.latest")"
 
 # Specific session
-bash src/utils/export-journal.sh research-sessions/session_123
+bash src/utils/export-journal.sh research-sessions/mission_123
 
-# Output: final/research-journal.md with complete timeline
+# Output: report/research-journal.md with complete timeline
 ```
 
 **Includes**:
@@ -144,7 +144,7 @@ bash src/utils/export-journal.sh research-sessions/session_123
 
 # View latest report directly
 SESSION_DIR=$(./src/utils/path-resolver.sh resolve session_dir)
-cat "$SESSION_DIR"/$(cat "$SESSION_DIR"/.latest)/final/mission-report.md
+cat "$SESSION_DIR"/$(cat "$SESSION_DIR"/.latest)/report/mission-report.md
 ```
 
 ---
@@ -294,7 +294,7 @@ rm ~/.config/cconductor/security-config.json
 ./cconductor sessions latest  # Shows the path
 # Or use path-resolver
 SESSION_DIR=$(./src/utils/path-resolver.sh resolve session_dir)
-cp "$SESSION_DIR"/$(cat "$SESSION_DIR"/.latest)/final/mission-report.md ~/Documents/
+cp "$SESSION_DIR"/$(cat "$SESSION_DIR"/.latest)/report/mission-report.md ~/Documents/
 ```
 
 ### Archive Old Sessions
@@ -349,7 +349,7 @@ Edit `config/security-config.json`:
 **Improve quality**:
 
 ```bash
-./cconductor resume session_123  # Most effective way
+./cconductor resume mission_123  # Most effective way
 ```
 
 ---
@@ -420,7 +420,7 @@ alias dldir='$(cd /path/to/cconductor && ./src/utils/path-resolver.sh resolve se
 dl "your question"              # Instead of ./cconductor
 dll                            # Show latest
 dls                            # List sessions
-dlr session_123                # Resume
+dlr mission_123                # Resume
 ```
 
 ---
