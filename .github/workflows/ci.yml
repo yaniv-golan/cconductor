@@ -47,10 +47,10 @@ jobs:
       - name: Install dependencies
         run: |
           if [[ "$OSTYPE" == "darwin"* ]]; then
-            brew install jq curl bash
+            brew install jq curl bash bc python3
           else
             sudo apt-get update
-            sudo apt-get install -y jq curl bash
+            sudo apt-get install -y jq curl bash bc python3
           fi
       
       - name: Test platform-paths.sh
