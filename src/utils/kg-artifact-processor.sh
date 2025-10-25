@@ -161,12 +161,17 @@ merge_artifacts_to_kg() {
         return 1
     fi
     
-    # Merge artifacts under agent namespace into KG
+    # Merge artifacts into canonical arrays
     local temp_kg="$session_dir/knowledge/knowledge-graph.json.tmp"
-    if ! jq --arg agent "$agent_name" \
-            --argjson artifacts "$merged_artifacts" \
-            '. + {($agent): $artifacts}' \
-            "$kg_file" > "$temp_kg" 2>&1; then
+    if ! jq --argjson artifacts "$merged_artifacts" \
+            --arg date "$(get_timestamp)" \
+            '.entities += ($artifacts.entities // []) |
+             .claims += ($artifacts.claims // []) |
+             .relationships += ($artifacts.relationships // []) |
+             .gaps += ($artifacts.gaps // []) |
+             .promising_leads += ($artifacts.promising_leads // []) |
+             .last_updated = $date' \
+            "$kg_file" > "$temp_kg" 2>/dev/null; then
         echo "ERROR: Failed to merge artifacts into knowledge graph" >&2
         rm -f "$temp_kg"
         rmdir "$lock_dir"
@@ -268,4 +273,3 @@ if [ "${BASH_SOURCE[0]}" = "$0" ]; then
     
     process_kg_artifacts "$@"
 fi
-

@@ -844,8 +844,7 @@ Three built-in profiles:
     "min_independent_sources": 2,
     "min_trust_score": 0.6,
     "min_claim_confidence": 0.6,
-    "max_low_confidence_claims": 0,
-    "max_unresolved_contradictions": 0
+    "max_low_confidence_claims": 0
   },
   "recency": {
     "enforce": true,
@@ -884,7 +883,6 @@ Three built-in profiles:
 | `thresholds.min_trust_score` | float | `0.6` | Minimum sum of trust weights for a claim |
 | `thresholds.min_claim_confidence` | float | `0.6` | Lowest confidence allowed before flagging |
 | `thresholds.max_low_confidence_claims` | integer | `0` | Permitted claims below confidence threshold |
-| `thresholds.max_unresolved_contradictions` | integer | `0` | Allowed unresolved contradictions |
 | `recency.enforce` | boolean | `true` | Require at least one fresh source per claim |
 | `recency.max_source_age_days` | integer | `540` | Maximum age (in days) for considered fresh |
 | `recency.allow_unparsed_dates` | boolean | `true` | If `false`, missing/ambiguous dates fail the gate |

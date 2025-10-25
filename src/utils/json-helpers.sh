@@ -201,6 +201,35 @@ json_compact() {
     fi
 }
 
+# Safely slurp JSON objects from file into array
+# Usage: json_slurp_array file.json ["[]"]
+# Returns: JSON array on success, fallback value on failure (default: '[]')
+json_slurp_array() {
+    local file="$1"
+    local fallback="${2:-[]}"
+    
+    # Empty or missing file
+    if [[ ! -s "$file" ]]; then
+        echo "$fallback"
+        return 0
+    fi
+    
+    # Attempt slurp with validation
+    local result
+    if result=$(jq -s '.' "$file" 2>/dev/null) && [[ -n "$result" ]]; then
+        # Validate it's actually JSON
+        if echo "$result" | jq empty 2>/dev/null; then
+            echo "$result"
+            return 0
+        fi
+    fi
+    
+    # Fallback on any error
+    log_warn "json_slurp_array: failed to parse $file, using fallback"
+    echo "$fallback"
+    return 1
+}
+
 # Export functions
 export -f json_merge_files
 export -f json_get_field
@@ -210,4 +239,5 @@ export -f json_set_field
 export -f json_validate_structure
 export -f json_pretty
 export -f json_compact
+export -f json_slurp_array
 

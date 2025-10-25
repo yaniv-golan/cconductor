@@ -75,8 +75,13 @@ sync_quality_surfaces_to_kg() {
     
     # Use atomic_json_update to merge gate data into KG claims
     # This is thread-safe and reuses existing locking infrastructure
+    local timestamp
+    timestamp=$(get_timestamp 2>/dev/null || date -u +"%Y-%m-%dT%H:%M:%SZ")
+
+    # shellcheck disable=SC2016 # jq program lives in single quotes
     atomic_json_update "$kg_file" \
         --argjson gate_results "$claim_results" \
+        --arg ts "$timestamp" \
         '
         # Build lookup map of gate results by claim ID
         ($gate_results | map({(.id): .}) | add) as $gate_map |
@@ -93,7 +98,7 @@ sync_quality_surfaces_to_kg() {
         )) |
         
         # Update last_updated timestamp
-        .last_updated = (now | todate)
+        .last_updated = $ts
         '
     
     local sync_status=$?
@@ -159,16 +164,13 @@ record_quality_gate_run() {
         }')
     
     # Append to quality_gate_runs array using atomic write
-    local tmp_file="${metadata_file}.tmp.$$"
-    
-    if jq --argjson run "$gate_run_record" \
-        '.quality_gate_runs += [$run]' \
-        "$metadata_file" > "$tmp_file"; then
-        mv "$tmp_file" "$metadata_file"
+    # shellcheck disable=SC2016 # jq program lives in single quotes
+    if atomic_json_update "$metadata_file" \
+        --argjson run "$gate_run_record" \
+        '.quality_gate_runs += [$run]'; then
         echo "✓ Recorded quality gate run in session metadata" >&2
         return 0
     else
-        rm -f "$tmp_file"
         echo "Warning: Failed to record quality gate run" >&2
         return 1
     fi
@@ -196,4 +198,3 @@ if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
             ;;
     esac
 fi
-

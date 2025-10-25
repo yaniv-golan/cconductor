@@ -6,8 +6,7 @@
     "min_independent_sources": 2,
     "min_trust_score": 0.6,
     "min_claim_confidence": 0.6,
-    "max_low_confidence_claims": 0,
-    "max_unresolved_contradictions": 0
+    "max_low_confidence_claims": 0
   },
   "recency": {
     "enforce": true,

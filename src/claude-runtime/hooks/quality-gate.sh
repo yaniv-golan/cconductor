@@ -21,6 +21,8 @@ source "$PROJECT_ROOT/src/utils/core-helpers.sh" 2>/dev/null || {
 source "$PROJECT_ROOT/src/utils/config-loader.sh"
 # shellcheck disable=SC1091
 source "$PROJECT_ROOT/src/utils/error-messages.sh" 2>/dev/null || true
+# shellcheck disable=SC1091
+source "$PROJECT_ROOT/src/utils/json-helpers.sh"
 
 # Check required dependencies
 require_command "python3" || {
@@ -64,7 +66,6 @@ MIN_INDEPENDENT_SOURCES=$(echo "$CONFIG_JSON" | jq -r '.thresholds.min_independe
 MIN_TRUST_SCORE=$(echo "$CONFIG_JSON" | jq -r '.thresholds.min_trust_score // 0')
 MIN_CLAIM_CONFIDENCE=$(echo "$CONFIG_JSON" | jq -r '.thresholds.min_claim_confidence // 0')
 MAX_LOW_CONFIDENCE_CLAIMS=$(echo "$CONFIG_JSON" | jq -r '.thresholds.max_low_confidence_claims // 0')
-MAX_UNRESOLVED_CONTRADICTIONS=$(echo "$CONFIG_JSON" | jq -r '.thresholds.max_unresolved_contradictions // 0')
 
 # Recency settings
 RECENCY_ENFORCE=$(echo "$CONFIG_JSON" | jq -r '.recency.enforce // false')
@@ -106,19 +107,31 @@ lookup_trust_weight() {
     echo "$weight"
 }
 
-parse_source_age() {
-    local raw_date="$1"
-    if [[ -z "$raw_date" || "$raw_date" == "null" ]]; then
-        return 1
-    fi
-    python3 - "$raw_date" <<'PY'
-import sys
+tmp_claims="$(mktemp)"
+tmp_session="$(mktemp)"
+trap 'rm -f "$tmp_claims" "$tmp_session"' EXIT
+
+total_claims=$(jq '.claims | length' "$KG_FILE")
+failed_claims=0
+low_confidence_claims=0
+total_trust_score=0
+trust_score_count=0
+
+date_age_map="{}"
+if [[ "$RECENCY_ENFORCE" == "true" ]]; then
+    all_dates_json=$(jq -c '[.claims[] | (.sources // [])[]? | (.date // (.as_of // "")) | select(. != null and . != "")] | unique' "$KG_FILE")
+    
+    # Trim whitespace to catch whitespace-only strings
+    trimmed=$(printf '%s' "$all_dates_json" | tr -d '[:space:]')
+    
+    if [[ -n "$trimmed" && "$trimmed" != "[]" ]]; then
+        # Redirect Python stderr to suppress JSONDecodeError tracebacks
+        date_age_map=$(python3 2>/dev/null <<PY || echo ""
+import json
 from datetime import datetime, timezone
+import sys
 
-raw = sys.argv[1].strip()
-if not raw:
-    sys.exit(1)
-
+dates = json.loads('''$all_dates_json''')
 formats = [
     "%Y-%m-%d",
     "%Y/%m/%d",
@@ -128,7 +141,7 @@ formats = [
     "%b %d %Y",
     "%b %Y",
     "%B %d %Y",
-    "%B %Y"
+    "%B %Y",
 ]
 
 now = datetime.now(timezone.utc).date()
@@ -143,46 +156,35 @@ def iso_parse(value: str):
         return None
     return dt.date()
 
-parsed = iso_parse(raw)
-if parsed is None:
-    for fmt in formats:
-        try:
-            dt = datetime.strptime(raw, fmt)
-        except ValueError:
-            continue
-        if hasattr(dt, "date"):
-            parsed = dt.date()
-        else:
-            parsed = dt
-        break
+result = {}
+for raw in dates:
+    raw_str = raw.strip()
+    if not raw_str:
+        continue
+    parsed = iso_parse(raw_str)
+    if parsed is None:
+        for fmt in formats:
+            try:
+                dt = datetime.strptime(raw_str, fmt)
+            except ValueError:
+                continue
+            parsed = dt.date() if hasattr(dt, "date") else dt
+            break
+    if parsed is None:
+        continue
+    if raw_str.isdigit() and len(raw_str) == 4:
+        parsed = parsed.replace(month=7, day=1)
+    result[raw] = (now - parsed).days
 
-if parsed is None:
-    sys.exit(2)
-
-# Heuristic: for year-only dates, assume mid-year (July 1) to avoid
-# over-penalizing sources that only publish coarse dates.
-if raw.isdigit() and len(raw) == 4:
-    parsed = parsed.replace(month=7, day=1)
-
-age_days = (now - parsed).days
-print(age_days)
+print(json.dumps(result))
 PY
-    local status=$?
-    if [[ $status -ne 0 ]]; then
-        return 1
+)
+        if [[ -z "$date_age_map" || "$date_age_map" == "" ]]; then
+            log_warn "quality-gate: recency parser failed, disabling recency checks"
+            date_age_map="{}"
+        fi
     fi
-    return 0
-}
-
-tmp_claims="$(mktemp)"
-tmp_session="$(mktemp)"
-trap 'rm -f "$tmp_claims" "$tmp_session"' EXIT
-
-total_claims=$(jq '.claims | length' "$KG_FILE")
-failed_claims=0
-low_confidence_claims=0
-total_trust_score=0
-trust_score_count=0
+fi
 
 while IFS= read -r claim_json; do
     claim_id=$(echo "$claim_json" | jq -r '.id // "unknown"')
@@ -221,8 +223,9 @@ PY
             esac
         fi
 
-        if [[ "$RECENCY_ENFORCE" == "true" ]]; then
-            if age=$(parse_source_age "$date_str"); then
+        if [[ "$RECENCY_ENFORCE" == "true" && -n "$date_str" ]]; then
+            age=$(echo "$date_age_map" | jq -r --arg key "$date_str" '.[ $key ] // empty')
+            if [[ -n "$age" && "$age" != "null" ]]; then
                 parseable_dates=$((parseable_dates + 1))
                 if [[ -z "$oldest_source_days" || "$age" -gt "$oldest_source_days" ]]; then
                     oldest_source_days="$age"
@@ -231,7 +234,7 @@ PY
                     newest_source_days="$age"
                 fi
             else
-                [[ -n "$date_str" ]] && unparsed_dates=$((unparsed_dates + 1))
+                unparsed_dates=$((unparsed_dates + 1))
             fi
         fi
     done < <(echo "$claim_json" | jq -r '.sources // [] | map([.credibility // "unknown", .url // "", .date // (.as_of // "")])[] | @tsv')
@@ -317,7 +320,6 @@ PY
 done < <(jq -c '.claims[]' "$KG_FILE")
 
 # Session-level checks
-unresolved_contradictions=$(jq '.stats.unresolved_contradictions // 0' "$KG_FILE")
 overall_failures=0
 if (( failed_claims > 0 )); then
     overall_failures=$((overall_failures + failed_claims))
@@ -339,23 +341,26 @@ else
         '{check: $check, result: $result, detail: $detail}' >>"$tmp_session"
 fi
 
-if (( unresolved_contradictions > MAX_UNRESOLVED_CONTRADICTIONS )); then
-    jq -n \
-        --arg check "Unresolved contradictions" \
-        --arg result "failed" \
-        --arg detail "Found $unresolved_contradictions unresolved contradictions (limit $MAX_UNRESOLVED_CONTRADICTIONS)" \
-        '{check: $check, result: $result, detail: $detail}' >>"$tmp_session"
-    overall_failures=$((overall_failures + 1))
-else
-    jq -n \
-        --arg check "Unresolved contradictions" \
-        --arg result "passed" \
-        --arg detail "Contradictions within threshold" \
-        '{check: $check, result: $result, detail: $detail}' >>"$tmp_session"
+# Contradiction detection removed - handled by fact-checker agent when orchestrator identifies conflicts
+
+# Slurp temp files into arrays with fallback
+claim_results=$(json_slurp_array "$tmp_claims" '[]')
+session_checks=$(json_slurp_array "$tmp_session" '[]')
+
+# Double-check for empty strings (defensive)
+if [[ -z "$claim_results" || "$claim_results" == "null" ]]; then
+    log_warn "quality-gate: claim_results empty after slurp, using fallback"
+    claim_results='[]'
 fi
 
-claim_results=$(if [[ -s "$tmp_claims" ]]; then jq -s '.' "$tmp_claims"; else echo '[]'; fi)
-session_checks=$(if [[ -s "$tmp_session" ]]; then jq -s '.' "$tmp_session"; else echo '[]'; fi)
+if [[ -z "$session_checks" || "$session_checks" == "null" ]]; then
+    log_warn "quality-gate: session_checks empty after slurp, using fallback"
+    session_checks='[]'
+fi
+
+thresholds_json=$(echo "$CONFIG_JSON" | jq '.thresholds // {}')
+recency_json=$(echo "$CONFIG_JSON" | jq '.recency // {}')
+trust_weights_json=$(echo "$CONFIG_JSON" | jq '.trust_weights // {}')
 
 average_trust=$(python3 - <<PY
 from decimal import Decimal
@@ -380,11 +385,10 @@ summary_json=$(jq -n \
     --argjson failed_claims "$failed_claims" \
     --argjson low_confidence "$low_confidence_claims" \
     --arg average_trust "$average_trust" \
-    --argjson contradictions "$unresolved_contradictions" \
     --arg mode "$MODE" \
-    --argjson thresholds "$(echo "$CONFIG_JSON" | jq '.thresholds')" \
-    --argjson recency "$(echo "$CONFIG_JSON" | jq '.recency')" \
-    --argjson trust_weights "$(echo "$CONFIG_JSON" | jq '.trust_weights')" \
+    --argjson thresholds "$thresholds_json" \
+    --argjson recency "$recency_json" \
+    --argjson trust_weights "$trust_weights_json" \
     --argjson claim_results "$claim_results" \
     --argjson session_checks "$session_checks" \
     '
@@ -404,7 +408,6 @@ summary_json=$(jq -n \
                 total_claims: $total_claims,
                 failed_claims: $failed_claims,
                 low_confidence_claims: $low_confidence,
-                unresolved_contradictions: $contradictions,
                 average_trust_score: ($average_trust | tonumber),
                 thresholds: $thresholds,
                 recency: $recency
@@ -430,8 +433,13 @@ summary_compact=$(echo "$summary_json" | jq '{
         }
     }')
 
-echo "$summary_json" >"$OUTPUT_PATH"
-echo "$summary_compact" >"$SUMMARY_PATH"
+# Atomic writes to prevent race conditions with readers
+# Write to temp files first, then atomically move into place
+echo "$summary_json" >"${OUTPUT_PATH}.tmp.$$"
+mv "${OUTPUT_PATH}.tmp.$$" "$OUTPUT_PATH"
+
+echo "$summary_compact" >"${SUMMARY_PATH}.tmp.$$"
+mv "${SUMMARY_PATH}.tmp.$$" "$SUMMARY_PATH"
 
 if [[ "$status" == "passed" ]]; then
     echo "✓ Quality gate passed (${total_claims} claims evaluated)" >&2
