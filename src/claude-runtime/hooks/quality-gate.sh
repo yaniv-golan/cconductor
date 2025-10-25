@@ -23,6 +23,8 @@ source "$PROJECT_ROOT/src/utils/config-loader.sh"
 source "$PROJECT_ROOT/src/utils/error-messages.sh" 2>/dev/null || true
 # shellcheck disable=SC1091
 source "$PROJECT_ROOT/src/utils/json-helpers.sh"
+# shellcheck disable=SC1091
+source "$PROJECT_ROOT/src/utils/domain-helpers.sh" 2>/dev/null || true
 
 # Check required dependencies
 require_command "python3" || {
@@ -76,6 +78,47 @@ ALLOW_UNPARSED_DATES=$(echo "$CONFIG_JSON" | jq -r '.recency.allow_unparsed_date
 TRUST_WEIGHTS_LIST=$(echo "$CONFIG_JSON" | jq -r '.trust_weights // {} | to_entries[] | "\(.key)\t\(.value)"')
 DEFAULT_TRUST_WEIGHT=$(echo "$CONFIG_JSON" | jq -r '.default_trust_weight // 0')
 
+HEURISTICS_FILE="$SESSION_DIR/meta/domain-heuristics.json"
+DOMAIN_HEURISTICS_JSON=""
+if [[ -f "$HEURISTICS_FILE" ]]; then
+    DOMAIN_HEURISTICS_JSON=$(cat "$HEURISTICS_FILE" 2>/dev/null || echo "")
+fi
+
+DOMAIN_AWARE=$(echo "$CONFIG_JSON" | jq -r '.domain_aware // false' | tr '[:upper:]' '[:lower:]')
+FALLBACK_TO_GLOBAL=$(echo "$CONFIG_JSON" | jq -r '.fallback_to_global_thresholds // true' | tr '[:upper:]' '[:lower:]')
+UNCAT_WARN_ENABLED=$(echo "$CONFIG_JSON" | jq -r '.uncategorized_source_warnings.enabled // false' | tr '[:upper:]' '[:lower:]')
+UNCAT_WARN_THRESHOLD=$(echo "$CONFIG_JSON" | jq -r '.uncategorized_source_warnings.threshold_percentage // 15')
+UNCAT_WARN_INCLUDE=$(echo "$CONFIG_JSON" | jq -r '.uncategorized_source_warnings.include_in_summary // true' | tr '[:upper:]' '[:lower:]')
+
+declare -A DOMAIN_TOPIC_LIMITS=()
+DOMAIN_RECENCY_FALLBACK=""
+DOMAIN_TOTAL_SOURCES=0
+DOMAIN_UNCATEGORIZED_COUNT=0
+DOMAIN_UNCATEGORIZED_PCT="0"
+DOMAIN_UNCATEGORIZED_SAMPLES_JSON='[]'
+DOMAIN_UNCATEGORIZED_ALERT=false
+
+if [[ -n "$DOMAIN_HEURISTICS_JSON" ]]; then
+    while IFS=$'\t' read -r topic limit; do
+        [[ -z "$topic" ]] && continue
+        [[ -z "$limit" || "$limit" == "null" ]] && continue
+        DOMAIN_TOPIC_LIMITS["$topic"]="$limit"
+    done < <(echo "$DOMAIN_HEURISTICS_JSON" | jq -r '.freshness_requirements[]? | "\(.topic)\t\(.max_age_days // 0)"' 2>/dev/null || echo "")
+
+    if [[ ${#DOMAIN_TOPIC_LIMITS[@]} -gt 0 ]]; then
+        max_limit=0
+        for limit in "${DOMAIN_TOPIC_LIMITS[@]}"; do
+            [[ -z "$limit" ]] && continue
+            if [[ "$limit" =~ ^[0-9]+$ ]] && (( limit > max_limit )); then
+                max_limit=$limit
+            fi
+        done
+        if (( max_limit > 0 )); then
+            DOMAIN_RECENCY_FALLBACK="$max_limit"
+        fi
+    fi
+fi
+
 OUTPUT_FILENAME=$(echo "$CONFIG_JSON" | jq -r '.reporting.output_filename // "artifacts/quality-gate.json"')
 OUTPUT_PATH="$SESSION_DIR/$OUTPUT_FILENAME"
 OUTPUT_DIR="$(dirname "$OUTPUT_PATH")"
@@ -110,6 +153,194 @@ lookup_trust_weight() {
 tmp_claims="$(mktemp)"
 tmp_session="$(mktemp)"
 trap 'rm -f "$tmp_claims" "$tmp_session"' EXIT
+
+check_stakeholder_balance() {
+    local session_dir="$1"
+
+    if [[ "$DOMAIN_AWARE" != "true" ]] || [[ -z "$DOMAIN_HEURISTICS_JSON" ]]; then
+        return 0
+    fi
+    if ! command -v map_source_to_stakeholder >/dev/null 2>&1; then
+        return 0
+    fi
+
+    local kg_file="$session_dir/knowledge/knowledge-graph.json"
+    if [[ ! -f "$kg_file" ]]; then
+        return 0
+    fi
+
+    declare -A stakeholder_counts=()
+    while IFS= read -r category; do
+        [[ -z "$category" ]] && continue
+        stakeholder_counts["$category"]=0
+    done < <(echo "$DOMAIN_HEURISTICS_JSON" | jq -r '.stakeholder_categories | keys[]?' 2>/dev/null || echo "")
+
+    local sample_limit=5
+    local -a uncategorized_samples=()
+    DOMAIN_TOTAL_SOURCES=0
+    DOMAIN_UNCATEGORIZED_COUNT=0
+
+    while IFS= read -r source_json; do
+        [[ -z "$source_json" || "$source_json" == "null" ]] && continue
+        DOMAIN_TOTAL_SOURCES=$((DOMAIN_TOTAL_SOURCES + 1))
+        local category
+        category=$(map_source_to_stakeholder "$source_json" "$DOMAIN_HEURISTICS_JSON")
+        if [[ -n "$category" && "$category" != "uncategorized" ]]; then
+            if [[ -z "${stakeholder_counts[$category]+_}" ]]; then
+                stakeholder_counts["$category"]=0
+            fi
+            stakeholder_counts["$category"]=$((stakeholder_counts["$category"] + 1))
+        else
+            DOMAIN_UNCATEGORIZED_COUNT=$((DOMAIN_UNCATEGORIZED_COUNT + 1))
+            if ((${#uncategorized_samples[@]} < sample_limit)); then
+                local url title sample
+                url=$(echo "$source_json" | jq -r '.url // ""')
+                title=$(echo "$source_json" | jq -r '.title // ""')
+                sample=$(jq -n --arg url "$url" --arg title "$title" '{url:$url,title:$title}')
+                uncategorized_samples+=("$sample")
+            fi
+        fi
+    done < <(jq -c '.claims[]? | .sources[]?' "$kg_file" 2>/dev/null || echo "")
+
+    if ((${#uncategorized_samples[@]} > 0)); then
+        DOMAIN_UNCATEGORIZED_SAMPLES_JSON=$(printf '%s\n' "${uncategorized_samples[@]}" | jq -s '.' 2>/dev/null || echo '[]')
+    else
+        DOMAIN_UNCATEGORIZED_SAMPLES_JSON='[]'
+    fi
+
+    if [[ $DOMAIN_TOTAL_SOURCES -gt 0 ]]; then
+        DOMAIN_UNCATEGORIZED_PCT=$(awk "BEGIN {printf \"%.1f\", ($DOMAIN_UNCATEGORIZED_COUNT / $DOMAIN_TOTAL_SOURCES) * 100}")
+    else
+        DOMAIN_UNCATEGORIZED_PCT="0"
+    fi
+
+    DOMAIN_UNCATEGORIZED_ALERT=false
+    if [[ "$UNCAT_WARN_ENABLED" == "true" && $DOMAIN_TOTAL_SOURCES -gt 0 ]]; then
+        if awk "BEGIN {exit !($DOMAIN_UNCATEGORIZED_PCT > $UNCAT_WARN_THRESHOLD)}"; then
+            DOMAIN_UNCATEGORIZED_ALERT=true
+        fi
+    fi
+
+    local missing_critical=()
+    while IFS=$'\t' read -r category importance; do
+        [[ -z "$category" ]] && continue
+        if [[ "$importance" == "critical" ]]; then
+            if [[ ${stakeholder_counts[$category]:-0} -eq 0 ]]; then
+                missing_critical+=("$category")
+            fi
+        fi
+    done < <(echo "$DOMAIN_HEURISTICS_JSON" | jq -r '.stakeholder_categories | to_entries[]? | "\(.key)\t\(.value.importance)"' 2>/dev/null || echo "")
+
+    if [[ ${#missing_critical[@]} -gt 0 ]]; then
+        local missing_list
+        missing_list=$(printf '%s, ' "${missing_critical[@]}" | sed 's/, $//')
+        jq -n \
+            --arg check "Stakeholder balance" \
+            --arg result "failed" \
+            --arg detail "Missing critical stakeholder perspectives: $missing_list" \
+            '{check: $check, result: $result, detail: $detail}' >>"$tmp_session"
+        return 1
+    fi
+
+    jq -n \
+        --arg check "Stakeholder balance" \
+        --arg result "passed" \
+        --arg detail "All critical stakeholder categories represented" \
+        '{check: $check, result: $result, detail: $detail}' >>"$tmp_session"
+    return 0
+}
+
+check_mandatory_milestones() {
+    local session_dir="$1"
+
+    if [[ "$DOMAIN_AWARE" != "true" ]] || [[ -z "$DOMAIN_HEURISTICS_JSON" ]]; then
+        return 0
+    fi
+    if ! command -v match_watch_item >/dev/null 2>&1; then
+        return 0
+    fi
+
+    local kg_file="$session_dir/knowledge/knowledge-graph.json"
+    if [[ ! -f "$kg_file" ]]; then
+        return 0
+    fi
+
+    local missing_critical=()
+
+    while IFS= read -r watch_item_json; do
+        [[ -z "$watch_item_json" || "$watch_item_json" == "null" ]] && continue
+        local importance
+        importance=$(echo "$watch_item_json" | jq -r '.importance // ""')
+        if [[ "$importance" != "critical" ]]; then
+            continue
+        fi
+        local found=false
+        while IFS= read -r claim_json; do
+            [[ -z "$claim_json" || "$claim_json" == "null" ]] && continue
+            if match_watch_item "$watch_item_json" "$claim_json"; then
+                found=true
+                break
+            fi
+        done < <(jq -c '.claims[]?' "$kg_file" 2>/dev/null || echo "")
+        if [[ "$found" == false ]]; then
+            local canonical
+            canonical=$(echo "$watch_item_json" | jq -r '.canonical // ""')
+            [[ -n "$canonical" ]] && missing_critical+=("$canonical")
+        fi
+    done < <(echo "$DOMAIN_HEURISTICS_JSON" | jq -c '.mandatory_watch_items[]?' 2>/dev/null || echo "")
+
+    if [[ ${#missing_critical[@]} -gt 0 ]]; then
+        local missing_list
+        missing_list=$(printf '%s, ' "${missing_critical[@]}" | sed 's/, $//')
+        jq -n \
+            --arg check "Mandatory milestones" \
+            --arg result "failed" \
+            --arg detail "Critical watch items not researched: $missing_list" \
+            '{check: $check, result: $result, detail: $detail}' >>"$tmp_session"
+        return 1
+    fi
+
+    jq -n \
+        --arg check "Mandatory milestones" \
+        --arg result "passed" \
+        --arg detail "All critical watch items addressed" \
+        '{check: $check, result: $result, detail: $detail}' >>"$tmp_session"
+    return 0
+}
+
+apply_domain_recency() {
+    local session_dir="$1"
+
+    if [[ "$DOMAIN_AWARE" != "true" ]] || [[ -z "$DOMAIN_HEURISTICS_JSON" ]]; then
+        return 0
+    fi
+    if [[ -z "$claim_results" || "$claim_results" == "null" ]]; then
+        return 0
+    fi
+
+    local violations
+    violations=$(echo "$claim_results" | jq -c '[.[] | select(.confidence_surface.domain_recency.max_age_days != null and .confidence_surface.newest_source_age_days != null and (.confidence_surface.newest_source_age_days > (.confidence_surface.domain_recency.max_age_days | tonumber))) | {id, topic: (.confidence_surface.domain_recency.topic // null), newest: .confidence_surface.newest_source_age_days, max_allowed: (.confidence_surface.domain_recency.max_age_days | tonumber)}]')
+    local violation_count
+    violation_count=$(echo "$violations" | jq 'length')
+
+    if (( violation_count > 0 )); then
+        local detail
+        detail=$(echo "$violations" | jq -r '[.[] | (.id + " (topic: " + (.topic // "unspecified") + ", newest: " + ((.newest | tostring) + "d > max: " + (.max_allowed | tostring) + "d)"))] | join("; ")')
+        jq -n \
+            --arg check "Domain recency" \
+            --arg result "failed" \
+            --arg detail "$detail" \
+            '{check: $check, result: $result, detail: $detail}' >>"$tmp_session"
+        return 1
+    fi
+
+    jq -n \
+        --arg check "Domain recency" \
+        --arg result "passed" \
+        --arg detail "All evaluated claims meet topic-specific recency windows" \
+        '{check: $check, result: $result, detail: $detail}' >>"$tmp_session"
+    return 0
+}
 
 total_claims=$(jq '.claims | length' "$KG_FILE")
 failed_claims=0
@@ -199,6 +430,38 @@ while IFS= read -r claim_json; do
     parseable_dates=0
     unparsed_dates=0
 
+    claim_topic=$(echo "$claim_json" | jq -r '.topic // ""')
+    [[ "$claim_topic" == "null" ]] && claim_topic=""
+    if [[ -z "$claim_topic" && "$DOMAIN_AWARE" == "true" && -n "$DOMAIN_HEURISTICS_JSON" ]]; then
+        if command -v infer_claim_topic >/dev/null 2>&1; then
+            inferred_topic=$(infer_claim_topic "$statement" "$DOMAIN_HEURISTICS_JSON")
+            if [[ -n "$inferred_topic" && "$inferred_topic" != "unclassified" ]]; then
+                claim_topic="$inferred_topic"
+            fi
+        fi
+    fi
+
+    effective_recency_limit="$MAX_SOURCE_AGE_DAYS"
+    if [[ "$DOMAIN_AWARE" == "true" && -n "$DOMAIN_HEURISTICS_JSON" ]]; then
+        effective_recency_limit=""
+        if [[ -n "$claim_topic" && -n "${DOMAIN_TOPIC_LIMITS[$claim_topic]:-}" ]]; then
+            effective_recency_limit="${DOMAIN_TOPIC_LIMITS[$claim_topic]}"
+        elif [[ -n "$DOMAIN_RECENCY_FALLBACK" ]]; then
+            effective_recency_limit="$DOMAIN_RECENCY_FALLBACK"
+        elif [[ "$FALLBACK_TO_GLOBAL" == "true" ]]; then
+            effective_recency_limit="$MAX_SOURCE_AGE_DAYS"
+        fi
+    fi
+
+    domain_topic_arg=""
+    domain_recency_limit_arg="null"
+    if [[ "$DOMAIN_AWARE" == "true" && -n "$DOMAIN_HEURISTICS_JSON" ]]; then
+        domain_topic_arg="$claim_topic"
+        if [[ -n "$effective_recency_limit" ]]; then
+            domain_recency_limit_arg="$effective_recency_limit"
+        fi
+    fi
+
     while IFS=$'\t' read -r credibility url date_str; do
         [[ "$credibility" == "null" ]] && credibility="unknown"
         [[ -z "$credibility" ]] && credibility="unknown"
@@ -272,8 +535,16 @@ PY
                 claim_failures+=("No parsable source dates and recency enforcement requires valid dates")
             fi
         else
-            if [[ -n "$newest_source_days" && "$newest_source_days" -gt "$MAX_SOURCE_AGE_DAYS" ]]; then
-                claim_failures+=("Most recent source is ${newest_source_days} days old; maximum allowed is $MAX_SOURCE_AGE_DAYS days")
+            recency_limit="$effective_recency_limit"
+            if [[ -z "$recency_limit" && ! ( "$DOMAIN_AWARE" == "true" && -n "$DOMAIN_HEURISTICS_JSON" ) ]]; then
+                recency_limit="$MAX_SOURCE_AGE_DAYS"
+            fi
+            if [[ -n "$recency_limit" && -n "$newest_source_days" ]] && [[ "$newest_source_days" -gt "$recency_limit" ]]; then
+                recency_detail="Most recent source is ${newest_source_days} days old; maximum allowed is $recency_limit days"
+                if [[ -n "$claim_topic" ]]; then
+                    recency_detail+=" for topic '$claim_topic'"
+                fi
+                claim_failures+=("$recency_detail")
             fi
         fi
     fi
@@ -297,6 +568,8 @@ PY
         --argjson failures "$failures_json" \
         --argjson parseable_dates "$parseable_dates" \
         --argjson unparsed_dates "$unparsed_dates" \
+        --arg domain_topic "$domain_topic_arg" \
+        --argjson domain_recency_limit "$domain_recency_limit_arg" \
         --arg newest_days "${newest_source_days:-null}" \
         --arg oldest_days "${oldest_source_days:-null}" \
         --arg evaluated_at "$(get_timestamp)" \
@@ -312,6 +585,10 @@ PY
                 oldest_source_age_days: (if $oldest_days == "null" then null else ($oldest_days | tonumber) end),
                 parseable_dates: $parseable_dates,
                 unparsed_dates: $unparsed_dates,
+                domain_recency: {
+                    topic: (if $domain_topic == "" then null else $domain_topic end),
+                    max_age_days: (if $domain_recency_limit == null then null else $domain_recency_limit end)
+                },
                 limitation_flags: $failures,
                 last_reviewed_at: $evaluated_at,
                 status: (if ($failures | length) > 0 then "flagged" else "passed" end)
@@ -345,6 +622,13 @@ fi
 
 # Slurp temp files into arrays with fallback
 claim_results=$(json_slurp_array "$tmp_claims" '[]')
+
+if [[ "$DOMAIN_AWARE" == "true" && -n "$DOMAIN_HEURISTICS_JSON" ]]; then
+    check_stakeholder_balance "$SESSION_DIR" || true
+    check_mandatory_milestones "$SESSION_DIR" || true
+    apply_domain_recency "$SESSION_DIR" || true
+fi
+
 session_checks=$(json_slurp_array "$tmp_session" '[]')
 
 # Double-check for empty strings (defensive)
@@ -378,6 +662,28 @@ if (( failed_claims > 0 || overall_failures > 0 )); then
     status="failed"
 fi
 
+uncategorized_summary='{"count":0,"total":0,"percentage":0,"samples":[],"action_required":null}'
+if [[ "$DOMAIN_AWARE" == "true" && -n "$DOMAIN_HEURISTICS_JSON" && "$UNCAT_WARN_INCLUDE" == "true" ]]; then
+    samples_json="$DOMAIN_UNCATEGORIZED_SAMPLES_JSON"
+    threshold_flag="false"
+    [[ "$DOMAIN_UNCATEGORIZED_ALERT" == "true" ]] && threshold_flag="true"
+    action_msg="Review uncategorized sources. Add patterns to ~/.config/cconductor/stakeholder-patterns.json if they represent important stakeholders."
+    uncategorized_summary=$(jq -n \
+        --argjson count "${DOMAIN_UNCATEGORIZED_COUNT:-0}" \
+        --argjson total "${DOMAIN_TOTAL_SOURCES:-0}" \
+        --arg pct "${DOMAIN_UNCATEGORIZED_PCT:-0}" \
+        --argjson samples "$samples_json" \
+        --arg action "$action_msg" \
+        --argjson alert "$threshold_flag" \
+        '{
+            count: $count,
+            total: $total,
+            percentage: ($pct | tonumber),
+            samples: $samples,
+            action_required: (if ($alert == true and $count > 0) then $action else null end)
+        }')
+fi
+
 summary_json=$(jq -n \
     --arg status "$status" \
     --arg evaluated_at "$(get_timestamp)" \
@@ -391,6 +697,7 @@ summary_json=$(jq -n \
     --argjson trust_weights "$trust_weights_json" \
     --argjson claim_results "$claim_results" \
     --argjson session_checks "$session_checks" \
+    --argjson uncategorized "$uncategorized_summary" \
     '
         def suggestion($text):
             if $text | test("Insufficient sources") then "Add more cited evidence so the claim meets the minimum source count."
@@ -415,6 +722,7 @@ summary_json=$(jq -n \
             trusts: $trust_weights,
             claim_results: $claim_results,
             session_checks: $session_checks,
+            uncategorized_sources: $uncategorized,
             recommendations: (
                 [$claim_results[]? | (.failures[]? | suggestion(.))] | map(select(. != "")) | unique
             )
@@ -427,6 +735,7 @@ summary_compact=$(echo "$summary_json" | jq '{
         mode,
         summary,
         recommendations,
+        uncategorized_sources,
         totals: {
             total_claims: .summary.total_claims,
             failed_claims: .summary.failed_claims

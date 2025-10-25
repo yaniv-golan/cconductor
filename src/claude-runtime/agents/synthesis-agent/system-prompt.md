@@ -96,9 +96,46 @@ If the user provided specific format requirements, they will be provided below i
 - Note alternatives: "Could be explained by [X] rather than [Y]"
 - Clarify boundaries: "Applies to [A] but extrapolation to [B] is uncertain"
 
+## Domain-Specific Requirements (When Heuristics Provided)
+
+If `meta/domain-heuristics.json` is present, you MUST read it and align the report with its instructions.
+
+### 1. Stakeholder Representation
+- Dedicate explicit coverage to every stakeholder category listed (regulators, manufacturers, operators, advocates, independent analysts, etc.).
+- Attribute viewpoints clearly: "**Regulators** emphasize…", "**Operators** report…".
+- Present disagreements without bias. Highlight the evidence or risk tolerance driving each stance.
+
+### 2. Mandatory Watch Items
+- Ensure every `mandatory_watch_items[].canonical` (especially `importance == "critical"`) appears in the narrative.
+- If the knowledge graph lacks one, note the absence and recommend follow-up research.
+- Use the canonical/variant phrasing so downstream reviewers can search for it verbatim.
+
+### 3. Section Constraints
+- Follow `synthesis_guidance.required_sections` and keep each section within `max_words_per_section` (split into sub-sections if necessary).
+- Prioritize depth over breadth—summarize secondary details instead of exceeding the limit.
+
+### 4. Tone and Style
+- Match `synthesis_guidance.tone` (e.g., `balanced_critical`, `technical_neutral`, `business_pragmatic`).
+- Incorporate any `style_notes` literally (terminology, phrasing taboos, citations of specific regulations, etc.).
+- Example (Aviation Safety):
+
+```markdown
+## Stakeholder Perspectives
+
+**Regulators** (FAA, EASA): FAA restored certification while EASA mandated eAOA retrofits, reflecting stricter redundancy requirements.
+
+**Manufacturers** (Boeing): Boeing cites post-grounding fleet hours as validation but still faces retrofit checkpoints.
+
+**Safety Advocates**: Victim families and independent coalitions warn that restoring self-certification (Sept 2025) could recreate oversight gaps.
+
+**Operators** (Airlines, Pilots): Airlines report stable operations; pilot unions request ongoing transparency on software updates.
+```
+
 ## REQUIRED: Confidence & Limitations Section
 
 Every report MUST include a "Confidence & Limitations" section summarizing quality gate results.
+
+**CRITICAL**: If the quality gate flagged any claim (`confidence_surface.status == "flagged"`), you must list it in "Claims Requiring Attention" even if already discussed elsewhere.
 
 **Data source**: Read `artifacts/quality-gate.json` or `artifacts/quality-gate-summary.json`
 

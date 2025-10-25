@@ -16,6 +16,7 @@
 5. [Improving Research Quality](#improving-research-quality)
 6. [Examples](#examples)
 7. [Troubleshooting](#troubleshooting)
+8. [Domain-Aware Quality & Stakeholder Patterns](#domain-aware-quality--stakeholder-patterns)
 
 ---
 
@@ -940,6 +941,374 @@ Confidence: 45/100 (LOW)
 
 3. **More specific question**:
    Break broad question into focused sub-questions
+
+---
+
+## Domain-Aware Quality & Stakeholder Patterns
+
+### What is Domain-Aware Quality?
+
+CConductor includes **domain-aware quality checking** that adapts quality standards to your research domain.
+
+**How it works**:
+
+1. At mission start, CConductor analyzes your research objective
+2. Identifies domain (e.g., aviation safety, healthcare policy, tech markets)
+3. Generates domain-specific requirements:
+   - **Stakeholder categories**: Which perspectives must be represented (regulators, manufacturers, critics, etc.)
+   - **Freshness requirements**: How recent data must be per topic (regulatory decisions: 6 months, technical specs: 12 months)
+   - **Mandatory watch items**: Critical facts that must be researched (e.g., "FAA certification status", "clinical trial results")
+
+4. Quality gate enforces these requirements:
+   - Checks that all critical stakeholder perspectives are included
+   - Verifies mandatory watch items were researched
+   - Applies topic-specific recency thresholds
+
+**Benefits**:
+
+- Reports automatically include balanced stakeholder representation
+- No more defensive or biased reporting
+- Ensures critical facts aren't omitted
+- Domain-appropriate freshness (regulatory domains get stricter thresholds than historical research)
+
+### Understanding Stakeholder Categories
+
+CConductor automatically identifies stakeholder perspectives from source URLs and titles:
+
+**Example - Aviation Safety Domain**:
+
+- **Regulators**: faa.gov, easa.europa.eu, sources with "FAA", "certification"
+- **Manufacturers**: boeing.com, airbus.com, sources with "manufacturer statement"
+- **Operators**: airline websites, pilot unions, sources with "fleet operations"
+- **Safety Advocates**: independent safety groups, sources with "investigation", "advocacy"
+- **Independent Analysts**: think tanks, academic researchers, sources with "analysis", "study"
+
+**How CConductor categorizes sources**:
+
+1. **Domain matching**: Checks if source URL contains known patterns (e.g., ".gov" for regulators)
+2. **Keyword matching**: Checks if source title contains category keywords (e.g., "FAA" → regulators)
+3. **Auto-learning**: Domain Heuristics Agent performs web research to discover stakeholder patterns per mission
+
+### When You Need Manual Stakeholder Patterns
+
+Sometimes CConductor encounters sources it can't automatically categorize. You'll see warnings like:
+
+```
+⚠ Note: 8 uncategorized sources detected (18%)
+   Review: artifacts/quality-gate-summary.json
+   Action: Add patterns to ~/.config/cconductor/stakeholder-patterns.json if needed
+```
+
+**When to add manual patterns**:
+
+- **Niche stakeholders**: Regional regulators (Transport Canada, CASA Australia)
+- **Specialized groups**: Patient advocacy organizations, open-source maintainers
+- **Domain-specific sources**: Industry newsletters, specialized journals
+- **International sources**: Non-English domains that don't match US/EU patterns
+
+**When NOT to add patterns**:
+
+- Generic news sites (these are usually correctly categorized or intentionally not stakeholders)
+- One-off sources (not worth maintaining patterns for)
+- Sources that shouldn't be stakeholders (personal blogs, forums)
+
+### How to Add Manual Stakeholder Patterns
+
+**Step 1: Create your patterns file**
+
+```bash
+# Create config directory if it doesn't exist
+mkdir -p ~/.config/cconductor
+
+# Copy template
+cp config/stakeholder-patterns.default.json ~/.config/cconductor/stakeholder-patterns.json
+```
+
+**Step 2: Edit the file**
+
+Open `~/.config/cconductor/stakeholder-patterns.json` in your editor.
+
+**Example - Adding regional aviation regulators**:
+
+```json
+{
+  "additional_patterns": {
+    "regional_regulators": {
+      "domain_patterns": [
+        "tc.gc.ca",
+        "casa.gov.au",
+        "dgca.gov.in"
+      ],
+      "keyword_patterns": [
+        "Transport Canada",
+        "CASA",
+        "DGCA",
+        "civil aviation authority"
+      ]
+    }
+  }
+}
+```
+
+**Pattern types explained**:
+
+- **domain_patterns**: URL fragments that identify sources
+  - Example: `"tc.gc.ca"` matches `https://tc.gc.ca/eng/civilaviation/`
+  - Use specific fragments: `"tc.gc.ca"` not just `".ca"`
+  
+- **keyword_patterns**: Terms that appear in source titles/snippets
+  - Example: `"Transport Canada"` matches title "Transport Canada Issues New Directive"
+  - Case-insensitive matching
+  - Include variations: `["safety advocate", "advocacy group", "safety coalition"]`
+
+**Matching logic**: A source matches a stakeholder category if it matches **ANY** domain pattern **OR ANY** keyword pattern.
+
+**Step 3: Add multiple categories**
+
+You can add as many stakeholder categories as needed:
+
+```json
+{
+  "additional_patterns": {
+    "regional_regulators": {
+      "domain_patterns": ["tc.gc.ca", "casa.gov.au"],
+      "keyword_patterns": ["Transport Canada", "CASA"]
+    },
+    "safety_advocates": {
+      "domain_patterns": ["familiesof737max.org", "airsafe.org"],
+      "keyword_patterns": ["victim families", "safety advocate", "crash investigation"]
+    },
+    "pilot_unions": {
+      "domain_patterns": ["alpa.org", "swapa.org"],
+      "keyword_patterns": ["pilot union", "ALPA", "SWAPA", "pilot association"]
+    }
+  }
+}
+```
+
+**Step 4: Run a test mission**
+
+```bash
+# Run research on your domain
+./cconductor "Your research question about the domain"
+
+# After mission completes, check uncategorized count
+cat research-sessions/mission_*/artifacts/quality-gate-summary.json | jq '.uncategorized_sources'
+```
+
+**What to look for**:
+
+```json
+{
+  "count": 2,           ← Should be lower than before
+  "total": 45,
+  "percentage": 4.4,    ← Should be <15%
+  "samples": [          ← Review these to see what's still uncategorized
+    {
+      "url": "https://example.com/article",
+      "title": "Example Title"
+    }
+  ]
+}
+```
+
+**If count is still high**:
+
+1. Review `samples` array to see what sources are missed
+2. Add more domain/keyword patterns for those sources
+3. Run another mission to verify
+
+### Pattern Merging Behavior
+
+Your manual patterns are **merged with auto-detected patterns**, not replaced:
+
+- ✅ Auto-detected patterns still work
+- ✅ Your patterns supplement them
+- ✅ No conflict: your patterns take priority if there's overlap
+- ✅ Different missions can use different auto-detected patterns
+
+**Example**:
+
+- Mission 1 (aviation): Auto-detects FAA, EASA + your manual patterns for Transport Canada
+- Mission 2 (healthcare): Auto-detects FDA, CDC + your manual patterns for patient advocates
+- Each mission gets relevant stakeholder categories
+
+### Template File Reference
+
+CConductor provides a comprehensive template with examples:
+
+**Location**: `config/stakeholder-patterns.default.json`
+
+**Includes examples for**:
+
+- **Aviation**: Regional regulators, safety advocates
+- **Healthcare**: Medical researchers, patient advocates
+- **Technology**: Security researchers, open-source maintainers
+
+**View template**:
+
+```bash
+cat config/stakeholder-patterns.default.json
+```
+
+The template includes detailed comments explaining each field and best practices.
+
+### Best Practices
+
+**1. Start small**
+
+Don't try to add every possible stakeholder upfront. Start with the uncategorized sources you actually encounter.
+
+**2. Use specific patterns**
+
+❌ Bad: `".gov"` (too broad, matches everything)  
+✅ Good: `"tc.gc.ca"` (specific to Transport Canada)
+
+❌ Bad: `"research"` (too generic)  
+✅ Good: `"clinical trial"` (specific to medical research)
+
+**3. Include variations**
+
+```json
+"keyword_patterns": [
+  "Transport Canada",
+  "Transports Canada",
+  "TC Civil Aviation",
+  "TCCA"
+]
+```
+
+**4. Document your additions**
+
+Add comments (using `"_note"` fields) explaining why you added each category:
+
+```json
+{
+  "additional_patterns": {
+    "regional_regulators": {
+      "_note": "Added June 2025 for international aviation compliance research",
+      "domain_patterns": ["tc.gc.ca"],
+      "keyword_patterns": ["Transport Canada"]
+    }
+  }
+}
+```
+
+**5. Test incrementally**
+
+Add 1-2 categories, run a test mission, verify they work, then add more.
+
+**6. Share with your team**
+
+If multiple people research the same domains, share your `stakeholder-patterns.json` file:
+
+```bash
+# Commit to team's shared config repository
+cp ~/.config/cconductor/stakeholder-patterns.json team-configs/aviation-stakeholders.json
+```
+
+### Troubleshooting
+
+**Problem: Patterns not matching**
+
+**Symptoms**:
+- Added patterns but uncategorized count didn't decrease
+- Expected sources still show up in `samples` array
+
+**Solutions**:
+
+1. **Check pattern syntax**:
+   ```bash
+   # Validate JSON
+   jq empty ~/.config/cconductor/stakeholder-patterns.json
+   # Should print nothing if valid, error if invalid
+   ```
+
+2. **Check domain pattern specificity**:
+   ```bash
+   # View source URL from quality gate summary
+   cat research-sessions/mission_*/artifacts/quality-gate-summary.json | \
+     jq '.uncategorized_sources.samples[0].url'
+   
+   # Extract domain part manually
+   # URL: https://www.example.com/path/to/article
+   # Domain to match: "example.com" (without www, protocol, path)
+   ```
+
+3. **Check keyword case sensitivity**:
+   - Keywords are case-insensitive
+   - `"Transport Canada"` matches "transport canada", "TRANSPORT CANADA", etc.
+
+4. **Verify file location**:
+   ```bash
+   # Check if file exists
+   ls -la ~/.config/cconductor/stakeholder-patterns.json
+   
+   # If missing, copy template again
+   cp config/stakeholder-patterns.default.json ~/.config/cconductor/stakeholder-patterns.json
+   ```
+
+**Problem: Too many categories**
+
+**Symptoms**:
+- Quality gate always fails with "missing critical stakeholder"
+- You don't need all these perspectives for your research
+
+**Solution**:
+
+Domain-aware quality only flags **critical** stakeholders as missing. If you're seeing failures, it means the auto-detected heuristics deemed those perspectives critical for your domain.
+
+Options:
+
+1. **Let the orchestrator address gaps**: CConductor will automatically research missing perspectives
+2. **Review domain heuristics**: Check `meta/domain-heuristics.json` to see why perspectives were marked critical
+3. **Adjust research question**: If your question is too broad, CConductor will require more stakeholder perspectives
+
+**Problem: Patterns work for one mission but not another**
+
+**Cause**: Domain heuristics are mission-specific. Your manual patterns apply to ALL missions, but auto-detected stakeholder categories vary by mission.
+
+**Example**:
+
+- **Mission 1** (aviation safety): Auto-detects "regulators", "manufacturers", "safety_advocates"
+  - Your pattern for "regional_regulators" supplements "regulators" category
+  
+- **Mission 2** (tech security): Auto-detects "vendors", "security_researchers", "users"
+  - Your "regional_regulators" pattern doesn't match any category in this mission (correctly ignored)
+
+**This is correct behavior**: Patterns only apply when relevant stakeholder categories exist.
+
+### Advanced: Category Naming
+
+**Important**: Your manual pattern category names should be semantic and clear, but they're merged based on similarity matching.
+
+**Naming tips**:
+
+- Use singular or plural consistently: `"regulators"` not mixing with `"regulator"`
+- Use underscores for multi-word: `"safety_advocates"` not `"safety advocates"` or `"SafetyAdvocates"`
+- Match auto-detected patterns when possible: Check `meta/domain-heuristics.json` to see what CConductor named the categories
+
+**Example from heuristics**:
+
+```json
+{
+  "stakeholder_categories": {
+    "regulators": { ... },
+    "safety_advocates": { ... }
+  }
+}
+```
+
+Your patterns should use same names:
+
+```json
+{
+  "additional_patterns": {
+    "regulators": { ... },        ← Merges with auto-detected "regulators"
+    "safety_advocates": { ... }   ← Merges with auto-detected "safety_advocates"
+  }
+}
+```
 
 ---
 

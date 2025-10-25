@@ -1,0 +1,124 @@
+{
+  "_comment": "Manual Stakeholder Pattern Supplementation Template",
+  "_usage": "Copy this file to ~/.config/cconductor/stakeholder-patterns.json and customize for your domains",
+  "_purpose": "Extend auto-detected stakeholder mappings for niche domains without editing core code",
+  
+  "additional_patterns": {
+    "safety_advocates": {
+      "_description": "Independent safety advocacy groups and victim families",
+      "domain_patterns": [
+        "familiesof737max.org",
+        "airsafe.org",
+        "flightsafety.org"
+      ],
+      "keyword_patterns": [
+        "safety advocate",
+        "victim families",
+        "independent safety analysis",
+        "crash investigation advocate"
+      ]
+    },
+    
+    "regional_regulators": {
+      "_description": "Aviation regulators outside FAA/EASA (Transport Canada, CASA Australia, etc.)",
+      "domain_patterns": [
+        "tc.gc.ca",
+        "casa.gov.au",
+        "dgca.gov.in",
+        "caac.gov.cn"
+      ],
+      "keyword_patterns": [
+        "Transport Canada",
+        "CASA",
+        "DGCA",
+        "CAAC",
+        "civil aviation authority"
+      ]
+    },
+    
+    "medical_researchers": {
+      "_description": "Academic medical researchers and clinical trial investigators (healthcare domain)",
+      "domain_patterns": [
+        "nih.gov",
+        "clinicaltrials.gov",
+        "nejm.org",
+        "thelancet.com",
+        "bmj.com"
+      ],
+      "keyword_patterns": [
+        "clinical trial",
+        "peer-reviewed study",
+        "research team",
+        "principal investigator",
+        "NIH",
+        "medical research"
+      ]
+    },
+    
+    "patient_advocates": {
+      "_description": "Patient advocacy organizations and support groups (healthcare domain)",
+      "domain_patterns": [
+        "patientadvocate.org",
+        "cancer.org",
+        "diabetes.org",
+        "heart.org"
+      ],
+      "keyword_patterns": [
+        "patient advocacy",
+        "patient support",
+        "patient rights",
+        "advocacy organization"
+      ]
+    },
+    
+    "independent_security_researchers": {
+      "_description": "Independent security researchers and bug bounty hunters (tech domain)",
+      "domain_patterns": [
+        "hackerone.com",
+        "bugcrowd.com",
+        "zerodayinitiative.com"
+      ],
+      "keyword_patterns": [
+        "security researcher",
+        "vulnerability disclosure",
+        "bug bounty",
+        "CVE",
+        "security advisory"
+      ]
+    },
+    
+    "open_source_maintainers": {
+      "_description": "Open source project maintainers and contributors (tech domain)",
+      "domain_patterns": [
+        "github.com",
+        "gitlab.com",
+        "apache.org",
+        "fsf.org"
+      ],
+      "keyword_patterns": [
+        "open source",
+        "maintainer",
+        "contributor",
+        "FOSS",
+        "free software"
+      ]
+    }
+  },
+  
+  "_instructions": {
+    "when_to_use": "Add patterns here when you see 'uncategorized sources' warnings in quality-gate-summary.json and those sources represent important stakeholder perspectives",
+    "how_patterns_work": {
+      "domain_patterns": "URL fragments that match source domains (e.g., 'faa.gov' matches 'https://www.faa.gov/newsroom/statement')",
+      "keyword_patterns": "Terms that appear in source titles or snippets (case-insensitive)",
+      "matching": "A source matches a category if it matches ANY domain pattern OR ANY keyword pattern"
+    },
+    "how_to_verify": "After adding patterns, run a mission and check research-sessions/mission_*/artifacts/quality-gate-summary.json for reduced uncategorized_sources.count",
+    "best_practices": [
+      "Use specific domain patterns (e.g., 'tc.gc.ca' not just '.ca')",
+      "Include multiple keyword variations ('safety advocate', 'advocacy group')",
+      "Test with a small mission first to verify patterns work",
+      "Document why you added each category (helps team maintenance)"
+    ]
+  }
+}
+

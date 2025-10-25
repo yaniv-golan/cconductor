@@ -1,0 +1,24 @@
+{
+  "name": "domain-heuristics",
+  "display_name": "Domain Heuristics Specialist",
+  "description": "Analyzes the mission objective, performs quick reconnaissance, and produces structured domain guidance for downstream agents",
+  "capabilities": [
+    "mission_planning",
+    "regulatory_analysis",
+    "risk_assessment"
+  ],
+  "input_types": [
+    "research_question",
+    "mission_profile"
+  ],
+  "output_types": [
+    "validation_report"
+  ],
+  "tools": [
+    "WebSearch",
+    "Read"
+  ],
+  "model": "claude-sonnet-4-5",
+  "produces_kg_artifacts": false,
+  "action_verb": "Analyzing"
+}

@@ -989,6 +989,341 @@ The quality gate emits structured confidence surfaces for each claim in `artifac
 
 ---
 
+## Stakeholder Patterns (stakeholder-patterns.json)
+
+### Overview
+
+**File**: `~/.config/cconductor/stakeholder-patterns.json` (user-created, optional)  
+**Purpose**: Manually supplement auto-detected stakeholder mappings for domain-aware quality checks  
+**Affects**: How quality gate categorizes sources into stakeholder perspectives  
+**Available since**: v0.4.0 (October 2025)
+
+### What This Does
+
+Domain-aware quality checking automatically detects stakeholder categories (regulators, manufacturers, critics, etc.) and ensures your reports include balanced perspectives. Sometimes CConductor encounters niche stakeholders it can't auto-detect. This configuration lets you extend the stakeholder mappings without editing core code.
+
+**When you see warnings like**:
+
+```
+⚠ Note: 8 uncategorized sources detected (18%)
+   Action: Add patterns to ~/.config/cconductor/stakeholder-patterns.json if needed
+```
+
+You can add custom patterns to help CConductor categorize those sources.
+
+### Structure
+
+```json
+{
+  "additional_patterns": {
+    "stakeholder_category_name": {
+      "domain_patterns": [
+        "domain.com",
+        "subdomain.example.org"
+      ],
+      "keyword_patterns": [
+        "Keyword phrase",
+        "Another keyword"
+      ]
+    }
+  }
+}
+```
+
+### Complete Example
+
+```json
+{
+  "additional_patterns": {
+    "regional_regulators": {
+      "domain_patterns": [
+        "tc.gc.ca",
+        "casa.gov.au",
+        "dgca.gov.in"
+      ],
+      "keyword_patterns": [
+        "Transport Canada",
+        "CASA",
+        "DGCA",
+        "civil aviation authority"
+      ]
+    },
+    "safety_advocates": {
+      "domain_patterns": [
+        "familiesof737max.org",
+        "airsafe.org"
+      ],
+      "keyword_patterns": [
+        "safety advocate",
+        "victim families",
+        "independent safety analysis"
+      ]
+    },
+    "patient_advocates": {
+      "domain_patterns": [
+        "patientadvocate.org",
+        "cancer.org"
+      ],
+      "keyword_patterns": [
+        "patient advocacy",
+        "patient rights"
+      ]
+    }
+  }
+}
+```
+
+### Field Descriptions
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `additional_patterns` | object | yes | Container for all stakeholder categories you're adding |
+| `<category_name>` | object | yes | Unique name for stakeholder category (e.g., "regional_regulators") |
+| `domain_patterns` | array of strings | yes | URL fragments that identify sources (e.g., "tc.gc.ca" matches https://tc.gc.ca/...) |
+| `keyword_patterns` | array of strings | yes | Terms that appear in source titles/snippets (case-insensitive) |
+
+### Pattern Matching Logic
+
+A source is categorized as a stakeholder if:
+
+- **Domain match**: Source URL contains ANY domain pattern (e.g., "tc.gc.ca" matches "https://tc.gc.ca/eng/civilaviation/statement.html")
+  - Matching is substring-based
+  - Domain extracted after stripping protocol and www prefix
+  - Best practice: Use specific patterns like "tc.gc.ca" not broad ones like ".ca"
+
+**OR**
+
+- **Keyword match**: Source title contains ANY keyword pattern (case-insensitive)
+  - "Transport Canada" matches "transport canada", "TRANSPORT CANADA", etc.
+  - Partial word matches: "FAA" matches "FAA Issues Directive"
+  - Best practice: Include variations: ["safety advocate", "advocacy group", "safety coalition"]
+
+### Pattern Merging Behavior
+
+Your manual patterns are **merged** with auto-detected patterns:
+
+- ✅ Auto-detected patterns still work
+- ✅ Your patterns supplement them
+- ✅ If category names match, patterns combine (union)
+- ✅ Different missions use different auto-detected categories; your patterns apply when relevant
+
+**Example flow**:
+
+1. Mission starts: "Research Boeing 737 MAX safety fixes"
+2. Domain Heuristics Agent auto-detects stakeholder categories:
+   - regulators (faa.gov, easa.europa.eu)
+   - manufacturers (boeing.com)
+   - safety_advocates (basic patterns)
+3. Quality gate reads your `stakeholder-patterns.json`:
+   - Merges your "regional_regulators" patterns into "regulators" category
+   - Merges your "safety_advocates" patterns into existing "safety_advocates"
+4. Sources now match more stakeholder categories → fewer uncategorized warnings
+
+### Category Naming Guidelines
+
+**Important**: Category names should match or be compatible with auto-detected names.
+
+**Best practices**:
+
+- **Use underscores**: `safety_advocates` not `safety advocates` or `SafetyAdvocates`
+- **Plural form**: `regulators` not `regulator` (consistency with auto-detection)
+- **Semantic names**: `regional_regulators` is clearer than `other_gov`
+- **Check auto-detected names**: View `research-sessions/mission_*/meta/domain-heuristics.json` to see what names CConductor uses
+
+**Common stakeholder categories**:
+
+- `regulators` - Government regulatory agencies
+- `manufacturers` - Product/service manufacturers
+- `operators` - Organizations that use/operate the product/service
+- `safety_advocates` - Independent safety groups, victim families
+- `independent_analysts` - Think tanks, academic researchers
+- `patient_advocates` - Healthcare: patient support organizations
+- `security_researchers` - Tech: independent security experts
+- `open_source_maintainers` - Tech: FOSS project contributors
+
+### Creating Your Patterns File
+
+**Step 1: Copy template**
+
+```bash
+mkdir -p ~/.config/cconductor
+cp config/stakeholder-patterns.default.json ~/.config/cconductor/stakeholder-patterns.json
+```
+
+**Step 2: Edit the file**
+
+```bash
+# macOS
+open ~/.config/cconductor/stakeholder-patterns.json
+
+# Linux
+nano ~/.config/cconductor/stakeholder-patterns.json
+```
+
+**Step 3: Add your patterns**
+
+Replace template examples with your stakeholder categories.
+
+**Step 4: Validate JSON**
+
+```bash
+jq empty ~/.config/cconductor/stakeholder-patterns.json
+# No output = valid JSON
+# Error message = fix syntax
+```
+
+**Step 5: Test with a mission**
+
+```bash
+./cconductor "Your research question"
+
+# After mission, check uncategorized count
+cat research-sessions/mission_*/artifacts/quality-gate-summary.json | jq '.uncategorized_sources'
+```
+
+### Template File
+
+CConductor provides a comprehensive template with examples for multiple domains:
+
+**Location**: `config/stakeholder-patterns.default.json`
+
+**Includes examples for**:
+- Aviation safety (regional regulators, safety advocates)
+- Healthcare (medical researchers, patient advocates)
+- Technology (security researchers, open-source maintainers)
+
+**View template**:
+
+```bash
+cat config/stakeholder-patterns.default.json
+```
+
+The template includes detailed comments and best practices.
+
+### Verification
+
+**Check if patterns are working**:
+
+```bash
+# After running a mission
+cat research-sessions/mission_*/artifacts/quality-gate-summary.json | jq '{
+  total: .uncategorized_sources.total,
+  uncategorized: .uncategorized_sources.count,
+  percentage: .uncategorized_sources.percentage,
+  samples: .uncategorized_sources.samples
+}'
+```
+
+**Expected results**:
+
+- `uncategorized` count should decrease after adding patterns
+- `percentage` should be <15% (threshold for warnings)
+- `samples` array shows which sources are still uncategorized (add more patterns if needed)
+
+### Best Practices
+
+**1. Start with real data**
+
+Don't add patterns preemptively. Wait until you see uncategorized sources in actual missions, then add patterns for those specific sources.
+
+**2. Use specific patterns**
+
+❌ **Bad**: `".gov"` (too broad, matches all government sites)  
+✅ **Good**: `"tc.gc.ca"` (specific to Transport Canada)
+
+❌ **Bad**: `"research"` (too generic)  
+✅ **Good**: `"clinical trial"` (specific to medical research)
+
+**3. Include variations**
+
+```json
+"keyword_patterns": [
+  "Transport Canada",
+  "Transports Canada",
+  "TC Civil Aviation",
+  "TCCA"
+]
+```
+
+**4. Document your patterns**
+
+Use `"_note"` fields (ignored by parser) to document why you added patterns:
+
+```json
+{
+  "additional_patterns": {
+    "regional_regulators": {
+      "_note": "Added June 2025 for international aviation compliance research",
+      "domain_patterns": ["tc.gc.ca"],
+      "keyword_patterns": ["Transport Canada"]
+    }
+  }
+}
+```
+
+**5. Test incrementally**
+
+Add 1-2 categories, run a test mission, verify they work, then add more.
+
+**6. Share with your team**
+
+If multiple people research the same domains:
+
+```bash
+# Version control your patterns
+cp ~/.config/cconductor/stakeholder-patterns.json team-configs/aviation-stakeholders.json
+git add team-configs/aviation-stakeholders.json
+git commit -m "Add aviation stakeholder patterns"
+```
+
+### Troubleshooting
+
+**Problem**: Added patterns but uncategorized count unchanged
+
+**Solutions**:
+
+1. **Check JSON syntax**:
+   ```bash
+   jq empty ~/.config/cconductor/stakeholder-patterns.json
+   ```
+
+2. **Verify file location**:
+   ```bash
+   ls -la ~/.config/cconductor/stakeholder-patterns.json
+   ```
+
+3. **Check domain pattern format**:
+   - Use domain only, not full URL
+   - ❌ Wrong: `"https://tc.gc.ca/eng/"`
+   - ✅ Right: `"tc.gc.ca"`
+
+4. **Check keyword patterns are in titles**:
+   View source titles in quality gate summary:
+   ```bash
+   cat research-sessions/mission_*/artifacts/quality-gate-summary.json | \
+     jq '.uncategorized_sources.samples[] | .title'
+   ```
+
+**Problem**: Patterns matching wrong sources
+
+**Solution**:
+
+Use more specific patterns. If `"research"` matches too broadly, use `"clinical research"` or `"peer-reviewed research"` instead.
+
+**Problem**: Patterns not needed for some missions
+
+**Expected behavior**: 
+
+Patterns only apply when relevant stakeholder categories exist in that mission's domain heuristics. A pattern for "regional_regulators" won't do anything in a tech security mission that has no "regulators" category. This is correct.
+
+### See Also
+
+- **[Quality Guide - Domain-Aware Quality Section](QUALITY_GUIDE.md#domain-aware-quality--stakeholder-patterns)** - Detailed user guide with examples
+- **[Quality Gate Configuration](#quality-gate-quality-gatejson)** - Main quality gate settings including `domain_aware` flag
+- **Template**: `config/stakeholder-patterns.default.json` - Comprehensive examples
+
+---
+
 ## Paths Configuration (paths.json)
 
 ### Overview

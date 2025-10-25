@@ -39,6 +39,21 @@
             "NotebookEdit"
         ]
     },
+    "domain-heuristics": {
+        "allowed": [
+            "WebSearch",
+            "WebFetch(*.gov)",
+            "WebFetch(*.edu)",
+            "WebFetch(news.*)",
+            "Read",
+            "Write"
+        ],
+        "disallowed": [
+            "Bash",
+            "Edit",
+            "NotebookEdit"
+        ]
+    },
     "synthesis-agent": {
         "allowed": [
             "Read",

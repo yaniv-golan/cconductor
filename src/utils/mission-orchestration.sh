@@ -226,6 +226,50 @@ invoke_mission_orchestrator() {
     local context_file="$session_dir/meta/orchestrator-context.json"
     echo "$context_json" > "$context_file"
     
+    # Build domain compliance block for orchestrator context
+    local domain_compliance_section
+    domain_compliance_section=$(
+        _dc_status=$(echo "$context_json" | jq -r '.state.domain_compliance.compliance_summary // .state.domain_compliance.status // "none"' 2>/dev/null)
+        if [[ -z "$_dc_status" || "$_dc_status" == "null" || "$_dc_status" == "none" ]]; then
+            echo "No domain compliance data available."
+        else
+            echo "Compliance Status: $_dc_status"
+            _dc_level=$(echo "$context_json" | jq -r '.state.domain_compliance.domain_drift.level // "none"' 2>/dev/null)
+            _dc_score=$(echo "$context_json" | jq -r '.state.domain_compliance.domain_drift.score // ""' 2>/dev/null)
+            if [[ "$_dc_level" == "high" ]]; then
+                echo ""
+                echo "**⚠ HIGH DOMAIN DRIFT DETECTED** (score: ${_dc_score:-unknown})"
+                echo "Factors:"
+                _dc_factors=$(echo "$context_json" | jq -r '.state.domain_compliance.domain_drift.factors[]?' 2>/dev/null)
+                if [[ -n "$_dc_factors" ]]; then
+                    while IFS= read -r _dc_factor_line; do
+                        echo "  - $_dc_factor_line"
+                    done <<< "$_dc_factors"
+                else
+                    echo "  - (no drift factors reported)"
+                fi
+                _dc_recommendation=$(echo "$context_json" | jq -r '.state.domain_compliance.domain_drift.recommendation // "Consider re-running domain heuristics with refined scope."' 2>/dev/null)
+                echo ""
+                echo "Recommendation: $_dc_recommendation"
+            elif [[ "$_dc_level" == "moderate" ]]; then
+                echo "Note: Moderate domain drift detected (score: ${_dc_score:-unknown}). Monitor for continued expansion."
+            else
+                echo "Domain drift: none"
+            fi
+            _dc_missing_stakeholders=$(echo "$context_json" | jq -r '.state.domain_compliance.missing_stakeholders // [] | select(length>0) | join(", ")' 2>/dev/null)
+            _dc_missing_milestones=$(echo "$context_json" | jq -r '.state.domain_compliance.missing_milestones // [] | select(length>0) | join(", ")' 2>/dev/null)
+            if [[ -n "$_dc_missing_stakeholders" || -n "$_dc_missing_milestones" ]]; then
+                echo "Gaps detected:"
+                if [[ -n "$_dc_missing_stakeholders" ]]; then
+                    echo "  - Missing stakeholders: $_dc_missing_stakeholders"
+                fi
+                if [[ -n "$_dc_missing_milestones" ]]; then
+                    echo "  - Missing milestones: $_dc_missing_milestones"
+                fi
+            fi
+        fi
+    )
+
     # Create user message with context
     local user_message
     user_message=$(cat <<EOF
@@ -241,6 +285,8 @@ $(echo "$context_json" | jq -r '.agents | tojson')
 Coverage Metrics: $(echo "$context_json" | jq -r '.state.coverage | tojson')
 Budget Summary: $(echo "$context_json" | jq -r '.state.budget_summary | tojson')
 Quality Gate Status: $(echo "$context_json" | jq -r '.state.quality_gate_status')
+## Domain Compliance & Drift
+$(printf '%s\n' "$domain_compliance_section")
 Recent Decisions (last 5): $(echo "$context_json" | jq -r '.state.last_5_decisions | tojson')
 
 Important Paths (use the Read tool if you need the raw data):
@@ -428,9 +474,17 @@ _invoke_delegated_agent() {
             return 0
         fi
     fi
-    
+
     # Note: verbose_agent_start is called by invoke_agent_v2, no need to call here
-    
+
+    if [[ "$agent_name" == "synthesis-agent" && -f "$session_dir/meta/domain-heuristics.json" ]]; then
+        if [[ -z "$input_artifacts" || "$input_artifacts" == "[]" ]]; then
+            input_artifacts='["meta/domain-heuristics.json"]'
+        else
+            input_artifacts=$(echo "$input_artifacts" | jq 'if (map(. == "meta/domain-heuristics.json") | any) then . else . + ["meta/domain-heuristics.json"] end' 2>/dev/null || echo '["meta/domain-heuristics.json"]')
+        fi
+    fi
+
     # Sanitize task for safe export and display
     # This is for verbose output only - the full task still goes to the input file
     local task_display
@@ -967,6 +1021,22 @@ run_quality_gate() {
     fi
 }
 
+announce_uncategorized_sources() {
+    local session_dir="$1"
+    local summary_file="$session_dir/artifacts/quality-gate-summary.json"
+    if [[ ! -f "$summary_file" ]]; then
+        return 0
+    fi
+
+    local uncategorized_count
+    uncategorized_count=$(jq -r '.uncategorized_sources.count // 0' "$summary_file" 2>/dev/null || echo "0")
+    if [[ "$uncategorized_count" -gt 0 ]]; then
+        echo "  ⚠ Note: $uncategorized_count uncategorized sources detected"
+        echo "     Review: artifacts/quality-gate-summary.json"
+        echo "     Action: Add patterns to ~/.config/cconductor/stakeholder-patterns.json if needed"
+    fi
+}
+
 log_quality_gate_event() {
     local session_dir="$1"
     local event_type="$2"
@@ -1030,6 +1100,7 @@ run_quality_assurance_cycle() {
         log_quality_gate_event "$session_dir" "quality_gate_started" "$attempt" "$gate_mode" "running"
         # Run quality gate
         if run_quality_gate "$session_dir"; then
+            announce_uncategorized_sources "$session_dir"
             verbose "✓ Quality gate passed"
             log_quality_gate_event "$session_dir" "quality_gate_completed" "$attempt" "$gate_mode" "passed" "artifacts/quality-gate-summary.json" "artifacts/quality-gate.json"
             
@@ -1046,6 +1117,7 @@ run_quality_assurance_cycle() {
             
             return 0
         fi
+        announce_uncategorized_sources "$session_dir"
         log_quality_gate_event "$session_dir" "quality_gate_completed" "$attempt" "$gate_mode" "failed" "artifacts/quality-gate-summary.json" "artifacts/quality-gate.json"
         
         # Sync gate results to KG even on failure (partial results useful)
@@ -1316,10 +1388,48 @@ run_mission_orchestration() {
     # Initialize agent registry
     echo "→ Loading agent registry..."
     agent_registry_init
+
+    # Mission objective cached for logging + heuristics agent
+    local objective
+    objective=$(jq -r '.objective // "Unknown"' "$session_dir/meta/session.json" 2>/dev/null || echo "Unknown")
+
+    echo "→ Analyzing domain requirements..."
+    if [[ -f "$session_dir/meta/domain-heuristics.json" ]]; then
+        echo "  ✓ Domain heuristics already available (resume)"
+    elif agent_registry_exists "domain-heuristics"; then
+        local heuristics_task heuristics_context mission_summary
+        mission_summary=$(echo "$mission_profile" | jq -r '{name: .name, success_criteria: .success_criteria, constraints: .constraints} | tojson' 2>/dev/null || echo '{}')
+        heuristics_task=$(cat <<EOF
+Analyze the mission objective below and produce domain-heuristics.json plus domain-heuristics.kg.lock inside artifacts/domain-heuristics/.
+Focus on stakeholder taxonomy, freshness requirements, mandatory watch items, and synthesis guidance using the documented schema.
+
+Mission Objective: $objective
+EOF
+)
+        heuristics_context=$(cat <<EOF
+Mission profile snapshot:
+$mission_summary
+EOF
+)
+
+        if _invoke_delegated_agent "$session_dir" "domain-heuristics" "$heuristics_task" "$heuristics_context" "[]"; then
+            process_agent_kg_artifacts "$session_dir" "domain-heuristics" >/dev/null 2>&1 || true
+            if [[ -f "$session_dir/artifacts/domain-heuristics/domain-heuristics.json" ]]; then
+                mkdir -p "$session_dir/meta"
+                cp "$session_dir/artifacts/domain-heuristics/domain-heuristics.json" "$session_dir/meta/domain-heuristics.json"
+                echo "  ✓ Domain requirements established"
+            else
+                echo "  ⚠ Domain heuristics agent did not produce expected output"
+            fi
+        else
+            echo "  ⚠ Domain heuristics agent failed, using defaults"
+        fi
+    else
+        echo "  ⚠ Domain heuristics agent not found, using defaults"
+    fi
+    echo ""
     
     # Log mission start event for journal
-    local objective
-    objective=$(cat "$session_dir/meta/session.json" | jq -r '.objective // "Unknown"')
     log_event "$session_dir" "mission_started" "$(jq -n \
         --arg mission "$mission_name" \
         --arg objective "$objective" \
@@ -1385,7 +1495,26 @@ run_mission_orchestration() {
                 fi
             fi
         fi
-        
+
+        if [[ -f "$UTILS_DIR/domain-compliance-check.sh" && -f "$session_dir/meta/domain-heuristics.json" && $iteration -gt 1 ]]; then
+            echo "→ Checking domain requirements compliance..."
+            local compliance_report compliance_status
+            if compliance_report=$(bash "$UTILS_DIR/domain-compliance-check.sh" "$session_dir" 2>/dev/null); then
+                compliance_status=$(echo "$compliance_report" | jq -r '.compliance_summary // "unknown"' 2>/dev/null || echo "unknown")
+                if [[ "$compliance_status" == "gaps_detected" ]]; then
+                    if command -v log_event &>/dev/null; then
+                        log_event "$session_dir" "domain_compliance_gap" "$compliance_report"
+                    fi
+                    echo "  ⚠ Domain compliance gaps detected (orchestrator will address)"
+                else
+                    echo "  ✓ Domain requirements on track"
+                fi
+            else
+                echo "  ⚠ Compliance check failed, skipping"
+            fi
+            echo ""
+        fi
+
         # Check budget before proceeding
         if ! budget_check "$session_dir"; then
             log_warning "$session_dir" "budget_limit" "Budget limit reached at iteration $iteration"

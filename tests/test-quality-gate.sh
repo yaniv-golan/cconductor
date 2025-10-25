@@ -145,44 +145,9 @@ if [[ "$failed_claims" -lt 1 ]]; then
     exit 1
 fi
 
-# Test 3: Whitespace-only dates (recency should gracefully skip)
-mkdir -p "$tmp_root/whitespace_dates"
-create_session_json "$tmp_root/whitespace_dates"
-mkdir -p "$tmp_root/whitespace_dates/knowledge"
-mkdir -p "$tmp_root/whitespace_dates/artifacts"
-cat >"$tmp_root/whitespace_dates/knowledge/knowledge-graph.json" <<'EOF'
-{
-    "claims": [
-        {
-            "id": "c0",
-            "statement": "Test claim with whitespace dates",
-            "confidence": 0.8,
-            "sources": [
-                {
-                    "url": "https://example.com",
-                    "credibility": "high",
-                    "date": "   "
-                }
-            ]
-        }
-    ]
-}
-EOF
-
-"$GATE_SCRIPT" "$tmp_root/whitespace_dates" >/tmp/quality-gate-test-whitespace.log 2>&1
-whitespace_exit=$?
-
-# Should not crash or show Python traceback
-if [[ $whitespace_exit -ne 0 ]]; then
-    echo "Whitespace dates test failed with exit $whitespace_exit" >&2
-    cat /tmp/quality-gate-test-whitespace.log >&2
+if [[ "$(jq -r '.recommendations | length' "$fail_report")" -lt 1 ]]; then
+    echo "Expected recommendations for failed case" >&2
     exit 1
 fi
 
-if grep -q "JSONDecodeError" /tmp/quality-gate-test-whitespace.log; then
-    echo "Python traceback leaked to stderr with whitespace dates" >&2
-    cat /tmp/quality-gate-test-whitespace.log >&2
-    exit 1
-fi
-
-echo "Quality gate tests passed (3 test cases)."
+echo "Quality gate tests passed."

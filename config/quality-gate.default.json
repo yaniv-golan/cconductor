@@ -1,6 +1,17 @@
 {
   "_comment": "Default thresholds for the mission quality gate. Override in ~/.config/cconductor/quality-gate.json if needed.",
   "mode": "advisory",
+  "domain_aware": true,
+  "fallback_to_global_thresholds": true,
+  "manual_stakeholder_patterns": {
+    "enabled": true,
+    "config_path": "~/.config/cconductor/stakeholder-patterns.json"
+  },
+  "uncategorized_source_warnings": {
+    "enabled": true,
+    "threshold_percentage": 15,
+    "include_in_summary": true
+  },
   "thresholds": {
     "min_sources_per_claim": 2,
     "min_independent_sources": 2,
