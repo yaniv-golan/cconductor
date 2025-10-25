@@ -38,6 +38,8 @@ source "$UTILS_DIR/json-parser.sh"
 # shellcheck disable=SC1091
 source "$PROJECT_ROOT/src/knowledge-graph.sh"
 # shellcheck disable=SC1091
+source "$UTILS_DIR/quality-surface-sync.sh" 2>/dev/null || true
+# shellcheck disable=SC1091
 source "$UTILS_DIR/verbose.sh" 2>/dev/null || true
 # shellcheck disable=SC1091
 source "$UTILS_DIR/error-logger.sh"
@@ -931,28 +933,21 @@ process_orchestrator_decisions() {
                     fi
                     
                     if [[ "$gate_mode" == "advisory" ]]; then
-                        echo "⚠ Quality gate flagged some claims (advisory mode - remediation attempted)" >&2
+                        echo "⚠ Quality gate flagged claims (advisory mode - proceeding with synthesis)" >&2
+                        # Log but don't block
+                        log_decision "$session_dir" "synthesis_proceeding_despite_gate" \
+                            "$(echo "$orchestrator_output" | jq --arg mode "$gate_mode" \
+                            '. + {quality_gate_status: "failed", mode: $mode, proceeding: true}')"
                     else
-                        echo "⚠ Quality gate flagged some claims, synthesis blocked (enforce mode)" >&2
+                        echo "⚠ Quality gate blocked synthesis (enforce mode)" >&2
+                        log_decision "$session_dir" "synthesis_blocked_quality_gate" \
+                            "$(echo "$orchestrator_output" | jq '. + {quality_gate_status: "failed", mode: "enforce"}')"
+                        # Return without invoking synthesis in enforce mode
+                        return 0
                     fi
-                    
-                    # Provide gate results to orchestrator for remediation decision
-                    local gate_results
-                    if [[ -f "$session_dir/artifacts/quality-gate-summary.json" ]]; then
-                        gate_results=$(cat "$session_dir/artifacts/quality-gate-summary.json")
-                    else
-                        gate_results='{"status": "failed", "message": "Quality gate failed but no summary available"}'
-                    fi
-                    
-                    # Log decision with gate results
-                    log_decision "$session_dir" "synthesis_blocked_quality_gate" \
-                        "$(echo "$orchestrator_output" | jq --argjson gate "$gate_results" \
-                        '. + {quality_gate_failed: $gate}')"
-                    
-                    # Return without invoking synthesis - orchestrator will adapt
-                    return 0
+                else
+                    echo "  ✓ Quality gate passed, proceeding with synthesis"
                 fi
-                echo "  ✓ Quality gate passed, proceeding with synthesis"
             fi
             
             # Actually invoke the agent - handle failures gracefully
@@ -1156,9 +1151,32 @@ run_quality_assurance_cycle() {
         if run_quality_gate "$session_dir"; then
             verbose "✓ Quality gate passed"
             log_quality_gate_event "$session_dir" "quality_gate_completed" "$attempt" "$gate_mode" "passed" "artifacts/quality-gate-summary.json" "artifacts/quality-gate.json"
+            
+            # Sync gate results to KG (optional, fails gracefully)
+            if command -v sync_quality_surfaces_to_kg &>/dev/null; then
+                local kg_file="$session_dir/knowledge/knowledge-graph.json"
+                local claims_count=0
+                if [[ -f "$kg_file" ]]; then
+                    claims_count=$(jq '.claims | length' "$kg_file" 2>/dev/null || echo 0)
+                fi
+                sync_quality_surfaces_to_kg "$session_dir" "artifacts/quality-gate.json" || true
+                record_quality_gate_run "$session_dir" "$(get_timestamp)" "$claims_count" "artifacts/quality-gate.json" || true
+            fi
+            
             return 0
         fi
         log_quality_gate_event "$session_dir" "quality_gate_completed" "$attempt" "$gate_mode" "failed" "artifacts/quality-gate-summary.json" "artifacts/quality-gate.json"
+        
+        # Sync gate results to KG even on failure (partial results useful)
+        if command -v sync_quality_surfaces_to_kg &>/dev/null; then
+            local kg_file="$session_dir/knowledge/knowledge-graph.json"
+            local claims_count=0
+            if [[ -f "$kg_file" ]]; then
+                claims_count=$(jq '.claims | length' "$kg_file" 2>/dev/null || echo 0)
+            fi
+            sync_quality_surfaces_to_kg "$session_dir" "artifacts/quality-gate.json" || true
+            record_quality_gate_run "$session_dir" "$(get_timestamp)" "$claims_count" "artifacts/quality-gate.json" || true
+        fi
 
         # Gate failed
         if [[ "$remediation_enabled" != "true" ]] || [[ $attempt -eq $max_attempts ]]; then
@@ -1202,8 +1220,16 @@ run_quality_assurance_cycle() {
             process_agent_kg_artifacts "$session_dir" "quality-remediator"
             verbose "  ✓ Remediation attempt $attempt completed"
         else
-            log_warn "Quality remediator invocation failed"
-            return 1
+            local remediator_exit_code=$?
+            
+            # Distinguish timeout from other failures
+            if [[ $remediator_exit_code -eq 124 ]]; then
+                log_warn "Quality remediator timed out (no activity detected) - continuing to next attempt"
+                # Don't return 1 for timeout - allow retry on next attempt
+            else
+                log_warn "Quality remediator invocation failed (exit code: $remediator_exit_code)"
+                return 1
+            fi
         fi
         
         attempt=$((attempt + 1))
@@ -1232,11 +1258,16 @@ check_mission_complete() {
         planning_done=true
     fi
     
-    # 2. Check quality gate
+    # 2. Check quality gate with mode awareness
     if [[ -f "$session_dir/artifacts/quality-gate-summary.json" ]]; then
-        local gate_status
+        local gate_status gate_mode
         gate_status=$(jq -r '.status // "unknown"' "$session_dir/artifacts/quality-gate-summary.json" 2>/dev/null || echo "unknown")
+        gate_mode=$(jq -r '.mode // "advisory"' "$session_dir/artifacts/quality-gate-summary.json" 2>/dev/null || echo "advisory")
+        
         if [[ "$gate_status" == "passed" ]]; then
+            quality_gate_passed=true
+        elif [[ "$gate_mode" == "advisory" ]]; then
+            # Advisory mode: don't block completion
             quality_gate_passed=true
         fi
     else
@@ -1582,6 +1613,8 @@ run_mission_orchestration_resume() {
     local mission_profile="$1"
     local session_dir="$2"
     local refinement="${3:-}"
+    local extend_iterations="${4:-}"
+    local extend_time="${5:-}"
     
     local mission_name
     mission_name=$(echo "$mission_profile" | jq -r '.name')
@@ -1609,9 +1642,62 @@ run_mission_orchestration_resume() {
     
     local max_iterations
     max_iterations=$(echo "$mission_profile" | jq -r '.constraints.max_iterations')
+    
+    local max_time_minutes
+    max_time_minutes=$(echo "$mission_profile" | jq -r '.constraints.max_time_minutes')
+    
+    # Apply extensions if provided
+    local extensions_applied=false
+    if [ -n "$extend_iterations" ] && [ "$extend_iterations" -gt 0 ]; then
+        max_iterations=$((max_iterations + extend_iterations))
+        echo "  Extended max iterations to $max_iterations (added $extend_iterations)"
+        extensions_applied=true
+    fi
+    
+    if [ -n "$extend_time" ] && [ "$extend_time" -gt 0 ]; then
+        max_time_minutes=$((max_time_minutes + extend_time))
+        echo "  Extended max time to $max_time_minutes minutes (added $extend_time)"
+        extensions_applied=true
+    fi
+    
+    # Update mission profile with extended constraints for budget_check
+    if [ "$extensions_applied" = true ]; then
+        mission_profile=$(echo "$mission_profile" | jq \
+            --argjson max_iter "$max_iterations" \
+            --argjson max_time "$max_time_minutes" \
+            '.constraints.max_iterations = $max_iter | .constraints.max_time_minutes = $max_time')
+        
+        # Update budget limits in the persisted budget file
+        if command -v budget_extend_limits &>/dev/null; then
+            budget_extend_limits "$session_dir" "$extend_iterations" "$extend_time" || \
+                log_warn "Failed to update budget limits - budget checks may be incorrect"
+        fi
+    fi
+    
     local iteration=$((current_iteration + 1))
     
     echo "  Continuing from iteration $iteration/$max_iterations"
+    
+    # Check if iterations already exhausted
+    if [[ $iteration -gt $max_iterations ]]; then
+        echo ""
+        echo "⚠ Session has already completed all iterations ($current_iteration original limit)"
+        echo ""
+        echo "This session cannot be resumed without extending the iteration limit."
+        echo ""
+        echo "Options:"
+        echo "  1. Resume with additional iterations/time:"
+        echo "     ./cconductor sessions resume $(basename "$session_dir") --extend-iterations 5"
+        echo "     ./cconductor sessions resume $(basename "$session_dir") --extend-time 30"
+        echo ""
+        echo "  2. Start a new session with the same query:"
+        echo "     ./cconductor \"$(jq -r '.objective' "$session_dir/meta/session.json" 2>/dev/null)\""
+        echo ""
+        echo "  3. View the existing research:"
+        echo "     ./cconductor sessions viewer $(basename "$session_dir")"
+        echo ""
+        return 0
+    fi
     
     # Launch dashboard if not already running
     if [ ! -f "$session_dir/.dashboard-server.pid" ]; then
