@@ -10,7 +10,9 @@ PROJECT_ROOT="$(cd "$HOOK_DIR/../../.." && pwd)"
 # shellcheck disable=SC1091
 source "$PROJECT_ROOT/src/utils/core-helpers.sh" 2>/dev/null || {
     # Minimal fallbacks if core-helpers unavailable
+    # shellcheck disable=SC2329
     get_timestamp() { date -u +"%Y-%m-%dT%H:%M:%SZ"; }
+    # shellcheck disable=SC2329
     is_valid_json() { echo "$1" | jq empty 2>/dev/null; }
 }
 
@@ -18,6 +20,7 @@ source "$PROJECT_ROOT/src/utils/core-helpers.sh" 2>/dev/null || {
 # shellcheck disable=SC1091
 source "$PROJECT_ROOT/src/shared-state.sh" 2>/dev/null || {
     # Fallback: atomic_json_update won't be available, use manual locking
+    # shellcheck disable=SC2329
     atomic_json_update() { return 1; }
 }
 
