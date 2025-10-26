@@ -16,7 +16,7 @@ build_mission_state() {
     local session_dir="$1"
 
     if [[ -z "$session_dir" || ! -d "$session_dir" ]]; then
-        log_error "Invalid session directory"
+        log_system_error "${session_dir:-unknown}" "build_mission_state" "Invalid session directory"
         return 1
     fi
 

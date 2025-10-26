@@ -222,14 +222,79 @@ log_info() {
 
 # Log warning message to stderr with timestamp
 # Usage: log_warn "Unusual condition detected"
+#    OR: log_warn "$session_dir" "operation" "message" ["context"]
 log_warn() {
+    if [[ -d "${1:-}" ]] && [[ $# -ge 3 ]] && \
+       [[ -f "${1}/meta/session.json" ]] && \
+       command -v log_session_warning &>/dev/null; then
+        log_session_warning "$@"
+        return
+    fi
+
     echo "[$(get_timestamp)] WARN: $*" >&2
 }
 
 # Log error message to stderr with timestamp
 # Usage: log_error "Failed to process file"
+#    OR: log_error "$session_dir" "operation" "message" ["context"]
 log_error() {
+    if [[ -d "${1:-}" ]] && [[ $# -ge 3 ]] && \
+       [[ -f "${1}/meta/session.json" ]] && \
+       command -v log_session_error &>/dev/null; then
+        log_session_error "$@"
+        return
+    fi
+
     echo "[$(get_timestamp)] ERROR: $*" >&2
+}
+
+# Session-aware error logging wrapper that prefers structured logs
+# Usage: log_system_error "$session_dir" "operation" "message" ["context"]
+log_system_error() {
+    local session_dir="${1:-}"
+    local operation="${2:-unknown_operation}"
+    local message="${3:-}"
+    local context="${4:-}"
+
+    if [[ -z "$message" ]]; then
+        log_error "[$operation] (no message provided)"
+        return
+    fi
+
+    if [[ -d "$session_dir" ]] && [[ -f "$session_dir/meta/session.json" ]] && \
+       command -v log_session_error &>/dev/null; then
+        log_session_error "$session_dir" "$operation" "$message" "$context"
+    else
+        if [[ -n "$context" ]]; then
+            log_error "[$operation] $message ($context)"
+        else
+            log_error "[$operation] $message"
+        fi
+    fi
+}
+
+# Session-aware warning logging wrapper with graceful fallback
+log_system_warning() {
+    local session_dir="${1:-}"
+    local operation="${2:-unknown_operation}"
+    local message="${3:-}"
+    local context="${4:-}"
+
+    if [[ -z "$message" ]]; then
+        log_warn "[$operation] (no message provided)"
+        return
+    fi
+
+    if [[ -d "$session_dir" ]] && [[ -f "$session_dir/meta/session.json" ]] && \
+       command -v log_session_warning &>/dev/null; then
+        log_session_warning "$session_dir" "$operation" "$message" "$context"
+    else
+        if [[ -n "$context" ]]; then
+            log_warn "[$operation] $message ($context)"
+        else
+            log_warn "[$operation] $message"
+        fi
+    fi
 }
 
 # Log debug message to stderr with timestamp (only if CCONDUCTOR_DEBUG=1)
@@ -262,3 +327,5 @@ export -f log_info
 export -f log_warn
 export -f log_error
 export -f log_debug
+export -f log_system_error
+export -f log_system_warning

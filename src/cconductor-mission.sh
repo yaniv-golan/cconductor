@@ -24,6 +24,13 @@ source "$CCONDUCTOR_MISSION_SCRIPT_DIR/utils/mission-session-init.sh"
 # shellcheck disable=SC1091
 source "$CCONDUCTOR_MISSION_SCRIPT_DIR/knowledge-graph.sh"
 
+# Enable error traps for mission orchestration workflows
+if [[ "$(type -t setup_error_trap 2>/dev/null)" != "function" ]]; then
+    # shellcheck disable=SC1090,SC1091
+    source "$CCONDUCTOR_MISSION_SCRIPT_DIR/utils/debug.sh"
+fi
+setup_error_trap
+
 # Print usage
 usage() {
     cat <<EOF

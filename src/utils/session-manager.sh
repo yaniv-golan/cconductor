@@ -51,7 +51,7 @@ start_agent_session() {
 
     # Validate inputs
     if [ -z "$agent_name" ] || [ -z "$session_dir" ] || [ -z "$initial_task" ]; then
-        log_error "start_agent_session requires agent_name, session_dir, and initial_task"
+        log_system_error "$session_dir" "start_agent_session" "agent_name, session_dir, and initial_task required"
         return 1
     fi
 
@@ -102,7 +102,7 @@ start_agent_session() {
         "$output_file" \
         "$timeout" \
         "$session_dir"; then
-        log_error "Failed to start session for agent $agent_name"
+        log_system_error "$session_dir" "start_agent_session" "Failed to start session for agent $agent_name" "timeout=${timeout}s"
         return 1
     fi
 
@@ -112,7 +112,7 @@ start_agent_session() {
     session_id=$(jq -r '.session_id // empty' "$output_file" 2>/dev/null)
 
     if [ -z "$session_id" ] || [ "$session_id" = "null" ]; then
-        log_error "Could not extract session_id from response"
+        log_system_error "$session_dir" "start_agent_session" "Could not extract session_id from response" "output_file=$output_file"
         if [[ -f "$output_file" ]] && [[ -s "$output_file" ]]; then
             echo "Response structure:" >&2
             jq 'keys' "$output_file" 2>&1 | head -20 >&2 || echo "(invalid JSON)" >&2
@@ -167,7 +167,7 @@ continue_agent_session() {
 
     # Validate inputs
     if [ -z "$agent_name" ] || [ -z "$session_dir" ] || [ -z "$task" ] || [ -z "$output_file" ]; then
-        log_error "continue_agent_session requires agent_name, session_dir, task, and output_file"
+        log_system_error "$session_dir" "continue_agent_session" "agent_name, session_dir, task, and output_file required"
         return 1
     fi
 
@@ -176,7 +176,7 @@ continue_agent_session() {
     local session_file="$sessions_dir/${agent_name}.session"
 
     if [ ! -f "$session_file" ]; then
-        log_error "No active session for agent $agent_name"
+        log_system_error "$session_dir" "continue_agent_session" "No active session for agent $agent_name"
         echo "Hint: Call start_agent_session() first" >&2
         return 1
     fi
@@ -202,7 +202,7 @@ continue_agent_session() {
         "$timeout" \
         "$session_dir" \
         "$session_id"; then
-        log_error "Failed to continue session for agent $agent_name"
+        log_system_error "$session_dir" "continue_agent_session" "Failed to continue session for agent $agent_name" "session_id=$session_id"
         return 1
     fi
 

@@ -208,11 +208,8 @@ get_session_version() {
     version=$(jq -r '.engine_version // "unknown"' "$metadata_file")
 
     if [ "$version" = "unknown" ]; then
-        if command -v log_error &>/dev/null; then
-            log_error "Session has no engine version in metadata"
-        else
-            echo "Error: Session has no engine version in metadata" >&2
-        fi
+        log_system_error "$session_dir" "session_version" "Session has no engine version in metadata"
+        echo "Error: Session has no engine version in metadata" >&2
         return 1
     fi
 
@@ -237,11 +234,8 @@ validate_session_compatibility() {
     if is_compatible "$engine_version" "$session_version"; then
         return 0
     else
-        if command -v log_error &>/dev/null; then
-            log_error "Session incompatible with current engine"
-        else
-            echo "Error: Session incompatible with current engine" >&2
-        fi
+        log_system_error "$session_dir" "session_compatibility" "Session incompatible with current engine"
+        echo "Error: Session incompatible with current engine" >&2
         echo "" >&2
         echo "  Session version:  $session_version" >&2
         echo "  Engine version:   $engine_version" >&2
@@ -705,5 +699,4 @@ EOF
             ;;
     esac
 fi
-
 

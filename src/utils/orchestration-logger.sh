@@ -18,7 +18,12 @@ require_command "jq" "brew install jq" "apt install jq" || exit 1
 
 # Load error logger for validation failures
 # shellcheck disable=SC1091
-source "$SCRIPT_DIR/error-logger.sh" 2>/dev/null || true
+if ! source "$SCRIPT_DIR/error-logger.sh" 2>/dev/null; then
+    if [[ -z "${ORCH_LOGGER_ERROR_LOGGER_WARNED:-}" ]]; then
+        log_warn "Optional error-logger.sh failed to load (structured orchestration logs degraded)"
+        ORCH_LOGGER_ERROR_LOGGER_WARNED=1
+    fi
+fi
 
 # Source shared-state for locking
 # shellcheck disable=SC1091
@@ -41,9 +46,7 @@ log_decision() {
     else
         # Not valid JSON - wrap as string and always warn
         log_warn "Decision data is not valid JSON, wrapping as string"
-        if command -v log_warning &>/dev/null; then
-            log_warning "$session_dir" "invalid_json" "Decision data is not valid JSON, wrapping as string"
-        fi
+        log_system_warning "$session_dir" "invalid_json" "Decision data is not valid JSON, wrapping as string"
         validated_data=$(jq -cn --arg text "$decision_data" '{raw_text: $text}')
     fi
     

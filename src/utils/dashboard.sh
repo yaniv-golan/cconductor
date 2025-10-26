@@ -216,8 +216,8 @@ dashboard_generate_metrics() {
             }
         }' > "$temp_metrics_file" 2>&1; then
         # jq failed - log error if error logger is available
-        if command -v log_error &>/dev/null && [ -n "${session_dir:-}" ]; then
-            log_error "$session_dir" "dashboard_metrics" "Failed to generate dashboard metrics JSON" \
+        if [ -n "${session_dir:-}" ]; then
+            log_system_error "$session_dir" "dashboard_metrics" "Failed to generate dashboard metrics JSON" \
                 "Check variables: iter=$iteration, confidence=$confidence, total=$total_invocations"
         fi
         log_error "Failed to generate dashboard metrics"
@@ -228,8 +228,8 @@ dashboard_generate_metrics() {
     
     # Atomic rename (POSIX guarantees atomicity)
     if ! mv "$temp_metrics_file" "$metrics_file" 2>&1; then
-        if command -v log_error &>/dev/null && [ -n "${session_dir:-}" ]; then
-            log_error "$session_dir" "dashboard_metrics" "Failed to move temp metrics file"
+        if [ -n "${session_dir:-}" ]; then
+            log_system_error "$session_dir" "dashboard_metrics" "Failed to move temp metrics file"
         fi
         log_error "Failed to write dashboard metrics"
         return 1
@@ -342,7 +342,7 @@ dashboard_serve() {
     local auto_open="${2:-true}"
     
     if [ ! -d "$session_dir" ]; then
-        log_error "Session directory not found: $session_dir"
+        log_system_error "$session_dir" "dashboard_serve" "Session directory not found"
         return 1
     fi
     

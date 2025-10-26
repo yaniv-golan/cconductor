@@ -45,6 +45,13 @@ fi
 # shellcheck disable=SC1091
 source "$CCONDUCTOR_ROOT/src/utils/cli-parser.sh"
 
+# Enable error traps early for better diagnostics
+if [[ "$(type -t setup_error_trap 2>/dev/null)" != "function" ]]; then
+    # shellcheck disable=SC1090,SC1091
+    source "$CCONDUCTOR_ROOT/src/utils/debug.sh"
+fi
+setup_error_trap
+
 # Parse arguments early to check for --verbose and --debug flags
 parse_cli_args "$@"
 

@@ -38,15 +38,31 @@ source "$UTILS_DIR/json-parser.sh"
 # shellcheck disable=SC1091
 source "$PROJECT_ROOT/src/knowledge-graph.sh"
 # shellcheck disable=SC1091
-source "$UTILS_DIR/quality-surface-sync.sh" 2>/dev/null || true
+if ! source "$UTILS_DIR/quality-surface-sync.sh" 2>/dev/null; then
+    if [[ -z "${MISSION_ORCH_QUALITY_SURFACE_SYNC_WARNED:-}" ]]; then
+        log_warn "Optional quality-surface-sync.sh failed to load (quality surface metrics disabled)"
+        MISSION_ORCH_QUALITY_SURFACE_SYNC_WARNED=1
+    fi
+fi
 # shellcheck disable=SC1091
-source "$UTILS_DIR/verbose.sh" 2>/dev/null || true
+if ! source "$UTILS_DIR/verbose.sh" 2>/dev/null; then
+    if [[ -z "${MISSION_ORCH_VERBOSE_WARNED:-}" ]]; then
+        log_warn "Optional verbose.sh failed to load (enhanced iteration logging disabled)"
+        MISSION_ORCH_VERBOSE_WARNED=1
+    fi
+fi
 # shellcheck disable=SC1091
 source "$UTILS_DIR/error-logger.sh"
 # shellcheck disable=SC1091
 source "$UTILS_DIR/debug.sh"
+setup_error_trap
 # shellcheck disable=SC1091
-source "$UTILS_DIR/web-cache.sh" 2>/dev/null || true
+if ! source "$UTILS_DIR/web-cache.sh" 2>/dev/null; then
+    if [[ -z "${MISSION_ORCH_WEB_CACHE_WARNED:-}" ]]; then
+        log_warn "Optional web-cache.sh failed to load (web fetch cache disabled for this run)"
+        MISSION_ORCH_WEB_CACHE_WARNED=1
+    fi
+fi
 # shellcheck disable=SC1091
 source "$UTILS_DIR/session-manager.sh"
 
@@ -187,6 +203,7 @@ prepare_orchestrator_context() {
     local session_dir="$1"
     local mission_profile="$2"
     local iteration="$3"
+    trace_function "$@"
     
     # Get agent registry as JSON
     local agents_json
@@ -712,7 +729,7 @@ process_agent_kg_artifacts() {
 }
 
 # Validate synthesis agent outputs
-# Ensures report/mission-report.md is created
+# Ensures report/mission-report.md is created and checks for incremental workflow artifacts
 validate_synthesis_outputs() {
     local session_dir="$1"
     local agent="$2"
@@ -730,7 +747,26 @@ validate_synthesis_outputs() {
         return 1
     fi
     
-    echo "  ✓ Synthesis outputs validated (report/mission-report.md)" >&2
+    # Check if incremental sections were created (indicates tool calls were made)
+    local sections_dir="$session_dir/report/sections"
+    local section_plan="$session_dir/work/synthesis-agent/section-plan.json"
+    
+    if [[ -f "$section_plan" ]]; then
+        echo "  ✓ Synthesis used incremental workflow (section plan found)" >&2
+    fi
+    
+    if [[ -d "$sections_dir" ]]; then
+        local section_count
+        section_count=$(find "$sections_dir" -name "*.md" -type f 2>/dev/null | wc -l | tr -d ' ')
+        if [[ $section_count -gt 0 ]]; then
+            echo "  ✓ Synthesis outputs validated (report + $section_count section files)" >&2
+        else
+            echo "  ✓ Synthesis outputs validated (report/mission-report.md)" >&2
+        fi
+    else
+        echo "  ✓ Synthesis outputs validated (report/mission-report.md)" >&2
+    fi
+    
     return 0
 }
 
@@ -823,6 +859,15 @@ process_orchestrator_decisions() {
             context=$(echo "$decision_json" | jq -r '.context // "No additional context"')
             local input_artifacts
             input_artifacts=$(echo "$decision_json" | jq -c '.input_artifacts // []')
+
+            local attempt_num
+            attempt_num=$(echo "$decision_json" | jq -r '.attempt // 1' 2>/dev/null || echo "1")
+            local needs_synthesis="false"
+            if [[ "$agent_name" == "synthesis-agent" ]]; then
+                needs_synthesis="true"
+            fi
+            debug "Invoking agent $agent_name (attempt $attempt_num)"
+            debug "Synthesis evaluation: needs_synthesis=$needs_synthesis"
             
             # Log the decision with proper format for journal export
             local rationale
@@ -855,6 +900,8 @@ process_orchestrator_decisions() {
             
             # For synthesis-agent, run quality gate first
             if [[ "$agent_name" == "synthesis-agent" ]]; then
+                local gate_iteration="${iteration:-unknown}"
+                debug "Checking quality gate: iteration=$gate_iteration"
                 echo "→ Running quality gate before synthesis..."
                 if ! run_quality_assurance_cycle "$session_dir"; then
                     # Get mode to display appropriate message
@@ -934,6 +981,7 @@ process_orchestrator_decisions() {
             fi
             
             log_decision "$session_dir" "agent_reinvocation" "$orchestrator_output"
+            debug "Agent reinvocation: agent=$agent_name, reason=$reason"
             
             # Re-invoke with refinements - handle failures
             if _invoke_delegated_agent "$session_dir" "$agent_name" "$refinements" "$reason" "[]"; then
@@ -1448,17 +1496,17 @@ EOF
     # Launch dashboard viewer
     echo "→ Launching Research Journal Viewer..."
     # shellcheck disable=SC1091
-    if source "$UTILS_DIR/dashboard.sh"; then
-        if dashboard_view "$session_dir"; then
-            echo "  ✓ Dashboard viewer launched"
+        if source "$UTILS_DIR/dashboard.sh"; then
+            if dashboard_view "$session_dir"; then
+                echo "  ✓ Dashboard viewer launched"
+            else
+                log_system_error "$session_dir" "dashboard_launch" "Dashboard viewer failed to launch"
+                echo "  ⚠ Dashboard viewer failed (check logs/system-errors.log)" >&2
+            fi
         else
-            log_error "$session_dir" "dashboard_launch" "Dashboard viewer failed to launch"
-            echo "  ⚠ Dashboard viewer failed (check logs/system-errors.log)" >&2
+            log_system_error "$session_dir" "dashboard_source" "Failed to source dashboard.sh"
+            echo "  ⚠ Dashboard utility not found" >&2
         fi
-    else
-        log_error "$session_dir" "dashboard_source" "Failed to source dashboard.sh"
-        echo "  ⚠ Dashboard utility not found" >&2
-    fi
     
     echo ""
     
@@ -1486,7 +1534,12 @@ EOF
         # Parse prompt on first iteration if not yet done
         if [[ $iteration -eq 1 ]]; then
             # shellcheck disable=SC1091
-            source "$UTILS_DIR/prompt-parser-handler.sh" 2>/dev/null || true
+            if ! source "$UTILS_DIR/prompt-parser-handler.sh" 2>/dev/null; then
+                if [[ -z "${MISSION_ORCH_PROMPT_PARSER_WARNED:-}" ]]; then
+                    log_warn "Optional prompt-parser-handler.sh failed to load (prompt parsing disabled)"
+                    MISSION_ORCH_PROMPT_PARSER_WARNED=1
+                fi
+            fi
             
             if command -v needs_prompt_parsing &>/dev/null && needs_prompt_parsing "$session_dir"; then
                 if command -v parse_prompt &>/dev/null; then
@@ -1517,11 +1570,12 @@ EOF
 
         # Check budget before proceeding
         if ! budget_check "$session_dir"; then
-            log_warning "$session_dir" "budget_limit" "Budget limit reached at iteration $iteration"
+            log_system_warning "$session_dir" "budget_limit" "Budget limit reached at iteration $iteration"
             echo ""
             echo "⚠ Budget limit reached - generating partial results"
             break
         fi
+        debug "Budget check passed for iteration $iteration"
         
         # Prepare orchestrator context
         echo "→ Preparing orchestrator context..."
@@ -1769,10 +1823,10 @@ run_mission_orchestration_resume() {
         # shellcheck disable=SC1091
         if source "$UTILS_DIR/dashboard.sh"; then
             if ! dashboard_view "$session_dir"; then
-                log_error "$session_dir" "dashboard_refresh" "Dashboard refresh failed on resume"
+                log_system_error "$session_dir" "dashboard_refresh" "Dashboard refresh failed on resume"
             fi
         else
-            log_error "$session_dir" "dashboard_source" "Failed to source dashboard.sh on resume"
+            log_system_error "$session_dir" "dashboard_source" "Failed to source dashboard.sh on resume"
         fi
     fi
     
@@ -1797,11 +1851,12 @@ run_mission_orchestration_resume() {
         
         # Check budget
         if ! budget_check "$session_dir"; then
-            log_warning "$session_dir" "budget_limit" "Budget limit reached at iteration $iteration (resume)"
+            log_system_warning "$session_dir" "budget_limit" "Budget limit reached at iteration $iteration (resume)"
             echo ""
             echo "⚠ Budget limit reached"
             break
         fi
+        debug "Budget check passed for iteration $iteration"
         
         # Prepare context with resume flag and refinement
         echo "→ Preparing orchestrator context..."
@@ -1952,6 +2007,7 @@ prepare_orchestrator_context_resume() {
     local mission_profile="$2"
     local iteration="$3"
     local refinement="${4:-}"
+    trace_function "$@"
     
     # Get existing state
     local agents_json

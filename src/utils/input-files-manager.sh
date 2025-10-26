@@ -177,11 +177,8 @@ process_text_file() {
     
     # Copy to session knowledge directory
     if ! cp "$file_path" "$session_dir/knowledge/"; then
-        if command -v log_error &>/dev/null; then
-            log_error "Failed to copy file to session knowledge: $file_path"
-        else
-            echo "Error: Failed to copy file to session knowledge: $file_path" >&2
-        fi
+        log_system_error "$session_dir" "input_files_manager" "Failed to copy file to session knowledge" "file=$file_path"
+        echo "Error: Failed to copy file to session knowledge: $file_path" >&2
         return 1
     fi
     
@@ -278,4 +275,3 @@ process_input_directory() {
     
     return 0
 }
-

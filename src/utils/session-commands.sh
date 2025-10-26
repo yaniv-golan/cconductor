@@ -210,19 +210,13 @@ sessions_viewer_handler() {
             fi
             echo "  or: pkill -f 'http-server'"
         else
-            if command -v log_error &>/dev/null; then
-                log_error "Failed to launch dashboard viewer"
-            else
-                echo "Error: Failed to launch dashboard viewer" >&2
-            fi
+            log_system_error "$session_dir" "sessions_viewer" "Failed to launch dashboard viewer"
+            echo "Error: Failed to launch dashboard viewer" >&2
             exit 1
         fi
     else
-        if command -v log_error &>/dev/null; then
-            log_error "Dashboard viewer utility not found"
-        else
-            echo "Error: Dashboard viewer utility not found" >&2
-        fi
+        log_system_error "$session_dir" "sessions_viewer" "Dashboard viewer utility not found"
+        echo "Error: Dashboard viewer utility not found" >&2
         exit 1
     fi
 }
@@ -311,11 +305,8 @@ sessions_resume_handler() {
     fi
     
     if [ ! -d "$session_path" ]; then
-        if command -v log_error &>/dev/null; then
-            log_error "Session not found: $session_id"
-        else
-            echo "Error: Session not found: $session_id" >&2
-        fi
+        log_system_error "$session_path" "sessions_resume" "Session not found: $session_id"
+        echo "Error: Session not found: $session_id" >&2
         exit 1
     fi
     

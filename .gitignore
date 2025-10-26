@@ -88,6 +88,7 @@ TODO_AUDIT.txt
 research-journal-*.plan.md
 test-*.sh
 !tests/test-quality-gate.sh
+!tests/test-quality-gate-malformed-samples.sh
 !tests/test-web-cache.sh
 !tests/test-library-memory-hook.sh
 !tests/test-mission-report-paths.sh

@@ -20,11 +20,26 @@ source "$SCRIPT_DIR/error-messages.sh"
 
 # Source event logger for Phase 2 metrics
 # shellcheck disable=SC1091
-source "$SCRIPT_DIR/event-logger.sh" 2>/dev/null || true
+if ! source "$SCRIPT_DIR/event-logger.sh" 2>/dev/null; then
+    if [[ -z "${INVOKE_AGENT_EVENT_LOGGER_WARNED:-}" ]]; then
+        log_warn "Optional event-logger.sh failed to load (agent event tracking disabled)"
+        INVOKE_AGENT_EVENT_LOGGER_WARNED=1
+    fi
+fi
 # shellcheck disable=SC1091
-source "$SCRIPT_DIR/error-logger.sh" 2>/dev/null || true
+if ! source "$SCRIPT_DIR/error-logger.sh" 2>/dev/null; then
+    if [[ -z "${INVOKE_AGENT_ERROR_LOGGER_WARNED:-}" ]]; then
+        log_warn "Optional error-logger.sh failed to load (structured agent errors disabled)"
+        INVOKE_AGENT_ERROR_LOGGER_WARNED=1
+    fi
+fi
 # shellcheck disable=SC1091
-source "$SCRIPT_DIR/verbose.sh" 2>/dev/null || true
+if ! source "$SCRIPT_DIR/verbose.sh" 2>/dev/null; then
+    if [[ -z "${INVOKE_AGENT_VERBOSE_WARNED:-}" ]]; then
+        log_warn "Optional verbose.sh failed to load (agent verbose output disabled)"
+        INVOKE_AGENT_VERBOSE_WARNED=1
+    fi
+fi
 
 
 # Check if Claude CLI is available
@@ -661,11 +676,9 @@ invoke_agent_v2() {
         if ! jq empty "$output_file" 2>/dev/null; then
             local error_sample
             error_sample=$(head -c 500 "$output_file" 2>/dev/null || echo "Unable to read output")
-            if command -v log_error &>/dev/null; then
-                log_error "$session_dir" "invalid_json" \
-                    "Agent $agent_name returned invalid JSON" \
-                    "Output sample: $error_sample"
-            fi
+            log_system_error "$session_dir" "invalid_json" \
+                "Agent $agent_name returned invalid JSON" \
+                "Output sample: $error_sample"
             echo "✗ Agent $agent_name returned invalid JSON" >&2
             echo "Raw output:" >&2
             cat "$output_file" >&2

@@ -6,6 +6,13 @@
 
 CConductor now includes comprehensive error logging to capture issues that would otherwise be silenced. All errors and warnings are logged to `logs/system-errors.log` in each session directory.
 
+**Note**: As of v0.4.0, CConductor auto-routes structured logs:
+
+- **Preferred (explicit)**: `log_system_error` and `log_system_warning` always write to `logs/system-errors.log` when a session context exists.
+- **Auto-routing (implicit)**: `log_error` and `log_warn` now detect session directories automatically. If called with three or more arguments and the first argument is a valid session directory (contains `meta/session.json`), they forward to the structured logger; otherwise they fall back to stderr.
+
+Best practice: call `log_system_error`/`log_system_warning` for mission-scoped events so intent is clear and future regressions are less likely.
+
 ## Log Location
 
 ```
@@ -221,10 +228,10 @@ source "$CCONDUCTOR_ROOT/src/utils/error-logger.sh"
 init_error_log "$session_dir"
 
 # Log an error
-log_error "$session_dir" "my_operation" "Something failed" "extra context"
+log_system_error "$session_dir" "my_operation" "Something failed" "extra context"
 
 # Log a warning
-log_warning "$session_dir" "my_check" "Non-critical issue"
+log_system_warning "$session_dir" "my_check" "Non-critical issue"
 
 # Get error summary
 get_error_summary "$session_dir"

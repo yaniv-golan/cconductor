@@ -32,11 +32,18 @@ source "$PROJECT_ROOT/src/utils/core-helpers.sh" 2>/dev/null || {
     get_timestamp() { date -u +"%Y-%m-%dT%H:%M:%S.%6NZ" 2>/dev/null || date -u +"%Y-%m-%dT%H:%M:%SZ"; }
     # shellcheck disable=SC2329
     get_epoch() { date +%s; }
+    # shellcheck disable=SC2329
+    log_warn() { printf '[%s] WARN: %s\n' "$(get_timestamp)" "$*" >&2; }
 }
 
 # Source shared-state for atomic operations (with fallback)
 # shellcheck disable=SC1091
-source "$PROJECT_ROOT/src/shared-state.sh" 2>/dev/null || true
+if ! source "$PROJECT_ROOT/src/shared-state.sh" 2>/dev/null; then
+    if [[ -z "${PRE_HOOK_SHARED_STATE_WARNED:-}" ]]; then
+        log_warn "Optional shared-state.sh failed to load in pre-tool-use hook (lock coordination disabled)"
+        PRE_HOOK_SHARED_STATE_WARNED=1
+    fi
+fi
 
 debug_log() {
     local msg="$1"
@@ -305,11 +312,26 @@ else
     verbose_tool_use() { :; }
 fi
 # shellcheck disable=SC1091
-source "$PROJECT_ROOT/src/utils/web-cache.sh" 2>/dev/null || true
+if ! source "$PROJECT_ROOT/src/utils/web-cache.sh" 2>/dev/null; then
+    if [[ -z "${PRE_HOOK_WEB_CACHE_WARNED:-}" ]]; then
+        log_warn "Optional web-cache.sh failed to load in pre-tool-use hook (web fetch cache summaries unavailable)"
+        PRE_HOOK_WEB_CACHE_WARNED=1
+    fi
+fi
 # shellcheck disable=SC1091
-source "$PROJECT_ROOT/src/utils/web-search-cache.sh" 2>/dev/null || true
+if ! source "$PROJECT_ROOT/src/utils/web-search-cache.sh" 2>/dev/null; then
+    if [[ -z "${PRE_HOOK_SEARCH_CACHE_WARNED:-}" ]]; then
+        log_warn "Optional web-search-cache.sh failed to load in pre-tool-use hook (search cache summaries unavailable)"
+        PRE_HOOK_SEARCH_CACHE_WARNED=1
+    fi
+fi
 # shellcheck disable=SC1091
-source "$PROJECT_ROOT/src/knowledge-graph.sh" 2>/dev/null || true
+if ! source "$PROJECT_ROOT/src/knowledge-graph.sh" 2>/dev/null; then
+    if [[ -z "${PRE_HOOK_KG_WARNED:-}" ]]; then
+        log_warn "Optional knowledge-graph.sh failed to load in pre-tool-use hook (KG helpers unavailable)"
+        PRE_HOOK_KG_WARNED=1
+    fi
+fi
 
 # WebSearch cache guard (avoid redundant billed queries)
 if [[ "$tool_name" == "WebSearch" ]]; then

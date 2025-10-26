@@ -40,6 +40,7 @@ TESTS=(
     "test-web-search-cache.sh"
     "test-pdf-cache-phase1.sh"
     "test-mission-report-paths.sh"
+    "test-quality-gate-malformed-samples.sh"
 )
 
 PASSED=0

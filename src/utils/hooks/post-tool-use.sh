@@ -17,11 +17,18 @@ source "$PROJECT_ROOT/src/utils/core-helpers.sh" 2>/dev/null || {
     get_timestamp() { date -u +"%Y-%m-%dT%H:%M:%S.%6NZ" 2>/dev/null || date -u +"%Y-%m-%dT%H:%M:%SZ"; }
     # shellcheck disable=SC2329
     get_epoch() { date +%s; }
+    # shellcheck disable=SC2329
+    log_warn() { printf '[%s] WARN: %s\n' "$(get_timestamp)" "$*" >&2; }
 }
 
 # Source shared-state for atomic operations (with fallback)
 # shellcheck disable=SC1091
-source "$PROJECT_ROOT/src/shared-state.sh" 2>/dev/null || true
+if ! source "$PROJECT_ROOT/src/shared-state.sh" 2>/dev/null; then
+    if [[ -z "${POST_HOOK_SHARED_STATE_WARNED:-}" ]]; then
+        log_warn "Optional shared-state.sh failed to load in post-tool-use hook (lock coordination disabled)"
+        POST_HOOK_SHARED_STATE_WARNED=1
+    fi
+fi
 
 # Source verbose utility
 # shellcheck disable=SC1091
@@ -35,9 +42,19 @@ source "$PROJECT_ROOT/src/utils/verbose.sh" 2>/dev/null || {
 
 # Optional cache utilities
 # shellcheck disable=SC1091
-source "$PROJECT_ROOT/src/utils/web-cache.sh" 2>/dev/null || true
+if ! source "$PROJECT_ROOT/src/utils/web-cache.sh" 2>/dev/null; then
+    if [[ -z "${POST_HOOK_WEB_CACHE_WARNED:-}" ]]; then
+        log_warn "Optional web-cache.sh failed to load in post-tool-use hook (web cache digest disabled)"
+        POST_HOOK_WEB_CACHE_WARNED=1
+    fi
+fi
 # shellcheck disable=SC1091
-source "$PROJECT_ROOT/src/utils/web-search-cache.sh" 2>/dev/null || true
+if ! source "$PROJECT_ROOT/src/utils/web-search-cache.sh" 2>/dev/null; then
+    if [[ -z "${POST_HOOK_SEARCH_CACHE_WARNED:-}" ]]; then
+        log_warn "Optional web-search-cache.sh failed to load in post-tool-use hook (search cache digest disabled)"
+        POST_HOOK_SEARCH_CACHE_WARNED=1
+    fi
+fi
 
 increment_tool_usage_counter() {
     local counter_key="$1"
