@@ -24,7 +24,7 @@ agent_name="$4"
 
 heartbeat_file="$session_dir/.agent-heartbeat"
 check_interval=5  # Check every 5 seconds
-max_heartbeat_age=300  # 5 minutes = stale
+max_heartbeat_age=600  # 10 minutes = stale (increased for synthesis-agent timeout fix)
 
 # Convert timeout to deciseconds for integer arithmetic
 timeout_deciseconds=$((timeout_seconds * 10))
