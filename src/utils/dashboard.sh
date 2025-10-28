@@ -42,7 +42,9 @@ dashboard_jq_file() {
 }
 
 dashboard_sanitize_number() {
-    local value="${1:-}"
+    local raw="${1:-}"
+    # strip all whitespace so blank or newline values collapse to empty
+    local value="${raw//[[:space:]]/}"
     local fallback="${2:-0}"
 
     if [[ -z "$value" || "$value" == "null" ]]; then
@@ -178,12 +180,12 @@ dashboard_generate_metrics() {
         orchestration_tail=$(tail -20 "$session_dir/logs/orchestration.jsonl" 2>/dev/null || echo '')
         if [[ -n "$orchestration_tail" ]]; then
             local orchestration_json
-            orchestration_json=$(printf '%s\n' "$orchestration_tail" | jq -s 'map(select(type == "object"))' 2>/dev/null || echo '[]')
-            if jq_validate_json "$orchestration_json"; then
-                active_agents=$(dashboard_jq_payload "$session_dir" "$orchestration_json" '[.[] | select(.type == "invoke" or .type == "reinvoke") | .decision.agent] | unique' '[]' "orchestration.active_agents" "false")
-            else
-                active_agents='[]'
-            fi
+            local orchestration_tmp
+            orchestration_tmp=$(mktemp)
+            printf '%s\n' "$orchestration_tail" > "$orchestration_tmp"
+            orchestration_json=$(json_slurp_array "$orchestration_tmp" '[]')
+            rm -f "$orchestration_tmp"
+            active_agents=$(dashboard_jq_payload "$session_dir" "$orchestration_json" '[.[] | select(type == "object" and (.type == "invoke" or .type == "reinvoke")) | .decision.agent] | unique' '[]' "orchestration.active_agents" "false")
         fi
     fi
     active_agents=$(dashboard_ensure_json "$active_agents" "[]")
@@ -194,7 +196,7 @@ dashboard_generate_metrics() {
     local observations='[]'
     if [ -f "$session_dir/logs/events.jsonl" ]; then
         local events_payload
-        events_payload=$(jq -s '.' "$session_dir/logs/events.jsonl" 2>/dev/null || echo '[]')
+        events_payload=$(json_slurp_array "$session_dir/logs/events.jsonl" '[]')
         if [[ -n "$events_payload" ]]; then
             # shellcheck disable=SC2016
             observations=$(dashboard_jq_payload "$session_dir" "$events_payload" '
@@ -336,7 +338,7 @@ calculate_total_cost() {
     # Sum cost_usd from all agent_result events
     # Events have structure: {type: "agent_result", data: {cost_usd: X}}
     local events_payload
-    events_payload=$(jq -s '.' "$events_file" 2>/dev/null || echo '[]')
+    events_payload=$(json_slurp_array "$events_file" '[]')
     local cost
     if [[ -z "$events_payload" || "$events_payload" == "[]" ]]; then
         echo "0"

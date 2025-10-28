@@ -522,6 +522,22 @@ invoke_agent_v2() {
         fi
     }
 
+    agent_runtime_config_lookup() {
+        local jq_filter="$1"
+        local fallback="${2:-}"
+        local context="${3:-invoke_agent.runtime_config}"
+        local session_ctx="${session_dir:-}"
+
+        load_agent_runtime_config
+
+        if [[ -z "$agent_runtime_config_json" ]]; then
+            printf '%s' "$fallback"
+            return 0
+        fi
+
+        safe_jq_from_json "$agent_runtime_config_json" "$jq_filter" "$fallback" "$session_ctx" "$context"
+    }
+
     resolve_toggle_mode() {
         local mode_env="$1"
         local legacy_enable_env="$2"
@@ -565,7 +581,7 @@ invoke_agent_v2() {
 
         load_agent_runtime_config
         local config_value
-        config_value=$(echo "$agent_runtime_config_json" | jq -r ".${config_key} // empty" 2>/dev/null || echo "")
+        config_value=$(agent_runtime_config_lookup ".${config_key} // empty" "" "invoke_agent.toggle.${config_key}")
         case "$config_value" in
             true|1|enabled)
                 echo "enabled"
@@ -865,7 +881,7 @@ invoke_agent_v2() {
         local fallback="${2:-600}"
         load_agent_runtime_config
         local resolved
-        resolved=$(echo "$agent_runtime_config_json" | jq -r ".per_agent_timeouts.\"$agent_name\" // .default_timeout_seconds // empty" 2>/dev/null || echo "")
+        resolved=$(agent_runtime_config_lookup ".per_agent_timeouts.\"$agent_name\" // .default_timeout_seconds // empty" "" "invoke_agent.agent_timeout")
         if [[ -z "$resolved" || "$resolved" == "null" ]]; then
             echo "$fallback"
         else
@@ -1030,7 +1046,9 @@ invoke_agent_v2() {
         fi
         if [[ -f "$stream_log" ]] && { [[ ! -s "$output_file" ]] || ! jq empty "$output_file" 2>/dev/null; }; then
             local extracted_stream_result=""
-            extracted_stream_result=$(jq -s 'map(select(.type == "result")) | last // empty' "$stream_log" 2>/dev/null || echo "")
+            local stream_payload
+            stream_payload=$(json_slurp_array "$stream_log" '[]')
+            extracted_stream_result=$(safe_jq_from_json "$stream_payload" 'map(select(.type == "result")) | last // empty' "" "$session_dir" "invoke_agent.stream_extracted" "false")
             if [[ -n "$extracted_stream_result" ]]; then
                 printf '%s\n' "$extracted_stream_result" > "$output_file"
             fi

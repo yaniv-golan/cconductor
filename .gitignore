@@ -129,3 +129,4 @@ docs/internal/knowledge-graph-schema.md
 !tests/bash-parity/fixtures/**
 tests/citation-readiness-tests/
 docs/internal/
+audit-results.json

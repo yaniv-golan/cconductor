@@ -84,6 +84,7 @@ for raw in "${SOURCES[@]}"; do
 
     if [[ -f "$digest_path" ]]; then
         # Use atomic_json_update for thread-safe update
+        # lint-allow: jq_argjson_safe reason="entry_json validated with jq_validate_json before passing to --argjson"
         # shellcheck disable=SC2016
         atomic_json_update "$digest_path" --argjson entry "$entry_json" '
             .last_updated = $entry.collected_at |
@@ -123,6 +124,7 @@ for raw in "${SOURCES[@]}"; do
     fi
 
     # Use atomic_json_update for thread-safe manifest update
+    # lint-allow: jq_argjson_safe reason="entry_count and metadata computed locally; no unvalidated JSON passed to jq"
     # shellcheck disable=SC2016
     atomic_json_update "$MANIFEST_FILE" --arg hash "$url_hash" --arg url "$url" --arg session "$session_name" --arg now "$timestamp" --arg count "$entry_count" '
         .[$hash] = (

@@ -18,6 +18,8 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/core-helpers.sh"
 # shellcheck disable=SC1091
 source "$SCRIPT_DIR/error-messages.sh"
+# shellcheck disable=SC1091
+source "$SCRIPT_DIR/json-helpers.sh"
 
 # Preferred Bash runtime (honors homebrew bash when available)
 BASH_RUNTIME="${CCONDUCTOR_BASH_RUNTIME:-$(command -v bash)}"
@@ -44,7 +46,7 @@ resolve_agent_timeout() {
             config_json=$(load_config "agent-timeouts" 2>/dev/null || echo "")
             if [ -n "$config_json" ]; then
                 local resolved
-                resolved=$(echo "$config_json" | jq -r ".per_agent_timeouts.\"$agent_name\" // .default_timeout_seconds // empty" 2>/dev/null || echo "")
+                resolved=$(safe_jq_from_json "$config_json" ".per_agent_timeouts.\"$agent_name\" // .default_timeout_seconds // empty" "" "" "session_manager.agent_timeout")
                 if [ -n "$resolved" ] && [ "$resolved" != "null" ]; then
                     timeout="$resolved"
                 fi

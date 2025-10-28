@@ -119,6 +119,7 @@ json_array_append() {
     fi
 
     # Use atomic_json_update from shared-state with validated payload
+    # lint-allow: jq_argjson_safe reason="json_array_append validates item with jq_validate_json before --argjson"
     atomic_json_update "$file" --argjson item "$item" \
         "${array_path} += [\$item]"
 }
