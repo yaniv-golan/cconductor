@@ -33,6 +33,8 @@ declare -a BOOLEAN_FLAGS=(
     "update" "check-update" "no-update-check"
     "init" "yes" "y" "non-interactive"
     "no-cache" "no-web-fetch-cache" "no-web-search-cache"
+    "enable-watchdog" "disable-watchdog"
+    "enable-agent-timeouts" "disable-agent-timeouts"
 )
 
 # Check if a flag is boolean

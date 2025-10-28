@@ -31,8 +31,44 @@ timeout_deciseconds=$((timeout_seconds * 10))
 elapsed_deciseconds=0
 poll_deciseconds=$((check_interval * 10))
 
+watchdog_mode="${CCONDUCTOR_WATCHDOG_MODE:-}"
+legacy_disable="${CCONDUCTOR_DISABLE_WATCHDOG:-}"
+legacy_enable="${CCONDUCTOR_ENABLE_WATCHDOG:-}"
+
+if [[ -n "$legacy_disable" ]]; then
+    watchdog_mode="disabled"
+elif [[ -n "$legacy_enable" ]]; then
+    watchdog_mode="enabled"
+fi
+watchdog_mode="${watchdog_mode,,}"
+
+if [[ "$watchdog_mode" == "disabled" ]]; then
+    # Passive wait to keep heartbeat updates consistent without enforcing termination
+    while ps -p "$agent_pid" >/dev/null 2>&1; do
+        sleep "$check_interval"
+    done
+    exit 0
+fi
+
+agent_timeout_mode="${CCONDUCTOR_AGENT_TIMEOUT_MODE:-}"
+if [[ -z "$agent_timeout_mode" ]]; then
+    if [[ -n "${CCONDUCTOR_DISABLE_AGENT_TIMEOUTS:-}" ]]; then
+        agent_timeout_mode="disabled"
+    elif [[ -n "${CCONDUCTOR_ENABLE_AGENT_TIMEOUTS:-}" ]]; then
+        agent_timeout_mode="enabled"
+    fi
+fi
+agent_timeout_mode="${agent_timeout_mode,,}"
+
+timeouts_enforced=1
+if [[ "$agent_timeout_mode" == "disabled" ]]; then
+    timeouts_enforced=0
+elif [[ "${CCONDUCTOR_AGENT_TIMEOUTS_ENABLED:-1}" == "0" ]]; then
+    timeouts_enforced=0
+fi
+
 # Monitor loop
-while [ $elapsed_deciseconds -lt $timeout_deciseconds ]; do
+while true; do
     # Check if agent process still exists
     if ! ps -p "$agent_pid" >/dev/null 2>&1; then
         # Agent completed normally
@@ -63,24 +99,24 @@ while [ $elapsed_deciseconds -lt $timeout_deciseconds ]; do
             exit 124
         fi
     fi
+
+    if [[ $timeouts_enforced -eq 1 && $elapsed_deciseconds -ge $timeout_deciseconds ]]; then
+        echo "[WATCHDOG] Agent $agent_name exceeded timeout (${timeout_seconds}s)" >&2
+
+        # Try graceful termination (SIGTERM)
+        kill -TERM "$agent_pid" 2>/dev/null || true
+        sleep 2
+
+        # Force kill if still alive (SIGKILL)
+        if ps -p "$agent_pid" >/dev/null 2>&1; then
+            echo "[WATCHDOG] Process didn't respond to SIGTERM, forcing SIGKILL..." >&2
+            kill -KILL "$agent_pid" 2>/dev/null || true
+        fi
+
+        exit 124
+    fi
     
     # Sleep and update elapsed time
     sleep "$check_interval"
     elapsed_deciseconds=$((elapsed_deciseconds + poll_deciseconds))
 done
-
-# Absolute timeout reached
-echo "[WATCHDOG] Agent $agent_name exceeded timeout (${timeout_seconds}s)" >&2
-
-# Try graceful termination (SIGTERM)
-kill -TERM "$agent_pid" 2>/dev/null || true
-sleep 2
-
-# Force kill if still alive (SIGKILL)
-if ps -p "$agent_pid" >/dev/null 2>&1; then
-    echo "[WATCHDOG] Process didn't respond to SIGTERM, forcing SIGKILL..." >&2
-    kill -KILL "$agent_pid" 2>/dev/null || true
-fi
-
-exit 124
-

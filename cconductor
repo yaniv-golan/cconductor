@@ -5,6 +5,10 @@
 
 set -euo pipefail
 
+if set -o | grep -q 'posix.*on'; then
+    set +o posix
+fi
+
 CCONDUCTOR_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 VERSION="$(cat "$CCONDUCTOR_ROOT/VERSION" 2>/dev/null | tr -d '\n' || echo "unknown")"
 
@@ -30,6 +34,13 @@ if [ "${BASH_VERSINFO[0]}" -lt 4 ]; then
         echo "Error: Bash 4.0 or higher is required to run CConductor." >&2
         exit 1
     fi
+fi
+
+# Record the runtime bash path for child processes that need an explicit interpreter
+if [[ -n "${BASH:-}" ]]; then
+    export CCONDUCTOR_BASH_RUNTIME="$BASH"
+else
+    export CCONDUCTOR_BASH_RUNTIME="$(command -v bash)"
 fi
 
 # Debug mode support
@@ -147,6 +158,116 @@ set_evidence_render() {
 }
 
 set_evidence_render
+
+normalize_toggle_flag() {
+    local feature="$1"
+    local cli_enable_flag="$2"
+    local cli_disable_flag="$3"
+    local mode_env="$4"
+    local legacy_enable_env="$5"
+    local legacy_disable_env="$6"
+
+    local cli_choice=""
+    if has_flag "$cli_enable_flag"; then
+        cli_choice="enabled"
+    fi
+    if has_flag "$cli_disable_flag"; then
+        if [[ -n "$cli_choice" ]]; then
+            echo "Error: Cannot combine --$cli_enable_flag with --$cli_disable_flag" >&2
+            exit 1
+        fi
+        cli_choice="disabled"
+    fi
+
+    local env_mode_raw=""
+    if [[ -n "${!mode_env:-}" ]]; then
+        env_mode_raw="${!mode_env}"
+    fi
+    local env_mode="${env_mode_raw,,}"
+
+    if [[ -n "$env_mode" && "$env_mode" != "enabled" && "$env_mode" != "disabled" && "$env_mode" != "true" && "$env_mode" != "false" && "$env_mode" != "1" && "$env_mode" != "0" ]]; then
+        echo "Error: Invalid value for ${mode_env}: ${env_mode_raw} (expected enabled|disabled)" >&2
+        exit 1
+    fi
+
+    local legacy_enable=""
+    if [[ -n "${!legacy_enable_env:-}" ]]; then
+        legacy_enable="${!legacy_enable_env}"
+    fi
+    local legacy_disable=""
+    if [[ -n "${!legacy_disable_env:-}" ]]; then
+        legacy_disable="${!legacy_disable_env}"
+    fi
+
+    if [[ -n "$legacy_enable" && -n "$legacy_disable" ]]; then
+        echo "Error: Both ${legacy_enable_env} and ${legacy_disable_env} are set; please choose one." >&2
+        exit 1
+    fi
+
+    local env_choice=""
+    if [[ -n "$env_mode" ]]; then
+        case "$env_mode" in
+            enabled|true|1)
+                env_choice="enabled"
+                ;;
+            disabled|false|0)
+                env_choice="disabled"
+                ;;
+        esac
+    fi
+
+    if [[ -z "$env_choice" ]]; then
+        if [[ -n "$legacy_enable" ]]; then
+            env_choice="enabled"
+        elif [[ -n "$legacy_disable" ]]; then
+            env_choice="disabled"
+        fi
+    fi
+
+    if [[ -n "$cli_choice" && -n "$env_choice" && "$cli_choice" != "$env_choice" ]]; then
+        echo "Error: Conflicting configuration for ${feature} (CLI flag disagrees with environment)" >&2
+        exit 1
+    fi
+
+    local resolved=""
+    if [[ -n "$cli_choice" ]]; then
+        resolved="$cli_choice"
+    elif [[ -n "$env_choice" ]]; then
+        resolved="$env_choice"
+    fi
+
+    if [[ -n "$resolved" ]]; then
+        export "$mode_env"="$resolved"
+    fi
+}
+
+normalize_toggle_flag "watchdog control" "enable-watchdog" "disable-watchdog" \
+    "CCONDUCTOR_WATCHDOG_MODE" "CCONDUCTOR_ENABLE_WATCHDOG" "CCONDUCTOR_DISABLE_WATCHDOG"
+
+normalize_toggle_flag "agent timeout control" "enable-agent-timeouts" "disable-agent-timeouts" \
+    "CCONDUCTOR_AGENT_TIMEOUT_MODE" "CCONDUCTOR_ENABLE_AGENT_TIMEOUTS" "CCONDUCTOR_DISABLE_AGENT_TIMEOUTS"
+
+if [[ -n "${CCONDUCTOR_WATCHDOG_MODE:-}" ]]; then
+    case "${CCONDUCTOR_WATCHDOG_MODE}" in
+        enabled)
+            export CCONDUCTOR_WATCHDOG_ENABLED=1
+            ;;
+        disabled)
+            export CCONDUCTOR_WATCHDOG_ENABLED=0
+            ;;
+    esac
+fi
+
+if [[ -n "${CCONDUCTOR_AGENT_TIMEOUT_MODE:-}" ]]; then
+    case "${CCONDUCTOR_AGENT_TIMEOUT_MODE}" in
+        enabled)
+            export CCONDUCTOR_AGENT_TIMEOUTS_ENABLED=1
+            ;;
+        disabled)
+            export CCONDUCTOR_AGENT_TIMEOUTS_ENABLED=0
+            ;;
+    esac
+fi
 
 if [[ "${CCONDUCTOR_VERBOSE:-0}" == "1" ]]; then
     if [ -n "${CCONDUCTOR_CONFIG_DIR:-}" ]; then

@@ -1,4 +1,6 @@
 {
+  "watchdog_enabled": true,
+  "timeouts_enabled": true,
   "default_timeout_seconds": 600,
   "per_agent_timeouts": {
     "academic-researcher": 900,
@@ -11,4 +13,3 @@
   },
   "watchdog_check_interval_seconds": 60
 }
-

@@ -563,6 +563,10 @@ kill -9 <PID>
 - Check network stability
 - Try simpler question first
 - Check API rate limits
+- Increase timeout budget temporarily: `./cconductor --disable-agent-timeouts "question"`
+  - Watchdog still monitors heartbeats; resume normal mode with `--enable-agent-timeouts`
+- As a last resort, disable the watchdog (`--disable-watchdog`) to keep the run alive, but **stay at the terminal**; no automatic recovery will occur.
+- Record any watchdog/timeout overrides in your runbook so teammates know the safeguards were relaxed.
 
 ---
 

@@ -1,0 +1,80 @@
+#!/usr/bin/env bash
+# Mock Claude CLI for streaming heartbeat tests.
+
+set -euo pipefail
+
+args=("$@")
+
+for arg in "${args[@]}"; do
+    if [[ "$arg" == "--help" ]]; then
+        cat <<'EOF'
+Claude CLI mock
+  --output-format json
+  --output-format stream-json
+EOF
+        exit 0
+    fi
+done
+
+input_payload="$(cat)"
+: "$input_payload"
+
+mode="legacy"
+output_format="json"
+pending_format_arg=0
+
+for arg in "${args[@]}"; do
+    if [[ "$pending_format_arg" -eq 1 ]]; then
+        output_format="$arg"
+        pending_format_arg=0
+        continue
+    fi
+    if [[ "$arg" == "--output-format" ]]; then
+        pending_format_arg=1
+    fi
+done
+
+if [[ "$output_format" == "stream-json" ]]; then
+    mode="stream"
+fi
+
+if [[ "$mode" == "stream" ]]; then
+    scenario="${STREAMING_SCENARIO:-text}"
+    if [[ "$scenario" == "json_result" ]]; then
+        cat <<'JSON'
+{"type":"system","subtype":"init","cwd":"/tmp","session_id":"session-json","tools":[],"mcp_servers":[],"model":"claude-test","permissionMode":"default","slash_commands":[],"apiKeySource":"mock","claude_code_version":"0.0.0","output_style":"default","agents":[],"skills":[],"uuid":"system-json"}
+{"type":"stream_event","event":{"type":"message_start","message":{"model":"claude-test","id":"msg_json","type":"message","role":"assistant","content":[]}},"session_id":"session-json","uuid":"start-json"}
+JSON
+        sleep 0.4
+        cat <<'JSON'
+{"type":"stream_event","event":{"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"{\"status\":\"ok\",\"count\":1}"}},"session_id":"session-json","uuid":"delta-json"}
+JSON
+        sleep 0.4
+        cat <<'JSON'
+{"type":"stream_event","event":{"type":"message_delta","delta":{"stop_reason":"end_turn","stop_sequence":null},"usage":{"input_tokens":5,"cache_creation_input_tokens":0,"cache_read_input_tokens":0,"output_tokens":7}},"session_id":"session-json","uuid":"message-delta-json"}
+{"type":"result","subtype":"success","is_error":false,"duration_ms":900,"duration_api_ms":800,"num_turns":1,"result":"```json\n{\"status\":\"ok\",\"count\":1}\n```","session_id":"session-json","total_cost_usd":0.0,"usage":{"input_tokens":5,"output_tokens":7},"modelUsage":{"claude-test":{"inputTokens":5,"outputTokens":7}},"permission_denials":[],"uuid":"result-json"}
+JSON
+    else
+        cat <<'JSON'
+{"type":"system","subtype":"init","cwd":"/tmp","session_id":"session-text","tools":[],"mcp_servers":[],"model":"claude-test","permissionMode":"default","slash_commands":[],"apiKeySource":"mock","claude_code_version":"0.0.0","output_style":"default","agents":[],"skills":[],"uuid":"system-text"}
+{"type":"stream_event","event":{"type":"message_start","message":{"model":"claude-test","id":"msg_text","type":"message","role":"assistant","content":[]}},"session_id":"session-text","uuid":"start-text"}
+JSON
+        sleep 0.4
+        cat <<'JSON'
+{"type":"stream_event","event":{"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"Hello"}},"session_id":"session-text","uuid":"delta1-text"}
+JSON
+        sleep 0.4
+        cat <<'JSON'
+{"type":"stream_event","event":{"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":" world"}},"session_id":"session-text","uuid":"delta2-text"}
+JSON
+        sleep 0.4
+        cat <<'JSON'
+{"type":"stream_event","event":{"type":"message_delta","delta":{"stop_reason":"end_turn","stop_sequence":null},"usage":{"input_tokens":4,"output_tokens":2}},"session_id":"session-text","uuid":"message-delta-text"}
+{"type":"result","subtype":"success","is_error":false,"duration_ms":1200,"duration_api_ms":1100,"num_turns":1,"result":"Hello world","session_id":"session-text","total_cost_usd":0.0,"usage":{"input_tokens":4,"output_tokens":2},"modelUsage":{"claude-test":{"inputTokens":4,"outputTokens":2}},"permission_denials":[],"uuid":"result-text"}
+JSON
+    fi
+else
+    cat <<'JSON'
+{"type":"result","subtype":"success","is_error":false,"duration_ms":200,"duration_api_ms":200,"num_turns":1,"result":"Legacy mode response","session_id":"legacy-session","total_cost_usd":0.0,"usage":{"input_tokens":3,"output_tokens":2},"modelUsage":{"claude-test":{"inputTokens":3,"outputTokens":2}},"permission_denials":[],"uuid":"legacy-result"}
+JSON
+fi

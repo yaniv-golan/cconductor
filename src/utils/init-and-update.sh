@@ -78,6 +78,7 @@ run_initialization() {
 
 # Self-update functionality
 perform_update() {
+    local bash_runtime="${CCONDUCTOR_BASH_RUNTIME:-$(command -v bash)}"
     echo "🔄 Updating CConductor..."
     echo ""
     
@@ -139,10 +140,9 @@ perform_update() {
         
         chmod +x "$temp_installer"
         echo "→ Running installer..."
-        bash "$temp_installer" "$CCONDUCTOR_ROOT"
+        "$bash_runtime" "$temp_installer" "$CCONDUCTOR_ROOT"
         rm -f "$temp_installer" "$temp_checksum"
         echo ""
         echo "✅ Updated successfully"
     fi
 }
-

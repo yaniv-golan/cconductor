@@ -879,6 +879,23 @@ Confidence: 45/100 (LOW)
 
 ---
 
+### Watchdog or Timeout Overrides
+
+**Problem**: Agents run indefinitely or finish without quality gates triggering.
+
+**What changed**: CConductor now supports toggles for the agent watchdog and timeout enforcement. Disabling these safeguards can be useful for deep dives, but it also removes automatic recovery when agents stall.
+
+**Guidelines**:
+
+- Prefer disabling only timeouts (`--disable-agent-timeouts`) if you need longer runs; the watchdog still enforces heartbeat freshness.
+- If you disable the watchdog (`--disable-watchdog`), plan to supervise the mission manually—quality checks will not terminate stalled agents.
+- Re-enable protections per run with `--enable-watchdog` / `--enable-agent-timeouts` or by updating `agent-timeouts.json`.
+- Document watchdog/timeout overrides in post-mission reviews so stakeholders understand the risk posture.
+
+**Quality impact**: Lower automation can reduce the consistency of quality metrics (agents may exceed budgets or return stale evidence). Use manual validation before sharing results.
+
+---
+
 ### Low Source Quality
 
 **Problem**: Too many low-authority sources, few high-authority.

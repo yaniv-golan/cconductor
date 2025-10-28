@@ -1492,6 +1492,19 @@ tar -czf sessions-backup.tar.gz ~/Library/Application\ Support/CConductor/resear
 | `./cconductor --help` | Show help |
 | `./cconductor --version` | Show version |
 
+### Runtime Safeguards
+
+| Flag | Purpose |
+|------|---------|
+| `--disable-watchdog` | Skip spawning the watchdog process; agents run without heartbeat enforcement or timeout kills. |
+| `--enable-watchdog` | Force-enable the watchdog even if configuration or environment disables it. |
+| `--disable-agent-timeouts` | Keep the watchdog heartbeat monitor active but skip absolute timeout enforcement. |
+| `--enable-agent-timeouts` | Force-enable per-agent timeout enforcement when configuration disables it. |
+
+**Precedence**: CLI flags take priority, followed by environment variables (`CCONDUCTOR_WATCHDOG_MODE=enabled|disabled`, `CCONDUCTOR_AGENT_TIMEOUT_MODE=enabled|disabled`), then user configs.
+
+**Configuration**: The `config/agent-timeouts.default.json` file now includes `watchdog_enabled` and `timeouts_enabled` booleans. Copy it to `~/.config/cconductor/agent-timeouts.json` to customize defaults without affecting the repository.
+
 ---
 
 ## Configuration Files Overview

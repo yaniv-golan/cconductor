@@ -17,6 +17,8 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/core-helpers.sh"
 # shellcheck disable=SC1091
 source "$SCRIPT_DIR/error-messages.sh"
+# shellcheck disable=SC1091
+source "$SCRIPT_DIR/json-helpers.sh"
 
 # Source event logger for Phase 2 metrics
 # shellcheck disable=SC1091
@@ -38,6 +40,13 @@ if ! source "$SCRIPT_DIR/verbose.sh" 2>/dev/null; then
     if [[ -z "${INVOKE_AGENT_VERBOSE_WARNED:-}" ]]; then
         log_warn "Optional verbose.sh failed to load (agent verbose output disabled)"
         INVOKE_AGENT_VERBOSE_WARNED=1
+    fi
+fi
+# shellcheck disable=SC1091
+if ! source "$SCRIPT_DIR/process-cleanup.sh" 2>/dev/null; then
+    if [[ -z "${INVOKE_AGENT_PROC_CLEANUP_WARNED:-}" ]]; then
+        log_warn "Optional process-cleanup.sh failed to load (orphan reaping disabled)"
+        INVOKE_AGENT_PROC_CLEANUP_WARNED=1
     fi
 fi
 
@@ -62,6 +71,50 @@ check_claude_cli() {
     return 0
 }
 
+supports_claude_streaming() {
+    if [[ -n "${CLAUDE_STREAMING_CHECKED:-}" ]]; then
+        [[ "${CLAUDE_STREAMING_SUPPORTED:-0}" -eq 1 ]]
+        return
+    fi
+
+    if claude --help 2>&1 | grep -q 'stream-json'; then
+        CLAUDE_STREAMING_SUPPORTED=1
+    else
+        CLAUDE_STREAMING_SUPPORTED=0
+    fi
+    CLAUDE_STREAMING_CHECKED=1
+
+    [[ "${CLAUDE_STREAMING_SUPPORTED:-0}" -eq 1 ]]
+}
+
+# Extract JSON payload from an agent result file (looks for ```json fences)
+extract_json_from_result_output() {
+    local file="$1"
+    local log_session="${CCONDUCTOR_SESSION_DIR:-}"
+    local raw_result
+    raw_result=$(safe_jq_from_file "$file" '.result // ""' "" "$log_session" "invoke_agent.extract_result")
+    local extracted_block
+    # shellcheck disable=SC2016
+    extracted_block=$(printf '%s' "$raw_result" | sed -n '/^```json$/,/^```$/p' | sed '1d;$d')
+    if [[ -z "$extracted_block" ]]; then
+        echo ""
+        return 0
+    fi
+    local parsed_json
+    if parsed_json=$(printf '%s' "$extracted_block" | jq -c '.' 2>/dev/null); then
+        printf '%s\n' "$parsed_json"
+        return 0
+    fi
+
+    echo ""
+    return 0
+}
+
+# Backwards compatibility helper (legacy name)
+extract_json_from_result() {
+    extract_json_from_result_output "$@"
+}
+
 # Extract agent-specific metadata for research journal view
 # Returns a JSON object with relevant metrics for each agent type
 extract_agent_metadata() {
@@ -73,24 +126,16 @@ extract_agent_metadata() {
     local metadata="{}"
     
     # Helper function to extract JSON from markdown code blocks
-    extract_json_from_result() {
-        local file="$1"
-        # shellcheck disable=SC2016
-        # SC2016: Single quotes intentional - we want literal regex patterns, not variable expansion
-        jq -r '.result // ""' "$file" 2>/dev/null | \
-            sed -n '/^```json$/,/^```$/p' | \
-            sed '1d;$d' | \
-            jq -c '.' 2>/dev/null || echo ""
-    }
+    # (global function extract_json_from_result_output handles this)
     
     # OPTION 2: Self-Describing Agents
     # First, try to extract standardized .metadata field from agent output
     local result_json
-    result_json=$(extract_json_from_result "$output_file")
+    result_json=$(extract_json_from_result_output "$output_file")
     
     if [ -n "$result_json" ]; then
         local agent_metadata
-        agent_metadata=$(echo "$result_json" | jq -c '.metadata // empty' 2>/dev/null)
+        agent_metadata=$(safe_jq_from_json "$result_json" '.metadata // empty' "" "$session_dir" "invoke_agent.metadata" false)
         
         if [ -n "$agent_metadata" ] && [ "$agent_metadata" != "null" ]; then
             # Agent provided self-describing metadata - use it directly
@@ -105,7 +150,7 @@ extract_agent_metadata() {
             # Extract reasoning from orchestrator output
             if [ -n "$result_json" ]; then
                 local reasoning
-                reasoning=$(echo "$result_json" | jq -c '.reasoning // empty' 2>/dev/null)
+                reasoning=$(safe_jq_from_json "$result_json" '.reasoning // empty' "" "$session_dir" "invoke_agent.reasoning" false)
                 if [ -n "$reasoning" ] && [ "$reasoning" != "null" ]; then
                     metadata=$(jq -n --argjson reasoning "$reasoning" '{reasoning: $reasoning}')
                 fi
@@ -118,10 +163,10 @@ extract_agent_metadata() {
             # result_json already extracted above
             if [ -n "$result_json" ]; then
                 # Try to count from .initial_tasks array
-                tasks_count=$(echo "$result_json" | jq '.initial_tasks // [] | length' 2>/dev/null || echo "0")
+                tasks_count=$(safe_jq_from_json "$result_json" '.initial_tasks // [] | length' "0" "$session_dir" "invoke_agent.initial_tasks_count")
                 # Fallback: if initial_tasks doesn't exist, try direct array length
                 if [ "$tasks_count" -eq 0 ]; then
-                    tasks_count=$(echo "$result_json" | jq 'if type == "array" then length else 0 end' 2>/dev/null || echo "0")
+                    tasks_count=$(safe_jq_from_json "$result_json" 'if type == "array" then length else 0 end' "0" "$session_dir" "invoke_agent.tasks_array_length")
                 fi
             fi
             metadata=$(jq -n --argjson count "$tasks_count" '{tasks_generated: $count}')
@@ -135,18 +180,18 @@ extract_agent_metadata() {
             
             # TIER 1: Try agent's self-reported manifest
             local findings_files
-            findings_files=$(echo "$result_json" | jq -r '.findings_files[]? // empty' 2>/dev/null || echo "")
+            findings_files=$(safe_jq_from_json "$result_json" '.findings_files[]? // empty' "" "$session_dir" "invoke_agent.findings_manifest")
             
             if [ -n "$findings_files" ]; then
                 # Agent provided manifest - use it
                 while IFS= read -r findings_file; do
                     if [ -f "$session_dir/$findings_file" ]; then
                         local file_entities
-                        file_entities=$(jq '[.entities_discovered[]? // empty] | length' "$session_dir/$findings_file" 2>/dev/null || echo "0")
+                        file_entities=$(safe_jq_from_file "$session_dir/$findings_file" '[.entities_discovered[]? // empty] | length' "0" "$session_dir" "invoke_agent.findings.entities")
                         entities=$((entities + file_entities))
-                        
+
                         local file_claims
-                        file_claims=$(jq '[.claims[]? // empty] | length' "$session_dir/$findings_file" 2>/dev/null || echo "0")
+                        file_claims=$(safe_jq_from_file "$session_dir/$findings_file" '[.claims[]? // empty] | length' "0" "$session_dir" "invoke_agent.findings.claims")
                         claims=$((claims + file_claims))
                     fi
                 done <<< "$findings_files"
@@ -157,11 +202,11 @@ extract_agent_metadata() {
                     for findings_file in "$session_dir/work"/*/findings-*.json "$session_dir/work"/*/findings*.json; do
                         [ -f "$findings_file" ] || continue
                         local file_entities
-                        file_entities=$(jq '[.entities_discovered[]? // empty] | length' "$findings_file" 2>/dev/null || echo "0")
+                        file_entities=$(safe_jq_from_file "$findings_file" '[.entities_discovered[]? // empty] | length' "0" "$session_dir" "invoke_agent.fs.entities")
                         entities=$((entities + file_entities))
-                        
+
                         local file_claims
-                        file_claims=$(jq '[.claims[]? // empty] | length' "$findings_file" 2>/dev/null || echo "0")
+                        file_claims=$(safe_jq_from_file "$findings_file" '[.claims[]? // empty] | length' "0" "$session_dir" "invoke_agent.fs.claims")
                         claims=$((claims + file_claims))
                     done
                 fi
@@ -171,11 +216,11 @@ extract_agent_metadata() {
                 for findings_file in "$session_dir"/*-findings.json "$session_dir"/*findings*.json; do
                     [ -f "$findings_file" ] || continue
                     local file_entities
-                    file_entities=$(jq '[.entities_discovered[]? // empty] | length' "$findings_file" 2>/dev/null || echo "0")
+                    file_entities=$(safe_jq_from_file "$findings_file" '[.entities_discovered[]? // empty] | length' "0" "$session_dir" "invoke_agent.tier3.entities")
                     entities=$((entities + file_entities))
                     
                     local file_claims
-                    file_claims=$(jq '[.claims[]? // empty] | length' "$findings_file" 2>/dev/null || echo "0")
+                    file_claims=$(safe_jq_from_file "$findings_file" '[.claims[]? // empty] | length' "0" "$session_dir" "invoke_agent.tier3.claims")
                     claims=$((claims + file_claims))
                 done
             fi
@@ -184,7 +229,7 @@ extract_agent_metadata() {
             # (This provides observability - we can log if numbers don't match)
             if [ -f "$session_dir/knowledge/knowledge-graph.json" ]; then
                 local kg_entities
-                kg_entities=$(jq '.entities | length' "$session_dir/knowledge/knowledge-graph.json" 2>/dev/null || echo "0")
+                kg_entities=$(safe_jq_from_file "$session_dir/knowledge/knowledge-graph.json" '.entities | length' "0" "$session_dir" "invoke_agent.kg_entities")
                 
                 # If we found findings but KG is still low, log warning
                 if [ "$entities" -gt 5 ] && [ "$kg_entities" -lt 5 ]; then
@@ -211,18 +256,18 @@ extract_agent_metadata() {
             
             # TIER 1: Try agent's self-reported manifest
             local findings_files
-            findings_files=$(echo "$result_json" | jq -r '.findings_files[]? // empty' 2>/dev/null || echo "")
+            findings_files=$(safe_jq_from_json "$result_json" '.findings_files[]? // empty' "" "$session_dir" "invoke_agent.parallel_manifest")
             
             if [ -n "$findings_files" ]; then
                 # Agent provided manifest - use it
                 while IFS= read -r findings_file; do
                     if [ -f "$session_dir/$findings_file" ]; then
                         local file_entities
-                        file_entities=$(jq '[.entities_discovered[]? // empty] | length' "$session_dir/$findings_file" 2>/dev/null || echo "0")
+                        file_entities=$(safe_jq_from_file "$session_dir/$findings_file" '[.entities_discovered[]? // empty] | length' "0" "$session_dir" "invoke_agent.parallel.entities")
                         entities=$((entities + file_entities))
                         
                         local file_claims
-                        file_claims=$(jq '[.claims[]? // empty] | length' "$session_dir/$findings_file" 2>/dev/null || echo "0")
+                        file_claims=$(safe_jq_from_file "$session_dir/$findings_file" '[.claims[]? // empty] | length' "0" "$session_dir" "invoke_agent.parallel.claims")
                         claims=$((claims + file_claims))
                     fi
                 done <<< "$findings_files"
@@ -233,11 +278,11 @@ extract_agent_metadata() {
                     for findings_file in "$session_dir/work"/*/findings-*.json "$session_dir/work"/*/findings*.json; do
                         [ -f "$findings_file" ] || continue
                         local file_entities
-                        file_entities=$(jq '[.entities_discovered[]? // empty] | length' "$findings_file" 2>/dev/null || echo "0")
+                        file_entities=$(safe_jq_from_file "$findings_file" '[.entities_discovered[]? // empty] | length' "0" "$session_dir" "invoke_agent.parallel_fs.entities")
                         entities=$((entities + file_entities))
                         
                         local file_claims
-                        file_claims=$(jq '[.claims[]? // empty] | length' "$findings_file" 2>/dev/null || echo "0")
+                        file_claims=$(safe_jq_from_file "$findings_file" '[.claims[]? // empty] | length' "0" "$session_dir" "invoke_agent.parallel_fs.claims")
                         claims=$((claims + file_claims))
                     done
                 fi
@@ -247,11 +292,11 @@ extract_agent_metadata() {
                 for findings_file in "$session_dir"/*-findings.json "$session_dir"/*findings*.json; do
                     [ -f "$findings_file" ] || continue
                     local file_entities
-                    file_entities=$(jq '[.entities_discovered[]? // empty] | length' "$findings_file" 2>/dev/null || echo "0")
+                    file_entities=$(safe_jq_from_file "$findings_file" '[.entities_discovered[]? // empty] | length' "0" "$session_dir" "invoke_agent.parallel_tier3.entities")
                     entities=$((entities + file_entities))
                     
                     local file_claims
-                    file_claims=$(jq '[.claims[]? // empty] | length' "$findings_file" 2>/dev/null || echo "0")
+                    file_claims=$(safe_jq_from_file "$findings_file" '[.claims[]? // empty] | length' "0" "$session_dir" "invoke_agent.parallel_tier3.claims")
                     claims=$((claims + file_claims))
                 done
             fi
@@ -260,7 +305,7 @@ extract_agent_metadata() {
             # (This provides observability - we can log if numbers don't match)
             if [ -f "$session_dir/knowledge/knowledge-graph.json" ]; then
                 local kg_entities
-                kg_entities=$(jq '.entities | length' "$session_dir/knowledge/knowledge-graph.json" 2>/dev/null || echo "0")
+                kg_entities=$(safe_jq_from_file "$session_dir/knowledge/knowledge-graph.json" '.entities | length' "0" "$session_dir" "invoke_agent.parallel_kg_entities")
                 
                 # If we found findings but KG is still low, log warning
                 if [ "$entities" -gt 5 ] && [ "$kg_entities" -lt 5 ]; then
@@ -286,11 +331,11 @@ extract_agent_metadata() {
             
             # Read from artifact files
             if [ -f "$session_dir/artifacts/synthesis-agent/completion.json" ]; then
-                claims=$(jq -r '.claims_analyzed // 0' "$session_dir/artifacts/synthesis-agent/completion.json" 2>/dev/null || echo "0")
+                claims=$(safe_jq_from_file "$session_dir/artifacts/synthesis-agent/completion.json" '.claims_analyzed // 0' "0" "$session_dir" "invoke_agent.synthesis.claims")
             fi
             
             if [ -f "$session_dir/artifacts/synthesis-agent/coverage.json" ]; then
-                gaps=$(jq -r '.aspects_not_covered // 0' "$session_dir/artifacts/synthesis-agent/coverage.json" 2>/dev/null || echo "0")
+                gaps=$(safe_jq_from_file "$session_dir/artifacts/synthesis-agent/coverage.json" '.aspects_not_covered // 0' "0" "$session_dir" "invoke_agent.synthesis.gaps")
             fi
             
             metadata=$(jq -n \
@@ -322,7 +367,7 @@ extract_cost_from_output() {
     
     # Try common paths: .usage.total_cost_usd, .total_cost_usd
     local cost
-    cost=$(jq -r '.usage.total_cost_usd // .total_cost_usd // 0 | tonumber? // 0' "$output_file" 2>/dev/null || echo "0")
+    cost=$(safe_jq_from_file "$output_file" '.usage.total_cost_usd // .total_cost_usd // 0 | tonumber? // 0' "0" "$session_dir" "invoke_agent.cost")
     
     # Optional: Log warning if file exists but has no cost field (verbose mode only)
     if is_verbose_enabled 2>/dev/null && [[ "$cost" == "0" ]] && [[ -s "$output_file" ]]; then
@@ -332,6 +377,37 @@ extract_cost_from_output() {
     fi
     
     echo "$cost"
+}
+
+cleanup_stale_invoke_pid() {
+    local pid_file="$1"
+    local label="$2"
+
+    if [[ ! -f "$pid_file" ]]; then
+        return 0
+    fi
+
+    local stale_pid
+    stale_pid=$(cat "$pid_file" 2>/dev/null || echo "")
+    if [[ -z "$stale_pid" ]]; then
+        rm -f "$pid_file"
+        return 0
+    fi
+
+    if kill -0 "$stale_pid" 2>/dev/null; then
+        local parent_pid
+        parent_pid=$(ps -o ppid= -p "$stale_pid" 2>/dev/null | tr -d '[:space:]')
+        if [[ -z "$parent_pid" || "$parent_pid" == "1" ]]; then
+            echo "[cleanup] Terminating orphaned invoke-agent process $stale_pid for $label" >&2
+            kill "$stale_pid" 2>/dev/null || true
+            sleep 1
+            if kill -0 "$stale_pid" 2>/dev/null; then
+                kill -KILL "$stale_pid" 2>/dev/null || true
+            fi
+        fi
+    fi
+
+    rm -f "$pid_file"
 }
 
 # Invoke agent with v2 implementation (uses validated patterns)
@@ -372,6 +448,7 @@ invoke_agent_v2() {
     local timeout="${4:-600}"  # Legacy parameter, kept for backward compatibility
     local session_dir="${5:-}"
     local resume_session_id="${6:-}"
+    local bash_runtime="${CCONDUCTOR_BASH_RUNTIME:-$(command -v bash)}"
 
     # Validate inputs
     if [ -z "$agent_name" ]; then
@@ -426,6 +503,102 @@ invoke_agent_v2() {
         fi
     fi
 
+    local agent_runtime_config_json="{}"
+    local agent_runtime_config_loaded=0
+
+    load_agent_runtime_config() {
+        if [[ "$agent_runtime_config_loaded" -eq 1 ]]; then
+            return
+        fi
+        agent_runtime_config_loaded=1
+        local config_loader="$cconductor_root/src/utils/config-loader.sh"
+        agent_runtime_config_json="{}"
+        if [[ -f "$config_loader" ]]; then
+            # shellcheck disable=SC1090
+            source "$config_loader" 2>/dev/null || true
+            if command -v load_config >/dev/null 2>&1; then
+                agent_runtime_config_json=$(load_config "agent-timeouts" 2>/dev/null || echo "{}")
+            fi
+        fi
+    }
+
+    resolve_toggle_mode() {
+        local mode_env="$1"
+        local legacy_enable_env="$2"
+        local legacy_disable_env="$3"
+        local config_key="$4"
+        local default_value="$5"
+
+        local env_mode_raw="${!mode_env:-}"
+        local env_mode="${env_mode_raw,,}"
+        if [[ -n "$env_mode" ]]; then
+            case "$env_mode" in
+                enabled|true|1)
+                    echo "enabled"
+                    return
+                    ;;
+                disabled|false|0)
+                    echo "disabled"
+                    return
+                    ;;
+                *)
+                    log_warn "Invalid value for $mode_env: $env_mode_raw (expected enabled|disabled)"
+                    ;;
+            esac
+        fi
+
+        local legacy_enable="${!legacy_enable_env:-}"
+        local legacy_disable="${!legacy_disable_env:-}"
+        if [[ -n "$legacy_enable" ]] && [[ -n "$legacy_disable" ]]; then
+            log_warn "Both $legacy_enable_env and $legacy_disable_env set; defaulting to disabled"
+            echo "disabled"
+            return
+        fi
+        if [[ -n "$legacy_enable" ]]; then
+            echo "enabled"
+            return
+        fi
+        if [[ -n "$legacy_disable" ]]; then
+            echo "disabled"
+            return
+        fi
+
+        load_agent_runtime_config
+        local config_value
+        config_value=$(echo "$agent_runtime_config_json" | jq -r ".${config_key} // empty" 2>/dev/null || echo "")
+        case "$config_value" in
+            true|1|enabled)
+                echo "enabled"
+                return
+                ;;
+            false|0|disabled)
+                echo "disabled"
+                return
+                ;;
+        esac
+
+        echo "$default_value"
+    }
+
+    local watchdog_mode
+    watchdog_mode=$(resolve_toggle_mode "CCONDUCTOR_WATCHDOG_MODE" "CCONDUCTOR_ENABLE_WATCHDOG" "CCONDUCTOR_DISABLE_WATCHDOG" "watchdog_enabled" "enabled")
+    local agent_timeouts_mode
+    agent_timeouts_mode=$(resolve_toggle_mode "CCONDUCTOR_AGENT_TIMEOUT_MODE" "CCONDUCTOR_ENABLE_AGENT_TIMEOUTS" "CCONDUCTOR_DISABLE_AGENT_TIMEOUTS" "timeouts_enabled" "enabled")
+
+    local watchdog_enabled=0
+    if [[ "$watchdog_mode" == "enabled" ]]; then
+        watchdog_enabled=1
+    fi
+    local agent_timeouts_enabled=0
+    if [[ "$agent_timeouts_mode" == "enabled" ]]; then
+        agent_timeouts_enabled=1
+    fi
+
+    export CCONDUCTOR_WATCHDOG_MODE="$watchdog_mode"
+    export CCONDUCTOR_AGENT_TIMEOUT_MODE="$agent_timeouts_mode"
+    export CCONDUCTOR_WATCHDOG_ENABLED="$watchdog_enabled"
+    export CCONDUCTOR_AGENT_TIMEOUTS_ENABLED="$agent_timeouts_enabled"
+
     # Load agent definition
     local agent_file="$session_dir/.claude/agents/${agent_name}.json"
 
@@ -437,7 +610,7 @@ invoke_agent_v2() {
     # Extract systemPrompt from agent definition
     # VALIDATED: Correct JSON path in diagnostic-json-structure.sh
     local system_prompt
-    system_prompt=$(jq -r '.systemPrompt' "$agent_file" 2>/dev/null)
+    system_prompt=$(safe_jq_from_file "$agent_file" '.systemPrompt' "" "$session_dir" "invoke_agent.system_prompt")
 
     if [ -z "$system_prompt" ] || [ "$system_prompt" = "null" ]; then
         echo "Error: Agent $agent_name missing systemPrompt in $agent_file" >&2
@@ -472,21 +645,32 @@ invoke_agent_v2() {
     # Extract model from agent definition (written by mission-orchestration.sh from agent metadata)
     # This supports per-agent models - each agent can specify its own model in metadata.json
     local agent_model
-    agent_model=$(jq -r '.model // "sonnet"' "$agent_file" 2>/dev/null || echo "sonnet")
+    agent_model=$(safe_jq_from_file "$agent_file" '.model // "sonnet"' "sonnet" "$session_dir" "invoke_agent.agent_model")
     
+    # Determine streaming preference (enabled by default) and CLI support
+    local enable_streaming="${CCONDUCTOR_ENABLE_STREAMING:-1}"
+    local use_streaming=0
+    if [[ "$enable_streaming" == "1" ]]; then
+        if supports_claude_streaming; then
+            use_streaming=1
+        else
+            log_warn "Claude CLI does not support stream-json output; falling back to legacy JSON mode"
+        fi
+    fi
+
     # Build Claude command with validated flags
-    # VALIDATED:
-    # - --output-format json: test-01
-    # - --append-system-prompt: test-append-system-prompt.sh
-    # - --allowedTools: test-04
-    # - --disallowedTools: test-05
     local claude_cmd=(
         claude
         --print
-        --model "$agent_model"  # Now uses per-agent model
-        --output-format json          # VALIDATED: test-01
-        --append-system-prompt "$system_prompt"  # VALIDATED: test-append-system-prompt.sh
+        --model "$agent_model"
+        --append-system-prompt "$system_prompt"
     )
+
+    if [[ "$use_streaming" -eq 1 ]]; then
+        claude_cmd+=(--verbose --output-format stream-json --include-partial-messages)
+    else
+        claude_cmd+=(--output-format json)
+    fi
 
     if [ -n "$resume_session_id" ]; then
         claude_cmd+=(--resume "$resume_session_id")
@@ -521,27 +705,196 @@ invoke_agent_v2() {
     export CCONDUCTOR_AGENT_NAME="$agent_name"
     export CCONDUCTOR_VERBOSE="${CCONDUCTOR_VERBOSE:-0}"
 
-    # Change to session directory for context
+    # Reap any orphaned agent processes from previous runs to avoid buildup
+    if declare -F cleanup_orphan_agent_processes >/dev/null 2>&1; then
+        cleanup_orphan_agent_processes || true
+    fi
+
+    # Track runtime resources for cleanup
     local original_dir
     original_dir=$(pwd)
+    tailer_started=0
+    local watchdog_pid=""
+    local heartbeat_file=""
+    local cleanup_performed=0
+    local stderr_file=""
+    local pid_file=""
+    local stream_pipe=""
+    local stream_processor_pid=""
+    local stream_log=""
+
+    cleanup_invoke_agent() {
+        local status=$?
+        if [[ ${cleanup_performed:-0} -eq 0 ]]; then
+            if [[ -n "${watchdog_pid:-}" ]]; then
+                kill "$watchdog_pid" 2>/dev/null || true
+                wait "$watchdog_pid" 2>/dev/null || true
+            fi
+            if [[ -n "${stream_processor_pid:-}" ]]; then
+                kill "$stream_processor_pid" 2>/dev/null || true
+                wait "$stream_processor_pid" 2>/dev/null || true
+            fi
+            if [[ "$tailer_started" == "1" ]] && declare -F stop_event_tailer >/dev/null 2>&1; then
+                stop_event_tailer "${session_dir:-}" || true
+            fi
+            if [[ -n "${heartbeat_file:-}" ]]; then
+                rm -f "$heartbeat_file" "${heartbeat_file}.tmp" 2>/dev/null || true
+            fi
+            if [[ -n "${stream_pipe:-}" ]]; then
+                rm -f "$stream_pipe" 2>/dev/null || true
+            fi
+            if [[ -n "${pid_file:-}" ]]; then
+                rm -f "$pid_file" 2>/dev/null || true
+            fi
+            if [[ -n "${original_dir:-}" ]]; then
+                cd "$original_dir" >/dev/null 2>&1 || true
+            fi
+            cleanup_performed=1
+        fi
+        return $status
+    }
+    trap 'cleanup_invoke_agent' EXIT INT TERM HUP
+
+    process_stream_events() {
+        local pipe_path="$1"
+        local log_file="$2"
+        local output_target="$3"
+        local heartbeat_path="$4"
+        local agent_label="$5"
+        local debug_log="${CCONDUCTOR_STREAM_DEBUG_LOG:-}"
+
+        : > "$log_file"
+        if [[ -n "$debug_log" ]]; then
+            : > "$debug_log"
+        fi
+
+        local final_result=""
+        local line=""
+        local aggregated_text=""
+        local last_assistant_text=""
+
+        while IFS= read -r line; do
+            printf '%s\n' "$line" >> "$log_file"
+            if [[ -n "$debug_log" ]]; then
+                printf '%s\n' "$line" >> "$debug_log"
+            fi
+            [[ -z "$line" ]] && continue
+
+            local event_type
+            event_type=$(safe_jq_from_json "$line" '.type // empty' "" "$session_dir" "invoke_agent.stream.event_type")
+
+            case "$event_type" in
+                stream_event)
+                    local inner_type
+                    inner_type=$(safe_jq_from_json "$line" '.event.type // empty' "" "$session_dir" "invoke_agent.stream.inner_type")
+                    case "$inner_type" in
+                        message_start|message_delta|content_block_start|content_block_delta|content_block_stop|tool_use_start|tool_use_delta|tool_use_stop)
+                            echo "${agent_label}:$(get_epoch)" > "$heartbeat_path" 2>/dev/null || true
+                            ;;
+                    esac
+                    if [[ "$inner_type" == "content_block_delta" || "$inner_type" == "message_delta" ]]; then
+                        local delta_text
+                        delta_text=$(safe_jq_from_json "$line" '.event.delta.text? // empty' "" "$session_dir" "invoke_agent.stream.delta")
+                        if [[ -n "$delta_text" && "$delta_text" != "null" ]]; then
+                            aggregated_text+="$delta_text"
+                        fi
+                    fi
+                    ;;
+                assistant|message)
+                    echo "${agent_label}:$(get_epoch)" > "$heartbeat_path" 2>/dev/null || true
+                    local assistant_text
+                    assistant_text=$(safe_jq_from_json "$line" '[.message.content[]? | select(.type=="text") | .text] | join("")' "" "$session_dir" "invoke_agent.stream.assistant")
+                    if [[ -n "$assistant_text" && "$assistant_text" != "null" ]]; then
+                        last_assistant_text="$assistant_text"
+                    fi
+                    ;;
+                result)
+                    final_result="$line"
+                    if [[ -n "$debug_log" ]]; then
+                        printf 'final_result_set\n' >> "$debug_log"
+                    fi
+                    ;;
+                *)
+                    ;;
+            esac
+        done < "$pipe_path"
+
+        if [[ -n "$final_result" ]]; then
+            printf '%s\n' "$final_result" > "$output_target"
+            if [[ -n "$debug_log" ]]; then
+                printf 'wrote_final_result\n' >> "$debug_log"
+            fi
+            return 0
+        fi
+
+        local synthesized_text="$aggregated_text"
+        if [[ -z "$synthesized_text" && -n "$last_assistant_text" ]]; then
+            synthesized_text="$last_assistant_text"
+        fi
+
+        if [[ -n "$synthesized_text" ]]; then
+            local synthetic_result
+            synthetic_result=$(jq -n --arg text "$synthesized_text" --arg subtype "stream_synthesized" \
+                '{type:"result",subtype:$subtype,result:$text}')
+            printf '%s\n' "$synthetic_result" > "$output_target"
+            if [[ -n "$debug_log" ]]; then
+                printf 'wrote_synthetic_result\n' >> "$debug_log"
+            fi
+            return 0
+        fi
+
+        # Fallback: try to salvage last JSON line if result missing
+        local fallback_line=""
+        if fallback_line=$(tail -n 1 "$log_file" 2>/dev/null); then
+            if [[ -n "$fallback_line" ]]; then
+                printf '%s\n' "$fallback_line" > "$output_target"
+                if [[ -n "$debug_log" ]]; then
+                    printf 'wrote_fallback\n' >> "$debug_log"
+                fi
+            fi
+        fi
+        return 1
+    }
+
+    # Change to session directory for context
     cd "$session_dir" || return 1
 
     # Load agent timeout from config (before showing start message)
     load_agent_timeout() {
         local agent_name="$1"
-        if [[ -f "$cconductor_root/src/utils/config-loader.sh" ]]; then
-            # shellcheck disable=SC1091
-            source "$cconductor_root/src/utils/config-loader.sh" 2>/dev/null || { echo "600"; return; }
-            local config
-            config=$(load_config "agent-timeouts" 2>/dev/null || echo "{}")
-            echo "$config" | jq -r ".per_agent_timeouts.\"$agent_name\" // .default_timeout_seconds // 600"
+        local fallback="${2:-600}"
+        load_agent_runtime_config
+        local resolved
+        resolved=$(echo "$agent_runtime_config_json" | jq -r ".per_agent_timeouts.\"$agent_name\" // .default_timeout_seconds // empty" 2>/dev/null || echo "")
+        if [[ -z "$resolved" || "$resolved" == "null" ]]; then
+            echo "$fallback"
         else
-            echo "600"
+            echo "$resolved"
         fi
     }
 
     local agent_timeout
     agent_timeout=$(load_agent_timeout "$agent_name")
+
+    local timeout_description="timeouts disabled"
+    if [[ "$agent_timeouts_enabled" -eq 1 ]]; then
+        timeout_description="${agent_timeout}s timeout"
+    fi
+
+    local -a mode_annotations=("$timeout_description")
+    if [[ "$watchdog_enabled" -eq 0 ]]; then
+        mode_annotations+=("watchdog disabled")
+    fi
+    local mode_summary="${mode_annotations[0]}"
+    if [[ ${#mode_annotations[@]} -gt 1 ]]; then
+        for annotation in "${mode_annotations[@]:1}"; do
+            mode_summary="${mode_summary}; ${annotation}"
+        done
+    fi
+
+    if [[ "$watchdog_enabled" -eq 0 && "$agent_timeouts_enabled" -eq 1 ]]; then
+        log_warn "Watchdog disabled; $agent_name timeout (${agent_timeout}s) will not be enforced."
+    fi
 
     # Show friendly message in verbose mode, technical in normal/debug mode
     if is_verbose_enabled 2>/dev/null && [ "$(type -t verbose_agent_start)" = "function" ]; then
@@ -549,9 +902,9 @@ invoke_agent_v2() {
         # Special message for orchestrator
         if [[ "$agent_name" == "mission-orchestrator" ]]; then
             if [ "$(type -t verbose)" = "function" ]; then
-                verbose "🚦 Coordinating next research step... [mission-orchestrator with ${agent_timeout}s timeout]"
+                verbose "🚦 Coordinating next research step... [mission-orchestrator with ${mode_summary}]"
             else
-                echo "🚦 Coordinating next research step... [mission-orchestrator with ${agent_timeout}s timeout]" >&2
+                echo "🚦 Coordinating next research step... [mission-orchestrator with ${mode_summary}]" >&2
             fi
         else
             # Regular agents: use sanitized task from environment if available, otherwise extract from file
@@ -566,14 +919,14 @@ invoke_agent_v2() {
                             cut -c1-150)
             fi
             verbose_agent_start "$agent_name" "$task_desc"
-            verbose "  [$agent_name with ${agent_timeout}s timeout]"
+            verbose "  [$agent_name with ${mode_summary}]"
         fi
     else
         # Normal/debug mode: technical
         if [[ "$agent_name" == "mission-orchestrator" ]]; then
-            echo "→ Invoking mission orchestrator... [${agent_timeout}s timeout]" >&2
+            echo "→ Invoking mission orchestrator... [${mode_summary}]" >&2
         else
-            echo "⚡ Invoking $agent_name with systemPrompt (tools: ${allowed_tools:-all}) [${agent_timeout}s timeout]" >&2
+            echo "⚡ Invoking $agent_name with systemPrompt (tools: ${allowed_tools:-all}) [${mode_summary}]" >&2
         fi
     fi
 
@@ -591,14 +944,14 @@ invoke_agent_v2() {
     # In verbose mode: shows detailed messages
     # In non-verbose mode: shows progress dots
     # Tailer prevents duplicates by checking if already running
-    local tailer_started=0
-    local invoke_agent_dir
-    invoke_agent_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    local invoke_agent_dir="$SCRIPT_DIR"
     
-    # shellcheck disable=SC1091
-    if source "$invoke_agent_dir/event-tailer.sh" 2>/dev/null; then
-        start_event_tailer "$session_dir" || true
-        tailer_started=1
+    if [[ "${CCONDUCTOR_SKIP_EVENT_TAILER:-0}" != "1" ]]; then
+        # shellcheck disable=SC1091
+        if source "$invoke_agent_dir/event-tailer.sh" 2>/dev/null; then
+            start_event_tailer "$session_dir" || true
+            tailer_started=1
+        fi
     fi
 
     # Set agent name for hooks (enables heartbeat tracking)
@@ -613,16 +966,55 @@ invoke_agent_v2() {
     local task
     task=$(cat "$input_file")
 
-    # Start agent in background with watchdog monitoring
-    # Output goes to $output_file in JSON format
-    # Note: Don't redirect stderr (2>&1) - let hooks write to terminal in verbose mode
-    printf '%s\n' "$task" | CLAUDE_PROJECT_DIR="$session_dir" "${claude_cmd[@]}" > "$output_file" &
+    # Prepare diagnostic paths
+    stderr_file="${output_file}.stderr"
+    : > "$stderr_file"
+    if [[ "$use_streaming" -eq 1 ]]; then
+        stream_log="${output_file}.stream.jsonl"
+        : > "$stream_log"
+        stream_pipe=$(mktemp "$session_dir/.agent-stream.XXXXXX")
+        rm -f "$stream_pipe"
+        if mkfifo "$stream_pipe"; then
+            process_stream_events "$stream_pipe" "$stream_log" "$output_file" "$heartbeat_file" "$agent_name" &
+            stream_processor_pid=$!
+            printf '%s\n' "$task" | CLAUDE_PROJECT_DIR="$session_dir" "${claude_cmd[@]}" > "$stream_pipe" 2> "$stderr_file" &
+        else
+            log_warn "Failed to initialize streaming FIFO; reverting to legacy JSON output"
+            rm -f "$stream_pipe" 2>/dev/null || true
+            stream_pipe=""
+            use_streaming=0
+            rm -f "$stream_log" 2>/dev/null || true
+            stream_log=""
+            local -a fallback_cmd=()
+            local skip_next_value=0
+            for arg in "${claude_cmd[@]}"; do
+                if [[ "$arg" == "--verbose" || "$arg" == "--include-partial-messages" ]]; then
+                    continue
+                fi
+                if [[ "$arg" == "--output-format" ]]; then
+                    fallback_cmd+=("$arg")
+                    fallback_cmd+=("json")
+                    skip_next_value=1
+                    continue
+                fi
+                if [[ "$skip_next_value" -eq 1 ]]; then
+                    skip_next_value=0
+                    continue
+                fi
+                fallback_cmd+=("$arg")
+            done
+            claude_cmd=("${fallback_cmd[@]}")
+            printf '%s\n' "$task" | CLAUDE_PROJECT_DIR="$session_dir" "${fallback_cmd[@]}" > "$output_file" 2> "$stderr_file" &
+        fi
+    else
+        printf '%s\n' "$task" | CLAUDE_PROJECT_DIR="$session_dir" "${claude_cmd[@]}" > "$output_file" 2> "$stderr_file" &
+    fi
     local agent_pid=$!
 
     # Start watchdog in background to monitor for inactivity
     local watchdog_pid=""
-    if [[ -f "$cconductor_root/src/utils/agent-watchdog.sh" ]]; then
-        bash "$cconductor_root/src/utils/agent-watchdog.sh" \
+    if [[ "$watchdog_enabled" -eq 1 && -f "$cconductor_root/src/utils/agent-watchdog.sh" ]]; then
+        "$bash_runtime" "$cconductor_root/src/utils/agent-watchdog.sh" \
             "$session_dir" "$agent_pid" "$agent_timeout" "$agent_name" &
         watchdog_pid=$!
     fi
@@ -630,6 +1022,22 @@ invoke_agent_v2() {
     # Wait for agent to complete
     wait "$agent_pid"
     local agent_exit_code=$?
+
+    if [[ "$use_streaming" -eq 1 ]]; then
+        if [[ -n "$stream_processor_pid" ]]; then
+            wait "$stream_processor_pid" || true
+            stream_processor_pid=""
+        fi
+        if [[ -f "$stream_log" ]] && { [[ ! -s "$output_file" ]] || ! jq empty "$output_file" 2>/dev/null; }; then
+            local extracted_stream_result=""
+            extracted_stream_result=$(jq -s 'map(select(.type == "result")) | last // empty' "$stream_log" 2>/dev/null || echo "")
+            if [[ -n "$extracted_stream_result" ]]; then
+                printf '%s\n' "$extracted_stream_result" > "$output_file"
+            fi
+        fi
+        rm -f "$stream_pipe" 2>/dev/null || true
+        stream_pipe=""
+    fi
 
     # Kill watchdog if it's still running
     if [[ -n "$watchdog_pid" ]]; then
@@ -642,15 +1050,20 @@ invoke_agent_v2() {
 
     # Check if agent timed out (exit code 124 = timeout, 143 = SIGTERM)
     if [[ $agent_exit_code -eq 124 ]] || [[ $agent_exit_code -eq 143 ]]; then
-        echo "✗ $agent_name timed out after ${agent_timeout}s (no activity detected)" >&2
-        
-        # Log timeout event for orchestrator awareness
-        if command -v log_event &>/dev/null; then
-            log_event "$session_dir" "agent_invocation_timeout" \
-                "{\"agent\":\"$agent_name\",\"timeout_seconds\":$agent_timeout}" 2>/dev/null || true
+        if [[ "$watchdog_enabled" -eq 1 && "$agent_timeouts_enabled" -eq 1 ]]; then
+            echo "✗ $agent_name timed out after ${agent_timeout}s (no activity detected)" >&2
+
+            # Log timeout event for orchestrator awareness
+            if command -v log_event &>/dev/null; then
+                log_event "$session_dir" "agent_invocation_timeout" \
+                    "{\"agent\":\"$agent_name\",\"timeout_seconds\":$agent_timeout}" 2>/dev/null || true
+            fi
+
+            return 124
+        else
+            echo "⚠️  $agent_name exited with code $agent_exit_code while watchdog/timeouts disabled; continuing." >&2
+            agent_exit_code=0
         fi
-        
-        return 124
     fi
 
     # Continue with existing validation if agent succeeded
@@ -687,7 +1100,7 @@ invoke_agent_v2() {
 
         # Check for .result field
         local result
-        result=$(jq -r '.result // empty' "$output_file" 2>/dev/null)
+        result=$(safe_jq_from_file "$output_file" '.result // empty' "" "$session_dir" "invoke_agent.result")
 
         if [ -z "$result" ]; then
             echo "✗ Agent $agent_name returned empty .result field" >&2
@@ -730,7 +1143,9 @@ invoke_agent_v2() {
                     # Log for monitoring
                     if command -v log_event &>/dev/null; then
                         local result_preview
-                        result_preview=$(jq -r '.result // "no result"' "$output_file" 2>/dev/null | head -c 100)
+                        local preview_raw
+                        preview_raw=$(safe_jq_from_file "$output_file" '.result // "no result"' "no result" "$session_dir" "invoke_agent.result_preview")
+                        result_preview=$(printf '%s' "$preview_raw" | head -c 100)
                         log_event "$session_dir" "tier0_format_mismatch" \
                             "Agent $agent_name returned non-parseable result" \
                             "{\"agent\": \"$agent_name\", \"result_preview\": \"$result_preview\"}" || true
@@ -754,7 +1169,12 @@ invoke_agent_v2() {
         local metadata
         metadata=$(extract_agent_metadata "$agent_name" "$output_file" "$session_dir" 2>/dev/null || echo "{}")
         # Compact JSON to single line to avoid quoting issues
-        metadata=$(echo "$metadata" | jq -c '.' 2>/dev/null || echo "{}")
+        local metadata_trimmed="${metadata//[[:space:]]/}"
+        if [[ -z "$metadata_trimmed" || "$metadata_trimmed" == "{}" ]]; then
+            metadata="{}"
+        else
+            metadata=$(safe_jq_from_json "$metadata" '.' '{}' "$session_dir" "invoke_agent.metadata.normalize" false)
+        fi
         
         # Log agent result with metrics, metadata, and model
         if [ -n "${session_dir:-}" ] && command -v log_agent_result &>/dev/null; then
@@ -770,7 +1190,7 @@ invoke_agent_v2() {
                     # Use cconductor_root (not PROJECT_ROOT) - it's the reliable variable discovered earlier
                     local wrapper_script="$cconductor_root/src/utils/kg-integrate.sh"
                     if [ -f "$wrapper_script" ]; then
-                        if bash "$wrapper_script" "$session_dir" "$agent_output_file" 2>&1; then
+                        if "$bash_runtime" "$wrapper_script" "$session_dir" "$agent_output_file" 2>&1; then
                             echo "  ✓ Integrated findings into knowledge graph" >&2
                         else
                             echo "  ⚠ Warning: Could not integrate findings (knowledge graph may be incomplete)" >&2
@@ -806,15 +1226,14 @@ invoke_agent_v2() {
 
         # Show agent reasoning in verbose mode
         if is_verbose_enabled 2>/dev/null && [ "$(type -t verbose_agent_reasoning)" = "function" ]; then
-            # Try to extract reasoning from agent output (JSON format)
-            local reasoning_json
-            # shellcheck disable=SC2016
-            reasoning_json=$(jq -r '.result' "$output_file" 2>/dev/null | \
-                            sed -n '/^```json$/,/^```$/p' | sed '1d;$d' | \
-                            jq -c '.reasoning // empty' 2>/dev/null || echo "")
-            
-            if [ -n "$reasoning_json" ] && [ "$reasoning_json" != "null" ]; then
-                verbose_agent_reasoning "$reasoning_json"
+            local reasoning_payload
+            reasoning_payload=$(extract_json_from_result_output "$output_file")
+            if [[ -n "$reasoning_payload" ]]; then
+                local reasoning_json
+                reasoning_json=$(safe_jq_from_json "$reasoning_payload" '.reasoning // empty' "" "$session_dir" "invoke_agent.verbose_reasoning" false)
+                if [ -n "$reasoning_json" ] && [ "$reasoning_json" != "null" ]; then
+                    verbose_agent_reasoning "$reasoning_json"
+                fi
             fi
         fi
 
@@ -823,7 +1242,7 @@ invoke_agent_v2() {
         if [[ -n "${session_dir:-}" ]]; then
             local metadata_file="$session_dir/.claude/agents/${agent_name}/metadata.json"
             if [[ -f "$metadata_file" ]]; then
-                friendly_name=$(jq -r '.display_name // empty' "$metadata_file" 2>/dev/null)
+                friendly_name=$(safe_jq_from_file "$metadata_file" '.display_name // empty' "" "$session_dir" "invoke_agent.friendly_name")
             fi
         fi
         if [[ -z "$friendly_name" ]]; then
@@ -840,7 +1259,7 @@ invoke_agent_v2() {
         if [[ "$tailer_started" == "1" ]] && declare -F stop_event_tailer >/dev/null 2>&1; then
             # Give tailer time to catch up with final events
             sleep 1
-            stop_event_tailer "$session_dir" || true
+            stop_event_tailer "${session_dir:-}" || true
         fi
         
         return 0
@@ -855,7 +1274,7 @@ invoke_agent_v2() {
         # Stop event tailer if it was started
         if [[ "$tailer_started" == "1" ]] && declare -F stop_event_tailer >/dev/null 2>&1; then
             sleep 0.5
-            stop_event_tailer "$session_dir" || true
+            stop_event_tailer "${session_dir:-}" || true
         fi
 
         # Get friendly name for error message
@@ -863,7 +1282,7 @@ invoke_agent_v2() {
         if [[ -n "${session_dir:-}" ]]; then
             local metadata_file="$session_dir/.claude/agents/${agent_name}/metadata.json"
             if [[ -f "$metadata_file" ]]; then
-                friendly_name=$(jq -r '.display_name // empty' "$metadata_file" 2>/dev/null)
+                friendly_name=$(safe_jq_from_file "$metadata_file" '.display_name // empty' "" "$session_dir" "invoke_agent.final_friendly_name")
             fi
         fi
         if [[ -z "$friendly_name" ]]; then

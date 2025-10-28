@@ -304,20 +304,18 @@ Check:
 For developers extending session continuity:
 
 ```bash
-# Start new session
+# Start new session (timeout pulled from agent-timeouts config)
 session_id=$(start_agent_session \
     "<agent-name>" \
     "$session_dir" \
-    "Initial task/context" \
-    timeout_seconds)
+    "Initial task/context")
 
 # Continue existing session
 continue_agent_session \
     "<agent-name>" \
     "$session_dir" \
     "New task" \
-    "$output_file" \
-    timeout_seconds
+    "$output_file"
 
 # Check if session exists
 if has_agent_session "<agent-name>" "$session_dir"; then

@@ -19,20 +19,50 @@ source "$SCRIPT_DIR/core-helpers.sh"
 # shellcheck disable=SC1091
 source "$SCRIPT_DIR/error-messages.sh"
 
+# Preferred Bash runtime (honors homebrew bash when available)
+BASH_RUNTIME="${CCONDUCTOR_BASH_RUNTIME:-$(command -v bash)}"
+
 # Session state directory structure:
 # $session_dir/
 #   .agent-sessions/
 #     <agent-name>.session    # Contains session_id
 #     <agent-name>.metadata   # Contains session metadata (JSON)
 
+# Resolve per-agent timeout using shared configuration (fallback 600)
+resolve_agent_timeout() {
+    local agent_name="$1"
+    local fallback="${2:-600}"
+    local timeout="$fallback"
+    local config_loader="$SCRIPT_DIR/config-loader.sh"
+
+    if [ -f "$config_loader" ]; then
+        # shellcheck disable=SC1091
+        # shellcheck source=src/utils/config-loader.sh
+        source "$config_loader" 2>/dev/null || true
+        if command -v load_config >/dev/null 2>&1; then
+            local config_json
+            config_json=$(load_config "agent-timeouts" 2>/dev/null || echo "")
+            if [ -n "$config_json" ]; then
+                local resolved
+                resolved=$(echo "$config_json" | jq -r ".per_agent_timeouts.\"$agent_name\" // .default_timeout_seconds // empty" 2>/dev/null || echo "")
+                if [ -n "$resolved" ] && [ "$resolved" != "null" ]; then
+                    timeout="$resolved"
+                fi
+            fi
+        fi
+    fi
+
+    echo "$timeout"
+}
+
 # Start a new agent session with initial context
+# Uses agent-timeouts configuration to determine watchdog ceiling
 # VALIDATED: test-13-session-continuity.sh
 #
 # Args:
 #   agent_name: Name of agent (e.g., "web-researcher")
 #   session_dir: Research session directory
 #   initial_task: Initial task/context to provide to agent
-#   timeout: Optional timeout in seconds (default: 600)
 #
 # Returns:
 #   Session ID on success, empty on failure
@@ -46,8 +76,9 @@ start_agent_session() {
     local agent_name="$1"
     local session_dir="$2"
     local initial_task="$3"
-    local timeout="${4:-600}"
-    local output_override="${5:-}"
+    local output_override="${4:-}"
+    local agent_timeout
+    agent_timeout=$(resolve_agent_timeout "$agent_name")
 
     # Validate inputs
     if [ -z "$agent_name" ] || [ -z "$session_dir" ] || [ -z "$initial_task" ]; then
@@ -96,13 +127,13 @@ start_agent_session() {
     # VALIDATED: invoke_agent_v2 returns JSON with .session_id
     mkdir -p "$(dirname "$output_file")"
 
-    if ! bash "$SCRIPT_DIR/invoke-agent.sh" invoke-v2 \
+    if ! "$BASH_RUNTIME" "$SCRIPT_DIR/invoke-agent.sh" invoke-v2 \
         "$agent_name" \
         "$input_file" \
         "$output_file" \
-        "$timeout" \
+        "$agent_timeout" \
         "$session_dir"; then
-        log_system_error "$session_dir" "start_agent_session" "Failed to start session for agent $agent_name" "timeout=${timeout}s"
+        log_system_error "$session_dir" "start_agent_session" "Failed to start session for agent $agent_name" "timeout=${agent_timeout}s"
         return 1
     fi
 
@@ -142,6 +173,7 @@ EOF
 }
 
 # Continue an existing agent session with a new task
+# Uses agent-timeouts configuration to determine watchdog ceiling
 # VALIDATED: test-13-session-continuity.sh
 #
 # Args:
@@ -149,8 +181,6 @@ EOF
 #   session_dir: Research session directory
 #   task: New task for the agent
 #   output_file: File to write response to
-#   timeout: Optional timeout in seconds (default: 600)
-#
 # Returns:
 #   0 on success, 1 on failure
 #
@@ -163,7 +193,8 @@ continue_agent_session() {
     local session_dir="$2"
     local task="$3"
     local output_file="$4"
-    local timeout="${5:-600}"
+    local agent_timeout
+    agent_timeout=$(resolve_agent_timeout "$agent_name")
 
     # Validate inputs
     if [ -z "$agent_name" ] || [ -z "$session_dir" ] || [ -z "$task" ] || [ -z "$output_file" ]; then
@@ -195,14 +226,14 @@ continue_agent_session() {
     local task_file="$sessions_dir/${agent_name}.continue-input.txt"
     echo "$task" > "$task_file"
 
-    if ! bash "$SCRIPT_DIR/invoke-agent.sh" invoke-v2 \
+    if ! "$BASH_RUNTIME" "$SCRIPT_DIR/invoke-agent.sh" invoke-v2 \
         "$agent_name" \
         "$task_file" \
         "$output_file" \
-        "$timeout" \
+        "$agent_timeout" \
         "$session_dir" \
         "$session_id"; then
-        log_system_error "$session_dir" "continue_agent_session" "Failed to continue session for agent $agent_name" "session_id=$session_id"
+        log_system_error "$session_dir" "continue_agent_session" "Failed to continue session for agent $agent_name" "session_id=$session_id timeout=${agent_timeout}s"
         return 1
     fi
 
@@ -345,6 +376,7 @@ end_agent_session() {
 }
 
 # Export functions
+export -f resolve_agent_timeout
 export -f start_agent_session
 export -f continue_agent_session
 export -f get_agent_session_id
@@ -356,10 +388,10 @@ export -f end_agent_session
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
     case "${1:-help}" in
         start)
-            start_agent_session "$2" "$3" "$4" "${5:-600}"
+            start_agent_session "$2" "$3" "$4"
             ;;
         continue)
-            continue_agent_session "$2" "$3" "$4" "$5" "${6:-600}"
+            continue_agent_session "$2" "$3" "$4" "$5"
             ;;
         get-id)
             get_agent_session_id "$2" "$3"
@@ -378,11 +410,11 @@ if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
 Usage: $0 <command> [args...]
 
 Commands:
-  start <agent> <session_dir> <initial_task> [timeout]
+  start <agent> <session_dir> <initial_task>
       Start new agent session with initial context
       Returns: session_id
-      
-  continue <agent> <session_dir> <task> <output_file> [timeout]
+
+  continue <agent> <session_dir> <task> <output_file>
       Continue existing agent session with new task
       Requires: Prior call to 'start'
       
@@ -400,16 +432,16 @@ Commands:
 
 Examples:
   # Start session with context
-  session_id=\$(bash $0 start web-researcher ./session-123 "Initial context here")
+  session_id=\$("$BASH_RUNTIME" $0 start web-researcher ./session-123 "Initial context here")
   
   # Continue session with new task
-  bash $0 continue web-researcher ./session-123 "New task" output.json
+  "$BASH_RUNTIME" $0 continue web-researcher ./session-123 "New task" output.json
   
   # Check if session exists
-  bash $0 has-session web-researcher ./session-123
+  "$BASH_RUNTIME" $0 has-session web-researcher ./session-123
   
   # Clean up
-  bash $0 end web-researcher ./session-123
+  "$BASH_RUNTIME" $0 end web-researcher ./session-123
 
 Notes:
   - Sessions auto-save (validated in test-13-session-continuity.sh)
