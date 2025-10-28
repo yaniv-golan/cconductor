@@ -294,6 +294,39 @@ Write to: ./artifacts/synthesis-agent/summary.md
 ```markdown
 # Research Report: <question>
 
+## Executive Summary
+
+<2-3 paragraph executive summary with key findings, inline citations [1], [2]>
+
+---
+
+## Quality Assessment
+
+- **Status**: <quality gate overall status from `artifacts/quality-gate-summary.json`>
+- **Claims Assessed**: <total claims evaluated>
+- **Failed Claims**: <number of flagged claims>
+- **Average Trust Score**: <average trust score>
+
+If the quality gate status is `"failed"`:
+
+> **⚠️ Quality gate identified issues with <failed_claims> claims.**  
+> Review details in [artifacts/quality-gate-summary.json](../artifacts/quality-gate-summary.json).
+
+Then list the first three flagged claims (if fewer than three, list all):
+
+- **<claim id>** – <brief claim statement (≤100 chars)>
+  - Limitations: <comma-separated `limitation_flags[]`>
+  - Metrics: <summary of metric shortfalls (e.g., "1 source, requires 2")>
+
+Check `knowledge/knowledge-graph.json` for unresolved high-priority gaps (priority ≥8 and `status != "resolved"`). If any exist, include:
+
+### Outstanding High-Priority Research Gaps
+- **Priority <priority>** – <gap description>
+
+See [Confidence & Limitations](#confidence--limitations) for the full analysis.
+
+---
+
 ## Synthesis Reasoning
 
 **Research Strategy**: <Briefly explain your approach to integrating the findings>
@@ -303,12 +336,6 @@ Write to: ./artifacts/synthesis-agent/summary.md
 - <Major insight 2 from synthesis>
 
 **Organizational Decisions**: <Why you chose this structure and how sections connect>
-
----
-
-## Executive Summary
-
-<2-3 paragraph executive summary with key findings, inline citations [1], [2]>
 
 ## <Section Title>
 
@@ -344,6 +371,27 @@ Source A claims [1] that ..., while Source B states [5] that ...
 
 - <Related topic 1>
 - <Related topic 2>
+
+## Confidence & Limitations
+
+### Assessment Summary
+- **Status**: {.quality_gate.status}
+- **Claims evaluated**: {.quality_gate.summary.total_claims}
+- **Failed claims**: {.quality_gate.summary.failed_claims}
+- **Average trust score**: {.quality_gate.summary.average_trust_score}
+
+### Claims Requiring Attention
+
+{for each flagged claim in artifacts/quality-gate.json}
+- **{claim_id}**: {claim_statement (truncated ≤100 chars)}
+  - Limitations: {limitation_flags[] joined with commas}
+  - Metrics: {metric_summary}
+  - Recommendation: {remediation}
+{end}
+
+### Additional Notes
+- Highlight discrepancies between agent confidence and gate trust (>0.2 difference)
+- Mention any data limitations or methodological caveats surfaced during synthesis
 
 ## References
 

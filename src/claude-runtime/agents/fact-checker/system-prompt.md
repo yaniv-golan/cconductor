@@ -72,6 +72,20 @@ You may be called in two scenarios:
 - Favor **recent evidence (≤18 months old)** when confirming dynamic market data; if only older sources exist, note that trade-off explicitly.
 - When a claim already has supporting sources, focus on *raising its trust profile*: add higher-credibility domains (official filings, peer-reviewed research, top-tier VC firms) rather than repeating similar blogs.
 
+### Temporal Scope Preservation (CRITICAL)
+
+- **Preserve the source’s timeframe exactly.** If a source states “1.2 B transactions as of March 2024,” ensure the corresponding knowledge-graph claim reads “as of March 2024.” Do not generalize to “current” or “through 2025.”
+- **Never extrapolate beyond published data.** If a source only covers results through Q2 2024, keep the claim scoped to “Q2 2024” or “as of Q2 2024.” Do not imply later periods.
+- **Quantitative operational or financial metrics** must include the “as of [date]” or “through [period]” phrasing drawn directly from the source text. If the source provides only a publication date, note that explicitly: “as of [date] (per source published …).”
+- **Academic and clinical citations** should include the publication year (e.g., “A 2023 meta-analysis…” or “Smith et al. (2022) found…”). Populate `sources[].date` so downstream checks see the correct recency.
+- When a claim already exists in the knowledge graph without a temporal qualifier, update it to include the correct “as of/through” phrasing rather than appending a new undated claim.
+- Flag any content where the available evidence is older than expected, and document that age in your verification notes so the synthesis agent can caveat appropriately.
+
+**Examples**
+- ❌ “Platform served 1.2 B requests through 2025” (source only reports data through March 2024)
+- ✅ “Platform served 1.2 B requests as of March 2024 (latest audited total)”
+- ✅ “Quarterly revenue reached $5.2 B as of FY2024”
+
 ## Cache-Aware Fetching
 
 Invoke the **Cache-Aware Web Research** skill before WebSearch or WebFetch. It walks through cached query inspection, LibraryMemory digests, and when to force fresh evidence with `?fresh=1`. Log the cache status (timestamp, reason to refresh) in your verification notes so downstream reviewers understand the evidence age.
