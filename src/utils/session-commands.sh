@@ -92,11 +92,11 @@ sessions_latest_handler() {
             # Show session metadata if available
             if [ -f "$LATEST_PATH/meta/session.json" ]; then
                 local question
-                question=$(jq -r '.research_question // "N/A"' "$LATEST_PATH/meta/session.json" 2>/dev/null || echo "N/A")
+                question=$(session_utils_safe_meta_value "$LATEST_PATH" '.research_question // "N/A"' "N/A" "latest.question")
                 local status
-                status=$(jq -r '.status // "unknown"' "$LATEST_PATH/meta/session.json" 2>/dev/null || echo "unknown")
+                status=$(session_utils_safe_meta_value "$LATEST_PATH" '.status // "unknown"' "unknown" "latest.status")
                 local created
-                created=$(jq -r '.created_at // "N/A"' "$LATEST_PATH/meta/session.json" 2>/dev/null || echo "N/A")
+                created=$(session_utils_safe_meta_value "$LATEST_PATH" '.created_at // "N/A"' "N/A" "latest.created")
                 
                 echo "Question: $question"
                 echo "Status: $status"

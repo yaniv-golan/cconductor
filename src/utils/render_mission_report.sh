@@ -9,6 +9,10 @@ if [[ "${BASH_VERSINFO[0]:-0}" -lt 4 ]]; then
     exit 1
 fi
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck disable=SC1091
+source "$SCRIPT_DIR/json-helpers.sh"
+
 single_line() {
     local text="$1"
     printf '%s' "$text" | tr '\n' ' ' | tr -s '[:space:]' ' ' | sed -e 's/^ *//' -e 's/ *$//'
@@ -298,7 +302,11 @@ main() {
     fi
 
     local claim_count
-    claim_count=$(jq '.claims | length' "$evidence_path" 2>/dev/null || echo 0)
+    if claim_count=$(safe_jq_from_file "$evidence_path" '(.claims // []) | length' "0" "$session_dir" "render_mission_report.claim_count" "true"); then
+        :
+    else
+        claim_count="0"
+    fi
     if [[ "$claim_count" -eq 0 ]]; then
         return 0
     fi

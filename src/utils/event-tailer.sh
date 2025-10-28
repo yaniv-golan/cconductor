@@ -12,6 +12,9 @@ source "$SCRIPT_DIR/verbose.sh" 2>/dev/null || {
     is_verbose_enabled() { [[ "${CCONDUCTOR_VERBOSE:-0}" == "1" ]]; }
 }
 
+# shellcheck disable=SC1091
+source "$SCRIPT_DIR/json-helpers.sh"
+
 TAILER_CURRENT_AGENT=""
 TAILER_CACHE_ACTIVITY=0
 TAILER_TOTAL_HITS=0
@@ -22,6 +25,18 @@ TAILER_LAST_LIBRARY_EVENT_TIME=0
 TAILER_LAST_LIBRARY_URL=""
 TAILER_SESSION_DIR=""
 TAILER_PROJECT_ROOT=""
+
+tailer_json_field() {
+    local payload="$1"
+    local filter="$2"
+    local fallback="$3"
+    local context="$4"
+    if [[ -z "$payload" ]] || ! jq_validate_json "$payload"; then
+        printf '%s' "$fallback"
+        return 0
+    fi
+    safe_jq_from_json "$payload" "$filter" "$fallback" "$TAILER_SESSION_DIR" "event_tailer.${context:-field}" "true"
+}
 
 tailer_rel_path() {
     local raw_path="$1"
@@ -126,9 +141,9 @@ tailer_emit_cache_summary() {
 tailer_process_library_check() {
     local line="$1"
     local url
-    url=$(echo "$line" | jq -r '.data.url // empty' 2>/dev/null || echo "")
+    url=$(tailer_json_field "$line" '.data.url // empty' "" "library_check.url")
     local event_agent
-    event_agent=$(echo "$line" | jq -r '.data.agent // empty' 2>/dev/null || echo "")
+    event_agent=$(tailer_json_field "$line" '.data.agent // empty' "" "library_check.agent")
     if [[ -n "$TAILER_CURRENT_AGENT" && -n "$event_agent" && "$event_agent" != "$TAILER_CURRENT_AGENT" ]]; then
         return 0
     fi
@@ -140,9 +155,9 @@ tailer_process_library_check() {
 tailer_process_library_force_refresh() {
     local line="$1"
     local url
-    url=$(echo "$line" | jq -r '.data.url // empty' 2>/dev/null || echo "")
+    url=$(tailer_json_field "$line" '.data.url // empty' "" "library_force_refresh.url")
     local event_agent
-    event_agent=$(echo "$line" | jq -r '.data.agent // empty' 2>/dev/null || echo "")
+    event_agent=$(tailer_json_field "$line" '.data.agent // empty' "" "library_force_refresh.agent")
     if [[ -n "$TAILER_CURRENT_AGENT" && -n "$event_agent" && "$event_agent" != "$TAILER_CURRENT_AGENT" ]]; then
         return 0
     fi
@@ -161,9 +176,9 @@ tailer_process_library_force_refresh() {
 tailer_process_library_hit() {
     local line="$1"
     local url
-    url=$(echo "$line" | jq -r '.data.url // empty' 2>/dev/null || echo "")
+    url=$(tailer_json_field "$line" '.data.url // empty' "" "library_hit.url")
     local event_agent
-    event_agent=$(echo "$line" | jq -r '.data.agent // empty' 2>/dev/null || echo "")
+    event_agent=$(tailer_json_field "$line" '.data.agent // empty' "" "library_hit.agent")
     if [[ -n "$TAILER_CURRENT_AGENT" && -n "$event_agent" && "$event_agent" != "$TAILER_CURRENT_AGENT" ]]; then
         return 0
     fi
@@ -185,7 +200,7 @@ tailer_process_library_hit() {
     # Architecture: Hooks emit events, tailer displays them (hook stderr is captured by Claude CLI)
     if [[ "$current_count" -eq 1 ]]; then
         local last_updated
-        last_updated=$(echo "$line" | jq -r '.data.last_updated // empty' 2>/dev/null || echo "")
+        last_updated=$(tailer_json_field "$line" '.data.last_updated // empty' "" "library_hit.last_updated")
         if [[ "$last_updated" != "null" && -n "$last_updated" ]]; then
             local date_part="${last_updated:0:10}"
             echo "♻️ Cache hit: Reused digest for $url (from $date_part)" >&2
@@ -198,11 +213,11 @@ tailer_process_library_hit() {
 tailer_process_library_allow() {
     local line="$1"
     local url
-    url=$(echo "$line" | jq -r '.data.url // empty' 2>/dev/null || echo "")
+    url=$(tailer_json_field "$line" '.data.url // empty' "" "library_allow.url")
     local reason
-    reason=$(echo "$line" | jq -r '.data.reason // empty' 2>/dev/null || echo "")
+    reason=$(tailer_json_field "$line" '.data.reason // empty' "" "library_allow.reason")
     local event_agent
-    event_agent=$(echo "$line" | jq -r '.data.agent // empty' 2>/dev/null || echo "")
+    event_agent=$(tailer_json_field "$line" '.data.agent // empty' "" "library_allow.agent")
     if [[ -n "$TAILER_CURRENT_AGENT" && -n "$event_agent" && "$event_agent" != "$TAILER_CURRENT_AGENT" ]]; then
         return 0
     fi
@@ -232,11 +247,11 @@ tailer_process_tool_start() {
     local session_dir="$2"
 
     local tool_name
-    tool_name=$(echo "$line" | jq -r '.data.tool // empty' 2>/dev/null)
+    tool_name=$(tailer_json_field "$line" '.data.tool // empty' "" "tool_start.tool")
     [[ -z "$tool_name" ]] && return 0
 
     local input_summary
-    input_summary=$(echo "$line" | jq -r '.data.input_summary // empty' 2>/dev/null)
+    input_summary=$(tailer_json_field "$line" '.data.input_summary // empty' "" "tool_start.input_summary")
 
     if [[ "$tool_name" == "WebFetch" ]]; then
         TAILER_TOTAL_FETCHES=$((TAILER_TOTAL_FETCHES + 1))
@@ -320,11 +335,11 @@ tailer_process_web_search_cache_hit() {
     # Display simplified one-line cache hit message (verbose mode only)
     # Architecture: Hooks emit events, tailer displays them (hook stderr is captured by Claude CLI)
     local query
-    query=$(echo "$line" | jq -r '.data.query // ""' 2>/dev/null)
+    query=$(tailer_json_field "$line" '.data.query // ""' "" "web_search_cache.query")
     local match_ratio
-    match_ratio=$(echo "$line" | jq -r '.data.match_ratio // ""' 2>/dev/null)
+    match_ratio=$(tailer_json_field "$line" '.data.match_ratio // ""' "" "web_search_cache.match_ratio")
     local event_timestamp
-    event_timestamp=$(echo "$line" | jq -r '.timestamp // ""' 2>/dev/null)
+    event_timestamp=$(tailer_json_field "$line" '.timestamp // ""' "" "web_search_cache.timestamp")
     
     # Extract date from event timestamp (format: 2025-10-23T08:28:06Z)
     local date_part="${event_timestamp:0:10}"
@@ -394,12 +409,12 @@ start_event_tailer() {
         TAILER_CURRENT_AGENT=""
 
         while IFS= read -r line; do
-            event_type=$(echo "$line" | jq -r '.type // empty' 2>/dev/null)
+            event_type=$(tailer_json_field "$line" '.type // empty' "" "tail_loop.type")
             [[ -z "$event_type" ]] && continue
 
             case "$event_type" in
                 agent_invocation)
-                    agent=$(echo "$line" | jq -r '.data.agent // empty' 2>/dev/null || echo "")
+                    agent=$(tailer_json_field "$line" '.data.agent // empty' "" "tail_loop.agent_entry")
                     if [[ -n "$TAILER_CURRENT_AGENT" && "$TAILER_CURRENT_AGENT" != "$agent" ]]; then
                         tailer_emit_cache_summary
                         tailer_reset_agent_state
@@ -411,7 +426,7 @@ start_event_tailer() {
                     TAILER_LAST_LIBRARY_URL=""
                     ;;
                 agent_result)
-                    agent=$(echo "$line" | jq -r '.data.agent // empty' 2>/dev/null || echo "")
+                    agent=$(tailer_json_field "$line" '.data.agent // empty' "" "tail_loop.agent_refresh")
                     if [[ -z "$TAILER_CURRENT_AGENT" ]] || [[ -z "$agent" ]] || [[ "$agent" == "$TAILER_CURRENT_AGENT" ]]; then
                         tailer_emit_cache_summary
                         tailer_reset_agent_state
@@ -478,10 +493,10 @@ display_tool_start() {
     
     # Extract tool info from event
     local tool_name
-    tool_name=$(echo "$event_json" | jq -r '.data.tool // empty' 2>/dev/null)
+    tool_name=$(tailer_json_field "$event_json" '.data.tool // empty' "" "display_tool_start.tool")
     
     local input_summary
-    input_summary=$(echo "$event_json" | jq -r '.data.input_summary // empty' 2>/dev/null)
+    input_summary=$(tailer_json_field "$event_json" '.data.input_summary // empty' "" "display_tool_start.input_summary")
     
     # Skip if no tool name
     [[ -z "$tool_name" ]] && return 0
@@ -544,13 +559,13 @@ display_tool_complete() {
     
     # Extract completion info
     local tool_name
-    tool_name=$(echo "$event_json" | jq -r '.data.tool // empty' 2>/dev/null)
+    tool_name=$(tailer_json_field "$event_json" '.data.tool // empty' "" "display_tool_complete.tool")
     
     local status
-    status=$(echo "$event_json" | jq -r '.data.status // empty' 2>/dev/null)
+    status=$(tailer_json_field "$event_json" '.data.status // empty' "" "display_tool_complete.status")
     
     local duration_ms
-    duration_ms=$(echo "$event_json" | jq -r '.data.duration_ms // 0' 2>/dev/null)
+    duration_ms=$(tailer_json_field "$event_json" '.data.duration_ms // 0' "0" "display_tool_complete.duration")
     
     # Skip bash completions and empty events
     [[ -z "$tool_name" ]] && return 0

@@ -5,7 +5,7 @@ All notable changes to CConductor will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.4.0] - 2025-10-23
+## [0.4.0] - unreleased
 
 **⚠️ BREAKING CHANGES**: This release introduces a new session directory structure that is incompatible with previous versions. Old sessions cannot be resumed or viewed with v0.4.0.
 
@@ -27,6 +27,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Session README**: `README.md` at the session root provides quick navigation, statistics, and usage examples for each session
 - **Automated Release Pipeline**: GitHub Actions now build multi-arch Docker images, publish release artifacts, and update the Homebrew tap automatically (see `docs/RELEASE_AUTOMATION.md`)
 - **Agent Watchdog & Cost Tracking**: Long-running agents are monitored by `agent-watchdog.sh`, cost data is extracted directly from Claude outputs, and a manual `tests/manual/cost-capture-validation` suite plus `tests/cost-extraction-test.sh` guard the budget tooling
+- **Watchdog & Timeout Controls**: Added CLI toggles (`--enable/--disable-watchdog`, `--enable/--disable-agent-timeouts`), environment overrides, and config defaults (`watchdog_enabled`, `timeouts_enabled`) so advanced users can relax safeguards intentionally while keeping heartbeat monitoring intact.
 - **Docker Distribution**: Official Docker images published to GitHub Container Registry (ghcr.io)
   - Multi-platform support (linux/amd64, linux/arm64)
   - Three authentication methods: volume mount, environment variable, Docker secrets
@@ -57,11 +58,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Interactive prompts for additional iterations and time
   - Input validation ensures only positive integers accepted
   - Works seamlessly with refinement guidance
+- Tracked pre-commit hook (`scripts/pre-commit.sh`) now runs ShellCheck alongside `scripts/lint-jq-patterns.sh` and `scripts/audit-jq-usage.sh`; CI mirrors the same jq guardrails.
+- Regression coverage for jq helper fallback semantics and dashboard metrics on partially populated sessions.
 
 ### Changed
 
 - **Meta README Flow**: `manifest-generator.sh` has been renamed to `meta-manifest-generator.sh` and now targets the `meta/` directory exclusively.
 - **Session File Paths** (breaking): All file references updated to use the new session directory structure
+- `safe_jq_from_json` and `safe_jq_from_file` return success when falling back by default, with an opt-in `strict=true` flag for callers that must treat parse failures as fatal.
+- Pre/post hook bootstrap resolves repository root via `CCONDUCTOR_ROOT`/`.cconductor-root` and replaces deprecated jq flags to stay compatible with jq 1.7.
 
 ### Fixed
 

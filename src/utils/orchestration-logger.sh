@@ -13,6 +13,8 @@ PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 # shellcheck disable=SC1091
 source "$PROJECT_ROOT/src/utils/core-helpers.sh"
 
+BASH_RUNTIME="${CCONDUCTOR_BASH_RUNTIME:-$(command -v bash)}"
+
 # Check for jq dependency using helper
 require_command "jq" "brew install jq" "apt install jq" || exit 1
 
@@ -71,7 +73,7 @@ log_decision() {
     # Use with_lock for thread-safe JSONL append
     # Use printf to safely handle JSON with special characters
     # shellcheck disable=SC2016
-    if ! with_lock "$log_file" bash -c 'printf "%s\n" "$0" >> "$1"' "$entry" "$log_file" 2>/dev/null; then
+    if ! with_lock "$log_file" "$BASH_RUNTIME" -c 'printf "%s\n" "$0" >> "$1"' "$entry" "$log_file" 2>/dev/null; then
         log_warn "Failed to write decision log entry (type: $decision_type)"
     fi
 }
@@ -162,7 +164,15 @@ get_orchestration_summary() {
     total_decisions=$(wc -l < "$log_file" | tr -d ' ')
     
     local decision_counts
-    decision_counts=$(jq -s 'map(select(.type != null or .decision.type != null)) | map(select(.type != null) // {type: .decision.type}) | group_by(.type) | map({type: .[0].type, count: length}) | from_entries' "$log_file" 2>/dev/null || echo '{}')
+    if decision_counts=$(jq -s 'map(select(.type != null or .decision.type != null))
+        | map(select(.type != null) // {type: .decision.type})
+        | group_by(.type)
+        | map({type: .[0].type, count: length})
+        | from_entries' "$log_file" 2>/dev/null); then
+        :
+    else
+        decision_counts='{}'
+    fi
     
     echo "Orchestration Summary:"
     echo "  Total decisions: $total_decisions"

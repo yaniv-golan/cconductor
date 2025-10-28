@@ -74,6 +74,11 @@ for raw in "${SOURCES[@]}"; do
         collected_at: $now
     }')
 
+    if ! jq_validate_json "$entry_json"; then
+        log_warn "digital-librarian: skipping malformed entry for $url"
+        continue
+    fi
+
     url_hash=$("$SCRIPT_DIR/hash-string.sh" "$url")
     digest_path="$SOURCES_DIR/${url_hash}.json"
 
@@ -113,20 +118,22 @@ for raw in "${SOURCES[@]}"; do
     fi
 
     entry_count=$(jq '.entries | length' "$digest_path")
+    if ! [[ "$entry_count" =~ ^[0-9]+$ ]]; then
+        entry_count=0
+    fi
 
     # Use atomic_json_update for thread-safe manifest update
     # shellcheck disable=SC2016
-    atomic_json_update "$MANIFEST_FILE" --arg hash "$url_hash" --arg url "$url" --arg session "$session_name" --arg now "$timestamp" --argjson count "$entry_count" '
+    atomic_json_update "$MANIFEST_FILE" --arg hash "$url_hash" --arg url "$url" --arg session "$session_name" --arg now "$timestamp" --arg count "$entry_count" '
         .[$hash] = (
             (.[$hash] // {url: $url, first_seen: $now, sessions: []})
             | .url = $url
             | .first_seen = (.first_seen // $now)
             | .last_updated = $now
             | .sessions = ((.sessions + [$session]) | unique)
-            | .entry_count = $count
+            | .entry_count = ($count | tonumber)
         )
     '
 done
 
 echo "  ✓ Research library updated (${#SOURCES[@]} source references processed)" >&2
-

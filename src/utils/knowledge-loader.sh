@@ -10,6 +10,10 @@ PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 # Source config loader for configuration access
 # shellcheck disable=SC1091
 source "$SCRIPT_DIR/config-loader.sh"
+# shellcheck disable=SC1091
+source "$SCRIPT_DIR/core-helpers.sh"
+# shellcheck disable=SC1091
+source "$SCRIPT_DIR/json-helpers.sh"
 
 # Load knowledge configuration (overlay pattern)
 get_knowledge_config() {
@@ -71,12 +75,28 @@ get_agent_knowledge() {
 
     local config
     config=$(get_knowledge_config)
-    local auto_discover
-    auto_discover=$(echo "$config" | jq -r '.auto_discover // true')
+    if ! jq_validate_json "$config"; then
+        log_warn "knowledge-loader: invalid knowledge-config JSON; using defaults"
+        config='{}'
+    fi
+
+    local auto_discover="true"
+    if auto_discover=$(safe_jq_from_json "$config" '.auto_discover // true' "true" "$session_dir" "knowledge_loader.auto_discover"); then
+        auto_discover=${auto_discover:-true}
+    else
+        auto_discover="true"
+    fi
 
     # Get mapped knowledge domains
-    local mapped_knowledge
-    mapped_knowledge=$(echo "$config" | jq -r ".agent_knowledge_map[\"$agent_name\"][]" 2>/dev/null || echo "")
+    local mapped_knowledge=""
+    local agent_key
+    agent_key=$(printf '%s' "$agent_name" | jq -R @json)
+    local mapped_filter="(.agent_knowledge_map // {})[$agent_key] // [] | .[]"
+    if mapped_knowledge=$(safe_jq_from_json "$config" "$mapped_filter" "" "$session_dir" "knowledge_loader.mapped" ); then
+        mapped_knowledge=${mapped_knowledge:-}
+    else
+        mapped_knowledge=""
+    fi
 
     # Collect knowledge file paths
     local knowledge_files=()
@@ -127,14 +147,29 @@ discover_all_knowledge() {
 
     local config
     config=$(get_knowledge_config)
+    if ! jq_validate_json "$config"; then
+        log_warn "knowledge-loader: invalid knowledge-config JSON for discovery; using defaults"
+        config='{}'
+    fi
+
+    local core_relative user_relative pattern excludes
+    if ! core_relative=$(safe_jq_from_json "$config" '.knowledge_paths.core // "knowledge-base"' "knowledge-base" "$session_dir" "knowledge_loader.discovery.core" "true" "true"); then
+        core_relative="knowledge-base"
+    fi
+    if ! user_relative=$(safe_jq_from_json "$config" '.knowledge_paths.user // "knowledge-base-custom"' "knowledge-base-custom" "$session_dir" "knowledge_loader.discovery.user" "true" "true"); then
+        user_relative="knowledge-base-custom"
+    fi
+    if ! pattern=$(safe_jq_from_json "$config" '.discovery_rules.pattern // "*.md"' "*.md" "$session_dir" "knowledge_loader.discovery.pattern" "true" "true"); then
+        pattern="*.md"
+    fi
+    if ! excludes=$(safe_jq_from_json "$config" '.discovery_rules.exclude[]?' "" "$session_dir" "knowledge_loader.discovery.excludes" "true" "true"); then
+        excludes=""
+    fi
+
     local core_path
-    core_path="$PROJECT_ROOT/$(echo "$config" | jq -r '.knowledge_paths.core')"
+    core_path="$PROJECT_ROOT/$core_relative"
     local user_path
-    user_path="$PROJECT_ROOT/$(echo "$config" | jq -r '.knowledge_paths.user')"
-    local pattern
-    pattern=$(echo "$config" | jq -r '.discovery_rules.pattern')
-    local excludes
-    excludes=$(echo "$config" | jq -r '.discovery_rules.exclude[]' 2>/dev/null || echo "")
+    user_path="$PROJECT_ROOT/$user_relative"
 
     # Collect unique knowledge names (priority order)
     declare -A seen_knowledge

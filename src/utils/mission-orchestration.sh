@@ -36,6 +36,8 @@ source "$UTILS_DIR/kg-artifact-processor.sh"
 # shellcheck disable=SC1091
 source "$UTILS_DIR/json-parser.sh"
 # shellcheck disable=SC1091
+source "$UTILS_DIR/json-helpers.sh"
+# shellcheck disable=SC1091
 source "$PROJECT_ROOT/src/knowledge-graph.sh"
 # shellcheck disable=SC1091
 if ! source "$UTILS_DIR/quality-surface-sync.sh" 2>/dev/null; then
@@ -109,15 +111,21 @@ format_fetch_cache_lines() {
     local base_dir="$3"
     local output=""
 
+    if ! jq_validate_json "$summary_json"; then
+        log_system_warning "$session_dir" "jq_cache_summary_invalid" "format_fetch_cache_lines" "payload_snippet=${summary_json:0:120}"
+        printf '%s' "$output"
+        return 0
+    fi
+
     while IFS= read -r entry; do
         [[ -z "$entry" || "$entry" == "null" ]] && continue
         local url status stored content_type path display_path
-        url=$(echo "$entry" | jq -r '.url // ""')
-        status=$(echo "$entry" | jq -r '.status // ""')
-        stored=$(echo "$entry" | jq -r '.stored_at_iso // (.stored_at // "")' 2>/dev/null || echo "")
+        url=$(safe_jq_from_json "$entry" '.url // ""' "" "$session_dir" "fetch_cache_entry.url")
+        status=$(safe_jq_from_json "$entry" '.status // ""' "" "$session_dir" "fetch_cache_entry.status")
+        stored=$(safe_jq_from_json "$entry" '.stored_at_iso // (.stored_at // "")' "" "$session_dir" "fetch_cache_entry.stored")
         [[ -z "$stored" || "$stored" == "null" ]] && stored="unknown"
-        content_type=$(echo "$entry" | jq -r '.content_type // ""' 2>/dev/null || echo "")
-        path=$(echo "$entry" | jq -r '.path // ""' 2>/dev/null || echo "")
+        content_type=$(safe_jq_from_json "$entry" '.content_type // ""' "" "$session_dir" "fetch_cache_entry.content_type")
+        path=$(safe_jq_from_json "$entry" '.path // ""' "" "$session_dir" "fetch_cache_entry.path")
         display_path=$(rel_path_for_display "$path" "$session_dir" "$base_dir")
 
         local status_label="cached"
@@ -132,7 +140,7 @@ format_fetch_cache_lines() {
             output+="    Content-Type: ${content_type}"$'\n'
         fi
         output+="    Cached file: ${display_path}"
-    done < <(echo "$summary_json" | jq -c '.[]')
+    done < <(printf '%s' "$summary_json" | jq -c '.[]?')
 
     printf '%s' "$output"
 }
@@ -143,18 +151,24 @@ format_search_cache_lines() {
     local base_dir="$3"
     local output=""
 
+    if ! jq_validate_json "$summary_json"; then
+        log_system_warning "$session_dir" "jq_cache_summary_invalid" "format_search_cache_lines" "payload_snippet=${summary_json:0:120}"
+        printf '%s' "$output"
+        return 0
+    fi
+
     while IFS= read -r entry; do
         [[ -z "$entry" || "$entry" == "null" ]] && continue
         local query stored status result_count canonical snippet path display_path
-        query=$(echo "$entry" | jq -r '.query // ""')
-        stored=$(echo "$entry" | jq -r '.stored_at_iso // (.stored_at // "")' 2>/dev/null || echo "")
+        query=$(safe_jq_from_json "$entry" '.query // ""' "" "$session_dir" "search_cache_entry.query")
+        stored=$(safe_jq_from_json "$entry" '.stored_at_iso // (.stored_at // "")' "" "$session_dir" "search_cache_entry.stored")
         [[ -z "$stored" || "$stored" == "null" ]] && stored="unknown"
-        status=$(echo "$entry" | jq -r '.status // ""')
-        result_count=$(echo "$entry" | jq -r '.result_count // 0')
-        canonical=$(echo "$entry" | jq -r '.canonical_query // ""')
-        snippet=$(echo "$entry" | jq -r '.snippet_preview // ""')
+        status=$(safe_jq_from_json "$entry" '.status // ""' "" "$session_dir" "search_cache_entry.status")
+        result_count=$(safe_jq_from_json "$entry" '.result_count // 0' "0" "$session_dir" "search_cache_entry.result_count")
+        canonical=$(safe_jq_from_json "$entry" '.canonical_query // ""' "" "$session_dir" "search_cache_entry.canonical")
+        snippet=$(safe_jq_from_json "$entry" '.snippet_preview // ""' "" "$session_dir" "search_cache_entry.snippet")
         snippet=${snippet//$'\n'/ }
-        path=$(echo "$entry" | jq -r '.path // ""' 2>/dev/null || echo "")
+        path=$(safe_jq_from_json "$entry" '.path // ""' "" "$session_dir" "search_cache_entry.path")
         display_path=$(rel_path_for_display "$path" "$session_dir" "$base_dir")
 
         local status_label="cached"
@@ -171,7 +185,7 @@ format_search_cache_lines() {
             output+="    Snippet: ${snippet}"$'\n'
         fi
         output+="    Cached file: ${display_path}"
-    done < <(echo "$summary_json" | jq -c '.[]')
+    done < <(printf '%s' "$summary_json" | jq -c '.[]?')
 
     printf '%s' "$output"
 }
@@ -181,14 +195,16 @@ get_search_quota_state() {
     local budget_file="$session_dir/meta/budget.json"
     local used=0
     if [[ -f "$budget_file" ]]; then
-        used=$(jq -r '.tool_usage.web_searches // 0' "$budget_file" 2>/dev/null || echo "0")
+        used=$(safe_jq_from_file "$budget_file" '.tool_usage.web_searches // 0' "0" "$session_dir" "search_quota.budget")
+    else
+        log_system_warning "$session_dir" "jq_file_missing" "search_quota.budget" "file=$budget_file"
     fi
 
     local max=999
     if command -v load_config >/dev/null 2>&1; then
         local config_json
         config_json=$(load_config "cconductor" 2>/dev/null || echo '{}')
-        max=$(echo "$config_json" | jq -r '.research.max_web_searches // 999' 2>/dev/null || echo "999")
+        max=$(safe_jq_from_json "$config_json" '.research.max_web_searches // 999' "999" "$session_dir" "search_quota.config")
     fi
 
     if [[ -z "$max" || "$max" == "null" ]]; then
@@ -212,7 +228,8 @@ prepare_orchestrator_context() {
         return 1
     fi
     
-    if ! bash "$PROJECT_ROOT/src/utils/mission-state-builder.sh" "$session_dir"; then
+    local bash_runtime="${CCONDUCTOR_BASH_RUNTIME:-$(command -v bash)}"
+    if ! "$bash_runtime" "$PROJECT_ROOT/src/utils/mission-state-builder.sh" "$session_dir"; then
         echo "✗ Error: Failed to build mission state summary" >&2
         return 1
     fi
@@ -238,6 +255,12 @@ prepare_orchestrator_context() {
 invoke_mission_orchestrator() {
     local session_dir="$1"
     local context_json="$2"
+    if ! jq_validate_json "$context_json"; then
+        log_system_error "$session_dir" "orchestrator_context_invalid" \
+            "Invalid JSON context provided to mission orchestrator" \
+            "payload_snippet=${context_json:0:200}"
+        return 1
+    fi
     
     # Write context to temp file
     local context_file="$session_dir/meta/orchestrator-context.json"
@@ -246,18 +269,18 @@ invoke_mission_orchestrator() {
     # Build domain compliance block for orchestrator context
     local domain_compliance_section
     domain_compliance_section=$(
-        _dc_status=$(echo "$context_json" | jq -r '.state.domain_compliance.compliance_summary // .state.domain_compliance.status // "none"' 2>/dev/null)
+        _dc_status=$(safe_jq_from_json "$context_json" '.state.domain_compliance.compliance_summary // .state.domain_compliance.status // "none"' "none" "$session_dir" "orchestrator.domain_compliance.status")
         if [[ -z "$_dc_status" || "$_dc_status" == "null" || "$_dc_status" == "none" ]]; then
             echo "No domain compliance data available."
         else
             echo "Compliance Status: $_dc_status"
-            _dc_level=$(echo "$context_json" | jq -r '.state.domain_compliance.domain_drift.level // "none"' 2>/dev/null)
-            _dc_score=$(echo "$context_json" | jq -r '.state.domain_compliance.domain_drift.score // ""' 2>/dev/null)
+            _dc_level=$(safe_jq_from_json "$context_json" '.state.domain_compliance.domain_drift.level // "none"' "none" "$session_dir" "orchestrator.domain_compliance.drift_level")
+            _dc_score=$(safe_jq_from_json "$context_json" '.state.domain_compliance.domain_drift.score // ""' "" "$session_dir" "orchestrator.domain_compliance.drift_score")
             if [[ "$_dc_level" == "high" ]]; then
                 echo ""
                 echo "**⚠ HIGH DOMAIN DRIFT DETECTED** (score: ${_dc_score:-unknown})"
                 echo "Factors:"
-                _dc_factors=$(echo "$context_json" | jq -r '.state.domain_compliance.domain_drift.factors[]?' 2>/dev/null)
+                _dc_factors=$(safe_jq_from_json "$context_json" '.state.domain_compliance.domain_drift.factors[]?' "" "$session_dir" "orchestrator.domain_compliance.drift_factors")
                 if [[ -n "$_dc_factors" ]]; then
                     while IFS= read -r _dc_factor_line; do
                         echo "  - $_dc_factor_line"
@@ -265,7 +288,7 @@ invoke_mission_orchestrator() {
                 else
                     echo "  - (no drift factors reported)"
                 fi
-                _dc_recommendation=$(echo "$context_json" | jq -r '.state.domain_compliance.domain_drift.recommendation // "Consider re-running domain heuristics with refined scope."' 2>/dev/null)
+                _dc_recommendation=$(safe_jq_from_json "$context_json" '.state.domain_compliance.domain_drift.recommendation // "Consider re-running domain heuristics with refined scope."' "Consider re-running domain heuristics with refined scope." "$session_dir" "orchestrator.domain_compliance.recommendation")
                 echo ""
                 echo "Recommendation: $_dc_recommendation"
             elif [[ "$_dc_level" == "moderate" ]]; then
@@ -273,8 +296,8 @@ invoke_mission_orchestrator() {
             else
                 echo "Domain drift: none"
             fi
-            _dc_missing_stakeholders=$(echo "$context_json" | jq -r '.state.domain_compliance.missing_stakeholders // [] | select(length>0) | join(", ")' 2>/dev/null)
-            _dc_missing_milestones=$(echo "$context_json" | jq -r '.state.domain_compliance.missing_milestones // [] | select(length>0) | join(", ")' 2>/dev/null)
+            _dc_missing_stakeholders=$(safe_jq_from_json "$context_json" '.state.domain_compliance.missing_stakeholders // [] | select(length>0) | join(", ")' "" "$session_dir" "orchestrator.domain_compliance.missing_stakeholders")
+            _dc_missing_milestones=$(safe_jq_from_json "$context_json" '.state.domain_compliance.missing_milestones // [] | select(length>0) | join(", ")' "" "$session_dir" "orchestrator.domain_compliance.missing_milestones")
             if [[ -n "$_dc_missing_stakeholders" || -n "$_dc_missing_milestones" ]]; then
                 echo "Gaps detected:"
                 if [[ -n "$_dc_missing_stakeholders" ]]; then
@@ -293,25 +316,25 @@ invoke_mission_orchestrator() {
 I am providing you with the mission context for this orchestration iteration.
 
 ## Mission Profile
-$(echo "$context_json" | jq -r '.mission | tojson')
+$(safe_jq_from_json "$context_json" '.mission | tojson' '{}' "$session_dir" "orchestrator.context.mission")
 
 ## Available Agents
-$(echo "$context_json" | jq -r '.agents | tojson')
+$(safe_jq_from_json "$context_json" '.agents | tojson' '[]' "$session_dir" "orchestrator.context.agents")
 
 ## Mission State Summary
-Coverage Metrics: $(echo "$context_json" | jq -r '.state.coverage | tojson')
-Budget Summary: $(echo "$context_json" | jq -r '.state.budget_summary | tojson')
-Quality Gate Status: $(echo "$context_json" | jq -r '.state.quality_gate_status')
+Coverage Metrics: $(safe_jq_from_json "$context_json" '.state.coverage | tojson' '{}' "$session_dir" "orchestrator.context.coverage")
+Budget Summary: $(safe_jq_from_json "$context_json" '.state.budget_summary | tojson' '{}' "$session_dir" "orchestrator.context.budget")
+Quality Gate Status: $(safe_jq_from_json "$context_json" '.state.quality_gate_status' 'unknown' "$session_dir" "orchestrator.context.quality_gate")
 ## Domain Compliance & Drift
 $(printf '%s\n' "$domain_compliance_section")
-Recent Decisions (last 5): $(echo "$context_json" | jq -r '.state.last_5_decisions | tojson')
+Recent Decisions (last 5): $(safe_jq_from_json "$context_json" '.state.last_5_decisions | tojson' '[]' "$session_dir" "orchestrator.context.decisions")
 
 Important Paths (use the Read tool if you need the raw data):
-- Knowledge Graph: $(echo "$context_json" | jq -r '.state.kg_path')
-- Orchestration Log: $(echo "$context_json" | jq -r '.state.full_log_path')
+- Knowledge Graph: $(safe_jq_from_json "$context_json" '.state.kg_path' 'unknown' "$session_dir" "orchestrator.context.kg_path")
+- Orchestration Log: $(safe_jq_from_json "$context_json" '.state.full_log_path' 'unknown' "$session_dir" "orchestrator.context.log_path")
 
 ## Current Iteration
-$(echo "$context_json" | jq -r '.iteration')
+$(safe_jq_from_json "$context_json" '.iteration' '0' "$session_dir" "orchestrator.context.iteration")
 
 ---
 
@@ -371,7 +394,7 @@ EOF
         
             # Get model from metadata or use default
             local model
-            model=$(jq -r '.model // "claude-sonnet-4-5"' "$orchestrator_dir/metadata.json" 2>/dev/null || echo "claude-sonnet-4-5")
+            model=$(safe_jq_from_file "$orchestrator_dir/metadata.json" '.model // "claude-sonnet-4-5"' "claude-sonnet-4-5" "$session_dir" "orchestrator.metadata.model")
             
             # Create agent definition
             jq -n \
@@ -392,8 +415,12 @@ EOF
     
         if invoke_agent_v2 "mission-orchestrator" "$input_file" "$output_file" 600 "$session_dir"; then
         # Extract result from agent output
-        local result
-        result=$(jq -r '.result // empty' "$output_file" 2>/dev/null)
+        local result=""
+        if [[ -f "$output_file" ]] && jq empty "$output_file" >/dev/null 2>&1; then
+            result=$(jq -r '.result // empty' "$output_file")
+        else
+            log_system_warning "$session_dir" "jq_file_parse_failure" "mission_orchestrator_output" "file=$output_file"
+        fi
         
         if [[ -z "$result" ]]; then
             echo "✗ Error: Orchestrator returned empty result" >&2
@@ -498,7 +525,7 @@ _invoke_delegated_agent() {
         if [[ -z "$input_artifacts" || "$input_artifacts" == "[]" ]]; then
             input_artifacts='["meta/domain-heuristics.json"]'
         else
-            input_artifacts=$(echo "$input_artifacts" | jq 'if (map(. == "meta/domain-heuristics.json") | any) then . else . + ["meta/domain-heuristics.json"] end' 2>/dev/null || echo '["meta/domain-heuristics.json"]')
+            input_artifacts=$(safe_jq_from_json "$input_artifacts" 'if (map(. == "meta/domain-heuristics.json") | any) then . else . + ["meta/domain-heuristics.json"] end' '["meta/domain-heuristics.json"]' "$session_dir" "agent_input.input_artifacts" false)
         fi
     fi
 
@@ -508,6 +535,25 @@ _invoke_delegated_agent() {
     task_display=$(printf '%s' "$task" | tr '\n' ' ' | cut -c1-150 | sed 's/[`$"\\]/\\&/g')
     export CCONDUCTOR_TASK_DESC="$task_display"
     
+    # Normalize artifact paths (convert absolute session paths to relative)
+    if [[ -n "$input_artifacts" && "$input_artifacts" != "[]" ]] && jq_validate_json "$input_artifacts"; then
+        local normalized_artifacts
+        normalized_artifacts=$(printf '%s' "$input_artifacts" | jq \
+            --arg base "$session_dir/" \
+            'map(
+                if type == "string" then
+                    (if startswith($base) then sub($base; "")
+                     elif startswith("./") then sub("^\\./"; "")
+                     else .
+                    end)
+                else .
+                end
+            )')
+        if [[ -n "$normalized_artifacts" ]]; then
+            input_artifacts="$normalized_artifacts"
+        fi
+    fi
+
     # Build agent input message
     # Process input_artifacts JSON array into readable format
     local artifacts_section
@@ -515,14 +561,28 @@ _invoke_delegated_agent() {
         artifacts_section="None"
     else
         # Parse JSON array and format as list
-        artifacts_section=$(echo "$input_artifacts" | jq -r '.[]' 2>/dev/null | while IFS= read -r artifact_path; do
-            if [[ -f "$session_dir/$artifact_path" ]]; then
-                echo "- $artifact_path (available - use Read tool to access)"
-            else
-                echo "- $artifact_path (ERROR: file not found)"
-            fi
-        done)
-        
+        if jq_validate_json "$input_artifacts"; then
+            artifacts_section=$(printf '%s' "$input_artifacts" | jq -r '.[]?' | while IFS= read -r artifact_path; do
+                local display_path="$artifact_path"
+                if [[ "$display_path" == /* ]]; then
+                    if [[ "$display_path" == "$session_dir/"* ]]; then
+                        display_path="${display_path#"$session_dir"/}"
+                    fi
+                fi
+                local session_path="$session_dir/$display_path"
+                if [[ -f "$session_path" ]]; then
+                    echo "- $display_path (available - use Read tool to access)"
+                elif [[ -f "$artifact_path" ]]; then
+                    echo "- $artifact_path (available - use Read tool to access)"
+                else
+                    echo "- $artifact_path (ERROR: file not found)"
+                fi
+            done)
+        else
+            log_system_warning "$session_dir" "jq_json_parse_failure" "agent_input.artifacts" "payload_snippet=${input_artifacts:0:200}"
+            artifacts_section=""
+        fi
+
         # If parsing failed, show the raw value
         if [[ -z "$artifacts_section" ]]; then
             artifacts_section="$input_artifacts (format error - expected JSON array)"
@@ -533,7 +593,7 @@ _invoke_delegated_agent() {
     local output_spec_section=""
     if [[ "$agent_name" == "synthesis-agent" ]]; then
         local output_spec
-        output_spec=$(jq -r '.output_specification // ""' "$session_dir/meta/session.json" 2>/dev/null)
+        output_spec=$(safe_jq_from_file "$session_dir/meta/session.json" '.output_specification // ""' "" "$session_dir" "agent_input.output_spec")
         if [[ -n "$output_spec" && "$output_spec" != "null" ]]; then
             output_spec_section=$(cat <<SPEC_EOF
 
@@ -609,7 +669,7 @@ EOF
             if [[ -n "$system_prompt" ]]; then
                 # Get model from agent metadata or use default
                 local agent_model
-                agent_model=$(jq -r '.model // "claude-sonnet-4-5"' "$agent_metadata" 2>/dev/null || echo "claude-sonnet-4-5")
+                agent_model=$(safe_jq_from_file "$agent_metadata" '.model // "claude-sonnet-4-5"' "claude-sonnet-4-5" "$session_dir" "agent_registry.model")
                 
                 # Create agent definition
                 mkdir -p "$session_dir/.claude/agents"
@@ -643,13 +703,13 @@ EOF
     local invocation_status=0
     if [[ "$supports_sessions" == "true" ]]; then
         if has_agent_session "$agent_name" "$session_dir"; then
-            if continue_agent_session "$agent_name" "$session_dir" "$agent_input" "$agent_output_file" 600; then
+            if continue_agent_session "$agent_name" "$session_dir" "$agent_input" "$agent_output_file"; then
                 invocation_status=0
             else
                 invocation_status=$?
             fi
         else
-            if start_agent_session "$agent_name" "$session_dir" "$agent_input" 600 "$agent_output_file"; then
+            if start_agent_session "$agent_name" "$session_dir" "$agent_input" "$agent_output_file"; then
                 invocation_status=0
             else
                 invocation_status=$?
@@ -675,8 +735,12 @@ EOF
         cost=$(extract_cost_from_output "$agent_output_file")
         
         # Extract result
-        local result
-        result=$(jq -r '.result // empty' "$agent_output_file" 2>/dev/null)
+        local result=""
+        if [[ -f "$agent_output_file" ]] && jq empty "$agent_output_file" >/dev/null 2>&1; then
+            result=$(jq -r '.result // empty' "$agent_output_file")
+        else
+            log_system_warning "$session_dir" "jq_file_parse_failure" "agent_output.result" "file=$agent_output_file"
+        fi
         
         # Register output as artifact
         local artifact_file=""
@@ -779,7 +843,7 @@ extract_orchestrator_decision() {
     if extracted_json=$(extract_json_from_text "$orchestrator_output" 2>/dev/null); then
         # Check if it has an action field
         local action
-        action=$(echo "$extracted_json" | jq -r '.action // empty' 2>/dev/null)
+        action=$(safe_jq_from_json "$extracted_json" '.action // empty' "" "" "orchestrator.extract_decision")
         if [ -n "$action" ] && [ "$action" != "null" ]; then
             echo "$extracted_json"
             return 0
@@ -799,7 +863,7 @@ get_agent_display_name() {
     if [[ -n "$session_dir" ]]; then
         local metadata_file="$session_dir/.claude/agents/${agent_name}/metadata.json"
         if [[ -f "$metadata_file" ]]; then
-            friendly_name=$(jq -r '.display_name // empty' "$metadata_file" 2>/dev/null)
+            friendly_name=$(safe_jq_from_file "$metadata_file" '.display_name // empty' "" "$session_dir" "agent_metadata.display_name")
         fi
     fi
     
@@ -827,14 +891,14 @@ process_orchestrator_decisions() {
     
     # Parse decision from extracted JSON
     local decision_action
-    decision_action=$(echo "$decision_json" | jq -r '.action')
+    decision_action=$(safe_jq_from_json "$decision_json" '.action // ""' "" "$session_dir" "orchestrator.decision.action")
     
     # Verbose: Show what the orchestrator decided
     if [[ "${CCONDUCTOR_VERBOSE:-0}" == "1" ]]; then
         case "$decision_action" in
             invoke)
                 local agent_for_msg
-                agent_for_msg=$(echo "$decision_json" | jq -r '.agent')
+                agent_for_msg=$(safe_jq_from_json "$decision_json" '.agent // ""' "" "$session_dir" "orchestrator.decision.agent_display")
                 echo "   → Delegating to $(get_agent_display_name "$agent_for_msg" "$session_dir")" >&2
                 ;;
             reinvoke)
@@ -852,16 +916,16 @@ process_orchestrator_decisions() {
     case "$decision_action" in
         invoke)
             local agent_name
-            agent_name=$(echo "$decision_json" | jq -r '.agent')
+            agent_name=$(safe_jq_from_json "$decision_json" '.agent // ""' "" "$session_dir" "orchestrator.decision.agent")
             local task
-            task=$(echo "$decision_json" | jq -r '.task')
+            task=$(safe_jq_from_json "$decision_json" '.task // ""' "" "$session_dir" "orchestrator.decision.task")
             local context
-            context=$(echo "$decision_json" | jq -r '.context // "No additional context"')
+            context=$(safe_jq_from_json "$decision_json" '.context // "No additional context"' "No additional context" "$session_dir" "orchestrator.decision.context")
             local input_artifacts
-            input_artifacts=$(echo "$decision_json" | jq -c '.input_artifacts // []')
+            input_artifacts=$(safe_jq_from_json "$decision_json" '.input_artifacts // []' '[]' "$session_dir" "orchestrator.decision.input_artifacts" false)
 
             local attempt_num
-            attempt_num=$(echo "$decision_json" | jq -r '.attempt // 1' 2>/dev/null || echo "1")
+            attempt_num=$(safe_jq_from_json "$decision_json" '.attempt // 1' "1" "$session_dir" "orchestrator.decision.attempt")
             local needs_synthesis="false"
             if [[ "$agent_name" == "synthesis-agent" ]]; then
                 needs_synthesis="true"
@@ -871,11 +935,11 @@ process_orchestrator_decisions() {
             
             # Log the decision with proper format for journal export
             local rationale
-            rationale=$(echo "$decision_json" | jq -r '.rationale // ""')
+            rationale=$(safe_jq_from_json "$decision_json" '.rationale // ""' "" "$session_dir" "orchestrator.decision.rationale")
             local alternatives
-            alternatives=$(echo "$decision_json" | jq -c '.alternatives_considered // []')
+            alternatives=$(safe_jq_from_json "$decision_json" '.alternatives_considered // []' '[]' "$session_dir" "orchestrator.decision.alternatives" false)
             local expected_impact
-            expected_impact=$(echo "$decision_json" | jq -r '.expected_impact // ""')
+            expected_impact=$(safe_jq_from_json "$decision_json" '.expected_impact // ""' "" "$session_dir" "orchestrator.decision.expected_impact")
             
             local decision_log_entry
             decision_log_entry=$(jq -n \
@@ -907,7 +971,9 @@ process_orchestrator_decisions() {
                     # Get mode to display appropriate message
                     local gate_mode
                     if command -v load_config &>/dev/null; then
-                        gate_mode=$(load_config "quality-gate" 2>/dev/null | jq -r '.mode // "advisory"')
+                        local gate_config_json
+                        gate_config_json=$(load_config "quality-gate" 2>/dev/null || echo '{}')
+                        gate_mode=$(safe_jq_from_json "$gate_config_json" '.mode // "advisory"' "advisory" "$session_dir" "quality_gate.config_mode")
                     else
                         gate_mode="advisory"
                     fi
@@ -998,15 +1064,15 @@ process_orchestrator_decisions() {
             
         handoff)
             local from_agent
-            from_agent=$(echo "$decision_json" | jq -r '.from_agent')
+            from_agent=$(safe_jq_from_json "$decision_json" '.from_agent // ""' "" "$session_dir" "orchestrator.decision.from_agent")
             local to_agent
-            to_agent=$(echo "$decision_json" | jq -r '.to_agent')
+            to_agent=$(safe_jq_from_json "$decision_json" '.to_agent // ""' "" "$session_dir" "orchestrator.decision.to_agent")
             local task
-            task=$(echo "$decision_json" | jq -r '.task')
+            task=$(safe_jq_from_json "$decision_json" '.task // ""' "" "$session_dir" "orchestrator.decision.handoff_task")
             local input_artifacts
-            input_artifacts=$(echo "$decision_json" | jq -c '.input_artifacts // []')
+            input_artifacts=$(safe_jq_from_json "$decision_json" '.input_artifacts // []' '[]' "$session_dir" "orchestrator.decision.handoff_artifacts" false)
             local rationale
-            rationale=$(echo "$decision_json" | jq -r '.rationale // "Handoff requested"')
+            rationale=$(safe_jq_from_json "$decision_json" '.rationale // "Handoff requested"' "Handoff requested" "$session_dir" "orchestrator.decision.handoff_rationale")
             
             # Log handoff decision (tracking is done via orchestration log)
             log_agent_handoff "$session_dir" "$from_agent" "$to_agent" "$orchestrator_output"
@@ -1026,7 +1092,7 @@ process_orchestrator_decisions() {
             
         early_exit)
             local reason
-            reason=$(echo "$decision_json" | jq -r '.reason')
+            reason=$(safe_jq_from_json "$decision_json" '.reason // ""' "" "$session_dir" "orchestrator.decision.early_exit_reason")
             
             log_decision "$session_dir" "early_exit" "$orchestrator_output"
             return 2  # Signal early exit
@@ -1052,12 +1118,13 @@ run_quality_gate() {
     fi
     
     # Run quality gate (always succeeds in advisory mode, so check JSON output)
-    bash "$PROJECT_ROOT/src/claude-runtime/hooks/quality-gate.sh" "$session_dir" > /dev/null 2>&1
+    local bash_runtime="${CCONDUCTOR_BASH_RUNTIME:-$(command -v bash)}"
+    "$bash_runtime" "$PROJECT_ROOT/src/claude-runtime/hooks/quality-gate.sh" "$session_dir" > /dev/null 2>&1
     
     # Check actual status from the summary file
     if [[ -f "$session_dir/artifacts/quality-gate-summary.json" ]]; then
         local status
-        status=$(jq -r '.status // "unknown"' "$session_dir/artifacts/quality-gate-summary.json")
+        status=$(safe_jq_from_file "$session_dir/artifacts/quality-gate-summary.json" '.status // "unknown"' "unknown" "$session_dir" "quality_gate.run_status")
         if [[ "$status" == "passed" ]]; then
             return 0  # Passed
         else
@@ -1077,7 +1144,7 @@ announce_uncategorized_sources() {
     fi
 
     local uncategorized_count
-    uncategorized_count=$(jq -r '.uncategorized_sources.count // 0' "$summary_file" 2>/dev/null || echo "0")
+    uncategorized_count=$(safe_jq_from_file "$summary_file" '.uncategorized_sources.count // 0' "0" "$session_dir" "quality_gate.uncategorized_count")
     if [[ "$uncategorized_count" -gt 0 ]]; then
         echo "  ⚠ Note: $uncategorized_count uncategorized sources detected"
         echo "     Review: artifacts/quality-gate-summary.json"
@@ -1102,13 +1169,13 @@ log_quality_gate_event() {
     if command -v log_event &>/dev/null; then
         local event_payload
         event_payload=$(jq -n \
-            --argjson attempt "$attempt_value" \
+            --arg attempt "$attempt_value" \
             --arg mode "$mode_value" \
             --arg status "$status_value" \
             --arg summary "$summary_file" \
             --arg report "$report_file" \
             '{
-                attempt: $attempt,
+                attempt: ($attempt | tonumber? // 0),
                 mode: $mode,
                 status: $status,
                 summary_file: ($summary | select(. != "")),
@@ -1157,7 +1224,7 @@ run_quality_assurance_cycle() {
                 local kg_file="$session_dir/knowledge/knowledge-graph.json"
                 local claims_count=0
                 if [[ -f "$kg_file" ]]; then
-                    claims_count=$(jq '.claims | length' "$kg_file" 2>/dev/null || echo 0)
+                    claims_count=$(safe_jq_from_file "$kg_file" '.claims | length' "0" "$session_dir" "quality_gate.claims_count")
                 fi
                 sync_quality_surfaces_to_kg "$session_dir" "artifacts/quality-gate.json" || true
                 record_quality_gate_run "$session_dir" "$(get_timestamp)" "$claims_count" "artifacts/quality-gate.json" || true
@@ -1173,7 +1240,7 @@ run_quality_assurance_cycle() {
             local kg_file="$session_dir/knowledge/knowledge-graph.json"
             local claims_count=0
             if [[ -f "$kg_file" ]]; then
-                claims_count=$(jq '.claims | length' "$kg_file" 2>/dev/null || echo 0)
+                claims_count=$(safe_jq_from_file "$kg_file" '.claims | length' "0" "$session_dir" "quality_gate.claims_count")
             fi
             sync_quality_surfaces_to_kg "$session_dir" "artifacts/quality-gate.json" || true
             record_quality_gate_run "$session_dir" "$(get_timestamp)" "$claims_count" "artifacts/quality-gate.json" || true
@@ -1232,7 +1299,7 @@ run_quality_assurance_cycle() {
 
         local failure_reason=""
         if [[ -f "$session_dir/artifacts/quality-gate-summary.json" ]]; then
-            failure_reason=$(jq -r '.primary_issue // ""' "$session_dir/artifacts/quality-gate-summary.json" 2>/dev/null || echo "")
+            failure_reason=$(safe_jq_from_file "$session_dir/artifacts/quality-gate-summary.json" '.primary_issue // ""' "" "$session_dir" "quality_gate.failure_reason")
             local failure_reason_lower
             failure_reason_lower=$(echo "$failure_reason" | tr '[:upper:]' '[:lower:]')
             case "$failure_reason_lower" in
@@ -1310,8 +1377,8 @@ check_mission_complete() {
     # 2. Check quality gate with mode awareness
     if [[ -f "$session_dir/artifacts/quality-gate-summary.json" ]]; then
         local gate_status gate_mode
-        gate_status=$(jq -r '.status // "unknown"' "$session_dir/artifacts/quality-gate-summary.json" 2>/dev/null || echo "unknown")
-        gate_mode=$(jq -r '.mode // "advisory"' "$session_dir/artifacts/quality-gate-summary.json" 2>/dev/null || echo "advisory")
+        gate_status=$(safe_jq_from_file "$session_dir/artifacts/quality-gate-summary.json" '.status // "unknown"' "unknown" "$session_dir" "quality_gate.summary_status")
+        gate_mode=$(safe_jq_from_file "$session_dir/artifacts/quality-gate-summary.json" '.mode // "advisory"' "advisory" "$session_dir" "quality_gate.summary_mode")
         
         if [[ "$gate_status" == "passed" ]]; then
             quality_gate_passed=true
@@ -1326,15 +1393,14 @@ check_mission_complete() {
     
     # 3. Check high-priority gaps (≥8)
     local unresolved_gaps
-    unresolved_gaps=$(jq -r '[.gaps[]? | select(.priority >= 8 and (.status // "unresolved") != "resolved")] | length' \
-        "$session_dir/knowledge/knowledge-graph.json" 2>/dev/null || echo "0")
+    unresolved_gaps=$(safe_jq_from_file "$session_dir/knowledge/knowledge-graph.json" '[.gaps[]? | select(.priority >= 8 and (.status // "unresolved") != "resolved")] | length' "0" "$session_dir" "mission_completion.unresolved_gaps")
     if [[ "$unresolved_gaps" -eq 0 ]]; then
         high_priority_gaps_resolved=true
     fi
     
     # 4. Check required outputs exist in artifacts
     local required_outputs
-    required_outputs=$(echo "$mission_profile" | jq -r '.success_criteria.required_outputs[]?' 2>/dev/null)
+    required_outputs=$(safe_jq_from_json "$mission_profile" '.success_criteria.required_outputs[]?' "" "$session_dir" "mission_completion.required_outputs")
     
     if [[ -z "$required_outputs" ]]; then
         # No required outputs specified
@@ -1374,16 +1440,16 @@ check_mission_complete() {
             # Orchestrator explicitly requested early exit
             # Log completion verification with current checklist state
             log_decision "$session_dir" "completion_verification" "$(jq -n \
-                --argjson planning "$planning_done" \
-                --argjson quality "$quality_gate_passed" \
-                --argjson gaps "$high_priority_gaps_resolved" \
-                --argjson outputs "$required_outputs_present" \
+                --arg planning "$planning_done" \
+                --arg quality "$quality_gate_passed" \
+                --arg gaps "$high_priority_gaps_resolved" \
+                --arg outputs "$required_outputs_present" \
                 --arg early_exit "true" \
                 '{
-                    planning_done: $planning,
-                    quality_gate_passed: $quality,
-                    gaps_resolved: $gaps,
-                    outputs_present: $outputs,
+                    planning_done: ($planning == "true"),
+                    quality_gate_passed: ($quality == "true"),
+                    gaps_resolved: ($gaps == "true"),
+                    outputs_present: ($outputs == "true"),
                     early_exit_requested: $early_exit
                 }')"
             return 0  # Complete (early exit)
@@ -1392,15 +1458,15 @@ check_mission_complete() {
     
     # Log completion verification
     log_decision "$session_dir" "completion_verification" "$(jq -n \
-        --argjson planning "$planning_done" \
-        --argjson quality "$quality_gate_passed" \
-        --argjson gaps "$high_priority_gaps_resolved" \
-        --argjson outputs "$required_outputs_present" \
+        --arg planning "$planning_done" \
+        --arg quality "$quality_gate_passed" \
+        --arg gaps "$high_priority_gaps_resolved" \
+        --arg outputs "$required_outputs_present" \
         '{
-            planning_done: $planning,
-            quality_gate_passed: $quality,
-            gaps_resolved: $gaps,
-            outputs_present: $outputs
+            planning_done: ($planning == "true"),
+            quality_gate_passed: ($quality == "true"),
+            gaps_resolved: ($gaps == "true"),
+            outputs_present: ($outputs == "true")
         }')"
     
     # Mission complete only if all checks pass
@@ -1439,14 +1505,14 @@ run_mission_orchestration() {
 
     # Mission objective cached for logging + heuristics agent
     local objective
-    objective=$(jq -r '.objective // "Unknown"' "$session_dir/meta/session.json" 2>/dev/null || echo "Unknown")
+    objective=$(safe_jq_from_file "$session_dir/meta/session.json" '.objective // "Unknown"' "Unknown" "$session_dir" "mission_summary.objective")
 
     echo "→ Analyzing domain requirements..."
     if [[ -f "$session_dir/meta/domain-heuristics.json" ]]; then
         echo "  ✓ Domain heuristics already available (resume)"
     elif agent_registry_exists "domain-heuristics"; then
         local heuristics_task heuristics_context mission_summary
-        mission_summary=$(echo "$mission_profile" | jq -r '{name: .name, success_criteria: .success_criteria, constraints: .constraints} | tojson' 2>/dev/null || echo '{}')
+    mission_summary=$(safe_jq_from_json "$mission_profile" '{name: .name, success_criteria: .success_criteria, constraints: .constraints} | tojson' '{}' "$session_dir" "mission_summary.profile")
         heuristics_task=$(cat <<EOF
 Analyze the mission objective below and produce domain-heuristics.json plus domain-heuristics.kg.lock inside artifacts/domain-heuristics/.
 Focus on stakeholder taxonomy, freshness requirements, mandatory watch items, and synthesis guidance using the documented schema.
@@ -1519,7 +1585,7 @@ EOF
         # Sync KG iteration with mission iteration FIRST (before any work)
         # This ensures dashboard always shows the current iteration number
         local kg_current
-        kg_current=$(jq -r '.iteration // 0' "$session_dir/knowledge/knowledge-graph.json" 2>/dev/null || echo "0")
+        kg_current=$(safe_jq_from_file "$session_dir/knowledge/knowledge-graph.json" '.iteration // 0' "0" "$session_dir" "dashboard.kg_iteration")
         if [[ "$kg_current" -lt "$iteration" ]]; then
             kg_increment_iteration "$session_dir"
             # Update dashboard metrics immediately so dashboard shows current iteration
@@ -1552,8 +1618,9 @@ EOF
         if [[ -f "$UTILS_DIR/domain-compliance-check.sh" && -f "$session_dir/meta/domain-heuristics.json" && $iteration -gt 1 ]]; then
             echo "→ Checking domain requirements compliance..."
             local compliance_report compliance_status
-            if compliance_report=$(bash "$UTILS_DIR/domain-compliance-check.sh" "$session_dir" 2>/dev/null); then
-                compliance_status=$(echo "$compliance_report" | jq -r '.compliance_summary // "unknown"' 2>/dev/null || echo "unknown")
+            local bash_runtime="${CCONDUCTOR_BASH_RUNTIME:-$(command -v bash)}"
+            if compliance_report=$("$bash_runtime" "$UTILS_DIR/domain-compliance-check.sh" "$session_dir" 2>/dev/null); then
+                compliance_status=$(safe_jq_from_json "$compliance_report" '.compliance_summary // "unknown"' "unknown" "$session_dir" "domain_compliance.report_status")
                 if [[ "$compliance_status" == "gaps_detected" ]]; then
                     if command -v log_event &>/dev/null; then
                         log_event "$session_dir" "domain_compliance_gap" "$compliance_report"
@@ -1676,8 +1743,16 @@ EOF
     local started_at
     started_at=$(jq -r '.created_at' "$session_dir/meta/session.json")
     local total_cost
-    total_cost=$(grep '"type":"agent_result"' "$session_dir/logs/events.jsonl" 2>/dev/null | \
-                 jq -s 'map(.data.cost_usd) | add' 2>/dev/null || echo "0")
+    local cost_events
+    cost_events=$(grep '"type":"agent_result"' "$session_dir/logs/events.jsonl" 2>/dev/null || true)
+    if [[ -n "$cost_events" ]]; then
+        if ! total_cost=$(printf '%s\n' "$cost_events" | jq -s 'map(.data.cost_usd // 0) | add' 2>/dev/null); then
+            log_system_warning "$session_dir" "jq_stream_parse_failure" "mission_metrics.total_cost" "file=$session_dir/logs/events.jsonl"
+            total_cost="0"
+        fi
+    else
+        total_cost="0"
+    fi
     
     jq -n \
         --arg status "completed" \
@@ -1748,9 +1823,17 @@ run_mission_orchestration_resume() {
     local current_iteration=0
     if [ -f "$session_dir/logs/orchestration.jsonl" ]; then
         # Try to get last iteration from decision entries
-        current_iteration=$(awk 'NF{print}' "$session_dir/logs/orchestration.jsonl" | \
-            jq -r 'select(.decision.iteration!=null) | .decision.iteration' 2>/dev/null | \
-            tail -1)
+        local orchestration_lines
+        orchestration_lines=$(awk 'NF{print}' "$session_dir/logs/orchestration.jsonl" 2>/dev/null || true)
+        if [[ -n "$orchestration_lines" ]]; then
+            local parsed_iterations
+            if parsed_iterations=$(printf '%s\n' "$orchestration_lines" | jq -r 'select(.decision.iteration!=null) | .decision.iteration' 2>/dev/null); then
+                current_iteration=$(printf '%s\n' "$parsed_iterations" | tail -1)
+            else
+                log_system_warning "$session_dir" "jq_stream_parse_failure" "resume.iteration_extract" "file=$session_dir/logs/orchestration.jsonl"
+                current_iteration=""
+            fi
+        fi
         
         # Fallback to line count if no iteration found
         if [ -z "$current_iteration" ] || [ "$current_iteration" = "null" ]; then
@@ -1809,7 +1892,9 @@ run_mission_orchestration_resume() {
         echo "     ./cconductor sessions resume $(basename "$session_dir") --extend-time 30"
         echo ""
         echo "  2. Start a new session with the same query:"
-        echo "     ./cconductor \"$(jq -r '.objective' "$session_dir/meta/session.json" 2>/dev/null)\""
+        local restart_objective
+        restart_objective=$(safe_jq_from_file "$session_dir/meta/session.json" '.objective // ""' "" "$session_dir" "resume_hint.objective")
+        echo "     ./cconductor \"$restart_objective\""
         echo ""
         echo "  3. View the existing research:"
         echo "     ./cconductor sessions viewer $(basename "$session_dir")"
@@ -1837,7 +1922,7 @@ run_mission_orchestration_resume() {
         # Sync KG iteration with mission iteration FIRST (before any work)
         # This ensures dashboard always shows the current iteration number
         local kg_current
-        kg_current=$(jq -r '.iteration // 0' "$session_dir/knowledge/knowledge-graph.json" 2>/dev/null || echo "0")
+        kg_current=$(safe_jq_from_file "$session_dir/knowledge/knowledge-graph.json" '.iteration // 0' "0" "$session_dir" "resume_dashboard.kg_iteration")
         if [[ "$kg_current" -lt "$iteration" ]]; then
             kg_increment_iteration "$session_dir"
             # Update dashboard metrics immediately so dashboard shows current iteration
@@ -1957,8 +2042,16 @@ run_mission_orchestration_resume() {
     local started_at
     started_at=$(jq -r '.created_at' "$session_dir/meta/session.json")
     local total_cost
-    total_cost=$(grep '"type":"agent_result"' "$session_dir/logs/events.jsonl" 2>/dev/null | \
-                 jq -s 'map(.data.cost_usd) | add' 2>/dev/null || echo "0")
+    local cost_events
+    cost_events=$(grep '"type":"agent_result"' "$session_dir/logs/events.jsonl" 2>/dev/null || true)
+    if [[ -n "$cost_events" ]]; then
+        if ! total_cost=$(printf '%s\n' "$cost_events" | jq -s 'map(.data.cost_usd // 0) | add' 2>/dev/null); then
+            log_system_warning "$session_dir" "jq_stream_parse_failure" "mission_metrics.total_cost" "file=$session_dir/logs/events.jsonl"
+            total_cost="0"
+        fi
+    else
+        total_cost="0"
+    fi
     
     jq -n \
         --arg status "completed" \
@@ -2021,6 +2114,10 @@ prepare_orchestrator_context_resume() {
         echo "✗ Error: Could not read knowledge graph" >&2
         return 1
     fi
+    if ! jq_validate_json "$kg_json"; then
+        log_system_warning "$session_dir" "jq_json_parse_failure" "dashboard.kg_read" "payload_snippet=${kg_json:0:200}"
+        kg_json='{}'
+    fi
     
     local budget_json
     if ! budget_json=$(budget_status "$session_dir"); then
@@ -2036,48 +2133,52 @@ prepare_orchestrator_context_resume() {
     
     # Extract coverage summary from knowledge graph
     local coverage_summary
-    coverage_summary=$(echo "$kg_json" | jq -r '
-        .claims // [] | group_by(.topic // "general") | 
+    coverage_summary=$(safe_jq_from_json "$kg_json" '
+        .claims // [] | group_by(.topic // "general") |
         map({
             topic: (.[0].topic // "general"),
             claim_count: length,
             avg_confidence: (if length > 0 then (map(.confidence // 0) | add / length) else 0 end),
             unique_domains: (
-                [.[] | .sources[]? | .url // "" | 
-                    sub("^https?://"; "") | sub("/.*$"; "") | sub("^www\\."; "")] 
+                [.[] | .sources[]? | .url // "" |
+                    sub("^https?://"; "") | sub("/.*$"; "") | sub("^www\\."; "")]
                 | unique | length
             )
         })
-    ' 2>/dev/null || echo "[]")
+    ' '[]' "$session_dir" "dashboard.kg.coverage" false)
     
     # Extract high-priority gaps (≥8)
     local high_priority_gaps_count
-    high_priority_gaps_count=$(echo "$kg_json" | jq -r '
-        [.gaps[]? | select(.priority >= 8)] | length
-    ' 2>/dev/null || echo "0")
+    high_priority_gaps_count=$(safe_jq_from_json "$kg_json" '[.gaps[]? | select(.priority >= 8)] | length' "0" "$session_dir" "dashboard.kg.high_priority_gaps")
     
     # Get list of high-priority gaps for context
     local high_priority_gaps_list
-    high_priority_gaps_list=$(echo "$kg_json" | jq -c '
+    high_priority_gaps_list=$(safe_jq_from_json "$kg_json" '
         [.gaps[]? | select(.priority >= 8) | {
             description: .description,
             priority: .priority,
             status: (.status // "unresolved")
         }]
-    ' 2>/dev/null || echo "[]")
+    ' '[]' "$session_dir" "dashboard.kg.high_priority_gaps_list" false)
     
     # Check if quality gate has run
     local quality_gate_status="not_run"
     local quality_gate_summary="{}"
     local quality_gate_mode="advisory"
-    if [[ -f "$session_dir/artifacts/quality-gate-summary.json" ]]; then
-        quality_gate_status=$(jq -r '.status // "unknown"' \
-            "$session_dir/artifacts/quality-gate-summary.json" 2>/dev/null || echo "unknown")
+    local summary_path="$session_dir/artifacts/quality-gate-summary.json"
+    if [[ -f "$summary_path" ]]; then
+        quality_gate_status=$(safe_jq_from_file "$summary_path" '.status // "unknown"' "unknown" "$session_dir" "dashboard.quality_gate_status")
         # Ensure we get valid JSON, default to empty object if file is invalid
-        quality_gate_summary=$(cat "$session_dir/artifacts/quality-gate-summary.json" 2>/dev/null | jq -c '.' 2>/dev/null || echo "{}")
+        if jq empty "$summary_path" >/dev/null 2>&1; then
+            quality_gate_summary=$(jq -c '.' "$summary_path")
+        else
+            log_system_warning "$session_dir" "jq_file_parse_failure" "dashboard.quality_gate_summary" "file=$summary_path"
+        fi
     fi
     if command -v load_config &>/dev/null; then
-        quality_gate_mode=$(load_config "quality-gate" 2>/dev/null | jq -r '.mode // "advisory"')
+        local gate_config_json
+        gate_config_json=$(load_config "quality-gate" 2>/dev/null || echo '{}')
+        quality_gate_mode=$(safe_jq_from_json "$gate_config_json" '.mode // "advisory"' "advisory" "$session_dir" "dashboard.quality_gate_mode")
     fi
     
     # Check if research plan exists

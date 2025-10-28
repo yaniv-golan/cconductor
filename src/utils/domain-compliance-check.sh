@@ -9,6 +9,8 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/core-helpers.sh"
 # shellcheck disable=SC1091
 source "$SCRIPT_DIR/domain-helpers.sh"
+# shellcheck disable=SC1091
+source "$SCRIPT_DIR/json-helpers.sh"
 
 SESSION_DIR="${1:-}"
 if [[ -z "$SESSION_DIR" || ! -d "$SESSION_DIR" ]]; then
@@ -30,6 +32,16 @@ if [[ ! -f "$KG_FILE" ]]; then
 fi
 
 HEURISTICS_JSON=$(cat "$HEURISTICS_FILE")
+if ! jq_validate_json "$HEURISTICS_JSON"; then
+    log_warn "domain-compliance-check: invalid domain heuristics JSON; using empty heuristics"
+    HEURISTICS_JSON='{}'
+fi
+
+KG_VALID=true
+if ! jq empty "$KG_FILE" >/dev/null 2>&1; then
+    log_warn "domain-compliance-check: knowledge-graph.json is invalid; skipping knowledge graph checks"
+    KG_VALID=false
+fi
 
 array_to_json() {
     if [[ $# -eq 0 ]]; then
@@ -46,25 +58,29 @@ drift_factors=()
 uncategorized_sources=0
 total_sources=0
 
-while IFS= read -r source_json; do
-    [[ -z "$source_json" || "$source_json" == "null" ]] && continue
-    total_sources=$((total_sources + 1))
-    if [[ $(map_source_to_stakeholder "$source_json" "$HEURISTICS_JSON") == "uncategorized" ]]; then
-        uncategorized_sources=$((uncategorized_sources + 1))
-    fi
-done < <(jq -c '.claims[]? | .sources[]?' "$KG_FILE" 2>/dev/null || echo "")
+if $KG_VALID; then
+    while IFS= read -r source_json; do
+        [[ -z "$source_json" || "$source_json" == "null" ]] && continue
+        total_sources=$((total_sources + 1))
+        if [[ $(map_source_to_stakeholder "$source_json" "$HEURISTICS_JSON") == "uncategorized" ]]; then
+            uncategorized_sources=$((uncategorized_sources + 1))
+        fi
+    done < <(jq -c '.claims[]? | .sources[]?' "$KG_FILE")
+fi
 
 while IFS=$'\t' read -r category importance; do
     [[ -z "$category" ]] && continue
     if [[ "$importance" == "critical" ]]; then
         local_found=false
-        while IFS= read -r source_json; do
-            [[ -z "$source_json" || "$source_json" == "null" ]] && continue
-            if [[ $(map_source_to_stakeholder "$source_json" "$HEURISTICS_JSON") == "$category" ]]; then
-                local_found=true
-                break
-            fi
-        done < <(jq -c '.claims[]? | .sources[]?' "$KG_FILE" 2>/dev/null || echo "")
+        if $KG_VALID; then
+            while IFS= read -r source_json; do
+                [[ -z "$source_json" || "$source_json" == "null" ]] && continue
+                if [[ $(map_source_to_stakeholder "$source_json" "$HEURISTICS_JSON") == "$category" ]]; then
+                    local_found=true
+                    break
+                fi
+            done < <(jq -c '.claims[]? | .sources[]?' "$KG_FILE")
+        fi
         if [[ "$local_found" == false ]]; then
             missing_stakeholders+=("$category")
         fi
@@ -78,31 +94,38 @@ while IFS= read -r watch_item_json; do
         continue
     fi
         found=false
-    while IFS= read -r claim_json; do
-        [[ -z "$claim_json" || "$claim_json" == "null" ]] && continue
-        if match_watch_item "$watch_item_json" "$claim_json"; then
-            found=true
-            break
-        fi
-    done < <(jq -c '.claims[]?' "$KG_FILE" 2>/dev/null || echo "")
+    if $KG_VALID; then
+        while IFS= read -r claim_json; do
+            [[ -z "$claim_json" || "$claim_json" == "null" ]] && continue
+            if match_watch_item "$watch_item_json" "$claim_json"; then
+                found=true
+                break
+            fi
+        done < <(jq -c '.claims[]?' "$KG_FILE")
+    fi
     if [[ "$found" == false ]]; then
             canonical=$(echo "$watch_item_json" | jq -r '.canonical // ""')
         [[ -n "$canonical" ]] && missing_milestones+=("$canonical")
     fi
 done < <(echo "$HEURISTICS_JSON" | jq -c '.mandatory_watch_items[]?')
 
-known_topics=$(echo "$HEURISTICS_JSON" | jq -r '.freshness_requirements[]? | .topic' 2>/dev/null || echo "")
-while IFS= read -r claim_json; do
-    [[ -z "$claim_json" || "$claim_json" == "null" ]] && continue
-    claim_topic=$(echo "$claim_json" | jq -r '.topic // ""')
-    if [[ -n "$claim_topic" && "$claim_topic" != "null" ]]; then
-        if ! printf '%s\n' "$known_topics" | grep -qx "$claim_topic" 2>/dev/null; then
-            if ! printf '%s\n' "${unexpected_topics[@]}" | grep -qx "$claim_topic" 2>/dev/null; then
-                unexpected_topics+=("$claim_topic")
+if ! known_topics=$(safe_jq_from_json "$HEURISTICS_JSON" '.freshness_requirements[]? | .topic' "" "$SESSION_DIR" "domain_compliance.known_topics" "true" "true"); then
+    known_topics=""
+fi
+
+if $KG_VALID; then
+    while IFS= read -r claim_json; do
+        [[ -z "$claim_json" || "$claim_json" == "null" ]] && continue
+        claim_topic=$(echo "$claim_json" | jq -r '.topic // ""')
+        if [[ -n "$claim_topic" && "$claim_topic" != "null" ]]; then
+            if ! printf '%s\n' "$known_topics" | grep -qx "$claim_topic" 2>/dev/null; then
+                if ! printf '%s\n' "${unexpected_topics[@]}" | grep -qx "$claim_topic" 2>/dev/null; then
+                    unexpected_topics+=("$claim_topic")
+                fi
             fi
         fi
-    fi
-done < <(jq -c '.claims[]?' "$KG_FILE" 2>/dev/null || echo "")
+    done < <(jq -c '.claims[]?' "$KG_FILE")
+fi
 
 drift_score="0"
 if [[ $total_sources -gt 0 ]]; then

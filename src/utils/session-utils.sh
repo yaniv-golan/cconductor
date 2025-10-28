@@ -5,6 +5,11 @@ set -euo pipefail
 
 SESSION_UTILS_ROOT="${CCONDUCTOR_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}"
 
+# shellcheck disable=SC1091
+if [ -f "$SESSION_UTILS_ROOT/src/utils/json-helpers.sh" ]; then
+    source "$SESSION_UTILS_ROOT/src/utils/json-helpers.sh"
+fi
+
 session_utils_primary_dir() {
     if [ -n "${SESSION_UTILS_PRIMARY_DIR:-}" ]; then
         echo "$SESSION_UTILS_PRIMARY_DIR"
@@ -56,6 +61,28 @@ session_utils_list_with_mtime() {
             printf '%s::%s\n' "$mtime" "$path"
         done
     done
+}
+
+session_utils_safe_meta_value() {
+    local session_path="$1"
+    local jq_filter="$2"
+    local fallback="$3"
+    local context="$4"
+    local meta_file="$session_path/meta/session.json"
+    local value="$fallback"
+
+    if [[ ! -f "$meta_file" ]]; then
+        printf '%s' "$fallback"
+        return 0
+    fi
+
+    local extracted
+    if extracted=$(safe_jq_from_file "$meta_file" "$jq_filter" "$fallback" "$session_path" "session_utils.${context}" "true"); then
+        value="$extracted"
+    fi
+
+    printf '%s' "$value"
+    return 0
 }
 
 session_utils_format_timestamp() {
@@ -157,9 +184,9 @@ session_utils_emit_row() {
     local status="In progress"
 
     if [ -f "$path/meta/session.json" ]; then
-        created=$(jq -r '.created_at // .started_at // ""' "$path/meta/session.json" 2>/dev/null || echo "")
-        objective=$(jq -r '.objective // .research_question // ""' "$path/meta/session.json" 2>/dev/null || echo "")
-        status=$(jq -r '.status // ""' "$path/meta/session.json" 2>/dev/null || echo "")
+        created=$(session_utils_safe_meta_value "$path" '.created_at // .started_at // ""' "" "created")
+        objective=$(session_utils_safe_meta_value "$path" '.objective // .research_question // ""' "" "objective")
+        status=$(session_utils_safe_meta_value "$path" '.status // ""' "" "status")
     fi
 
     if [ -z "$created" ] || [ "$created" = "null" ]; then

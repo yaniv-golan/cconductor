@@ -4,6 +4,30 @@
 
 set -euo pipefail 2>/dev/null || set -eu
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck disable=SC1091
+source "$SCRIPT_DIR/json-helpers.sh"
+
+verbose_safe_reasoning() {
+    local json_payload="$1"
+    local jq_filter="$2"
+    local fallback="$3"
+    local context="$4"
+    local value="$fallback"
+
+    if [[ -z "$json_payload" ]]; then
+        printf '%s' "$fallback"
+        return 0
+    fi
+
+    if value=$(safe_jq_from_json "$json_payload" "$jq_filter" "$fallback" "${CCONDUCTOR_SESSION_DIR:-}" "verbose.$context" "true"); then
+        printf '%s' "$value"
+    else
+        printf '%s' "$fallback"
+    fi
+    return 0
+}
+
 # Check if verbose mode is enabled
 is_verbose_enabled() {
     [[ "${CCONDUCTOR_VERBOSE:-0}" == "1" ]]
@@ -90,20 +114,20 @@ verbose_agent_reasoning() {
     
     # Try different reasoning fields
     local synthesis_approach
-    synthesis_approach=$(echo "$reasoning_json" | jq -r '.synthesis_approach // empty' 2>/dev/null || echo "")
+    synthesis_approach=$(verbose_safe_reasoning "$reasoning_json" '.synthesis_approach // empty' "" "synthesis_approach")
     if [[ -n "$synthesis_approach" ]]; then
         echo "   - Approach: $synthesis_approach" >&2
     fi
     
     local gap_prioritization
-    gap_prioritization=$(echo "$reasoning_json" | jq -r '.gap_prioritization // empty' 2>/dev/null || echo "")
+    gap_prioritization=$(verbose_safe_reasoning "$reasoning_json" '.gap_prioritization // empty' "" "gap_prioritization")
     if [[ -n "$gap_prioritization" ]]; then
         echo "   - Priority: $gap_prioritization" >&2
     fi
     
     # Show key insights as bullet points
     local insights_count
-    insights_count=$(echo "$reasoning_json" | jq '.key_insights // [] | length' 2>/dev/null || echo "0")
+    insights_count=$(verbose_safe_reasoning "$reasoning_json" '(.key_insights // []) | length' "0" "key_insights_count")
     if [[ "$insights_count" -gt 0 ]]; then
         echo "$reasoning_json" | jq -r '.key_insights[] // empty' 2>/dev/null | while IFS= read -r insight; do
             echo "   - $insight" >&2
@@ -112,7 +136,7 @@ verbose_agent_reasoning() {
     
     # Show strategic decisions
     local decisions_count
-    decisions_count=$(echo "$reasoning_json" | jq '.strategic_decisions // [] | length' 2>/dev/null || echo "0")
+    decisions_count=$(verbose_safe_reasoning "$reasoning_json" '(.strategic_decisions // []) | length' "0" "strategic_decisions_count")
     if [[ "$decisions_count" -gt 0 ]]; then
         echo "$reasoning_json" | jq -r '.strategic_decisions[] // empty' 2>/dev/null | while IFS= read -r decision; do
             echo "   - $decision" >&2
@@ -310,4 +334,3 @@ Example usage in scripts:
 
 EOF
 fi
-

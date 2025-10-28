@@ -5,9 +5,22 @@
 
 set -euo pipefail
 
-# Find project root robustly (hooks may run in various contexts)
+# Find project root and session directory via shared bootstrap
 HOOK_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_ROOT="$(cd "$HOOK_DIR/../../../.." && pwd)"
+# shellcheck disable=SC1091
+source "$HOOK_DIR/hook-bootstrap.sh"
+
+hook_resolve_roots "${BASH_SOURCE[0]}"
+resolved_repo="${HOOK_REPO_ROOT:-}"
+resolved_session="${HOOK_SESSION_DIR:-}"
+
+if [[ -z "$resolved_repo" ]]; then
+    resolved_repo="$(cd "$HOOK_DIR/../../../.." && pwd)"
+fi
+
+PROJECT_ROOT="$resolved_repo"
+SESSION_DIR="$resolved_session"
+session_dir="${SESSION_DIR:-${CCONDUCTOR_SESSION_DIR:-}}"
 
 # Source core helpers with fallback (hooks must never fail)
 # shellcheck disable=SC1091
@@ -99,7 +112,9 @@ else
 fi
 
 # Get session directory from environment or derive it
-session_dir="${CCONDUCTOR_SESSION_DIR:-}"
+if [ -z "$session_dir" ]; then
+    session_dir="${CCONDUCTOR_SESSION_DIR:-}"
+fi
 if [ -z "$session_dir" ]; then
     if [ -f "logs/events.jsonl" ]; then
         session_dir=$(pwd)

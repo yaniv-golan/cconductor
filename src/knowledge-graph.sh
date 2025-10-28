@@ -26,6 +26,8 @@ source "$KG_SCRIPT_DIR/utils/json-parser.sh"
 debug "knowledge-graph.sh: Sourcing validation.sh"
 # shellcheck disable=SC1091
 source "$KG_SCRIPT_DIR/utils/validation.sh"
+# shellcheck disable=SC1091
+source "$KG_SCRIPT_DIR/utils/json-helpers.sh"
 debug "knowledge-graph.sh: Sourcing event-logger.sh"
 # shellcheck disable=SC1091
 source "$KG_SCRIPT_DIR/utils/event-logger.sh" || true
@@ -405,10 +407,12 @@ kg_add_gap() {
     kg_file=$(kg_get_path "$session_dir")
 
     # Pre-compute ID and iteration
+    local total_gaps
+    total_gaps=$(safe_jq_from_file "$kg_file" '.stats.total_gaps' "0" "$session_dir" "kg_add_gap.total_gaps")
     local gap_id
-    gap_id="g$(jq '.stats.total_gaps' "$kg_file" 2>/dev/null || echo "0")"
+    gap_id="g${total_gaps}"
     local iteration
-    iteration=$(jq '.iteration' "$kg_file" 2>/dev/null || echo "0")
+    iteration=$(safe_jq_from_file "$kg_file" '.iteration' "0" "$session_dir" "kg_add_gap.iteration")
 
     # Use atomic_json_update for thread-safe operation
     atomic_json_update "$kg_file" \
@@ -482,10 +486,12 @@ kg_add_contradiction() {
     kg_file=$(kg_get_path "$session_dir")
 
     # Pre-compute ID and iteration
+    local total_contradictions
+    total_contradictions=$(safe_jq_from_file "$kg_file" '.stats.total_contradictions' "0" "$session_dir" "kg_add_contradiction.total")
     local con_id
-    con_id="con$(jq '.stats.total_contradictions' "$kg_file" 2>/dev/null || echo "0")"
+    con_id="con${total_contradictions}"
     local iteration
-    iteration=$(jq '.iteration' "$kg_file" 2>/dev/null || echo "0")
+    iteration=$(safe_jq_from_file "$kg_file" '.iteration' "0" "$session_dir" "kg_add_contradiction.iteration")
 
     # Use atomic_json_update for thread-safe operation
     atomic_json_update "$kg_file" \
@@ -537,10 +543,12 @@ kg_add_lead() {
     kg_file=$(kg_get_path "$session_dir")
 
     # Pre-compute ID and iteration
+    local total_leads
+    total_leads=$(safe_jq_from_file "$kg_file" '.stats.total_leads' "0" "$session_dir" "kg_add_lead.total")
     local lead_id
-    lead_id="l$(jq '.stats.total_leads' "$kg_file" 2>/dev/null || echo "0")"
+    lead_id="l${total_leads}"
     local iteration
-    iteration=$(jq '.iteration' "$kg_file" 2>/dev/null || echo "0")
+    iteration=$(safe_jq_from_file "$kg_file" '.iteration' "0" "$session_dir" "kg_add_lead.iteration")
 
     # Use atomic_json_update for thread-safe operation
     atomic_json_update "$kg_file" \
@@ -905,8 +913,14 @@ kg_find_source_by_url() {
         return 0
     fi
 
-    local summary
-    summary=$(echo "$kg_content" | jq -r --arg url "$url" '
+    if ! jq_validate_json "$kg_content"; then
+        log_system_warning "$session_dir" "jq_json_parse_failure" "kg_find_source_by_url" "payload_snippet=${kg_content:0:200}"
+        echo ""
+        return 0
+    fi
+
+    local summary=""
+    if ! summary=$(printf '%s' "$kg_content" | jq -r --arg url "$url" '
         [
             (.claims // [] | map(select((.sources // []) | map(.url) | index($url))) |
                 map("- Claim " + ((.id // "unknown")) + ": " + (.statement // ""))),
@@ -916,7 +930,10 @@ kg_find_source_by_url() {
         | add
         | unique
         | if length == 0 then empty else join("\n") end
-    ' 2>/dev/null || echo "")
+    ' 2>/dev/null); then
+        log_system_warning "$session_dir" "jq_json_parse_failure" "kg_find_source_by_url.summary" "url=$url"
+        summary=""
+    fi
 
     echo "$summary"
 }
@@ -1303,13 +1320,13 @@ kg_integrate_agent_output() {
             
             # Extract entities
             local entities
-            entities=$(echo "$agent_data" | jq -c '.entities_discovered // []' 2>/dev/null)
-            entity_count=$(echo "$entities" | jq 'length' 2>/dev/null || echo "0")
-            
+            entities=$(safe_jq_from_json "$agent_data" '.entities_discovered // []' '[]' "$session_dir" "kg_integrate.entities" false)
+            entity_count=$(safe_jq_from_json "$entities" 'length' "0" "$session_dir" "kg_integrate.entities_count")
+
             # Extract claims
             local claims
-            claims=$(echo "$agent_data" | jq -c '.claims // []' 2>/dev/null)
-            claim_count=$(echo "$claims" | jq 'length' 2>/dev/null || echo "0")
+            claims=$(safe_jq_from_json "$agent_data" '.claims // []' '[]' "$session_dir" "kg_integrate.claims" false)
+            claim_count=$(safe_jq_from_json "$claims" 'length' "0" "$session_dir" "kg_integrate.claims_count")
             
             # If we have data, integrate it
             if [[ "$entity_count" -gt 0 ]] || [[ "$claim_count" -gt 0 ]]; then

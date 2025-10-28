@@ -81,6 +81,7 @@ curl --version
 
 # Development tools (required for contributing)
 shellcheck --version  # For linting shell scripts
+rg --version          # ripgrep for jq lint automation
 
 # Required for calculations
 bc --version
@@ -102,6 +103,16 @@ sudo apt-get install shellcheck
 ```
 
 **Note**: Our CI uses ShellCheck stable version. Install the latest stable version to match CI behavior.
+
+**ripgrep** (required for jq lint tooling):
+
+```bash
+# macOS
+brew install ripgrep
+
+# Ubuntu/Debian
+sudo apt-get install ripgrep
+```
 
 ### Getting Started
 
@@ -324,12 +335,17 @@ find . -name "*.sh" -type f -not -path "./.history/*" -not -path "./.git/*" | wh
     shellcheck "$file" || exit 1
 done
 
-# Pre-commit hook runs automatically
-# To test it manually:
-.git/hooks/pre-commit
+# jq lint guardrails
+scripts/lint-jq-patterns.sh
+
+# jq usage audit (matches pre-commit + CI)
+scripts/audit-jq-usage.sh /tmp/jq-audit.json
+
+# Run the tracked pre-commit hook manually
+scripts/pre-commit.sh
 ```
 
-**Pre-commit Hook**: The repository includes a pre-commit hook that automatically runs ShellCheck on all shell scripts. This hook runs automatically when you commit, ensuring code quality.
+**Pre-commit Hook**: The repository ships a tracked hook at `scripts/pre-commit.sh` (ShellCheck + jq lint guards). Enable it with `ln -sf ../../scripts/pre-commit.sh .git/hooks/pre-commit` so local commits match CI.
 
 ### Writing Tests
 

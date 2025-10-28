@@ -84,6 +84,12 @@ if [[ -f "$HEURISTICS_FILE" ]]; then
     DOMAIN_HEURISTICS_JSON=$(cat "$HEURISTICS_FILE" 2>/dev/null || echo "")
 fi
 
+if [[ -n "$DOMAIN_HEURISTICS_JSON" ]] && ! jq_validate_json "$DOMAIN_HEURISTICS_JSON"; then
+    log_system_warning "$SESSION_DIR" "quality_gate.heuristics_invalid" \
+        "Invalid domain heuristics JSON" "file=$HEURISTICS_FILE"
+    DOMAIN_HEURISTICS_JSON=""
+fi
+
 DOMAIN_AWARE=$(echo "$CONFIG_JSON" | jq -r '.domain_aware // false' | tr '[:upper:]' '[:lower:]')
 FALLBACK_TO_GLOBAL=$(echo "$CONFIG_JSON" | jq -r '.fallback_to_global_thresholds // true' | tr '[:upper:]' '[:lower:]')
 UNCAT_WARN_ENABLED=$(echo "$CONFIG_JSON" | jq -r '.uncategorized_source_warnings.enabled // false' | tr '[:upper:]' '[:lower:]')
@@ -99,11 +105,16 @@ DOMAIN_UNCATEGORIZED_SAMPLES_JSON='[]'
 DOMAIN_UNCATEGORIZED_ALERT=false
 
 if [[ -n "$DOMAIN_HEURISTICS_JSON" ]]; then
+    freshness_rows=""
+    if ! freshness_rows=$(printf '%s' "$DOMAIN_HEURISTICS_JSON" | jq -r '.freshness_requirements[]? | "\(.topic)\t\(.max_age_days // 0)"' 2>/dev/null); then
+        log_system_warning "$SESSION_DIR" "quality_gate.heuristics_parse_failure" "freshness_requirements" "file=$HEURISTICS_FILE"
+        freshness_rows=""
+    fi
     while IFS=$'\t' read -r topic limit; do
         [[ -z "$topic" ]] && continue
         [[ -z "$limit" || "$limit" == "null" ]] && continue
         DOMAIN_TOPIC_LIMITS["$topic"]="$limit"
-    done < <(echo "$DOMAIN_HEURISTICS_JSON" | jq -r '.freshness_requirements[]? | "\(.topic)\t\(.max_age_days // 0)"' 2>/dev/null || echo "")
+    done <<< "$freshness_rows"
 
     if [[ ${#DOMAIN_TOPIC_LIMITS[@]} -gt 0 ]]; then
         max_limit=0
@@ -170,15 +181,30 @@ check_stakeholder_balance() {
     fi
 
     declare -A stakeholder_counts=()
+    local stakeholder_keys=""
+    if ! stakeholder_keys=$(printf '%s' "$DOMAIN_HEURISTICS_JSON" | jq -r '.stakeholder_categories | keys[]?' 2>/dev/null); then
+        log_system_warning "$SESSION_DIR" "quality_gate.heuristics_parse_failure" "stakeholder_categories" "file=$HEURISTICS_FILE"
+        stakeholder_keys=""
+    fi
     while IFS= read -r category; do
         [[ -z "$category" ]] && continue
         stakeholder_counts["$category"]=0
-    done < <(echo "$DOMAIN_HEURISTICS_JSON" | jq -r '.stakeholder_categories | keys[]?' 2>/dev/null || echo "")
+    done <<< "$stakeholder_keys"
 
     local sample_limit=5
     local -a uncategorized_samples=()
     DOMAIN_TOTAL_SOURCES=0
     DOMAIN_UNCATEGORIZED_COUNT=0
+
+    local source_stream=""
+    if [[ -f "$kg_file" ]] && jq empty "$kg_file" >/dev/null 2>&1; then
+        if ! source_stream=$(jq -c '.claims[]? | .sources[]?' "$kg_file" 2>/dev/null); then
+            log_system_warning "$SESSION_DIR" "quality_gate.kg_parse_failure" "claims_sources" "file=$kg_file"
+            source_stream=""
+        fi
+    else
+        log_system_warning "$SESSION_DIR" "quality_gate.kg_missing" "claims_sources" "file=$kg_file"
+    fi
 
     while IFS= read -r source_json; do
         [[ -z "$source_json" || "$source_json" == "null" ]] && continue
@@ -200,10 +226,35 @@ check_stakeholder_balance() {
                 uncategorized_samples+=("$sample")
             fi
         fi
-    done < <(jq -c '.claims[]? | .sources[]?' "$kg_file" 2>/dev/null || echo "")
+    done <<< "$source_stream"
 
+    # Track skipped samples for data loss visibility
+    DOMAIN_UNCATEGORIZED_SKIPPED=0
     if ((${#uncategorized_samples[@]} > 0)); then
-        DOMAIN_UNCATEGORIZED_SAMPLES_JSON=$(printf '%s\n' "${uncategorized_samples[@]}" | jq -s '.' 2>/dev/null || echo '[]')
+        # Validate each sample is JSON before slurping
+        local valid_samples=()
+        local skipped_count=0
+        for sample in "${uncategorized_samples[@]}"; do
+            if jq_validate_json "$sample"; then
+                valid_samples+=("$sample")
+            else
+                log_system_warning "$session_dir" "quality_gate_validation" \
+                    "Skipping invalid JSON sample" "${sample:0:100}"
+                skipped_count=$((skipped_count + 1))
+            fi
+        done
+        
+        DOMAIN_UNCATEGORIZED_SKIPPED=$skipped_count
+        
+        if ((${#valid_samples[@]} > 0)); then
+            local temp_samples
+            temp_samples=$(create_temp_file "qg-samples")
+            printf '%s\n' "${valid_samples[@]}" > "$temp_samples"
+            DOMAIN_UNCATEGORIZED_SAMPLES_JSON=$(jq_slurp_array "$temp_samples" '[]')
+            rm -f "$temp_samples"
+        else
+            DOMAIN_UNCATEGORIZED_SAMPLES_JSON='[]'
+        fi
     else
         DOMAIN_UNCATEGORIZED_SAMPLES_JSON='[]'
     fi
@@ -222,6 +273,11 @@ check_stakeholder_balance() {
     fi
 
     local missing_critical=()
+    local stakeholder_entries=""
+    if ! stakeholder_entries=$(printf '%s' "$DOMAIN_HEURISTICS_JSON" | jq -r '.stakeholder_categories | to_entries[]? | "\(.key)\t\(.value.importance)"' 2>/dev/null); then
+        log_system_warning "$SESSION_DIR" "quality_gate.heuristics_parse_failure" "stakeholder_criticality" "file=$HEURISTICS_FILE"
+        stakeholder_entries=""
+    fi
     while IFS=$'\t' read -r category importance; do
         [[ -z "$category" ]] && continue
         if [[ "$importance" == "critical" ]]; then
@@ -229,7 +285,7 @@ check_stakeholder_balance() {
                 missing_critical+=("$category")
             fi
         fi
-    done < <(echo "$DOMAIN_HEURISTICS_JSON" | jq -r '.stakeholder_categories | to_entries[]? | "\(.key)\t\(.value.importance)"' 2>/dev/null || echo "")
+    done <<< "$stakeholder_entries"
 
     if [[ ${#missing_critical[@]} -gt 0 ]]; then
         local missing_list
@@ -266,6 +322,21 @@ check_mandatory_milestones() {
     fi
 
     local missing_critical=()
+    local watch_items=""
+    if ! watch_items=$(printf '%s' "$DOMAIN_HEURISTICS_JSON" | jq -c '.mandatory_watch_items[]?' 2>/dev/null); then
+        log_system_warning "$SESSION_DIR" "quality_gate.heuristics_parse_failure" "mandatory_watch_items" "file=$HEURISTICS_FILE"
+        watch_items=""
+    fi
+
+    local claims_stream=""
+    if [[ -f "$kg_file" ]] && jq empty "$kg_file" >/dev/null 2>&1; then
+        if ! claims_stream=$(jq -c '.claims[]?' "$kg_file" 2>/dev/null); then
+            log_system_warning "$SESSION_DIR" "quality_gate.kg_parse_failure" "claims_list" "file=$kg_file"
+            claims_stream=""
+        fi
+    else
+        log_system_warning "$SESSION_DIR" "quality_gate.kg_missing" "claims_list" "file=$kg_file"
+    fi
 
     while IFS= read -r watch_item_json; do
         [[ -z "$watch_item_json" || "$watch_item_json" == "null" ]] && continue
@@ -281,13 +352,13 @@ check_mandatory_milestones() {
                 found=true
                 break
             fi
-        done < <(jq -c '.claims[]?' "$kg_file" 2>/dev/null || echo "")
+        done <<< "$claims_stream"
         if [[ "$found" == false ]]; then
             local canonical
             canonical=$(echo "$watch_item_json" | jq -r '.canonical // ""')
             [[ -n "$canonical" ]] && missing_critical+=("$canonical")
         fi
-    done < <(echo "$DOMAIN_HEURISTICS_JSON" | jq -c '.mandatory_watch_items[]?' 2>/dev/null || echo "")
+    done <<< "$watch_items"
 
     if [[ ${#missing_critical[@]} -gt 0 ]]; then
         local missing_list
@@ -673,6 +744,7 @@ if [[ "$DOMAIN_AWARE" == "true" && -n "$DOMAIN_HEURISTICS_JSON" && "$UNCAT_WARN_
         --argjson total "${DOMAIN_TOTAL_SOURCES:-0}" \
         --arg pct "${DOMAIN_UNCATEGORIZED_PCT:-0}" \
         --argjson samples "$samples_json" \
+        --argjson skipped "${DOMAIN_UNCATEGORIZED_SKIPPED:-0}" \
         --arg action "$action_msg" \
         --argjson alert "$threshold_flag" \
         '{
@@ -680,7 +752,9 @@ if [[ "$DOMAIN_AWARE" == "true" && -n "$DOMAIN_HEURISTICS_JSON" && "$UNCAT_WARN_
             total: $total,
             percentage: ($pct | tonumber),
             samples: $samples,
-            action_required: (if ($alert == true and $count > 0) then $action else null end)
+            skipped_invalid_json: $skipped,
+            action_required: (if ($alert == true and $count > 0) then $action else null end),
+            data_loss_warning: (if $skipped > 0 then "Skipped \($skipped) invalid JSON entries; check logs/system-errors.log for details" else null end)
         }')
 fi
 

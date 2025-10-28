@@ -40,7 +40,11 @@ generate_provenance() {
     bash_version="${BASH_VERSION:-unknown}"
     
     local jq_version
-    jq_version=$(jq --version 2>/dev/null || echo "unknown")
+    if command -v jq >/dev/null 2>&1; then
+        jq_version=$(jq --version)
+    else
+        jq_version="unknown"
+    fi
     
     local curl_version
     curl_version=$(curl --version 2>/dev/null | head -n 1 || echo "unknown")

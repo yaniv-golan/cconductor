@@ -14,6 +14,11 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+
+      - name: Install lint dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y jq ripgrep
       
       - name: Install ShellCheck
         run: |
@@ -32,6 +37,15 @@ jobs:
             shellcheck "$file" || exit 1
           done
           echo "✓ All scripts passed ShellCheck"
+
+      - name: Run jq lint
+        run: |
+          bash scripts/lint-jq-patterns.sh
+          bash scripts/audit-jq-usage.sh /tmp/jq-audit-ci.json
+
+      - name: Check bash runtime usage
+        run: |
+          bash scripts/lint-bash-runtime.sh
 
   test-scripts:
     name: Test Scripts
@@ -107,4 +121,3 @@ jobs:
               fi
             fi
           done
-

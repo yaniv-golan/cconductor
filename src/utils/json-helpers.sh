@@ -70,15 +70,17 @@ json_get_field() {
     fi
     
     local value
-    value=$(jq -r "$field // empty" "$file" 2>/dev/null || echo "")
-    
-    if [[ -z "$value" || "$value" == "null" ]]; then
-        echo "$default"
-        return 1
+    if value=$(safe_jq_from_file "$file" "$field // empty" "$default" "${CCONDUCTOR_SESSION_DIR:-}" "json_get_field" "true"); then
+        if [[ -z "$value" || "$value" == "null" ]]; then
+            echo "$default"
+            return 1
+        fi
+        echo "$value"
+        return 0
     fi
-    
-    echo "$value"
-    return 0
+
+    echo "$default"
+    return 1
 }
 
 # Check if field exists in JSON
@@ -111,12 +113,12 @@ json_array_append() {
     fi
     
     # Validate item is valid JSON
-    if ! echo "$item" | jq empty 2>/dev/null; then
+    if ! jq_validate_json "$item"; then
         log_error "Item is not valid JSON"
         return 1
     fi
-    
-    # Use atomic_json_update from shared-state
+
+    # Use atomic_json_update from shared-state with validated payload
     atomic_json_update "$file" --argjson item "$item" \
         "${array_path} += [\$item]"
 }
@@ -230,6 +232,192 @@ json_slurp_array() {
     return 1
 }
 
+# ============================================================================
+# jq Safety Layer - Validation and safe argument building
+# Added per jq-encapsulation-layer plan to prevent jq failures
+# ============================================================================
+
+# Validate that a value is valid JSON
+# Usage: jq_validate_json "$value"
+# Returns: 0 if valid JSON, 1 if invalid
+# Note: Uses printf instead of echo to preserve whitespace and avoid escape sequence issues
+jq_validate_json() {
+    local value="$1"
+    
+    # Empty string is not valid JSON
+    if [[ -z "$value" ]]; then
+        return 1
+    fi
+    
+    # Use printf to avoid echo's escape sequence interpretation
+    # Handles multi-line JSON correctly, preserves whitespace
+    if printf '%s' "$value" | jq empty 2>/dev/null; then
+        return 0
+    else
+        return 1
+    fi
+}
+
+# Escape a shell string to JSON string literal
+# Usage: json_str=$(jq_escape_string "my string")
+# Returns: JSON-escaped string on stdout
+jq_escape_string() {
+    local string="$1"
+    
+    # Use jq itself to safely escape the string
+    jq -n --arg val "$string" '$val'
+}
+
+# Build --argjson argument safely with validation
+# Usage: jq_build_argjson ARRAY_NAME var_name json_value
+# Appends the validated `--argjson` tuple to the provided array by name.
+jq_build_argjson() {
+    local array_name="$1"
+    shift
+    local var_name="$1"
+    shift
+    local value="$1"
+    local session_dir="${CCONDUCTOR_SESSION_DIR:-}"
+
+    if [[ -z "$array_name" || ! "$array_name" =~ ^[a-zA-Z_][a-zA-Z0-9_]*$ ]]; then
+        log_error "[jq_build_argjson] Invalid array name: '$array_name'"
+        return 1
+    fi
+
+    if ! jq_validate_json "$value"; then
+        if [[ -n "$session_dir" ]] && command -v log_system_error &>/dev/null; then
+            log_system_error "$session_dir" "jq_build_argjson" \
+                "Invalid JSON for --argjson '$var_name'" \
+                "value: ${value:0:200}"
+        else
+            log_error "[jq_build_argjson] Invalid JSON for '$var_name': ${value:0:200}"
+        fi
+        return 1
+    fi
+
+    local var_quoted value_quoted
+    printf -v var_quoted '%q' "$var_name"
+    printf -v value_quoted '%q' "$value"
+
+    eval "$array_name+=(\"--argjson\" $var_quoted $value_quoted)"
+    return 0
+}
+
+# Alias for json_slurp_array (consistent naming)
+# Usage: jq_slurp_array file.json ["[]"]
+jq_slurp_array() {
+    json_slurp_array "$@"
+}
+
+# Read JSON object from file with fallback
+# Usage: jq_read_object file.json ['{}']
+# Returns: JSON object on success, fallback value on failure (default: '{}')
+jq_read_object() {
+    local file="$1"
+    local fallback="${2:-\{\}}"
+    
+    # Empty or missing file
+    if [[ ! -s "$file" ]]; then
+        echo "$fallback"
+        return 0
+    fi
+    
+    # Attempt read with validation
+    local result
+    if result=$(jq '.' "$file" 2>/dev/null) && [[ -n "$result" ]]; then
+        # Validate it's actually a JSON object (not array)
+        local type
+        type=$(echo "$result" | jq -r 'type' 2>/dev/null)
+        if [[ "$type" == "object" ]]; then
+            echo "$result"
+            return 0
+        elif [[ "$type" == "array" ]]; then
+            log_warn "jq_read_object: $file contains array, not object; using fallback"
+            echo "$fallback"
+            return 1
+        else
+            log_warn "jq_read_object: $file contains $type, not object; using fallback"
+            echo "$fallback"
+            return 1
+        fi
+    fi
+    
+    # Fallback on any error
+    log_warn "jq_read_object: failed to parse $file, using fallback"
+    echo "$fallback"
+    return 1
+}
+
+# Safely evaluate jq against a JSON string with validation and logging
+# Usage: safe_jq_from_json "$json" '<jq_filter>' '<fallback>' [session_dir] [context] [raw_output=true] [strict=false]
+safe_jq_from_json() {
+    local json_payload="$1"
+    local jq_filter="$2"
+    local fallback="$3"
+    local session_dir="${4:-}"
+    local context="${5:-jq_safe_json}"
+    local raw_output="${6:-true}"
+    local strict_mode="${7:-false}"
+    local -a jq_args=()
+
+    [[ "$raw_output" == "true" ]] && jq_args+=(-r)
+
+    if jq_validate_json "$json_payload"; then
+        if [[ "${#jq_args[@]}" -gt 0 ]]; then
+            printf '%s' "$json_payload" | jq "${jq_args[@]}" "$jq_filter"
+        else
+            printf '%s' "$json_payload" | jq "$jq_filter"
+        fi
+        return 0
+    fi
+
+    if [[ -n "$session_dir" ]] && command -v log_system_warning &>/dev/null; then
+        log_system_warning "$session_dir" "jq_json_parse_failure" "$context" "payload_snippet=${json_payload:0:200}"
+    else
+        log_warn "[jq_json_parse_failure] $context: ${json_payload:0:200}"
+    fi
+    printf '%s' "$fallback"
+    if [[ "$strict_mode" == "true" ]]; then
+        return 1
+    fi
+    return 0
+}
+
+# Safely evaluate jq against a JSON file (ensures file exists + valid JSON)
+# Usage: safe_jq_from_file path '<jq_filter>' '<fallback>' [session_dir] [context] [raw_output=true] [strict=false]
+safe_jq_from_file() {
+    local file_path="$1"
+    local jq_filter="$2"
+    local fallback="$3"
+    local session_dir="${4:-}"
+    local context="${5:-jq_safe_file}"
+    local raw_output="${6:-true}"
+    local strict_mode="${7:-false}"
+    local -a jq_args=()
+
+    [[ "$raw_output" == "true" ]] && jq_args+=(-r)
+
+    if [[ -f "$file_path" ]] && jq empty "$file_path" >/dev/null 2>&1; then
+        if [[ "${#jq_args[@]}" -gt 0 ]]; then
+            jq "${jq_args[@]}" "$jq_filter" "$file_path"
+        else
+            jq "$jq_filter" "$file_path"
+        fi
+        return 0
+    fi
+
+    if [[ -n "$session_dir" ]] && command -v log_system_warning &>/dev/null; then
+        log_system_warning "$session_dir" "jq_file_parse_failure" "$context" "file=$file_path"
+    else
+        log_warn "[jq_file_parse_failure] $context: $file_path"
+    fi
+    printf '%s' "$fallback"
+    if [[ "$strict_mode" == "true" ]]; then
+        return 1
+    fi
+    return 0
+}
+
 # Export functions
 export -f json_merge_files
 export -f json_get_field
@@ -240,4 +428,10 @@ export -f json_validate_structure
 export -f json_pretty
 export -f json_compact
 export -f json_slurp_array
-
+export -f jq_validate_json
+export -f jq_escape_string
+export -f jq_build_argjson
+export -f jq_slurp_array
+export -f jq_read_object
+export -f safe_jq_from_json
+export -f safe_jq_from_file

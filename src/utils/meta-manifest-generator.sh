@@ -8,6 +8,8 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=src/utils/core-helpers.sh
 # shellcheck disable=SC1091
 source "$SCRIPT_DIR/core-helpers.sh"
+# shellcheck disable=SC1091
+source "$SCRIPT_DIR/json-helpers.sh"
 
 hash_file() {
     if [ -x "$SCRIPT_DIR/hash-file.sh" ]; then
@@ -16,6 +18,22 @@ hash_file() {
         sha256sum "$1" 2>/dev/null | awk '{print $1}' || echo ""
     else
         shasum -a 256 "$1" 2>/dev/null | awk '{print $1}' || echo ""
+    fi
+}
+
+sanitize_number() {
+    local value="${1:-}"
+    local fallback="${2:-0}"
+
+    if [[ -z "$value" || "$value" == "null" ]]; then
+        printf '%s' "$fallback"
+        return 0
+    fi
+
+    if [[ "$value" =~ ^-?[0-9]+([.][0-9]+)?$ ]]; then
+        printf '%s' "$value"
+    else
+        printf '%s' "$fallback"
     fi
 }
 
@@ -46,9 +64,17 @@ generate_manifest() {
 
     local session_id objective created_at status
     session_id=$(basename "$session_dir")
-    objective=$(jq -r '.objective // .research_question // "N/A"' "$session_json" 2>/dev/null || echo "N/A")
-    created_at=$(jq -r '.created_at // "unknown"' "$session_json" 2>/dev/null || echo "unknown")
-    status=$(jq -r '.status // "unknown"' "$session_json" 2>/dev/null || echo "unknown")
+
+    session_field() {
+        local filter="$1"
+        local fallback="$2"
+        local context="$3"
+        safe_jq_from_file "$session_json" "$filter" "$fallback" "$session_dir" "meta_manifest.$context"
+    }
+
+    objective=$(session_field '.objective // .research_question // "N/A"' "N/A" "objective")
+    created_at=$(session_field '.created_at // "unknown"' "unknown" "created_at")
+    status=$(session_field '.status // "unknown"' "unknown" "status")
 
     local kg_entities=0
     local kg_claims=0
@@ -56,10 +82,9 @@ generate_manifest() {
     local kg_checksum=""
     local knowledge_file="$session_dir/$knowledge_rel/knowledge-graph.json"
     if [ -f "$knowledge_file" ]; then
-        kg_entities=$(jq -r '.stats.total_entities // 0' "$knowledge_file" 2>/dev/null || echo "0")
-        kg_claims=$(jq -r '.stats.total_claims // 0' "$knowledge_file" 2>/dev/null || echo "0")
-        kg_sources=$(jq -r '
-            (
+        kg_entities=$(safe_jq_from_file "$knowledge_file" '.stats.total_entities // 0' "0" "$session_dir" "knowledge.entities")
+        kg_claims=$(safe_jq_from_file "$knowledge_file" '.stats.total_claims // 0' "0" "$session_dir" "knowledge.claims")
+        local kg_sources_filter='(
                 [
                     (.claims // [])[]?.sources[]? |
                     ((.url // "") + "|" + (.title // "") + "|" + (.relevant_quote // ""))
@@ -69,10 +94,13 @@ generate_manifest() {
                     ((.url // "") + "|" + (.title // "") + "|" + (.excerpt // ""))
                 ]
             )
-            | map(select(. != "")) | unique | length
-        ' "$knowledge_file" 2>/dev/null || echo "0")
+            | map(select(. != "")) | unique | length'
+        kg_sources=$(safe_jq_from_file "$knowledge_file" "$kg_sources_filter" "0" "$session_dir" "knowledge.sources" "false")
         kg_checksum=$(hash_file "$knowledge_file")
     fi
+    kg_entities=$(sanitize_number "$kg_entities")
+    kg_claims=$(sanitize_number "$kg_claims")
+    kg_sources=$(sanitize_number "$kg_sources")
 
     local report_exists=false
     local report_file="$session_dir/$report_rel/mission-report.md"
@@ -95,12 +123,14 @@ generate_manifest() {
     if [ -d "$session_dir/$artifacts_rel" ]; then
         artifact_count=$(find "$session_dir/$artifacts_rel" -type f -name "*.json" 2>/dev/null | wc -l | tr -d ' ')
     fi
+    artifact_count=$(sanitize_number "$artifact_count")
 
     local event_count=0
     local events_file="$session_dir/$logs_rel/events.jsonl"
     if [ -f "$events_file" ]; then
         event_count=$(wc -l < "$events_file" 2>/dev/null | tr -d ' ')
     fi
+    event_count=$(sanitize_number "$event_count")
 
     jq -n \
         --arg id "$session_id" \

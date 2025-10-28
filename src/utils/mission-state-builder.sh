@@ -12,6 +12,8 @@ source "$SCRIPT_DIR/json-helpers.sh"
 # shellcheck disable=SC1091
 source "$SCRIPT_DIR/budget-tracker.sh" 2>/dev/null || true
 
+BASH_RUNTIME="${CCONDUCTOR_BASH_RUNTIME:-$(command -v bash)}"
+
 build_mission_state() {
     local session_dir="$1"
 
@@ -25,21 +27,23 @@ build_mission_state() {
 
     local kg_file="$session_dir/knowledge/knowledge-graph.json"
     local heuristics_file="$meta_dir/domain-heuristics.json"
-    local kg_json
-    kg_json=$(cat "$kg_file" 2>/dev/null || echo '{}')
 
-    local claims_count entities_count sources_count
-    claims_count=$(echo "$kg_json" | jq '.claims | length' 2>/dev/null || echo '0')
-    entities_count=$(echo "$kg_json" | jq '.entities | length' 2>/dev/null || echo '0')
-    sources_count=$(echo "$kg_json" | jq '[.claims[]? | .sources[]?] | unique_by(.url) | length' 2>/dev/null || echo '0')
+    local claims_count="0"
+    local entities_count="0"
+    local sources_count="0"
+    if [[ -f "$kg_file" ]]; then
+        claims_count=$(safe_jq_from_file "$kg_file" '.claims | length' '0' "$session_dir" "mission_state.claims")
+        entities_count=$(safe_jq_from_file "$kg_file" '.entities | length' '0' "$session_dir" "mission_state.entities")
+        sources_count=$(safe_jq_from_file "$kg_file" '[.claims[]? | .sources[]?] | unique_by(.url) | length' '0' "$session_dir" "mission_state.sources" "false")
+    fi
 
     local spent_usd="0"
     local spent_invocations="0"
     if command -v budget_status >/dev/null 2>&1; then
         local budget_state
         budget_state=$(budget_status "$session_dir" 2>/dev/null || echo '{}')
-        spent_usd=$(echo "$budget_state" | jq -r '.spent.cost_usd // 0' 2>/dev/null || echo '0')
-        spent_invocations=$(echo "$budget_state" | jq -r '.spent.agent_invocations // 0' 2>/dev/null || echo '0')
+        spent_usd=$(safe_jq_from_json "$budget_state" '.spent.cost_usd // 0' '0' "$session_dir" "mission_state.spent_usd")
+        spent_invocations=$(safe_jq_from_json "$budget_state" '.spent.agent_invocations // 0' '0' "$session_dir" "mission_state.spent_invocations")
     else
         local budget_file="$meta_dir/budget.json"
         if [[ -f "$budget_file" ]]; then
@@ -56,13 +60,23 @@ build_mission_state() {
 
     local compliance_json='{}'
     if [[ -f "$heuristics_file" && -f "$SCRIPT_DIR/domain-compliance-check.sh" ]]; then
-        compliance_json=$(bash "$SCRIPT_DIR/domain-compliance-check.sh" "$session_dir" 2>/dev/null || echo '{}')
+        compliance_json=$("$BASH_RUNTIME" "$SCRIPT_DIR/domain-compliance-check.sh" "$session_dir" 2>/dev/null || echo '{}')
     fi
 
     local orch_log="$session_dir/logs/orchestration.jsonl"
     local recent_decisions='[]'
     if [[ -f "$orch_log" ]]; then
-        recent_decisions=$(tail -5 "$orch_log" 2>/dev/null | jq -s '.' 2>/dev/null || echo '[]')
+        local decision_tail
+        decision_tail=$(tail -5 "$orch_log" 2>/dev/null || true)
+        if [ -n "$decision_tail" ]; then
+            if recent_decisions=$(printf '%s\n' "$decision_tail" | jq -s '.' 2>/dev/null); then
+                :
+            else
+                recent_decisions='[]'
+            fi
+        else
+            recent_decisions='[]'
+        fi
     fi
 
     local tmp_file="$meta_dir/mission_state.json.tmp"

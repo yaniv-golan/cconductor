@@ -20,6 +20,59 @@ source "$SCRIPT_DIR/json-parser.sh" 2>/dev/null || {
     }
 }
 
+# shellcheck disable=SC1091
+source "$SCRIPT_DIR/core-helpers.sh"
+# shellcheck disable=SC1091
+source "$SCRIPT_DIR/json-helpers.sh"
+
+safe_export_journal_from_file() {
+    local file_path="$1"
+    local jq_filter="$2"
+    local fallback="${3:-}"
+    local context="${4:-export_journal}"
+    local session_dir="${CCONDUCTOR_SESSION_DIR:-}"
+    local value="$fallback"
+
+    if [[ -z "$file_path" || ! -f "$file_path" ]]; then
+        printf '%s' "$fallback"
+        return 0
+    fi
+
+    local extracted
+    if extracted=$(safe_jq_from_file "$file_path" "$jq_filter" "$fallback" "$session_dir" "$context"); then
+        value="$extracted"
+    else
+        value="$fallback"
+    fi
+
+    printf '%s' "$value"
+    return 0
+}
+
+safe_export_journal_from_json() {
+    local json_payload="$1"
+    local jq_filter="$2"
+    local fallback="${3:-}"
+    local context="${4:-export_journal}"
+    local session_dir="${CCONDUCTOR_SESSION_DIR:-}"
+    local value="$fallback"
+
+    if [[ -z "$json_payload" ]]; then
+        printf '%s' "$fallback"
+        return 0
+    fi
+
+    local extracted
+    if extracted=$(safe_jq_from_json "$json_payload" "$jq_filter" "$fallback" "$session_dir" "$context"); then
+        value="$extracted"
+    else
+        value="$fallback"
+    fi
+
+    printf '%s' "$value"
+    return 0
+}
+
 # Helper function to format credibility (peer_reviewed -> Peer Reviewed, academic -> Academic)
 format_credibility() {
     local cred="$1"
@@ -299,7 +352,7 @@ render_evidence_section() {
     fi
 
     local claim_count
-    claim_count=$(jq '.claims | length' "$evidence_file" 2>/dev/null || echo 0)
+    claim_count=$(safe_export_journal_from_file "$evidence_file" '(.claims // []) | length' "0" "evidence.claim_count")
     if [[ "$claim_count" -eq 0 ]]; then
         return
     fi
@@ -318,6 +371,58 @@ render_evidence_section() {
 export_journal() {
     local session_dir="$1"
     local output_file="${2:-$session_dir/report/research-journal.md}"
+
+    safe_file_json() {
+        local file_path="$1"
+        local jq_filter="$2"
+        local fallback="$3"
+        local context="$4"
+        local value
+        if value=$(safe_jq_from_file "$file_path" "$jq_filter" "$fallback" "$session_dir" "export_journal.${context:-file}" "true"); then
+            printf '%s' "$value"
+        else
+            printf '%s' "$fallback"
+        fi
+    }
+
+    safe_file_json_raw() {
+        local file_path="$1"
+        local jq_filter="$2"
+        local fallback="$3"
+        local context="$4"
+        local value
+        if value=$(safe_jq_from_file "$file_path" "$jq_filter" "$fallback" "$session_dir" "export_journal.${context:-file}" "false"); then
+            printf '%s' "$value"
+        else
+            printf '%s' "$fallback"
+        fi
+    }
+
+    safe_payload_json() {
+        local payload="$1"
+        local jq_filter="$2"
+        local fallback="$3"
+        local context="$4"
+        local value
+        if value=$(safe_jq_from_json "$payload" "$jq_filter" "$fallback" "$session_dir" "export_journal.${context:-payload}" "true"); then
+            printf '%s' "$value"
+        else
+            printf '%s' "$fallback"
+        fi
+    }
+
+    safe_payload_json_raw() {
+        local payload="$1"
+        local jq_filter="$2"
+        local fallback="$3"
+        local context="$4"
+        local value
+        if value=$(safe_jq_from_json "$payload" "$jq_filter" "$fallback" "$session_dir" "export_journal.${context:-payload}" "false"); then
+            printf '%s' "$value"
+        else
+            printf '%s' "$fallback"
+        fi
+    }
 
     mkdir -p "$(dirname "$output_file")"
     
@@ -345,9 +450,9 @@ export_journal() {
     local objective="Unknown"
     local session_created=""
     if [ -f "$session_file" ]; then
-        question=$(jq -r '.question // "Unknown"' "$session_file" 2>/dev/null || echo "Unknown")
-        objective=$(jq -r '.objective // .question // "Unknown"' "$session_dir/meta/session.json" 2>/dev/null || echo "Unknown")
-        session_created=$(jq -r '.created_at // "unknown"' "$session_file" 2>/dev/null || echo "unknown")
+        question=$(safe_file_json "$session_file" '.question // "Unknown"' "Unknown" "session.question")
+        objective=$(safe_file_json "$session_file" '.objective // .question // "Unknown"' "Unknown" "session.objective")
+        session_created=$(safe_file_json "$session_file" '.created_at // "unknown"' "unknown" "session.created_at")
     fi
     
     # Load orchestration log for decision lookups
@@ -378,7 +483,7 @@ export_journal() {
         
         # Display output format if specified
         local output_spec
-        output_spec=$(jq -r '.output_specification // ""' "$session_file" 2>/dev/null)
+        output_spec=$(safe_file_json "$session_file" '.output_specification // ""' "" "session.output_spec")
         if [ -n "$output_spec" ] && [ "$output_spec" != "null" ]; then
             echo "**User's Format Requirements:**"
             echo ""
@@ -390,7 +495,7 @@ export_journal() {
         
         # Display research date
         local session_created
-        session_created=$(jq -r '.created_at // "unknown"' "$session_file" 2>/dev/null || echo "unknown")
+        session_created=$(safe_file_json "$session_file" '.created_at // "unknown"' "unknown" "session.created_at")
         if [ "$session_created" != "unknown" ]; then
             local formatted_date
             # Convert UTC to local time: parse UTC to epoch, then format in local timezone
@@ -407,9 +512,9 @@ export_journal() {
         
         # Display runtime information
         local cconductor_ver claude_ver mission_name
-        cconductor_ver=$(jq -r '.runtime.cconductor_version // .version // "unknown"' "$session_file" 2>/dev/null || echo "unknown")
-        claude_ver=$(jq -r '.runtime.claude_code_version // "unknown"' "$session_file" 2>/dev/null || echo "unknown")
-        mission_name=$(jq -r '.mission_name // "unknown"' "$session_file" 2>/dev/null || echo "unknown")
+        cconductor_ver=$(safe_file_json "$session_file" '.runtime.cconductor_version // .version // "unknown"' "unknown" "session.runtime_cconductor")
+        claude_ver=$(safe_file_json "$session_file" '.runtime.claude_code_version // "unknown"' "unknown" "session.claude_version")
+        mission_name=$(safe_file_json "$session_file" '.mission_name // "unknown"' "unknown" "session.mission_name")
         
         if [ "$cconductor_ver" != "unknown" ] || [ "$claude_ver" != "unknown" ] || [ "$mission_name" != "unknown" ]; then
             echo "**Research Environment:**"
@@ -445,7 +550,7 @@ export_journal() {
         # Get iteration count from dashboard metrics
         local dashboard_metrics="$session_dir/viewer/dashboard-metrics.json"
         if [ -f "$dashboard_metrics" ]; then
-            total_iterations=$(jq -r '.iteration // 0' "$dashboard_metrics" 2>/dev/null || echo "0")
+            total_iterations=$(safe_file_json "$dashboard_metrics" '.iteration // 0' "0" "dashboard.iteration")
         fi
         
         # Get findings statistics
@@ -499,13 +604,13 @@ export_journal() {
         local input_manifest="$session_dir/inputs/input-files.json"
         if [ -f "$input_manifest" ]; then
             local input_dir_path
-            input_dir_path=$(jq -r '.input_dir // ""' "$input_manifest" 2>/dev/null)
+            input_dir_path=$(safe_file_json "$input_manifest" '.input_dir // ""' "" "inputs.input_dir")
             
             if [ -n "$input_dir_path" ] && [ "$input_dir_path" != "" ]; then
                 local pdf_count md_count txt_count
-                pdf_count=$(jq '.pdfs | length' "$input_manifest" 2>/dev/null || echo "0")
-                md_count=$(jq '.markdown | length' "$input_manifest" 2>/dev/null || echo "0")
-                txt_count=$(jq '.text | length' "$input_manifest" 2>/dev/null || echo "0")
+                pdf_count=$(safe_file_json "$input_manifest" '(.pdfs // []) | length' "0" "inputs.pdf_count")
+                md_count=$(safe_file_json "$input_manifest" '(.markdown // []) | length' "0" "inputs.md_count")
+                txt_count=$(safe_file_json "$input_manifest" '(.text // []) | length' "0" "inputs.txt_count")
                 local total_count=$((pdf_count + md_count + txt_count))
                 
                 if [ "$total_count" -gt 0 ]; then
@@ -601,7 +706,13 @@ export_journal() {
                     if [ "$agent" = "mission-orchestrator" ] && [ "$has_orchestration_log" = true ]; then
                         local iteration_number timestamp_minute
                         timestamp_minute="${clean_timestamp%:??Z}"
-                        iteration_number=$(grep "$timestamp_minute" "$orchestration_log" 2>/dev/null | head -1 | jq -r '.decision.iteration // 0' 2>/dev/null || echo "0")
+                        local orchestration_entry
+                        orchestration_entry=$(grep "$timestamp_minute" "$orchestration_log" 2>/dev/null | head -1 || true)
+                        if [[ -n "$orchestration_entry" ]]; then
+                            iteration_number=$(safe_export_journal_from_json "$orchestration_entry" '.decision.iteration // 0' "0" "orchestration.iteration_lookup")
+                        else
+                            iteration_number="0"
+                        fi
                         
                         if [ "$iteration_number" != "0" ] && [ "$iteration_number" != "$current_iteration" ]; then
                             current_iteration=$iteration_number
@@ -933,7 +1044,7 @@ export_journal() {
                     # Show technical details in collapsed section after results
                     if [ "$model" != "unknown" ]; then
                         local tools
-                        tools=$(echo "$line" | jq -r '.data.tools // "N/A"' 2>/dev/null || echo "N/A")
+                        tools=$(safe_export_journal_from_json "$line" '.data.tools // "N/A"' "N/A" "agent_invocation.tools")
                         echo "> [!note]- ⚙️ Configuration"
                         echo ">"
                         echo "> - Model: \`$model\`"
@@ -1048,7 +1159,7 @@ export_journal() {
                                 
                                 # Extract gaps from the parsed result
                                 local gaps_count
-                                gaps_count=$(echo "$result_json" | jq '[.knowledge_graph_updates.gaps_detected // [], .next_steps // []] | length' 2>/dev/null || echo "0")
+                                gaps_count=$(safe_export_journal_from_json "$result_json" '[.knowledge_graph_updates.gaps_detected // [], .next_steps // []] | length' "0" "planner.gaps_count")
                                 if [ "$gaps_count" -gt 0 ]; then
                                     echo "**Research Gaps Identified:**"
                                     echo ""
@@ -1058,7 +1169,7 @@ export_journal() {
                                 
                                 # Extract contradictions from the parsed result
                                 local contradictions_count
-                                contradictions_count=$(echo "$result_json" | jq '[.knowledge_graph_updates.contradictions_detected // []] | length' 2>/dev/null || echo "0")
+                                contradictions_count=$(safe_export_journal_from_json "$result_json" '[.knowledge_graph_updates.contradictions_detected // []] | length' "0" "planner.contradictions_count")
                                 if [ "$contradictions_count" -gt 0 ]; then
                                     echo "**Contradictions Detected:**"
                                     echo ""
@@ -1135,7 +1246,7 @@ export_journal() {
                                 
                                 # Extract key themes
                                 local themes_count
-                                themes_count=$(jq '[.synthesis.key_themes // []] | length' "$synthesis_file" 2>/dev/null || echo "0")
+                                themes_count=$(safe_file_json "$synthesis_file" '[.synthesis.key_themes // []] | length' "0" "synthesis.key_themes")
                                 if [ "$themes_count" -gt 0 ]; then
                                     echo "**Key Themes:**"
                                     echo ""
@@ -1145,7 +1256,7 @@ export_journal() {
                                 
                                 # Extract remaining gaps
                                 local remaining_gaps
-                                remaining_gaps=$(jq '[.synthesis.remaining_gaps // []] | length' "$synthesis_file" 2>/dev/null || echo "0")
+                                remaining_gaps=$(safe_file_json "$synthesis_file" '[.synthesis.remaining_gaps // []] | length' "0" "synthesis.remaining_gaps")
                                 if [ "$remaining_gaps" -gt 0 ]; then
                                     echo "**Remaining Knowledge Gaps:**"
                                     echo ""
@@ -1198,7 +1309,7 @@ export_journal() {
                             
                             # Extract entities
                             local entities_count
-                            entities_count=$(jq '(.entities_discovered // []) | length' "$findings_file" 2>/dev/null || echo "0")
+                            entities_count=$(safe_file_json "$findings_file" '(.entities_discovered // []) | length' "0" "findings.entities")
                             if [ "$entities_count" -gt 0 ]; then
                                 echo "**Entities Discovered ($entities_count):**"
                                 echo ""
@@ -1208,7 +1319,7 @@ export_journal() {
                             
                             # Extract claims
                             local claims_count
-                            claims_count=$(jq '(.claims // []) | length' "$findings_file" 2>/dev/null || echo "0")
+                            claims_count=$(safe_file_json "$findings_file" '(.claims // []) | length' "0" "findings.claims")
                             if [ "$claims_count" -gt 0 ]; then
                                 # Limit to first 10 for brevity
                                 local display_count=$((claims_count > 10 ? 10 : claims_count))
@@ -1233,7 +1344,7 @@ export_journal() {
                             
                             # Show gaps if any
                             local gaps_count
-                            gaps_count=$(jq '[.gaps_identified // []] | length' "$findings_file" 2>/dev/null || echo "0")
+                            gaps_count=$(safe_file_json "$findings_file" '[.gaps_identified // []] | length' "0" "findings.gaps")
                             if [ "$gaps_count" -gt 0 ]; then
                                 echo "**Gaps Identified:**"
                                 echo ""
@@ -1313,9 +1424,9 @@ export_journal() {
                     local kg_file="$session_dir/knowledge/knowledge-graph.json"
                     local claims=0 entities=0 citations=0
                     if [ -f "$kg_file" ]; then
-                        claims=$(jq -r '.stats.total_claims // 0' "$kg_file" 2>/dev/null || echo "0")
-                        entities=$(jq -r '.stats.total_entities // 0' "$kg_file" 2>/dev/null || echo "0")
-                        citations=$(jq -r '.stats.total_citations // 0' "$kg_file" 2>/dev/null || echo "0")
+                        claims=$(safe_file_json "$kg_file" '.stats.total_claims // 0' "0" "kg.total_claims")
+                        entities=$(safe_file_json "$kg_file" '.stats.total_entities // 0' "0" "kg.total_entities")
+                        citations=$(safe_file_json "$kg_file" '.stats.total_citations // 0' "0" "kg.total_citations")
                     fi
                     
                     echo "## Research Investigation Complete"
@@ -1345,7 +1456,7 @@ export_journal() {
                                 echo "  🔍 Web Search: \"$input_summary\"" >> "$tool_log_file"
                                 # Increment counter
                                 local count
-                                count=$(jq -r '.searches // 0' "$tool_counts_file" 2>/dev/null || echo "0")
+                                count=$(safe_file_json "$tool_counts_file" '.searches // 0' "0" "tool_counts.searches")
                                 jq --arg count "$((count + 1))" '.searches = ($count | tonumber)' "$tool_counts_file" > "$tool_counts_file.tmp" && mv "$tool_counts_file.tmp" "$tool_counts_file"
                             fi
                             ;;
@@ -1354,7 +1465,7 @@ export_journal() {
                                 echo "  📄 Fetching: <$input_summary>" >> "$tool_log_file"
                                 # Increment counter
                                 local count
-                                count=$(jq -r '.fetches // 0' "$tool_counts_file" 2>/dev/null || echo "0")
+                                count=$(safe_file_json "$tool_counts_file" '.fetches // 0' "0" "tool_counts.fetches")
                                 jq --arg count "$((count + 1))" '.fetches = ($count | tonumber)' "$tool_counts_file" > "$tool_counts_file.tmp" && mv "$tool_counts_file.tmp" "$tool_counts_file"
                             fi
                             ;;
@@ -1363,7 +1474,7 @@ export_journal() {
                                 echo "  📋 Planning: $input_summary" >> "$tool_log_file"
                                 # Increment counter
                                 local count
-                                count=$(jq -r '.plans // 0' "$tool_counts_file" 2>/dev/null || echo "0")
+                                count=$(safe_file_json "$tool_counts_file" '.plans // 0' "0" "tool_counts.plans")
                                 jq --arg count "$((count + 1))" '.plans = ($count | tonumber)' "$tool_counts_file" > "$tool_counts_file.tmp" && mv "$tool_counts_file.tmp" "$tool_counts_file"
                             fi
                             ;;
@@ -1375,7 +1486,7 @@ export_journal() {
                                 echo "  💾 Saving: $relative_path" >> "$tool_log_file"
                                 # Increment counter
                                 local count
-                                count=$(jq -r '.saves // 0' "$tool_counts_file" 2>/dev/null || echo "0")
+                                count=$(safe_file_json "$tool_counts_file" '.saves // 0' "0" "tool_counts.saves")
                                 jq --arg count "$((count + 1))" '.saves = ($count | tonumber)' "$tool_counts_file" > "$tool_counts_file.tmp" && mv "$tool_counts_file.tmp" "$tool_counts_file"
                             fi
                             ;;
@@ -1384,7 +1495,7 @@ export_journal() {
                                 echo "  🔎 Searching for: $input_summary" >> "$tool_log_file"
                                 # Increment counter
                                 local count
-                                count=$(jq -r '.greps // 0' "$tool_counts_file" 2>/dev/null || echo "0")
+                                count=$(safe_file_json "$tool_counts_file" '.greps // 0' "0" "tool_counts.greps")
                                 jq --arg count "$((count + 1))" '.greps = ($count | tonumber)' "$tool_counts_file" > "$tool_counts_file.tmp" && mv "$tool_counts_file.tmp" "$tool_counts_file"
                             fi
                             ;;

@@ -7,6 +7,9 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
 
+# shellcheck disable=SC1091
+source "$PROJECT_ROOT/src/utils/json-helpers.sh"
+
 # Test counter
 TESTS_RUN=0
 TESTS_FAILED=0
@@ -64,7 +67,11 @@ assert_json_field() {
     local description="${4:-}"
     
     local actual
-    actual=$(jq -r "$field" "$file" 2>/dev/null || echo "")
+    if actual=$(safe_jq_from_file "$file" "$field" "" "" "test_input_dir.field" "true"); then
+        :
+    else
+        actual=""
+    fi
     
     if [ "$actual" = "$expected" ]; then
         echo "  ✓ PASS: $field = $expected $description"
@@ -83,7 +90,11 @@ assert_json_array_length() {
     local description="${4:-}"
     
     local actual
-    actual=$(jq "$field | length" "$file" 2>/dev/null || echo "0")
+    if actual=$(safe_jq_from_file "$file" "$field | length" "0" "" "test_input_dir.length" "true"); then
+        :
+    else
+        actual="0"
+    fi
     
     if [ "$actual" = "$expected" ]; then
         echo "  ✓ PASS: $field has $expected items $description"
@@ -361,4 +372,3 @@ else
     echo "❌ $TESTS_FAILED test case(s) failed"
     exit 1
 fi
-

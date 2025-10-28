@@ -5,23 +5,22 @@
 
 set -euo pipefail
 
-# Find project root robustly (hooks may run in various contexts)
+# Find project root and session directory via shared bootstrap
 HOOK_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-if [[ -n "${CLAUDE_PROJECT_DIR:-}" ]]; then
-    PROJECT_ROOT="$CLAUDE_PROJECT_DIR"
-else
-    search_path="$HOOK_DIR"
-    while [[ "$search_path" != "/" ]]; do
-        if [[ -f "$search_path/VERSION" ]]; then
-            PROJECT_ROOT="$search_path"
-            break
-        fi
-        search_path="$(dirname "$search_path")"
-    done
-    if [[ -z "${PROJECT_ROOT:-}" ]]; then
-        PROJECT_ROOT="$(cd "$HOOK_DIR/../../.." && pwd)"
-    fi
+# shellcheck disable=SC1091
+source "$HOOK_DIR/hook-bootstrap.sh"
+
+hook_resolve_roots "${BASH_SOURCE[0]}"
+resolved_repo="${HOOK_REPO_ROOT:-}"
+resolved_session="${HOOK_SESSION_DIR:-}"
+
+if [[ -z "$resolved_repo" ]]; then
+    resolved_repo="$(cd "$HOOK_DIR/../../.." && pwd)"
 fi
+
+PROJECT_ROOT="$resolved_repo"
+SESSION_DIR="$resolved_session"
+session_dir="$SESSION_DIR"
 ROOT="$PROJECT_ROOT"
 
 # Source core helpers with fallback (hooks must never fail)
@@ -35,6 +34,9 @@ source "$PROJECT_ROOT/src/utils/core-helpers.sh" 2>/dev/null || {
     # shellcheck disable=SC2329
     log_warn() { printf '[%s] WARN: %s\n' "$(get_timestamp)" "$*" >&2; }
 }
+
+# shellcheck disable=SC1091
+source "$PROJECT_ROOT/src/utils/json-helpers.sh" 2>/dev/null || true
 
 # Source shared-state for atomic operations (with fallback)
 # shellcheck disable=SC1091
@@ -136,10 +138,27 @@ debug_log "hook_project_root_init $PROJECT_ROOT"
 # Read hook data from stdin
 hook_raw_input=$(cat)
 hook_data="$hook_raw_input"
+session_dir="${SESSION_DIR:-${CCONDUCTOR_SESSION_DIR:-}}"
+
+hook_field() {
+    local filter="$1"
+    local fallback="$2"
+    local context="$3"
+    safe_jq_from_json "$hook_data" "$filter" "$fallback" "$session_dir" "pre_tool.$context"
+}
+
+lookup_field() {
+    local payload="$1"
+    local filter="$2"
+    local fallback="$3"
+    local context="$4"
+    local raw="${5:-true}"
+    safe_jq_from_json "$payload" "$filter" "$fallback" "$session_dir" "pre_tool.$context" "$raw"
+}
 debug_log "hook_invoked raw_len=${#hook_raw_input}"
 
 # Extract tool information
-tool_name=$(echo "$hook_data" | jq -r '.tool_name // "unknown"' 2>/dev/null || echo "jq_error")
+tool_name=$(hook_field '.tool_name // "unknown"' 'unknown' 'tool_name')
 # Get agent name from environment (set by invoke-agent.sh)
 agent_name="${CCONDUCTOR_AGENT_NAME:-unknown}"
 debug_log "hook_context tool=$tool_name agent=$agent_name"
@@ -148,7 +167,7 @@ debug_log "hook_context tool=$tool_name agent=$agent_name"
 if [[ "$agent_name" == "mission-orchestrator" ]]; then
     case "$tool_name" in
         Read|Write|Edit|MultiEdit)
-            file_path=$(echo "$hook_data" | jq -r '.tool_input.file_path // ""')
+            file_path=$(hook_field '.tool_input.file_path // ""' '' 'tool_input.file_path')
             if [[ -n "$file_path" ]]; then
                 # Get absolute path
                 abs_path=$(safe_realpath "$file_path")
@@ -166,7 +185,7 @@ if [[ "$agent_name" == "mission-orchestrator" ]]; then
             ;;
         Bash)
             # Only allow whitelisted utility scripts
-            command=$(echo "$hook_data" | jq -r '.tool_input.command // ""')
+            command=$(hook_field '.tool_input.command // ""' '' 'tool_input.command')
             
             # Whitelist of safe utility scripts
             if [[ "$command" =~ ^(src/utils/calculate\.sh|src/utils/kg-utils\.sh|src/utils/data-utils\.sh) ]]; then
@@ -191,51 +210,48 @@ tool_input_summary=""
 tool_input_details=""
 case "$tool_name" in
     WebSearch)
-        tool_input_summary=$(echo "$hook_data" | jq -r '.tool_input.query // "no query"')
+        tool_input_summary=$(hook_field '.tool_input.query // "no query"' 'no query' 'tool_input.query')
         ;;
     WebFetch)
-        tool_input_summary=$(echo "$hook_data" | jq -r '.tool_input.url // "no url"')
+        tool_input_summary=$(hook_field '.tool_input.url // "no url"' 'no url' 'tool_input.url')
         tool_input_details="$tool_input_summary"
         ;;
     Bash)
-        tool_input_summary=$(echo "$hook_data" | jq -r '.tool_input.command // "no command"')
+        tool_input_summary=$(hook_field '.tool_input.command // "no command"' 'no command' 'tool_input.command_summary')
         tool_input_details="$tool_input_summary"
         ;;
     Read)
-        tool_input_summary=$(echo "$hook_data" | jq -r '.tool_input.file_path // "no path"')
+        tool_input_summary=$(hook_field '.tool_input.file_path // "no path"' 'no path' 'tool_input.file_path_read')
         ;;
     Write|Edit|MultiEdit)
-        tool_input_summary=$(echo "$hook_data" | jq -r '.tool_input.file_path // "no path"')
+        tool_input_summary=$(hook_field '.tool_input.file_path // "no path"' 'no path' 'tool_input.file_path_edit')
         ;;
     Glob)
-        tool_input_summary=$(echo "$hook_data" | jq -r '.tool_input.pattern // "no pattern"')
+        tool_input_summary=$(hook_field '.tool_input.pattern // "no pattern"' 'no pattern' 'tool_input.pattern_glob')
         ;;
     Grep)
         # Show search pattern (most relevant info for grep)
-        tool_input_summary=$(echo "$hook_data" | jq -r '.tool_input.pattern // "pattern"')
+        tool_input_summary=$(hook_field '.tool_input.pattern // "pattern"' 'pattern' 'tool_input.pattern_grep')
         ;;
     TodoWrite)
         # Extract high-priority or in-progress todos (most relevant)
         # Format: "content (status)" for up to 3 most important tasks
-        tool_input_summary=$(echo "$hook_data" | jq -r '
-            [.tool_input.todos[]? | 
-             select(.priority == "high" or .status == "in_progress") | 
-             .content] | 
-            .[0:3] | 
-            join("; ")' 2>/dev/null)
+        tool_input_summary=$(hook_field '[.tool_input.todos[]? | select(.priority == "high" or .status == "in_progress") | .content] | .[0:3] | join("; ")' '' 'tool_input.todo_high')
         # Fallback: if no high-priority tasks, show first 3 todos
         if [[ -z "$tool_input_summary" ]]; then
-            tool_input_summary=$(echo "$hook_data" | jq -r '[.tool_input.todos[]?.content // empty] | .[0:3] | join("; ")' 2>/dev/null || echo "tasks")
+            tool_input_summary=$(hook_field '[.tool_input.todos[]?.content // empty] | .[0:3] | join("; ")' 'tasks' 'tool_input.todo_any')
         fi
         ;;
     *)
-        tool_input_summary=$(echo "$hook_data" | jq -r '.tool_input | keys | join(", ")' 2>/dev/null || echo "...")
+        tool_input_summary=$(hook_field '.tool_input | keys | join(", ")' '...' 'tool_input.generic')
         ;;
 esac
 
-session_dir="${CCONDUCTOR_SESSION_DIR:-}"
+if [[ -z "${session_dir:-}" ]]; then
+    session_dir="${SESSION_DIR:-${CCONDUCTOR_SESSION_DIR:-}}"
+fi
 if [[ -z "$session_dir" ]]; then
-    transcript_path=$(echo "$hook_data" | jq -r '.transcript_path // ""')
+    transcript_path=$(hook_field '.transcript_path // ""' '' 'transcript_path')
     if [[ -n "$transcript_path" && "$transcript_path" != "null" ]]; then
         session_dir="$(dirname "$transcript_path")"
     elif [[ -f "logs/events.jsonl" ]]; then
@@ -335,16 +351,16 @@ fi
 
 # WebSearch cache guard (avoid redundant billed queries)
 if [[ "$tool_name" == "WebSearch" ]]; then
-    query=$(echo "$hook_data" | jq -r '.tool_input.query // empty')
+query=$(hook_field '.tool_input.query // empty' '' 'web_search.query')
     debug_log "web_search_guard_start query_length=${#query}"
     if [[ -n "$query" ]] && command -v web_search_cache_lookup >/dev/null 2>&1 && web_search_cache_enabled; then
         lookup_json=$(web_search_cache_lookup "$query")
-        status=$(echo "$lookup_json" | jq -r '.status // "miss"')
+        status=$(lookup_field "$lookup_json" '.status // "miss"' 'miss' 'search_cache.status')
         debug_log "web_search_guard_status $status"
         case "$status" in
             hit)
                 display_query=$(web_search_cache_display_query "$query" 2>/dev/null || printf '%s' "$query")
-                stored_iso=$(echo "$lookup_json" | jq -r '.metadata.stored_at_iso // ""')
+                stored_iso=$(lookup_field "$lookup_json" '.metadata.stored_at_iso // ""' '' 'search_cache.stored_at_iso')
                 if [[ -z "$stored_iso" ]]; then
                     stored_iso=$(get_timestamp)
                 fi
@@ -352,12 +368,12 @@ if [[ "$tool_name" == "WebSearch" ]]; then
                 if [[ -n "$session_dir" ]]; then
                     materialized_path=$(web_search_cache_materialize_for_session "$session_dir" "$query" "$lookup_json" 2>/dev/null || echo "")
                 fi
-                result_count=$(echo "$lookup_json" | jq -r '.metadata.result_count // 0')
+                result_count=$(lookup_field "$lookup_json" '.metadata.result_count // 0' '0' 'search_cache.result_count')
                 if [[ -z "$result_count" || "$result_count" == "null" ]]; then
                     result_count=0
                 fi
-                match_ratio=$(echo "$lookup_json" | jq -r '.match_ratio // ""')
-                match_base_query=$(echo "$lookup_json" | jq -r '.match_base_query // ""')
+                match_ratio=$(lookup_field "$lookup_json" '.match_ratio // ""' '' 'search_cache.match_ratio')
+                match_base_query=$(lookup_field "$lookup_json" '.match_base_query // ""' '' 'search_cache.match_base')
                 # Cache hit detected - emit event for tailer to display
                 # Note: Hook stderr is captured by Claude CLI, so we emit events instead
                 # The event tailer reads logs/events.jsonl and displays formatted output
@@ -373,7 +389,7 @@ if [[ "$tool_name" == "WebSearch" ]]; then
                             --arg ts "$(get_timestamp)" \
                             --arg type "web_search_cache_hit" \
                             --arg query "$display_query" \
-                            --arg normalized "$(echo "$lookup_json" | jq -r '.normalized_query // ""')" \
+                            --arg normalized "$(lookup_field "$lookup_json" '.normalized_query // ""' '' 'search_cache.normalized_query')" \
                             --arg path "$materialized_path" \
                             --arg status "$status" \
                             --arg count "$result_count" \
@@ -419,18 +435,18 @@ if [[ "$tool_name" == "WebSearch" ]]; then
                 debug_log "web_search_guard_hit path=${materialized_path:-none}"
                 payload_file="$materialized_path"
                 if [[ -z "$payload_file" ]]; then
-                    payload_file=$(echo "$lookup_json" | jq -r '.object_path // empty')
+                    payload_file=$(lookup_field "$lookup_json" '.object_path // empty' '' 'search_cache.object_path')
                 fi
                 if [[ -n "$payload_file" && -f "$payload_file" ]]; then
                     jq -n \
                         --arg status "$status" \
                         --arg stored "$stored_iso" \
-                        --argfile payload "$payload_file" \
+                        --slurpfile payload "$payload_file" \
                         '{
                             cache_hit: true,
                             cache_status: $status,
                             stored_at: (if $stored == "" then null else $stored end),
-                            tool_output: $payload
+                            tool_output: ($payload[0] // null)
                         }'
                     exit 0
                 fi
@@ -466,7 +482,7 @@ guard_library_sources=""
 
 # LibraryMemory guard for WebFetch (enforce cache reuse)
 if [[ "$tool_name" == "WebFetch" ]]; then
-    url=$(echo "$hook_data" | jq -r '.tool_input.url // empty')
+url=$(hook_field '.tool_input.url // empty' '' 'web_fetch.url')
     guard_detail="$url"
     guard_reason="allow:no_url"
     debug_log "guard_start tool=$tool_name url=$url session_dir=${session_dir:-}"
@@ -506,7 +522,7 @@ if [[ "$tool_name" == "WebFetch" ]]; then
                     digest_path="$library_sources_dir/${url_hash}.json"
                     debug_log "guard_digest_path $digest_path"
                     if [[ -f "$digest_path" ]]; then
-                        last_updated=$(jq -r '.last_updated // empty' "$digest_path" 2>/dev/null || echo "")
+                        last_updated=$(safe_jq_from_file "$digest_path" '.last_updated // empty' '' "$session_dir" "digest.last_updated")
                         is_fresh=0
                         if [[ -n "$last_updated" ]]; then
                             if [[ "$ttl_days" -lt 0 ]]; then
@@ -633,7 +649,7 @@ fi
 
 # Backup existing files before Write tool executes (for JSON validation rollback)
 if [[ "$tool_name" == "Write" ]]; then
-    file_path=$(echo "$hook_data" | jq -r '.tool_input.file_path // empty')
+file_path=$(hook_field '.tool_input.file_path // empty' '' 'file_watch.file_path')
     if [[ -n "$file_path" && -f "$file_path" ]]; then
         backup_root=""
         if [[ -n "$session_dir" ]]; then
@@ -652,18 +668,18 @@ fi
 # Cache + knowledge graph advisory for WebFetch
 if [[ "$tool_name" == "WebFetch" && -n "$session_dir" ]]; then
     if command -v web_cache_lookup >/dev/null 2>&1 && web_cache_enabled; then
-        url=$(echo "$hook_data" | jq -r '.tool_input.url // empty')
+        url=$(hook_field '.tool_input.url // empty' '' 'library.url_check')
         if [[ -n "$url" ]]; then
             force_fetch=0
             if command -v web_cache_load_config >/dev/null 2>&1; then
                 config=$(web_cache_load_config)
                 fresh_params=()
-                fresh_list=$(echo "$config" | jq -r '.fresh_url_parameters[]?')
-                if [[ -n "$fresh_list" ]]; then
+                fresh_params_json=$(safe_jq_from_json "$config" '.fresh_url_parameters // []' '[]' "$session_dir" "web_cache.fresh_params" "false")
+                if [[ -n "$fresh_params_json" ]]; then
                     while IFS= read -r param; do
                         [[ -z "$param" ]] && continue
                         fresh_params+=("$param")
-                    done <<< "$fresh_list"
+                    done < <(jq -r '.[]?' <<< "$fresh_params_json")
                 fi
                 for param in "${fresh_params[@]}"; do
                     if [[ "$url" == *"$param"* ]]; then
@@ -675,7 +691,7 @@ if [[ "$tool_name" == "WebFetch" && -n "$session_dir" ]]; then
 
             if [ "$force_fetch" -eq 0 ]; then
                 lookup_json=$(web_cache_lookup "$url")
-                status=$(echo "$lookup_json" | jq -r '.status // "miss"')
+                status=$(lookup_field "$lookup_json" '.status // "miss"' 'miss' 'web_cache.status')
                 if [[ "$status" == "hit" ]]; then
                     materialized_path=$(web_cache_materialize_for_session "$session_dir" "$url" "$lookup_json" 2>/dev/null || echo "")
                     if [[ -n "$materialized_path" ]]; then
@@ -683,7 +699,7 @@ if [[ "$tool_name" == "WebFetch" && -n "$session_dir" ]]; then
                         if command -v kg_find_source_by_url >/dev/null 2>&1; then
                             kg_summary=$(kg_find_source_by_url "$session_dir" "$url" 2>/dev/null || echo "")
                         fi
-                        stored_iso=$(echo "$lookup_json" | jq -r 'if .metadata.stored_at then (.metadata.stored_at | gmtime | strftime("%Y-%m-%dT%H:%M:%SZ")) else "" end' 2>/dev/null || printf '')
+                stored_iso=$(lookup_field "$lookup_json" 'if .metadata.stored_at then (.metadata.stored_at | gmtime | strftime("%Y-%m-%dT%H:%M:%SZ")) else "" end' '' 'web_cache.stored_at' )
                         if [[ -z "$stored_iso" ]]; then
                             stored_iso="unknown"
                         fi
@@ -715,13 +731,13 @@ Use the Read tool on the cached file. Append '?fresh=1' to the URL if you must f
                                             status: $status,
                                             kg_summary: (if $summary == "" then null else $summary end)
                                         }
-                                    }' >> "$session_dir/logs/events.jsonl"
+                                    }' -c >> "$session_dir/logs/events.jsonl"
                                 rmdir "$lock_file" 2>/dev/null || true
                             fi
                         fi
-                        status_code=$(echo "$lookup_json" | jq -r '.metadata.status_code // 200')
-                        content_type=$(echo "$lookup_json" | jq -r '.metadata.content_type // ""')
-                        headers_json=$(echo "$lookup_json" | jq '.metadata.headers // {}')
+                        status_code=$(lookup_field "$lookup_json" '.metadata.status_code // 200' '200' 'web_cache.status_code')
+                        content_type=$(lookup_field "$lookup_json" '.metadata.content_type // ""' '' 'web_cache.content_type')
+                        headers_json=$(lookup_field "$lookup_json" '.metadata.headers // {}' '{}' 'web_cache.headers' 'false')
                         jq -n \
                             --arg path "$materialized_path" \
                             --arg status "$status_code" \
@@ -768,12 +784,8 @@ if [ -n "$session_dir" ] && [ -d "$session_dir" ]; then
     while true; do
         if mkdir "$lock_file" 2>/dev/null; then
             # Lock acquired - write event
-            echo "$hook_data" | jq -c \
-                --arg ts "$timestamp" \
-                --arg type "tool_use_start" \
-                --argjson data "$event_data" \
-                '{timestamp: $ts, type: $type, data: $data}' \
-                >> "$session_dir/logs/events.jsonl" 2>/dev/null
+            jq -n -c --arg ts "$timestamp" --arg type "tool_use_start" --argjson data "$event_data" \
+                '{timestamp: $ts, type: $type, data: $data}' >> "$session_dir/logs/events.jsonl" 2>/dev/null
             
             # Release lock
             rmdir "$lock_file" 2>/dev/null || true

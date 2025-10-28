@@ -23,6 +23,8 @@ source "$CCONDUCTOR_MISSION_SCRIPT_DIR/utils/mission-orchestration.sh"
 source "$CCONDUCTOR_MISSION_SCRIPT_DIR/utils/mission-session-init.sh"
 # shellcheck disable=SC1091
 source "$CCONDUCTOR_MISSION_SCRIPT_DIR/knowledge-graph.sh"
+# shellcheck disable=SC1091
+source "$PROJECT_ROOT/src/utils/json-helpers.sh"
 
 # Enable error traps for mission orchestration workflows
 if [[ "$(type -t setup_error_trap 2>/dev/null)" != "function" ]]; then
@@ -192,7 +194,9 @@ cmd_resume() {
     
     # Load mission profile from original session
     local mission_name
-    mission_name=$(jq -r '.mission_name // "general-research"' "$session_dir/meta/session.json" 2>/dev/null || echo "general-research")
+    if ! mission_name=$(safe_jq_from_file "$session_dir/meta/session.json" '.mission_name // "general-research"' "general-research" "$session_dir" "mission_cli.mission" "true" "true"); then
+        mission_name="general-research"
+    fi
     
     # Store mission_name in session if not present
     if ! jq -e '.mission_name' "$session_dir/meta/session.json" >/dev/null 2>&1; then

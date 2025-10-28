@@ -14,6 +14,8 @@ source "$SCRIPT_DIR/core-helpers.sh"
 source "$SCRIPT_DIR/error-messages.sh"
 # shellcheck disable=SC1091
 source "$SCRIPT_DIR/validation.sh"
+# shellcheck disable=SC1091
+source "$SCRIPT_DIR/json-helpers.sh"
 
 # Load dependencies
 # shellcheck disable=SC1091
@@ -185,7 +187,11 @@ mission_list() {
       if [[ "${missions[$mission_name]}" == "project" ]]; then
         local mission_file="$project_mission_dir/${mission_name}.json"
         local description
-        description=$(jq -r '.description' "$mission_file" 2>/dev/null || echo "")
+        if description=$(safe_jq_from_file "$mission_file" '.description // ""' "" "$mission_file" "mission_loader.project_description" "true" "true"); then
+            :
+        else
+            description=""
+        fi
         echo "  $mission_name - $description"
       fi
     done | sort
@@ -196,7 +202,11 @@ mission_list() {
       if [[ "${missions[$mission_name]}" == "user" ]]; then
         local mission_file="$user_mission_dir/${mission_name}.json"
         local description
-        description=$(jq -r '.description' "$mission_file" 2>/dev/null || echo "")
+        if description=$(safe_jq_from_file "$mission_file" '.description // ""' "" "$mission_file" "mission_loader.user_description" "true" "true"); then
+            :
+        else
+            description=""
+        fi
         echo "  $mission_name - $description"
       fi
     done | sort
@@ -288,4 +298,3 @@ mission_exists() {
   [[ -f "$user_mission_dir/${mission_name}.json" ]] || \
   [[ -f "$project_mission_dir/${mission_name}.json" ]]
 }
-

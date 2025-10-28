@@ -8,6 +8,10 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 
 # shellcheck disable=SC1091
+source "$PROJECT_ROOT/src/utils/core-helpers.sh"
+# shellcheck disable=SC1091
+source "$PROJECT_ROOT/src/utils/json-helpers.sh"
+# shellcheck disable=SC1091
 source "$PROJECT_ROOT/src/shared-state.sh"
 # shellcheck disable=SC1091
 source "$PROJECT_ROOT/src/utils/config-loader.sh"
@@ -327,8 +331,10 @@ web_search_cache_store() {
         printf '%s' "$results_json" > "$object_path"
     fi
 
-    local result_count
-    result_count=$(printf '%s' "$results_json" | jq 'if type=="array" then length else (if has("results") then (.results | length) else 0 end) end' 2>/dev/null || echo "0")
+    local result_count="0"
+    if ! result_count=$(safe_jq_from_json "$results_json" 'if type=="array" then length else (if has("results") then (.results | length) else 0 end) end' "0" "${CCONDUCTOR_SESSION_DIR:-}" "web_search_cache.result_count" "true" "true"); then
+        result_count="0"
+    fi
 
     local metadata_arg
     metadata_arg="$metadata_json"

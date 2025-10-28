@@ -8,6 +8,8 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # shellcheck disable=SC1091
 source "$SCRIPT_DIR/json-parser.sh" 2>/dev/null || true
+# shellcheck disable=SC1091
+source "$SCRIPT_DIR/json-helpers.sh"
 
 # Check if prompt needs parsing
 needs_prompt_parsing() {
@@ -19,7 +21,11 @@ needs_prompt_parsing() {
     fi
     
     local prompt_parsed
-    prompt_parsed=$(jq -r '.prompt_parsed // false' "$session_file" 2>/dev/null || echo "false")
+    if prompt_parsed=$(safe_jq_from_file "$session_file" '.prompt_parsed // false' "false" "$session_dir" "prompt_parser.prompt_parsed" "true"); then
+        :
+    else
+        prompt_parsed="false"
+    fi
     
     if [ "$prompt_parsed" = "false" ]; then
         return 0  # Needs parsing
@@ -62,7 +68,11 @@ parse_prompt() {
         local agent_output="$session_dir/work/prompt-parser/output.json"
         if [ -f "$agent_output" ]; then
             local result
-            result=$(jq -r '.result // empty' "$agent_output" 2>/dev/null || echo "")
+            if result=$(safe_jq_from_file "$agent_output" '.result // empty' "" "$session_dir" "prompt_parser.agent_result" "true"); then
+                :
+            else
+                result=""
+            fi
             
             if [ -n "$result" ]; then
                 # Extract JSON from result (handles markdown code fences)
@@ -151,4 +161,3 @@ parse_prompt() {
 # Export functions
 export -f needs_prompt_parsing
 export -f parse_prompt
-

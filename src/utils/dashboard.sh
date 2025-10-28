@@ -12,12 +12,66 @@ PROJECT_ROOT="$(dirname "$(dirname "$SCRIPT_DIR")")"
 source "$SCRIPT_DIR/core-helpers.sh"
 # shellcheck disable=SC1091
 source "$SCRIPT_DIR/error-messages.sh"
+# shellcheck disable=SC1091
+source "$SCRIPT_DIR/json-helpers.sh"
 
 # Source shared-state for atomic operations
 # shellcheck disable=SC1091
 source "$PROJECT_ROOT/src/shared-state.sh"
 # shellcheck disable=SC1091
 source "$SCRIPT_DIR/error-logger.sh" 2>/dev/null || true
+
+dashboard_jq_payload() {
+    local session_dir="$1"
+    local payload="$2"
+    local filter="$3"
+    local fallback="${4:-}"
+    local context="${5:-payload}"
+    local raw="${6:-true}"
+    safe_jq_from_json "$payload" "$filter" "$fallback" "$session_dir" "dashboard.${context}" "$raw"
+}
+
+dashboard_jq_file() {
+    local session_dir="$1"
+    local path="$2"
+    local filter="$3"
+    local fallback="${4:-}"
+    local context="${5:-file}"
+    local raw="${6:-true}"
+    safe_jq_from_file "$path" "$filter" "$fallback" "$session_dir" "dashboard.${context}" "$raw"
+}
+
+dashboard_sanitize_number() {
+    local value="${1:-}"
+    local fallback="${2:-0}"
+
+    if [[ -z "$value" || "$value" == "null" ]]; then
+        printf '%s' "$fallback"
+        return 0
+    fi
+
+    if [[ "$value" =~ ^-?[0-9]+([.][0-9]+)?$ ]]; then
+        printf '%s' "$value"
+    else
+        printf '%s' "$fallback"
+    fi
+}
+
+dashboard_ensure_json() {
+    local value="${1:-}"
+    local fallback="${2:-null}"
+
+    if [[ -z "$value" ]]; then
+        printf '%s' "$fallback"
+        return 0
+    fi
+
+    if jq_validate_json "$value"; then
+        printf '%s' "$value"
+    else
+        printf '%s' "$fallback"
+    fi
+}
 
 # ============================================================================
 # SECTION 1: Metrics Generation (from dashboard-metrics.sh)
@@ -45,9 +99,11 @@ dashboard_generate_metrics() {
     
     # Extract stats
     local iteration
-    iteration=$(echo "$kg" | jq '.iteration // 0')
+    iteration=$(dashboard_jq_payload "$session_dir" "$kg" '.iteration // 0' "0" "kg.iteration")
     local confidence
-    confidence=$(echo "$kg" | jq '.confidence_scores.overall // 0')
+    confidence=$(dashboard_jq_payload "$session_dir" "$kg" '.confidence_scores.overall // 0' "0" "kg.confidence")
+    iteration=$(dashboard_sanitize_number "$iteration")
+    confidence=$(dashboard_sanitize_number "$confidence")
     
     # NEW: Get agent invocation stats from events (v0.2.0 mission system)
     local total_invocations=0
@@ -55,67 +111,93 @@ dashboard_generate_metrics() {
         total_invocations=$(grep -c '"agent_invocation"' "$session_dir/logs/events.jsonl" 2>/dev/null || true)
         total_invocations=${total_invocations:-0}
     fi
-    
+    total_invocations=$(dashboard_sanitize_number "$total_invocations")
+
     local completed_invocations=0
     if [ -f "$session_dir/logs/events.jsonl" ]; then
         completed_invocations=$(grep -c '"agent_result"' "$session_dir/logs/events.jsonl" 2>/dev/null || true)
         completed_invocations=${completed_invocations:-0}
     fi
-    
+    completed_invocations=$(dashboard_sanitize_number "$completed_invocations")
+
     local in_progress
     in_progress=$((total_invocations - completed_invocations))
-    
+    in_progress=$(dashboard_sanitize_number "$in_progress")
+
     local failed=0
     if [ -f "$session_dir/logs/events.jsonl" ]; then
         failed=$(grep '"agent_result"' "$session_dir/logs/events.jsonl" 2>/dev/null | grep -c '"status":"failed"' 2>/dev/null || true)
         failed=${failed:-0}
     fi
+    failed=$(dashboard_sanitize_number "$failed")
     
     local entities
-    entities=$(echo "$kg" | jq '.stats.total_entities // 0')
+    entities=$(dashboard_jq_payload "$session_dir" "$kg" '.stats.total_entities // 0' "0" "kg.entities")
     local claims
-    claims=$(echo "$kg" | jq '.stats.total_claims // 0')
+    claims=$(dashboard_jq_payload "$session_dir" "$kg" '.stats.total_claims // 0' "0" "kg.claims")
     local citations
-    citations=$(echo "$kg" | jq '.stats.total_citations // 0')
+    citations=$(dashboard_jq_payload "$session_dir" "$kg" '.stats.total_citations // 0' "0" "kg.citations")
     local gaps
-    gaps=$(echo "$kg" | jq '.stats.unresolved_gaps // 0')
+    gaps=$(dashboard_jq_payload "$session_dir" "$kg" '.stats.unresolved_gaps // 0' "0" "kg.unresolved_gaps")
     local contradictions
-    contradictions=$(echo "$kg" | jq '.stats.unresolved_contradictions // 0')
+    contradictions=$(dashboard_jq_payload "$session_dir" "$kg" '.stats.unresolved_contradictions // 0' "0" "kg.unresolved_contradictions")
+    entities=$(dashboard_sanitize_number "$entities")
+    claims=$(dashboard_sanitize_number "$claims")
+    citations=$(dashboard_sanitize_number "$citations")
+    gaps=$(dashboard_sanitize_number "$gaps")
+    contradictions=$(dashboard_sanitize_number "$contradictions")
     
     # Calculate costs from events
     local total_cost
     total_cost=$(calculate_total_cost "$session_dir")
+    total_cost=$(dashboard_sanitize_number "$total_cost")
     
     # Calculate duration
     local created_at
-    created_at=$(echo "$session" | jq -r '.created_at // ""')
+    created_at=$(dashboard_jq_payload "$session_dir" "$session" '.created_at // ""' "" "session.created_at")
     local elapsed_seconds
     elapsed_seconds=$(calculate_elapsed_seconds "$created_at")
+    elapsed_seconds=$(dashboard_sanitize_number "$elapsed_seconds")
     
     # Extract session info
     local session_status
-    session_status=$(echo "$session" | jq -r '.status // "unknown"')
+    session_status=$(dashboard_jq_payload "$session_dir" "$session" '.status // "unknown"' "unknown" "session.status")
     local completed_at
-    completed_at=$(echo "$session" | jq -r '.completed_at // ""')
+    completed_at=$(dashboard_jq_payload "$session_dir" "$session" '.completed_at // ""' "" "session.completed_at")
     local research_question
-    research_question=$(echo "$session" | jq -r '.research_question // ""')
+    research_question=$(dashboard_jq_payload "$session_dir" "$session" '.research_question // ""' "" "session.research_question")
 
     local quality_gate
-    quality_gate=$(echo "$session" | jq '.quality_gate // null' 2>/dev/null || echo 'null')
+    quality_gate=$(dashboard_jq_payload "$session_dir" "$session" '.quality_gate // null' 'null' "session.quality_gate" "false")
+    quality_gate=$(dashboard_ensure_json "$quality_gate" "null")
     
     # NEW: Get active agents from recent orchestration decisions (v0.2.0)
-    local active_agents
-    active_agents='[]'
+    local active_agents='[]'
     if [ -f "$session_dir/logs/orchestration.jsonl" ]; then
-        active_agents=$(tail -20 "$session_dir/logs/orchestration.jsonl" 2>/dev/null | \
-            jq -s '[.[] | select(.type == "invoke" or .type == "reinvoke") | .decision.agent] | unique' 2>/dev/null || echo '[]')
+        local orchestration_tail
+        orchestration_tail=$(tail -20 "$session_dir/logs/orchestration.jsonl" 2>/dev/null || echo '')
+        if [[ -n "$orchestration_tail" ]]; then
+            local orchestration_json
+            orchestration_json=$(printf '%s\n' "$orchestration_tail" | jq -s 'map(select(type == "object"))' 2>/dev/null || echo '[]')
+            if jq_validate_json "$orchestration_json"; then
+                active_agents=$(dashboard_jq_payload "$session_dir" "$orchestration_json" '[.[] | select(.type == "invoke" or .type == "reinvoke") | .decision.agent] | unique' '[]' "orchestration.active_agents" "false")
+            else
+                active_agents='[]'
+            fi
+        fi
     fi
+    active_agents=$(dashboard_ensure_json "$active_agents" "[]")
     
     # Get system observations (last 20, most recent first)
     # Exclude resolved observations by checking for matching observation_resolved events
     local observations
-    observations=$(cat "$session_dir/logs/events.jsonl" 2>/dev/null | \
-        jq -s '
+    local observations='[]'
+    if [ -f "$session_dir/logs/events.jsonl" ]; then
+        local events_payload
+        events_payload=$(jq -s '.' "$session_dir/logs/events.jsonl" 2>/dev/null || echo '[]')
+        if [[ -n "$events_payload" ]]; then
+            # shellcheck disable=SC2016
+            observations=$(dashboard_jq_payload "$session_dir" "$events_payload" '
             # Get all observations
             (map(select(.type == "system_observation"))) as $all_obs |
             # Get all resolved observation components+text to filter out
@@ -131,7 +213,10 @@ dashboard_generate_metrics() {
                     ) | any) | not
                 )
             ) | .[-20:] | reverse
-        ' 2>/dev/null || echo '[]')
+        ' '[]' "events.observations" "false")
+        fi
+    fi
+    observations=$(dashboard_ensure_json "$observations" "[]")
     
     # Get error/warning counts from system-errors.log
     local error_count=0
@@ -144,6 +229,8 @@ dashboard_generate_metrics() {
         error_count=${error_count:-0}
         warning_count=${warning_count:-0}
     fi
+    error_count=$(dashboard_sanitize_number "$error_count")
+    warning_count=$(dashboard_sanitize_number "$warning_count")
     
     # Build metrics JSON
     # Use atomic write pattern: write to temp file, then atomic rename
@@ -248,15 +335,16 @@ calculate_total_cost() {
     
     # Sum cost_usd from all agent_result events
     # Events have structure: {type: "agent_result", data: {cost_usd: X}}
+    local events_payload
+    events_payload=$(jq -s '.' "$events_file" 2>/dev/null || echo '[]')
     local cost
-    cost=$(cat "$events_file" 2>/dev/null | \
-        jq -s 'map(select(.type == "agent_result") | .data.cost_usd // 0) | add // 0' 2>/dev/null)
-    
-    if [ -z "$cost" ] || [ "$cost" = "null" ]; then
+    if [[ -z "$events_payload" || "$events_payload" == "[]" ]]; then
         echo "0"
-    else
-        echo "$cost"
+        return
     fi
+    cost=$(safe_jq_from_json "$events_payload" 'map(select(.type == "agent_result") | .data.cost_usd // 0) | add // 0' "0" "$session_dir" "dashboard.total_cost" "false")
+    [[ -z "$cost" || "$cost" == "null" ]] && cost="0"
+    echo "$cost"
 }
 
 # Calculate elapsed seconds
@@ -549,7 +637,7 @@ dashboard_cleanup_orphans() {
         # Check if session is completed
         elif [ -f "$session_dir/meta/session.json" ]; then
             local status
-            status=$(jq -r '.status // "active"' "$session_dir/meta/session.json" 2>/dev/null || echo "active")
+            status=$(dashboard_jq_file "$session_dir" "$session_dir/meta/session.json" '.status // "active"' "active" "session.status_active")
             if [ "$status" = "completed" ]; then
                 is_stale=true
                 reason="session completed"

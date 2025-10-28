@@ -13,6 +13,10 @@ set -euo pipefail
 # Get script directory and source utilities
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck disable=SC1091
+source "$SCRIPT_DIR/core-helpers.sh"
+# shellcheck disable=SC1091
+source "$SCRIPT_DIR/json-helpers.sh"
+# shellcheck disable=SC1091
 source "$SCRIPT_DIR/path-resolver.sh"
 # shellcheck disable=SC1091
 source "$SCRIPT_DIR/config-loader.sh"
@@ -27,10 +31,18 @@ DOWNLOAD_TIMEOUT=60
 
 # Load PDF configuration using overlay pattern (user config overrides defaults)
 if PDF_CONFIG=$(load_config "pdf-config" 2>/dev/null); then
-    MAX_CACHE_SIZE_MB=$(echo "$PDF_CONFIG" | jq -r '.cache.max_size_mb // 5000')
-    MAX_AGE_DAYS=$(echo "$PDF_CONFIG" | jq -r '.cache.max_age_days // 90')
-    CLEANUP_ON_INIT=$(echo "$PDF_CONFIG" | jq -r '.cache.cleanup_on_init // false')
-    EVICTION_POLICY=$(echo "$PDF_CONFIG" | jq -r '.cache.eviction_policy // "lru"')
+    if ! jq_validate_json "$PDF_CONFIG"; then
+        log_warn "pdf-cache: invalid pdf-config JSON; using built-in defaults"
+        MAX_CACHE_SIZE_MB=5000
+        MAX_AGE_DAYS=90
+        CLEANUP_ON_INIT=false
+        EVICTION_POLICY="lru"
+    else
+        MAX_CACHE_SIZE_MB=$(safe_jq_from_json "$PDF_CONFIG" '.cache.max_size_mb // 5000' "5000" "" "pdf_cache.config.max_size")
+        MAX_AGE_DAYS=$(safe_jq_from_json "$PDF_CONFIG" '.cache.max_age_days // 90' "90" "" "pdf_cache.config.max_age")
+        CLEANUP_ON_INIT=$(safe_jq_from_json "$PDF_CONFIG" '.cache.cleanup_on_init // false' "false" "" "pdf_cache.config.cleanup")
+        EVICTION_POLICY=$(safe_jq_from_json "$PDF_CONFIG" '.cache.eviction_policy // "lru"' "lru" "" "pdf_cache.config.eviction")
+    fi
 else
     # Fallback to defaults if config loading fails
     MAX_CACHE_SIZE_MB=5000
@@ -639,7 +651,11 @@ verify_cache_integrity() {
     
     # Get array of cache keys
     local cache_keys_array=()
-    mapfile -t cache_keys_array < <(jq -r '.pdfs[].cache_key' "$index_file" 2>/dev/null)
+    if jq empty "$index_file" >/dev/null 2>&1; then
+        mapfile -t cache_keys_array < <(jq -r '.pdfs[]?.cache_key // empty' "$index_file")
+    else
+        log_warn "pdf-cache: invalid cache-index.json; skipping cache key enumeration"
+    fi
     
     # Check each indexed PDF exists
     for cache_key in "${cache_keys_array[@]}"; do
@@ -657,7 +673,10 @@ verify_cache_integrity() {
         else
             # Verify file integrity with stored hash
             local stored_hash
-            stored_hash=$(jq -r '.sha256' "$metadata_file" 2>/dev/null || echo "")
+            local stored_hash=""
+            if ! stored_hash=$(safe_jq_from_file "$metadata_file" '.sha256 // ""' "" "${CCONDUCTOR_SESSION_DIR:-}" "pdf_cache.verify.sha256" "true" "true"); then
+                stored_hash=""
+            fi
             if [ -n "$stored_hash" ]; then
                 local actual_hash
                 actual_hash=$("$SCRIPT_DIR/hash-file.sh" "$pdf_file")
@@ -708,12 +727,18 @@ rebuild_cache_index() {
             
             # Only include if PDF exists
             if [ -f "$pdf_file" ]; then
-                local url
-                url=$(jq -r '.url' "$metadata_file" 2>/dev/null || echo "")
-                local title
-                title=$(jq -r '.title' "$metadata_file" 2>/dev/null || echo "Unknown")
-                local cached_at
-                cached_at=$(jq -r '.cached_at' "$metadata_file" 2>/dev/null || echo "")
+                local url=""
+                if ! url=$(safe_jq_from_file "$metadata_file" '.url // ""' "" "${CCONDUCTOR_SESSION_DIR:-}" "pdf_cache.rebuild.url" "true" "true"); then
+                    url=""
+                fi
+                local title=""
+                if ! title=$(safe_jq_from_file "$metadata_file" '.title // "Unknown"' "Unknown" "${CCONDUCTOR_SESSION_DIR:-}" "pdf_cache.rebuild.title" "true" "true"); then
+                    title="Unknown"
+                fi
+                local cached_at=""
+                if ! cached_at=$(safe_jq_from_file "$metadata_file" '.cached_at // ""' "" "${CCONDUCTOR_SESSION_DIR:-}" "pdf_cache.rebuild.cached_at" "true" "true"); then
+                    cached_at=""
+                fi
                 
                 if [ -n "$url" ]; then
                     new_index=$(echo "$new_index" | jq \

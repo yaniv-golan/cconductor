@@ -23,7 +23,36 @@ if [[ -n "${CCONDUCTOR_ROOT:-}" ]] && [[ -f "$CCONDUCTOR_ROOT/src/utils/core-hel
 fi
 
 # shellcheck disable=SC1091
+if [[ -n "${CCONDUCTOR_ROOT:-}" ]] && [[ -f "$CCONDUCTOR_ROOT/src/utils/json-helpers.sh" ]]; then
+    source "$CCONDUCTOR_ROOT/src/utils/json-helpers.sh"
+fi
+
+# shellcheck disable=SC1091
 source "$CCONDUCTOR_ROOT/src/utils/session-utils.sh"
+
+tui_safe_json() {
+    local file_path="$1"
+    local jq_filter="$2"
+    local fallback="${3:-}"
+    local context="${4:-tui}"
+    local session_dir="${CCONDUCTOR_SESSION_DIR:-}"
+    local value="$fallback"
+
+    if [[ -z "$file_path" || ! -f "$file_path" ]]; then
+        printf '%s' "$fallback"
+        return 0
+    fi
+
+    local extracted
+    if extracted=$(safe_jq_from_file "$file_path" "$jq_filter" "$fallback" "$session_dir" "tui.${context}" "true"); then
+        value="$extracted"
+    else
+        value="$fallback"
+    fi
+
+    printf '%s' "$value"
+    return 0
+}
 
 # shellcheck disable=SC2034
 declare -a TUI_SESSION_PATHS=()
@@ -158,7 +187,7 @@ session_details_collect() {
     local mission
     mission=$(jq -r '.mission_name // "general-research"' "$session_path/meta/session.json" 2>/dev/null)
     local status_value
-    status_value=$(jq -r '.status // ""' "$session_path/meta/session.json" 2>/dev/null || echo "")
+    status_value=$(tui_safe_json "$session_path/meta/session.json" '.status // ""' "" "session.status")
 
     local created_display
     created_display=$(session_utils_pretty_timestamp "$created")
@@ -180,16 +209,16 @@ session_details_collect() {
 
     local total_cost=""
     if [ -f "$session_path/meta/mission-metrics.json" ]; then
-        total_cost=$(jq -r '.total_cost_usd // empty' "$session_path/meta/mission-metrics.json" 2>/dev/null || echo "")
+        total_cost=$(tui_safe_json "$session_path/meta/mission-metrics.json" '.total_cost_usd // empty' "" "mission_metrics.total_cost")
     fi
 
     local budget_cost=""
     local invocations=""
     local elapsed_minutes=""
     if [ -f "$session_path/meta/budget.json" ]; then
-        budget_cost=$(jq -r '.spent.cost_usd // empty' "$session_path/meta/budget.json" 2>/dev/null || echo "")
-        invocations=$(jq -r '.spent.agent_invocations // empty' "$session_path/meta/budget.json" 2>/dev/null || echo "")
-        elapsed_minutes=$(jq -r '.spent.elapsed_minutes // empty' "$session_path/meta/budget.json" 2>/dev/null || echo "")
+        budget_cost=$(tui_safe_json "$session_path/meta/budget.json" '.spent.cost_usd // empty' "" "budget.cost")
+        invocations=$(tui_safe_json "$session_path/meta/budget.json" '.spent.agent_invocations // empty' "" "budget.agent_invocations")
+        elapsed_minutes=$(tui_safe_json "$session_path/meta/budget.json" '.spent.elapsed_minutes // empty' "" "budget.elapsed_minutes")
     fi
 
     local cost_display=""
@@ -225,7 +254,7 @@ session_details_collect() {
 
     local iterations=""
     if [ -f "$session_path/viewer/dashboard-metrics.json" ]; then
-        iterations=$(jq -r '.iteration // empty' "$session_path/viewer/dashboard-metrics.json" 2>/dev/null || echo "")
+        iterations=$(tui_safe_json "$session_path/viewer/dashboard-metrics.json" '.iteration // empty' "" "dashboard.iteration")
     fi
     local iterations_display="$iterations"
     if [ -z "$iterations_display" ] || [ "$iterations_display" = "null" ]; then
@@ -327,7 +356,7 @@ show_session_process_status() {
     if [ "$found" -eq 0 ]; then
         report+="No active mission process for $session_id."$'\n'
         local status_value
-        status_value=$(jq -r '.status // ""' "$session_path/meta/session.json" 2>/dev/null || echo "")
+        status_value=$(tui_safe_json "$session_path/meta/session.json" '.status // ""' "" "session.status")
         if [ "$status_value" = "in_progress" ] || [ -z "$status_value" ] || [ "$status_value" = "running" ]; then
             report+="Session metadata indicates it may still be in progress."$'\n'
         fi
@@ -366,7 +395,7 @@ resume_session_interactive() {
     
     # Check if session is completed/exhausted
     local status_value
-    status_value=$(jq -r '.status // ""' "$session_path/meta/session.json" 2>/dev/null || echo "")
+    status_value=$(tui_safe_json "$session_path/meta/session.json" '.status // ""' "" "session.status")
     
     local extend_iterations=""
     local extend_time=""

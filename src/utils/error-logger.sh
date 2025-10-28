@@ -13,12 +13,13 @@ init_error_log() {
     local log_file="$session_dir/logs/system-errors.log"
 
     mkdir -p "$session_dir/logs"
-    
+
+    local previous_umask
+    previous_umask=$(umask)
+    umask 077
+
     # Create empty log file if it doesn't exist
     if [ ! -f "$log_file" ]; then
-        touch "$log_file"
-        
-        # Write header
         cat > "$log_file" <<EOF
 # CConductor System Error Log
 # Format: JSONL (one JSON object per line)
@@ -33,6 +34,8 @@ init_error_log() {
 #
 EOF
     fi
+
+    umask "$previous_umask"
 }
 
 # Log an error to session error log (critical failure)
@@ -146,7 +149,12 @@ get_error_summary() {
     fi
     
     # Convert to JSON array and get last 10 entries
-    echo "$entries" | jq -s '. | sort_by(.timestamp) | reverse | .[0:10]' 2>/dev/null || echo "[]"
+    local latest
+    if latest=$(echo "$entries" | jq -s '. | sort_by(.timestamp) | reverse | .[0:10]' 2>/dev/null); then
+        echo "$latest"
+    else
+        echo "[]"
+    fi
 }
 
 # Get error counts

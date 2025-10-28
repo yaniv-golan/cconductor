@@ -9,6 +9,23 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/core-helpers.sh"
 # shellcheck disable=SC1091
 source "$SCRIPT_DIR/config-loader.sh" 2>/dev/null || true
+safe_domain_json() {
+    local payload="$1"
+    local filter="$2"
+    local fallback="$3"
+    local context="$4"
+    safe_jq_from_json "$payload" "$filter" "$fallback" "" "domain_helpers.${context:-payload}" "true"
+}
+
+safe_domain_json_raw() {
+    local payload="$1"
+    local filter="$2"
+    local fallback="$3"
+    local context="$4"
+    safe_jq_from_json "$payload" "$filter" "$fallback" "" "domain_helpers.${context:-payload}" "false"
+}
+# shellcheck disable=SC1091
+source "$SCRIPT_DIR/json-helpers.sh"
 
 # Internal caches to avoid recomputing manual merges for every call
 __DOMAIN_HELPERS_LAST_INPUT=""
@@ -40,7 +57,7 @@ _domain_helpers_manual_patterns_path() {
     local config_json
     config_json=$(load_config "quality-gate" 2>/dev/null || echo '{}')
     local path
-    path=$(echo "$config_json" | jq -r '.manual_stakeholder_patterns.config_path // ""' 2>/dev/null || echo "")
+    path=$(safe_domain_json "$config_json" '.manual_stakeholder_patterns.config_path // ""' "" "manual_config_path")
 
     if [[ -z "$path" || "$path" == "null" ]]; then
         if [[ -n "${CCONDUCTOR_USER_CONFIG_DIR:-}" ]]; then
@@ -81,7 +98,7 @@ _domain_helpers_merge_manual_patterns() {
     printf '%s' "$heuristics_json" >"$tmp_heuristics"
 
     local merged
-    merged=$(jq -n \
+    if merged=$(jq -n \
         --slurpfile heur "$tmp_heuristics" \
         --slurpfile manual "$manual_path" '
             ($heur[0] // {}) as $h |
@@ -113,7 +130,13 @@ _domain_helpers_merge_manual_patterns() {
                     )
                 }
             end
-        ' 2>/dev/null || printf '%s' "$heuristics_json")
+        ');
+    then
+        :
+    else
+        log_warn "domain-helpers: failed to merge manual stakeholder patterns, using base heuristics"
+        merged="$heuristics_json"
+    fi
 
     rm -f "$tmp_heuristics"
     printf '%s' "$merged"
@@ -162,16 +185,23 @@ map_source_to_stakeholder() {
     fi
 
     local url title domain
-    url=$(echo "$source_json" | jq -r '.url // ""' 2>/dev/null || echo "")
-    title=$(echo "$source_json" | jq -r '.title // ""' 2>/dev/null || echo "")
+    url=$(safe_domain_json "$source_json" '.url // ""' "" "source.url")
+    title=$(safe_domain_json "$source_json" '.title // ""' "" "source.title")
     domain=$(_domain_helpers_extract_domain "$url")
     local domain_lc="${domain,,}"
 
-    while IFS=$'\t' read -r category category_data; do
-        [[ -z "$category" || -z "$category_data" ]] && continue
+    local category_entries
+    category_entries=$(safe_domain_json_raw "$effective" '.stakeholder_categories | to_entries' '[]' 'stakeholder_entries')
+
+    while IFS= read -r entry; do
+        local category
+        category=$(safe_domain_json "$entry" '.key' "" "stakeholder_entry.key")
+        [[ -z "$category" ]] && continue
 
         local matched=false
 
+        local domain_patterns_json
+        domain_patterns_json=$(safe_domain_json_raw "$entry" '.value.domain_patterns // []' '[]' "stakeholder_entry.domain_patterns")
         while IFS= read -r pattern; do
             [[ -z "$pattern" || "$pattern" == "null" ]] && continue
             local pattern_lc="${pattern,,}"
@@ -179,21 +209,23 @@ map_source_to_stakeholder() {
                 echo "$category"
                 return 0
             fi
-        done < <(echo "$category_data" | jq -r '.domain_patterns[]?' 2>/dev/null || echo "")
+        done < <(jq -r '.[]?' <<< "$domain_patterns_json")
 
+        local keyword_patterns_json
+        keyword_patterns_json=$(safe_domain_json_raw "$entry" '.value.keyword_patterns // []' '[]' "stakeholder_entry.keyword_patterns")
         while IFS= read -r keyword; do
             [[ -z "$keyword" || "$keyword" == "null" ]] && continue
             if printf '%s' "$title" | grep -qiF -- "$keyword"; then
                 matched=true
                 break
             fi
-        done < <(echo "$category_data" | jq -r '.keyword_patterns[]?' 2>/dev/null || echo "")
+        done < <(jq -r '.[]?' <<< "$keyword_patterns_json")
 
         if [[ "$matched" == true ]]; then
             echo "$category"
             return 0
         fi
-    done < <(echo "$effective" | jq -r '.stakeholder_categories | to_entries[]? | "\(.key)\t\(.value | tojson)"' 2>/dev/null || echo "")
+    done < <(jq -c '.[]' <<< "$category_entries")
 
     echo "uncategorized"
 }
@@ -209,16 +241,23 @@ infer_claim_topic() {
         return 0
     fi
 
-    while IFS=$'\t' read -r topic keywords; do
-        [[ -z "$topic" || -z "$keywords" ]] && continue
+    local freshness_entries
+    freshness_entries=$(safe_domain_json_raw "$effective" '.freshness_requirements // []' '[]' "freshness_requirements")
+
+    while IFS= read -r entry; do
+        local topic
+        topic=$(safe_domain_json "$entry" '.topic // ""' "" "freshness.topic")
+        [[ -z "$topic" ]] && continue
+        local keywords_json
+        keywords_json=$(safe_domain_json_raw "$entry" '.topic_keywords // []' '[]' "freshness.keywords")
         while IFS= read -r keyword; do
             [[ -z "$keyword" || "$keyword" == "null" ]] && continue
             if printf '%s' "$claim_statement" | grep -qiF -- "$keyword"; then
                 echo "$topic"
                 return 0
             fi
-        done <<< "$keywords"
-    done < <(echo "$effective" | jq -r '.freshness_requirements[]? | "\(.topic)\t\(.topic_keywords | join("\n"))"' 2>/dev/null || echo "")
+        done < <(jq -r '.[]?' <<< "$keywords_json")
+    done < <(jq -c '.[]' <<< "$freshness_entries")
 
     echo "unclassified"
 }
@@ -228,34 +267,38 @@ match_watch_item() {
     local claim_json="$2"
 
     local statement
-    statement=$(echo "$claim_json" | jq -r '.statement // ""' 2>/dev/null || echo "")
+    statement=$(safe_domain_json "$claim_json" '.statement // ""' "" "claim.statement")
     local canonical
-    canonical=$(echo "$watch_item_json" | jq -r '.canonical // ""' 2>/dev/null || echo "")
+    canonical=$(safe_domain_json "$watch_item_json" '.canonical // ""' "" "watch_item.canonical")
 
     if [[ -n "$canonical" ]] && printf '%s' "$statement" | grep -qiF -- "$canonical"; then
         return 0
     fi
 
+    local variants_json
+    variants_json=$(safe_domain_json_raw "$watch_item_json" '.variants // []' '[]' "watch_item.variants")
     while IFS= read -r variant; do
         [[ -z "$variant" || "$variant" == "null" ]] && continue
         if printf '%s' "$statement" | grep -qiF -- "$variant"; then
             return 0
         fi
-    done < <(echo "$watch_item_json" | jq -r '.variants[]?' 2>/dev/null || echo "")
+    done < <(jq -r '.[]?' <<< "$variants_json")
 
     local sources_json
-    sources_json=$(echo "$claim_json" | jq -c '.sources[]?' 2>/dev/null || echo "")
-    if [[ -n "$sources_json" ]]; then
-        while IFS= read -r hint; do
-            [[ -z "$hint" || "$hint" == "null" ]] && continue
-            while IFS= read -r source; do
-                [[ -z "$source" || "$source" == "null" ]] && continue
-                if echo "$source" | jq -e --arg hint "$hint" '.url // "" | contains($hint)' >/dev/null 2>&1; then
-                    return 0
-                fi
-            done <<< "$sources_json"
-        done < <(echo "$watch_item_json" | jq -r '.source_hints[]?' 2>/dev/null || echo "")
-    fi
+    sources_json=$(safe_domain_json_raw "$claim_json" '.sources // []' '[]' "claim.sources")
+    local source_hints_json
+    source_hints_json=$(safe_domain_json_raw "$watch_item_json" '.source_hints // []' '[]' "watch_item.source_hints")
+    while IFS= read -r hint; do
+        [[ -z "$hint" || "$hint" == "null" ]] && continue
+        while IFS= read -r source; do
+            [[ -z "$source" || "$source" == "null" ]] && continue
+            local source_url
+            source_url=$(safe_domain_json "$source" '.url // ""' "" "source.url")
+            if [[ -n "$source_url" ]] && printf '%s' "$source_url" | grep -q -- "$hint"; then
+                return 0
+            fi
+        done < <(jq -c '.[]?' <<< "$sources_json")
+    done < <(jq -r '.[]?' <<< "$source_hints_json")
 
     return 1
 }

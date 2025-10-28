@@ -27,9 +27,11 @@ setup_tool_hooks() {
     cp "$source_hooks_dir/post-tool-use.sh" "$session_hooks_dir/"
     cp "$source_hooks_dir/stop-build-evidence.sh" "$session_hooks_dir/"
     cp "$source_hooks_dir/evidence_fragment.pl" "$session_hooks_dir/"
+    cp "$source_hooks_dir/hook-bootstrap.sh" "$session_hooks_dir/"
     chmod +x "$session_hooks_dir/pre-tool-use.sh"
     chmod +x "$session_hooks_dir/post-tool-use.sh"
     chmod +x "$session_hooks_dir/stop-build-evidence.sh"
+    chmod +x "$session_hooks_dir/hook-bootstrap.sh"
     chmod +x "$session_hooks_dir/evidence_fragment.pl"
     
     # Path to settings file
