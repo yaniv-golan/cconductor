@@ -1722,7 +1722,7 @@ EOF
     # shellcheck source=/dev/null
     if command -v export_journal &>/dev/null || source "$UTILS_DIR/export-journal.sh" 2>/dev/null; then
         echo "→ Generating research journal..."
-        export_journal "$session_dir" "$session_dir/report/research-journal.md" 2>&1 || echo "  ⚠️  Warning: Could not generate research journal"
+        export_journal "$session_dir" "$session_dir/report/research-journal.md" >/dev/null || echo "  ⚠️  Warning: Could not generate research journal"
     fi
     
     # Log mission completion event for journal
@@ -2021,7 +2021,7 @@ run_mission_orchestration_resume() {
     # shellcheck source=/dev/null
     if command -v export_journal &>/dev/null || source "$UTILS_DIR/export-journal.sh" 2>/dev/null; then
         echo "→ Generating research journal..."
-        export_journal "$session_dir" "$session_dir/report/research-journal.md" 2>&1 || echo "  ⚠️  Warning: Could not generate research journal"
+        export_journal "$session_dir" "$session_dir/report/research-journal.md" >/dev/null || echo "  ⚠️  Warning: Could not generate research journal"
     fi
     
     # Log mission completion event for journal
