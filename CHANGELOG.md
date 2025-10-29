@@ -5,6 +5,20 @@ All notable changes to CConductor will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.0] - Unreleased
+
+### Added
+
+- Stakeholder classification pipeline with a dedicated Claude agent, deterministic classifier (`src/utils/stakeholder-classifier.sh`), gate evaluator (`src/utils/stakeholder-gate.sh`), and default policy/resolver templates to guarantee mission-aware stakeholder coverage.
+- Mission-scoped stakeholder policies and resolvers for every built-in mission, plus global defaults under `config/stakeholder-policy.default.json` and `config/stakeholder-resolver.default.json`.
+- Quality gate regression coverage that seeds classification artifacts so the new stakeholder checks remain stable.
+
+### Changed
+
+- Reinforced the quality gate hook to delegate stakeholder coverage decisions to the new gate reports, improving uncategorized tracking and failure messaging.
+- Reorganized built-in mission profiles into directory-based bundles (`profile.json`, `policy.json`, `resolver.json`) and taught `mission-loader.sh` to discover them transparently.
+- Documented the stakeholder pipeline in the Quality Guide and agent directory so maintainers know how the classifier and gate cooperate.
+
 ## [0.4.1] - 2025-10-29
 
 ### Changed
