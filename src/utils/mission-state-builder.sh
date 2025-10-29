@@ -39,16 +39,28 @@ build_mission_state() {
 
     local spent_usd="0"
     local spent_invocations="0"
+    local elapsed_minutes="0"
+    local budget_limit="0"
+    local time_limit="9999"
+    local invocation_limit="9999"
     if command -v budget_status >/dev/null 2>&1; then
         local budget_state
         budget_state=$(budget_status "$session_dir" 2>/dev/null || echo '{}')
         spent_usd=$(safe_jq_from_json "$budget_state" '.spent.cost_usd // 0' '0' "$session_dir" "mission_state.spent_usd")
         spent_invocations=$(safe_jq_from_json "$budget_state" '.spent.agent_invocations // 0' '0' "$session_dir" "mission_state.spent_invocations")
+        elapsed_minutes=$(safe_jq_from_json "$budget_state" '.spent.elapsed_minutes // 0' '0' "$session_dir" "mission_state.elapsed_minutes")
+        budget_limit=$(safe_jq_from_json "$budget_state" '.limits.budget_usd // 0' '0' "$session_dir" "mission_state.budget_limit")
+        time_limit=$(safe_jq_from_json "$budget_state" '.limits.max_time_minutes // 9999' '9999' "$session_dir" "mission_state.max_time_minutes")
+        invocation_limit=$(safe_jq_from_json "$budget_state" '.limits.max_agent_invocations // 9999' '9999' "$session_dir" "mission_state.max_invocations")
     else
         local budget_file="$meta_dir/budget.json"
         if [[ -f "$budget_file" ]]; then
             spent_usd=$(json_get_field "$budget_file" '.spent.cost_usd' '0')
             spent_invocations=$(json_get_field "$budget_file" '.spent.agent_invocations' '0')
+            elapsed_minutes=$(json_get_field "$budget_file" '.spent.elapsed_minutes' '0')
+            budget_limit=$(json_get_field "$budget_file" '.limits.budget_usd' '0')
+            time_limit=$(json_get_field "$budget_file" '.limits.max_time_minutes' '9999')
+            invocation_limit=$(json_get_field "$budget_file" '.limits.max_agent_invocations' '9999')
         fi
     fi
 
@@ -86,6 +98,10 @@ build_mission_state() {
         --argjson sources "$sources_count" \
         --arg spent "$spent_usd" \
         --argjson spent_inv "$spent_invocations" \
+        --arg elapsed_min "$elapsed_minutes" \
+        --arg budget_limit "$budget_limit" \
+        --arg time_limit "$time_limit" \
+        --arg invocation_limit "$invocation_limit" \
         --arg qg "$qg_status" \
         --argjson compliance "$compliance_json" \
         --argjson decisions "$recent_decisions" \
@@ -99,7 +115,11 @@ build_mission_state() {
             },
             budget_summary: {
                 spent_usd: ($spent | tonumber),
-                spent_invocations: ($spent_inv | tonumber)
+                spent_invocations: ($spent_inv | tonumber),
+                elapsed_minutes: ($elapsed_min | tonumber),
+                budget_usd: ($budget_limit | tonumber),
+                max_time_minutes: ($time_limit | tonumber),
+                max_agent_invocations: ($invocation_limit | tonumber)
             },
             quality_gate_status: $qg,
             domain_compliance: $compliance,

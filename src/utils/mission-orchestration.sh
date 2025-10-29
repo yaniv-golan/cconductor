@@ -323,7 +323,10 @@ $(safe_jq_from_json "$context_json" '.agents | tojson' '[]' "$session_dir" "orch
 
 ## Mission State Summary
 Coverage Metrics: $(safe_jq_from_json "$context_json" '.state.coverage | tojson' '{}' "$session_dir" "orchestrator.context.coverage")
-Budget Summary: $(safe_jq_from_json "$context_json" '.state.budget_summary | tojson' '{}' "$session_dir" "orchestrator.context.budget")
+Budget Summary:
+- Cost: \$$(safe_jq_from_json "$context_json" '.state.budget_summary.spent_usd' '0' "$session_dir" "orchestrator.context.budget.spent") of \$$(safe_jq_from_json "$context_json" '.state.budget_summary.budget_usd' '0' "$session_dir" "orchestrator.context.budget.limit")
+- Agent invocations: $(safe_jq_from_json "$context_json" '.state.budget_summary.spent_invocations' '0' "$session_dir" "orchestrator.context.budget.invocations") of $(safe_jq_from_json "$context_json" '.state.budget_summary.max_agent_invocations' '9999' "$session_dir" "orchestrator.context.budget.invocation_limit")
+- Elapsed time: $(safe_jq_from_json "$context_json" '.state.budget_summary.elapsed_minutes' '0' "$session_dir" "orchestrator.context.budget.elapsed") of $(safe_jq_from_json "$context_json" '.state.budget_summary.max_time_minutes' '9999' "$session_dir" "orchestrator.context.budget.time_limit") minutes
 Quality Gate Status: $(safe_jq_from_json "$context_json" '.state.quality_gate_status' 'unknown' "$session_dir" "orchestrator.context.quality_gate")
 ## Domain Compliance & Drift
 $(printf '%s\n' "$domain_compliance_section")

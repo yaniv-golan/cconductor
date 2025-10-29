@@ -6,6 +6,39 @@
 # from logs/events.jsonl
 #
 
+# Ensure we are running on Bash 4+ (prefer Homebrew bash when available)
+if [ "${BASH_VERSINFO[0]:-0}" -lt 4 ]; then
+    if command -v /opt/homebrew/bin/bash >/dev/null 2>&1; then
+        exec /opt/homebrew/bin/bash "$0" "$@"
+    elif command -v /usr/local/bin/bash >/dev/null 2>&1; then
+        exec /usr/local/bin/bash "$0" "$@"
+    else
+        echo "Error: Bash 4.0 or higher is required to run export-journal.sh." >&2
+        exit 1
+    fi
+fi
+
+if [[ -n "${BASH:-}" ]]; then
+    CCONDUCTOR_BASH_RUNTIME="$BASH"
+else
+    CCONDUCTOR_BASH_RUNTIME="$(command -v bash)"
+fi
+export CCONDUCTOR_BASH_RUNTIME
+
+EXPORT_JOURNAL_TOOL_LOG_FILE=""
+EXPORT_JOURNAL_TOOL_COUNTS_FILE=""
+
+cleanup_export_journal() {
+    local files=()
+    [[ -n "${EXPORT_JOURNAL_TOOL_LOG_FILE:-}" ]] && files+=("$EXPORT_JOURNAL_TOOL_LOG_FILE")
+    [[ -n "${EXPORT_JOURNAL_TOOL_COUNTS_FILE:-}" ]] && files+=("$EXPORT_JOURNAL_TOOL_COUNTS_FILE")
+    if ((${#files[@]})); then
+        rm -f "${files[@]}"
+    fi
+}
+
+trap cleanup_export_journal EXIT
+
 # Get script directory for sourcing dependencies
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
@@ -438,8 +471,8 @@ export_journal() {
     echo '{"searches":0,"fetches":0,"saves":0,"plans":0,"greps":0}' > "$tool_counts_file"
     : > "$tool_log_file"
     
-    # Cleanup temp files on exit (use ${var:-} to handle unbound variable if trap runs after function exits)
-    trap 'rm -f "${tool_log_file:-}" "${tool_counts_file:-}"' EXIT
+    EXPORT_JOURNAL_TOOL_LOG_FILE="$tool_log_file"
+    EXPORT_JOURNAL_TOOL_COUNTS_FILE="$tool_counts_file"
     
     # Flag to track when we need a task section header after iteration
     local NEED_TASK_SECTION_HEADER=false
@@ -1100,6 +1133,23 @@ export_journal() {
                         if [ "$strategic_decisions_count" -gt 0 ]; then
                             echo "**Strategic decisions:**"
                             echo "$reasoning" | jq -r '.strategic_decisions // [] | .[] | "- \(.)"' 2>/dev/null
+                            echo ""
+                        fi
+
+                        local budget_file="$session_dir/meta/budget.json"
+                        if [ -f "$budget_file" ]; then
+                            local budget_elapsed budget_time_limit budget_spent_cost budget_limit budget_spent_inv budget_inv_limit
+                            budget_elapsed=$(safe_file_json "$budget_file" '.spent.elapsed_minutes // 0' "0" "budget_snapshot.elapsed")
+                            budget_time_limit=$(safe_file_json "$budget_file" '.limits.max_time_minutes // 9999' "9999" "budget_snapshot.time_limit")
+                            budget_spent_cost=$(safe_file_json "$budget_file" '.spent.cost_usd // 0' "0" "budget_snapshot.cost")
+                            budget_limit=$(safe_file_json "$budget_file" '.limits.budget_usd // 0' "0" "budget_snapshot.limit")
+                            budget_spent_inv=$(safe_file_json "$budget_file" '.spent.agent_invocations // 0' "0" "budget_snapshot.invocations")
+                            budget_inv_limit=$(safe_file_json "$budget_file" '.limits.max_agent_invocations // 9999' "9999" "budget_snapshot.invocation_limit")
+
+                            echo "**💰 Budget Snapshot** (from ledger):"
+                            echo "- Elapsed: ${budget_elapsed} of ${budget_time_limit} minutes"
+                            echo "- Cost: \$${budget_spent_cost} of \$${budget_limit}"
+                            echo "- Agent calls: ${budget_spent_inv} of ${budget_inv_limit}"
                             echo ""
                         fi
                     fi

@@ -10,10 +10,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - Expanded `./cconductor --help` coverage so debug and watchdog/timeout controls (including their aliases) are surfaced directly in the CLI output.
+- Documented environment toggles for watchdog/timeouts, cache bypassing, and streaming diagnostics across the User Guide, Troubleshooting guide, Quality Guide, and Configuration Reference to clarify automation workflows.
+- Aligned installation guidance in the README and User Guide: clarified Claude Code authentication via `claude` + `/login` + `/status`, listed required dependencies (bash ≥4, jq, curl, bc, git, ripgrep, Python 3, dialog), and highlighted Homebrew vs. curl installer paths for macOS and Linux users.
+- Surfaced authoritative budget telemetry everywhere: mission state now records elapsed minutes and limit thresholds, orchestrator context prints the derived usage, and the journal appends a ledger-backed “Budget Snapshot” after strategic decisions.
+- `export-journal.sh` now re-execs under Homebrew Bash when available so Bash 4+ features (parameter case transforms, arrays) always work during ad-hoc exports.
 
 ### Removed
 
 - Dropped the unused `CCONDUCTOR_SEED` metadata field from generated `provenance.json` files to keep session artifacts lean.
+
+### Fixed
+
+- Hardened journal cleanup: the export script only removes temp files when paths exist, eliminating the lingering `rm -f '' ''` warning during regeneration.
 
 ## [0.4.0] - 2025-10-29
 
