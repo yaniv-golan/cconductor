@@ -1,0 +1,35 @@
+{
+  "aliases": {
+    "white_house": "government",
+    "u.s._census": "government",
+    "world_bank": "government",
+    "oxford": "academic",
+    "harvard": "academic",
+    "gartner": "industry_analysis",
+    "idc": "industry_analysis",
+    "forrester": "industry_analysis",
+    "press_release": "company_statement",
+    "investor_relations": "company_statement",
+    "wall_street_journal": "news_report",
+    "financial_times": "news_report"
+  },
+  "patterns": [
+    {"pattern": "*.gov", "category": "government"},
+    {"pattern": "*.gouv.fr", "category": "government"},
+    {"pattern": "*.europa.eu", "category": "government"},
+    {"pattern": "*.who.int", "category": "government"},
+    {"pattern": "*.edu", "category": "academic"},
+    {"pattern": "*.ac.uk", "category": "academic"},
+    {"pattern": "*.nature.com", "category": "academic"},
+    {"pattern": "*.sciencedirect.com", "category": "academic"},
+    {"pattern": "*.gartner.com", "category": "industry_analysis"},
+    {"pattern": "*.forrester.com", "category": "industry_analysis"},
+    {"pattern": "*.idc.com", "category": "industry_analysis"},
+    {"pattern": "*.investor.fb.com", "category": "company_statement"},
+    {"pattern": "*.ir.apple.com", "category": "company_statement"},
+    {"pattern": "*.sec.gov", "category": "company_statement"},
+    {"pattern": "*.prnewswire.com", "category": "news_report"},
+    {"pattern": "*.reuters.com", "category": "news_report"},
+    {"pattern": "*.wsj.com", "category": "news_report"}
+  ]
+}

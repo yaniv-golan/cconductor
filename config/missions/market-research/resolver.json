@@ -1,0 +1,37 @@
+{
+  "aliases": {
+    "sec": "regulator",
+    "ftc": "regulator",
+    "eu_competition": "regulator",
+    "pitchbook": "benchmark_provider",
+    "cambridge_associates": "benchmark_provider",
+    "cb_insights": "benchmark_provider",
+    "company_10k": "company_source",
+    "investor_presentation": "company_source",
+    "earnings_call": "company_source",
+    "mckinsey": "industry_analyst",
+    "bain": "industry_analyst",
+    "bcg": "industry_analyst",
+    "techcrunch": "trade_press",
+    "crunchbase_news": "trade_press",
+    "wsj": "trade_press"
+  },
+  "patterns": [
+    {"pattern": "*.sec.gov", "category": "regulator"},
+    {"pattern": "*.ftc.gov", "category": "regulator"},
+    {"pattern": "*.ec.europa.eu", "category": "regulator"},
+    {"pattern": "*.pitchbook.com", "category": "benchmark_provider"},
+    {"pattern": "*.cambridgeassociates.com", "category": "benchmark_provider"},
+    {"pattern": "*.bloomberg.com/professional", "category": "benchmark_provider"},
+    {"pattern": "*.sec.gov/Archives/edgar/data/*", "category": "company_source"},
+    {"pattern": "*.investor.*", "category": "company_source"},
+    {"pattern": "*.ir.*", "category": "company_source"},
+    {"pattern": "*.mckinsey.com", "category": "industry_analyst"},
+    {"pattern": "*.bain.com", "category": "industry_analyst"},
+    {"pattern": "*.bcg.com", "category": "industry_analyst"},
+    {"pattern": "*.gartner.com", "category": "industry_analyst"},
+    {"pattern": "*.techcrunch.com", "category": "trade_press"},
+    {"pattern": "*.crunchbase.com/news", "category": "trade_press"},
+    {"pattern": "*.wsj.com", "category": "trade_press"}
+  ]
+}

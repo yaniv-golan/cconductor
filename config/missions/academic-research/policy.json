@@ -1,0 +1,31 @@
+{
+  "version": "0.3",
+  "importance_levels": ["critical", "important", "informative"],
+  "categories": {
+    "peer_reviewed": {
+      "importance": "critical",
+      "description": "Peer-reviewed journals, conference proceedings, and academic presses"
+    },
+    "government_body": {
+      "importance": "critical",
+      "description": "Government agencies publishing primary scientific data or policy"
+    },
+    "research_institute": {
+      "importance": "important",
+      "description": "Independent or university-affiliated research institutes"
+    },
+    "industry_whitepaper": {
+      "importance": "important",
+      "description": "Industry consortiums or corporate labs publishing technical briefs"
+    },
+    "news_digest": {
+      "importance": "informative",
+      "description": "Science journalism summarizing primary research"
+    }
+  },
+  "gate": {
+    "min_sources_per_critical": 1,
+    "min_total_sources": 14,
+    "uncategorized_max_pct": 0.12
+  }
+}

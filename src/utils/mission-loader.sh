@@ -21,6 +21,47 @@ source "$SCRIPT_DIR/json-helpers.sh"
 # shellcheck disable=SC1091
 source "$SCRIPT_DIR/path-resolver.sh" 2>/dev/null || true
 
+# Resolve mission profile location within base directory
+_mission_loader_locate_profile() {
+  local base_dir="$1"
+  local name="$2"
+
+  if [[ -z "$base_dir" || -z "$name" ]]; then
+    return 1
+  fi
+
+  if [[ -f "$base_dir/${name}.json" ]]; then
+    printf '%s\n' "$base_dir/${name}.json"
+    return 0
+  fi
+
+  if [[ -f "$base_dir/${name}/profile.json" ]]; then
+    printf '%s\n' "$base_dir/${name}/profile.json"
+    return 0
+  fi
+
+  return 1
+}
+
+# Discover mission names available within directory (json files or profile directories)
+_mission_loader_discover_missions() {
+  local base_dir="$1"
+
+  [[ -d "$base_dir" ]] || return 0
+
+  local entry mission_name
+  for entry in "$base_dir"/*; do
+    [[ -e "$entry" ]] || continue
+    if [[ -f "$entry" && "$entry" == *.json ]]; then
+      mission_name=$(basename "$entry" .json)
+      printf '%s\n' "$mission_name"
+    elif [[ -d "$entry" && -f "$entry/profile.json" ]]; then
+      mission_name=$(basename "$entry")
+      printf '%s\n' "$mission_name"
+    fi
+  done
+}
+
 # Load mission profile by name
 # User missions override project missions
 mission_load() {
@@ -36,17 +77,17 @@ mission_load() {
   local project_mission_dir="$PROJECT_ROOT/config/missions"
   
   local mission_file=""
-  
+
   # Check user directory first (override)
-  if [[ -f "$user_mission_dir/${mission_name}.json" ]]; then
-    mission_file="$user_mission_dir/${mission_name}.json"
-  elif [[ -f "$project_mission_dir/${mission_name}.json" ]]; then
-    mission_file="$project_mission_dir/${mission_name}.json"
+  if mission_file=$(_mission_loader_locate_profile "$user_mission_dir" "$mission_name"); then
+    :
+  elif mission_file=$(_mission_loader_locate_profile "$project_mission_dir" "$mission_name"); then
+    :
   else
     log_error "Mission '$mission_name' not found"
     log_info "Searched: $user_mission_dir/"
     log_info "          $project_mission_dir/"
-    log_info "Available missions: $(find "$project_mission_dir" -maxdepth 1 -name '*.json' -print0 2>/dev/null | xargs -0 -n1 basename | sed 's/.json$//' | tr '\n' ' ' || echo 'none')"
+    log_info "Available missions: $(mission_list | tr '\n' ' ' || echo 'none')"
     return 1
   fi
   
@@ -156,22 +197,16 @@ mission_list() {
   
   # Scan project missions
   if [[ -d "$project_mission_dir" ]]; then
-    for mission_file in "$project_mission_dir"/*.json; do
-      [[ -f "$mission_file" ]] || continue
-      local mission_name
-      mission_name=$(basename "$mission_file" .json)
+    while IFS= read -r mission_name; do
       missions["$mission_name"]="project"
-    done
+    done < <(_mission_loader_discover_missions "$project_mission_dir")
   fi
   
   # Scan user missions (override)
   if [[ -d "$user_mission_dir" ]]; then
-    for mission_file in "$user_mission_dir"/*.json; do
-      [[ -f "$mission_file" ]] || continue
-      local mission_name
-      mission_name=$(basename "$mission_file" .json)
+    while IFS= read -r mission_name; do
       missions["$mission_name"]="user"
-    done
+    done < <(_mission_loader_discover_missions "$user_mission_dir")
   fi
   
   if [[ "$format" == "simple" ]]; then
@@ -185,7 +220,12 @@ mission_list() {
     echo "Built-in missions:"
     for mission_name in "${!missions[@]}"; do
       if [[ "${missions[$mission_name]}" == "project" ]]; then
-        local mission_file="$project_mission_dir/${mission_name}.json"
+        local mission_file
+        if mission_file=$(_mission_loader_locate_profile "$project_mission_dir" "$mission_name"); then
+          :
+        else
+          continue
+        fi
         local description
         if description=$(safe_jq_from_file "$mission_file" '.description // ""' "" "$mission_file" "mission_loader.project_description" "true" "true"); then
             :
@@ -200,7 +240,12 @@ mission_list() {
     echo "User missions:"
     for mission_name in "${!missions[@]}"; do
       if [[ "${missions[$mission_name]}" == "user" ]]; then
-        local mission_file="$user_mission_dir/${mission_name}.json"
+        local mission_file
+        if mission_file=$(_mission_loader_locate_profile "$user_mission_dir" "$mission_name"); then
+          :
+        else
+          continue
+        fi
         local description
         if description=$(safe_jq_from_file "$mission_file" '.description // ""' "" "$mission_file" "mission_loader.user_description" "true" "true"); then
             :

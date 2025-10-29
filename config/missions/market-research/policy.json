@@ -1,0 +1,31 @@
+{
+  "version": "0.3",
+  "importance_levels": ["critical", "important", "informative"],
+  "categories": {
+    "regulator": {
+      "importance": "critical",
+      "description": "Regulators publishing filings, compliance data, or enforcement actions"
+    },
+    "benchmark_provider": {
+      "importance": "critical",
+      "description": "Market sizing benchmarks and macroeconomic datasets"
+    },
+    "company_source": {
+      "importance": "important",
+      "description": "Company-reported metrics and investor communications"
+    },
+    "industry_analyst": {
+      "importance": "important",
+      "description": "Independent industry analyst firms and consultancies"
+    },
+    "trade_press": {
+      "importance": "informative",
+      "description": "Trade publications, newsletters, and reputable business press"
+    }
+  },
+  "gate": {
+    "min_sources_per_critical": 1,
+    "min_total_sources": 12,
+    "uncategorized_max_pct": 0.15
+  }
+}

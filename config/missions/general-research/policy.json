@@ -1,0 +1,31 @@
+{
+  "version": "0.3",
+  "importance_levels": ["critical", "important", "informative"],
+  "categories": {
+    "government": {
+      "importance": "critical",
+      "description": "Official government regulators or policy authorities"
+    },
+    "academic": {
+      "importance": "critical",
+      "description": "Peer-reviewed journals or academic institutions"
+    },
+    "industry_analysis": {
+      "importance": "important",
+      "description": "Independent research boutiques and industry analysts"
+    },
+    "company_statement": {
+      "importance": "important",
+      "description": "Corporate disclosures, investor relations, or product documentation"
+    },
+    "news_report": {
+      "importance": "informative",
+      "description": "Major media outlets and trade publications"
+    }
+  },
+  "gate": {
+    "min_sources_per_critical": 1,
+    "min_total_sources": 12,
+    "uncategorized_max_pct": 0.15
+  }
+}

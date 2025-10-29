@@ -1,0 +1,39 @@
+{
+  "aliases": {
+    "pubmed": "peer_reviewed",
+    "ieee": "peer_reviewed",
+    "springer": "peer_reviewed",
+    "nature": "peer_reviewed",
+    "sciencedirect": "peer_reviewed",
+    "nih": "government_body",
+    "fda": "government_body",
+    "who": "government_body",
+    "cdc": "government_body",
+    "rand_corp": "research_institute",
+    "brookings": "research_institute",
+    "mitre": "research_institute",
+    "openai": "industry_whitepaper",
+    "deepmind": "industry_whitepaper",
+    "mit_news": "news_digest",
+    "science_daily": "news_digest"
+  },
+  "patterns": [
+    {"pattern": "*.doi.org", "category": "peer_reviewed"},
+    {"pattern": "*.acm.org", "category": "peer_reviewed"},
+    {"pattern": "*.ieee.org", "category": "peer_reviewed"},
+    {"pattern": "*.nature.com", "category": "peer_reviewed"},
+    {"pattern": "*.sciencedirect.com", "category": "peer_reviewed"},
+    {"pattern": "*.nih.gov", "category": "government_body"},
+    {"pattern": "*.fda.gov", "category": "government_body"},
+    {"pattern": "*.who.int", "category": "government_body"},
+    {"pattern": "*.cdc.gov", "category": "government_body"},
+    {"pattern": "*.rand.org", "category": "research_institute"},
+    {"pattern": "*.brookings.edu", "category": "research_institute"},
+    {"pattern": "*.mit.edu", "category": "research_institute"},
+    {"pattern": "*.openai.com", "category": "industry_whitepaper"},
+    {"pattern": "*.deepmind.com", "category": "industry_whitepaper"},
+    {"pattern": "*.nist.gov", "category": "industry_whitepaper"},
+    {"pattern": "*.sciencedaily.com", "category": "news_digest"},
+    {"pattern": "*.eurekalert.org", "category": "news_digest"}
+  ]
+}

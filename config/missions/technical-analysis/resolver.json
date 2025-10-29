@@ -1,0 +1,39 @@
+{
+  "aliases": {
+    "iso": "standards_body",
+    "iec": "standards_body",
+    "ieee": "standards_body",
+    "ietf": "standards_body",
+    "nist": "regulator",
+    "nhtsa": "regulator",
+    "fcc": "regulator",
+    "product_datasheet": "vendor_primary",
+    "whitepaper": "vendor_primary",
+    "aws": "vendor_primary",
+    "azure": "vendor_primary",
+    "gartner": "independent_research",
+    "forrester_wave": "independent_research",
+    "owasp": "independent_research",
+    "stackoverflow": "community_observation",
+    "engineering_blog": "community_observation",
+    "hacker_news": "community_observation"
+  },
+  "patterns": [
+    {"pattern": "*.iso.org", "category": "standards_body"},
+    {"pattern": "*.iec.ch", "category": "standards_body"},
+    {"pattern": "*.ieee.org", "category": "standards_body"},
+    {"pattern": "*.ietf.org", "category": "standards_body"},
+    {"pattern": "*.nist.gov", "category": "regulator"},
+    {"pattern": "*.fcc.gov", "category": "regulator"},
+    {"pattern": "*.osha.gov", "category": "regulator"},
+    {"pattern": "*.docs.aws.amazon.com", "category": "vendor_primary"},
+    {"pattern": "*.docs.microsoft.com", "category": "vendor_primary"},
+    {"pattern": "*.developer.apple.com", "category": "vendor_primary"},
+    {"pattern": "*.gartner.com", "category": "independent_research"},
+    {"pattern": "*.forrester.com", "category": "independent_research"},
+    {"pattern": "*.owasp.org", "category": "independent_research"},
+    {"pattern": "*.stackoverflow.com", "category": "community_observation"},
+    {"pattern": "*.hashnode.dev", "category": "community_observation"},
+    {"pattern": "*.medium.com", "category": "community_observation"}
+  ]
+}

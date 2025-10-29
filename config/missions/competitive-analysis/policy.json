@@ -1,0 +1,27 @@
+{
+  "version": "0.3",
+  "importance_levels": ["critical", "important", "informative"],
+  "categories": {
+    "competitor_primary": {
+      "importance": "critical",
+      "description": "Primary documentation from competitor companies (filings, investor materials, product docs)"
+    },
+    "regulator": {
+      "importance": "important",
+      "description": "Regulatory bodies with enforcement or compliance findings"
+    },
+    "market_intelligence": {
+      "importance": "important",
+      "description": "Industry analysts, independent benchmarking, and market share trackers"
+    },
+    "press_coverage": {
+      "importance": "informative",
+      "description": "Reputable media or trade press summarizing competitive moves"
+    }
+  },
+  "gate": {
+    "min_sources_per_critical": 1,
+    "min_total_sources": 10,
+    "uncategorized_max_pct": 0.18
+  }
+}

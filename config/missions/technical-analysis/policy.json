@@ -1,0 +1,31 @@
+{
+  "version": "0.3",
+  "importance_levels": ["critical", "important", "informative"],
+  "categories": {
+    "standards_body": {
+      "importance": "critical",
+      "description": "Accredited standards organizations and technical committees"
+    },
+    "regulator": {
+      "importance": "critical",
+      "description": "Technology or safety regulators issuing directives"
+    },
+    "vendor_primary": {
+      "importance": "important",
+      "description": "Primary vendor documentation, whitepapers, or reference architectures"
+    },
+    "independent_research": {
+      "importance": "important",
+      "description": "Independent security labs, analyst houses, or benchmarking bodies"
+    },
+    "community_observation": {
+      "importance": "informative",
+      "description": "Community-maintained knowledge bases and expert blogs"
+    }
+  },
+  "gate": {
+    "min_sources_per_critical": 1,
+    "min_total_sources": 12,
+    "uncategorized_max_pct": 0.15
+  }
+}

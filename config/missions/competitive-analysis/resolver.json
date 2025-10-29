@@ -1,0 +1,31 @@
+{
+  "aliases": {
+    "10-k": "competitor_primary",
+    "10-q": "competitor_primary",
+    "s-1": "competitor_primary",
+    "product_documentation": "competitor_primary",
+    "compliance_action": "regulator",
+    "consent_decree": "regulator",
+    "pitchbook": "market_intelligence",
+    "crunchbase": "market_intelligence",
+    "cb_insights": "market_intelligence",
+    "press_release": "press_coverage",
+    "techcrunch": "press_coverage",
+    "axios": "press_coverage"
+  },
+  "patterns": [
+    {"pattern": "*.sec.gov/Archives/edgar/data/*", "category": "competitor_primary"},
+    {"pattern": "*.docs.google.com/presentation/*", "category": "competitor_primary"},
+    {"pattern": "*.investor.*", "category": "competitor_primary"},
+    {"pattern": "*.ir.*", "category": "competitor_primary"},
+    {"pattern": "*.ftc.gov", "category": "regulator"},
+    {"pattern": "*.ec.europa.eu", "category": "regulator"},
+    {"pattern": "*.justice.gov", "category": "regulator"},
+    {"pattern": "*.pitchbook.com", "category": "market_intelligence"},
+    {"pattern": "*.crunchbase.com", "category": "market_intelligence"},
+    {"pattern": "*.privco.com", "category": "market_intelligence"},
+    {"pattern": "*.techcrunch.com", "category": "press_coverage"},
+    {"pattern": "*.axios.com", "category": "press_coverage"},
+    {"pattern": "*.theinformation.com", "category": "press_coverage"}
+  ]
+}
