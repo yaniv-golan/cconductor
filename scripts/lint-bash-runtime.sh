@@ -5,82 +5,76 @@
 set -euo pipefail
 
 PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-TARGET_DIRS=(
-  "$PROJECT_ROOT/src"
+
+PROJECT_ROOT="$PROJECT_ROOT" python3 <<'PY'
+import pathlib
+import re
+import sys
+import os
+
+project_root = pathlib.Path(os.environ["PROJECT_ROOT"]).resolve()
+target_dir = project_root / "src"
+
+violations = []
+
+bash_runtime_patterns = (
+    "bash ${CCONDUCTOR_BASH_RUNTIME",
+    "bash ${BASH_RUNTIME",
+    "bash $CCONDUCTOR_BASH_RUNTIME",
+    "bash $BASH_RUNTIME",
 )
 
-violations=()
+for path in sorted(target_dir.rglob("*.sh")):
+    text = path.read_text(encoding="utf-8")
+    for lineno, line in enumerate(text.splitlines(), 1):
+        if not re.search(r"\bbash\s+", line):
+            continue
 
-while IFS= read -r match; do
-  [[ -z "$match" ]] && continue
-  file="${match%%:*}"
-  rest="${match#*:}"
-  lineno="${rest%%:*}"
-  line="${rest#*:}"
+        stripped = line.lstrip()
+        if stripped.startswith("#") or stripped.startswith("#!"):
+            continue
+        if "command -v bash" in line:
+            continue
+        if "brew install bash" in line:
+            continue
+        if "| bash" in line:
+            continue
 
-  line_no_newline="${line%%$'\n'}"
-  trimmed_leading="${line_no_newline#"${line_no_newline%%[![:space:]]*}"}"
+        in_single = False
+        in_double = False
+        prev = ""
+        idx = 0
+        while idx < len(line):
+            ch = line[idx]
+            if ch == "'" and not in_double and prev != "\\":
+                in_single = not in_single
+            elif ch == '"' and not in_single and prev != "\\":
+                in_double = not in_double
+            elif (
+                ch == "b"
+                and not in_single
+                and not in_double
+                and line.startswith("bash", idx)
+            ):
+                before = line[idx - 1] if idx > 0 else ""
+                after = line[idx + 4] if idx + 4 < len(line) else ""
+                if (
+                    not re.match(r"[A-Za-z0-9_]", before or " ")
+                    and not re.match(r"[A-Za-z0-9_]", after or " ")
+                ):
+                    token_rest = line[idx:]
+                    if not token_rest.startswith(bash_runtime_patterns):
+                        violations.append(f"{path.relative_to(project_root)}:{lineno}:{line.rstrip()}")
+                        break
+                idx += 3
+            prev = ch
+            idx += 1
 
-  if [[ "$trimmed_leading" == \#* ]]; then
-    continue
-  fi
-  if [[ "$trimmed_leading" == '#!'* ]]; then
-    continue
-  fi
-  if [[ "$line_no_newline" == *'command -v bash'* ]]; then
-    continue
-  fi
-  if [[ "$line_no_newline" == *'brew install bash'* ]]; then
-    continue
-  fi
-  if [[ "$line_no_newline" == *'| bash'* ]]; then
-    continue
-  fi
-
-  state_single=0
-  state_double=0
-  prev=""
-  i=0
-  length=${#line}
-  while (( i < length )); do
-    ch="${line:i:1}"
-
-    if [[ "$ch" == "'" && "$state_double" -eq 0 && "$prev" != "\\" ]]; then
-      ((state_single ^= 1))
-    elif [[ "$ch" == '"' && "$state_single" -eq 0 && "$prev" != "\\" ]]; then
-      ((state_double ^= 1))
-    elif [[ "$ch" == "b" && "$state_single" -eq 0 && "$state_double" -eq 0 ]]; then
-      if [[ "${line:i:4}" == "bash" ]]; then
-        before_char=""
-        after_char=""
-        (( i > 0 )) && before_char="${line:i-1:1}"
-        (( i + 4 < length )) && after_char="${line:i+4:1}"
-
-        if [[ ! "$before_char" =~ [A-Za-z0-9_] ]] && [[ ! "$after_char" =~ [A-Za-z0-9_] ]]; then
-          # Skip if explicitly invoking configured runtime variables
-          token_rest="${line:i}"
-          if [[ "$token_rest" != bash\ \$\{CCONDUCTOR_BASH_RUNTIME* ]] && \
-             [[ "$token_rest" != bash\ \$\{BASH_RUNTIME* ]] && \
-             [[ "$token_rest" != bash\ \$CCONDUCTOR_BASH_RUNTIME* ]] && \
-             [[ "$token_rest" != bash\ \$BASH_RUNTIME* ]]; then
-            violations+=("$file:$lineno:$line_no_newline")
-          fi
-        fi
-        ((i+=3))
-      fi
-    fi
-    prev="$ch"
-    ((i++))
-  done
-done < <(rg --no-heading --line-number --glob '*.sh' '\bbash\s+' "${TARGET_DIRS[@]}" || true)
-
-if (( ${#violations[@]} > 0 )); then
-  {
-    echo "bash runtime lint: found direct 'bash' invocations;"
-    echo "use \"\${CCONDUCTOR_BASH_RUNTIME:-\$(command -v bash)}\" instead."
-    printf '%s\n' "${violations[@]}"
-  } >&2
-  exit 1
-fi
-
-exit 0
+if violations:
+    print("bash runtime lint: found direct 'bash' invocations;", file=sys.stderr)
+    print('use "${CCONDUCTOR_BASH_RUNTIME:-$(command -v bash)}" instead.', file=sys.stderr)
+    for violation in violations:
+        print(violation, file=sys.stderr)
+    sys.exit(1)
+sys.exit(0)
+PY
