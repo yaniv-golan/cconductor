@@ -6,24 +6,13 @@
 # from logs/events.jsonl
 #
 
-# Ensure we are running on Bash 4+ (prefer Homebrew bash when available)
-if [ "${BASH_VERSINFO[0]:-0}" -lt 4 ]; then
-    if command -v /opt/homebrew/bin/bash >/dev/null 2>&1; then
-        exec /opt/homebrew/bin/bash "$0" "$@"
-    elif command -v /usr/local/bin/bash >/dev/null 2>&1; then
-        exec /usr/local/bin/bash "$0" "$@"
-    else
-        echo "Error: Bash 4.0 or higher is required to run export-journal.sh." >&2
-        exit 1
-    fi
-fi
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-if [[ -n "${BASH:-}" ]]; then
-    CCONDUCTOR_BASH_RUNTIME="$BASH"
-else
-    CCONDUCTOR_BASH_RUNTIME="$(command -v bash)"
-fi
-export CCONDUCTOR_BASH_RUNTIME
+# shellcheck disable=SC1091
+source "$SCRIPT_DIR/bash-runtime.sh"
+
+ensure_modern_bash "$@"
+resolve_cconductor_bash_runtime >/dev/null
 
 EXPORT_JOURNAL_TOOL_LOG_FILE=""
 EXPORT_JOURNAL_TOOL_COUNTS_FILE=""
@@ -40,9 +29,6 @@ cleanup_export_journal() {
 }
 
 trap cleanup_export_journal EXIT
-
-# Get script directory for sourcing dependencies
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # Source JSON parser for robust JSON extraction
 # shellcheck disable=SC1091

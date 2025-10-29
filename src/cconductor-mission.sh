@@ -4,6 +4,11 @@
 
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# shellcheck disable=SC1091
+source "$SCRIPT_DIR/utils/bash-runtime.sh"
+
 if set -o | grep -q 'posix.*on'; then
     set +o posix
 fi
@@ -18,16 +23,7 @@ prepend_path_if_exists() {
 prepend_path_if_exists "/opt/homebrew/bin"
 prepend_path_if_exists "/usr/local/bin"
 
-if [[ -z "${BASH_VERSINFO:-}" ]] || (( BASH_VERSINFO[0] < 4 )); then
-    if command -v /opt/homebrew/bin/bash >/dev/null 2>&1; then
-        exec /opt/homebrew/bin/bash "$0" "$@"
-    elif command -v /usr/local/bin/bash >/dev/null 2>&1; then
-        exec /usr/local/bin/bash "$0" "$@"
-    else
-        echo "Error: Bash 4.0 or higher is required to run cconductor-mission." >&2
-        exit 1
-    fi
-fi
+ensure_modern_bash "$@"
 
 # Re-enable bash trace if debug mode is active
 if [[ "${CCONDUCTOR_DEBUG:-0}" == "1" ]]; then
@@ -35,8 +31,10 @@ if [[ "${CCONDUCTOR_DEBUG:-0}" == "1" ]]; then
 fi
 
 # Save script directory before sourcing other files (they may redefine SCRIPT_DIR)
-CCONDUCTOR_MISSION_SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_ROOT="$(dirname "$CCONDUCTOR_MISSION_SCRIPT_DIR")"
+resolve_cconductor_bash_runtime >/dev/null
+
+CCONDUCTOR_MISSION_SCRIPT_DIR="$SCRIPT_DIR"
+PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
 export PROJECT_ROOT
 
 # Load utilities
