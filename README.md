@@ -20,42 +20,90 @@ CConductor is a multi-agent AI research system that conducts comprehensive, adap
 
 ---
 
-## Quick Start
+## Getting Started
 
-**Interactive Mode** (easiest):
+### Prerequisites
+- **Claude Code CLI access** – You need a Claude Pro/Max subscription or API credits plus the Claude Code CLI (run `claude`, then `/status` to confirm your account). Install via the native script (`curl -fsSL https://claude.ai/install.sh | bash`) or, if you already have Node.js 18+, `npm install -g @anthropic-ai/claude-code`.
+- **Supported platforms** – macOS 10.15+, Linux distros with GNU coreutils (Ubuntu 20.04+, Debian 10+, Fedora 33+), or Windows via WSL2.
+- **System packages** – Bash ≥ 4.0, `git`, `jq`, `curl`, `bc`, and `ripgrep`. The quick-start commands below install them for you.
+- **Python 3** – Used for knowledge graph tooling (pre-installed on most systems).
+- **Optional (installed in quick start):** `dialog` for the full interactive TUI experience.
 
+### Quick Start (Non-Technical)
+Use the commands for your platform to go from zero to your first mission. Replace `sudo` with your preferred privilege escalation tool if needed.
+
+#### macOS (Homebrew)
 ```bash
-./cconductor
-# Launches dialog-based TUI for guided research setup
-# (Install the optional `dialog` package for the full menu experience:
-#   macOS → brew install dialog, Debian/Ubuntu → sudo apt install dialog)
+# 1. Install Claude Code CLI and authenticate
+curl -fsSL https://claude.ai/install.sh | bash
+claude
+# In the Claude prompt (looks like ">"), type:
+#   /login    # opens browser-based OAuth flow
+# After the browser flow completes, type:
+#   /status   # confirms account, version, and connectivity
+
+# 2. Install required system packages
+# (Install Homebrew first if you do not already have it: 
+#  /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)")
+brew install bash jq curl bc ripgrep git dialog
+
+# 3. Install CConductor (accept the PATH prompt when offered)
+curl -fsSL https://github.com/yaniv-golan/cconductor/releases/latest/download/install.sh | bash
+
+# 4. Launch the guided experience
+cconductor
 ```
 
-**Direct Command**:
-
+#### Ubuntu / Debian / WSL2
 ```bash
-./cconductor "What is quantum computing?"
+# 1. Install Claude Code CLI and authenticate
+curl -fsSL https://claude.ai/install.sh | bash
+claude
+# In the Claude prompt (looks like ">"), type:
+#   /login
+#   /status
+
+# 2. Install required system packages
+sudo apt-get update
+sudo apt-get install -y git jq curl bc ripgrep dialog
+
+# 3. Install CConductor (installs to ~/.cconductor by default)
+curl -fsSL https://github.com/yaniv-golan/cconductor/releases/latest/download/install.sh | bash
+
+# 4. Launch the guided experience
+cconductor
 ```
 
-On first run, CConductor will automatically set up directories and configuration (takes ~5 seconds).
+> WSL2 users should run the Linux commands inside their WSL distribution. The quick installer does not install the Claude CLI or other system packages, so completing steps 1-2 first is required.
 
-Your research report will be in `research-sessions/` with full citations and quality assessment.
+> Prefer a Homebrew-managed install on macOS? Jump to [Option 2: Homebrew (macOS)](#option-2-homebrew-macos) in the Installation Options section.
 
-**Choose mission type** (optional):
-
+### Verify Installation
 ```bash
-./cconductor "your question" --mission market-research       # Market analysis
-./cconductor "your question" --mission academic-research     # Scholarly sources
-./cconductor "your question" --mission competitive-analysis  # Competitor research
-./cconductor "your question" --mission technical-analysis    # Technical deep-dive
-# Default: general-research (flexible for any topic)
+claude
+#   /status          # Confirms CLI version, account, and connectivity
+cconductor --help    # Shows available commands (use ./cconductor if running from a cloned repo)
 ```
 
-**View your results**:
+### Run Your First Mission
+- **Interactive mode:** `cconductor` (or `./cconductor`) launches the dialog-based TUI for guided setup. Install `dialog` for the full menu experience.
+- **Direct command:** `cconductor "What is quantum computing?"`
+- **Choose a mission type:**
+  ```bash
+  cconductor "your question" --mission market-research       # Market analysis
+  cconductor "your question" --mission academic-research     # Scholarly sources
+  cconductor "your question" --mission competitive-analysis  # Competitor research
+  cconductor "your question" --mission technical-analysis    # Technical deep-dive
+  # Default: general-research (flexible for any topic)
+  ```
+- **View your results:** `cconductor sessions latest`
 
-```bash
-./cconductor sessions latest
-```
+On first run, CConductor automatically creates the session workspace and configuration (about five seconds). Research reports live under `research-sessions/` with full citations and quality assessments.
+
+### Platform Notes
+- **Supported operating systems:** macOS 10.15+, Linux distributions with GNU coreutils (Ubuntu 20.04+, Debian 10+, Fedora 33+), and Windows via WSL2.
+- **Known limitations:** FreeBSD/OpenBSD use a different `date` implementation that can break timestamp formatting; Windows native shells are not supported—run inside WSL2 instead.
+- **Time formatting:** All scripts use `date -u +"%Y-%m-%dT%H:%M:%SZ"`, which works on macOS (BSD date) and GNU/Linux. Adjust the command if your environment uses a non-standard `date`.
 
 ---
 
@@ -66,7 +114,7 @@ Your research report will be in `research-sessions/` with full citations and qua
 Comprehensive research with full citations and bibliography.
 
 ```bash
-./cconductor "Latest advances in CRISPR gene editing 2023-2024"
+cconductor "Latest advances in CRISPR gene editing 2023-2024"
 ```
 
 ### Complex Research from Files
@@ -74,7 +122,7 @@ Comprehensive research with full citations and bibliography.
 For multi-part research queries with structured context, use a markdown file:
 
 ```bash
-./cconductor --question-file research-query.md
+cconductor --question-file research-query.md
 ```
 
 **Benefits:**
@@ -105,10 +153,10 @@ Analyze your own PDFs, documents, and notes alongside web research.
 
 ```bash
 # Analyze pitch decks
-./cconductor "Evaluate this pitch deck" --input-dir ./pitch-materials/
+cconductor "Evaluate this pitch deck" --input-dir ./pitch-materials/
 
 # Research with context documents
-./cconductor "Summarize findings" --input-dir ~/Documents/research-reports/
+cconductor "Summarize findings" --input-dir ~/Documents/research-reports/
 ```
 
 **Supported formats:**
@@ -122,7 +170,7 @@ Analyze your own PDFs, documents, and notes alongside web research.
 Business intelligence with market data and competitive insights.
 
 ```bash
-./cconductor "SaaS CRM market size and growth 2024"
+cconductor "SaaS CRM market size and growth 2024"
 ```
 
 ### Technical Deep-Dives
@@ -130,7 +178,7 @@ Business intelligence with market data and competitive insights.
 Detailed technical research with architecture and examples.
 
 ```bash
-./cconductor "How does Docker containerization work?"
+cconductor "How does Docker containerization work?"
 ```
 
 ### General Research
@@ -138,7 +186,7 @@ Detailed technical research with architecture and examples.
 Balanced research on any topic.
 
 ```bash
-./cconductor "What causes climate change?"
+cconductor "What causes climate change?"
 ```
 
 ---
@@ -194,214 +242,77 @@ Switch the config to `mode: "enforce"` if you prefer to block finalization until
 
 ---
 
-## Requirements
+## Installation Options
 
-- **Claude Code CLI** (required - CConductor is a Claude Code extension)
-  - **Option 1: Native Installer** (Recommended, no Node.js needed):
-    ```bash
-    curl -fsSL https://claude.ai/install.sh | bash
-    ```
-  - **Option 2: npm** (if you prefer or already have Node.js):
-    - Requires Node.js 18+: `brew install node` (macOS) or see [nodejs.org](https://nodejs.org/)
-    - Install: `npm install -g @anthropic-ai/claude-code`
-  - CConductor uses the Claude Code CLI in headless mode to invoke
-    specialized agents with allowed tools (e.g., Bash, Read, WebSearch, MCP)
-  - Cannot run standalone with just an API key
-  - Available through Claude Pro/Max subscriptions or API/pay-as-you-go
-  - See [Understanding Claude Code Access](#understanding-claude-code-access) below for details
-- **Python 3** - For knowledge graph operations (usually pre-installed)
-  - macOS: `brew install python3` (if needed)
-  - Linux: Usually pre-installed; if not: `sudo apt-get install python3`
-  - Windows (WSL): `sudo apt-get install python3`
-- **Standard Unix tools**
-  - **Bash shell** (4.0+)
-  - **jq** (JSON processor)
-  - **curl** (for web requests)
-  - **bc** (arbitrary-precision calculator for accurate math)
-    - macOS: Usually pre-installed; if not: `brew install bc`
-    - Linux: `sudo apt install bc` or `sudo yum install bc`
-    - Windows: Use WSL2, then `sudo apt install bc`
-  - **ripgrep** (recommended for Search tool) - `brew install ripgrep` (macOS)
+> Completed the prerequisites above? Pick the workflow that fits your environment and compliance requirements.
 
-### Platform Compatibility
-
-CConductor is tested and supported on:
-- **macOS** 10.15+ (Catalina and later)
-- **Linux** with GNU coreutils (Ubuntu 20.04+, Debian 10+, Fedora 33+)
-- **Windows** via WSL2 (Windows Subsystem for Linux)
-
-**Known Limitations**:
-- **FreeBSD/OpenBSD**: `date` command format differs, may cause timestamp issues
-- **Windows native**: Not supported - use WSL2
-
-**Date/Time Dependencies**: All timestamp generation uses `date -u +"%Y-%m-%dT%H:%M:%SZ"` which works on macOS (BSD date) and Linux (GNU date). For other BSD variants, timestamps may need adjustment.
-
-### Installing Dependencies
-
-**macOS**:
-
-```bash
-# 0. Install Homebrew (if not already installed)
-# Check if you have Homebrew:
-brew --version
-
-# If not installed, install Homebrew:
-/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
-
-# 1. Install Claude Code CLI (Native Installer - Recommended)
-curl -fsSL https://claude.ai/install.sh | bash
-
-# OR if you prefer npm:
-# brew install node
-# npm install -g @anthropic-ai/claude-code
-
-# 2. Login to Claude Code (REQUIRED)
-claude login
-# This opens a browser to authenticate with Claude.ai
-# You need a Claude Pro/Max subscription or API credits
-
-# 3. Install other dependencies
-brew install bash jq curl bc ripgrep
-# Note: macOS ships with Bash 3.2, but CConductor requires Bash 4.0+
-# The brew-installed bash (5.x) will be at /opt/homebrew/bin/bash
-# ripgrep is recommended for Search tool functionality
-
-# 4. Verify installations
-claude --version  # Should show claude-code version
-rg --version      # Should show ripgrep version
-claude whoami     # Should show your authenticated account
-/opt/homebrew/bin/bash --version  # Should be 5.x or higher
-```
-
-**Linux** (Ubuntu/Debian):
-
-```bash
-# 1. Install Claude Code CLI (Native Installer - Recommended)
-curl -fsSL https://claude.ai/install.sh | bash
-
-# OR if you prefer npm:
-# curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
-# sudo apt-get install -y nodejs
-# npm install -g @anthropic-ai/claude-code
-
-# 2. Login to Claude Code
-claude login
-
-# 3. Install other dependencies
-sudo apt-get install jq curl bash bc ripgrep
-```
-
-**Windows** (WSL):
-
-```bash
-# 1. Install Claude Code CLI (Native Installer - Recommended)
-curl -fsSL https://claude.ai/install.sh | bash
-
-# OR if you prefer npm:
-# curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
-# sudo apt-get install -y nodejs
-# npm install -g @anthropic-ai/claude-code
-
-# 2. Login to Claude Code
-claude login
-
-# 3. Install other dependencies
-sudo apt-get install jq curl bash bc ripgrep
-```
-
----
-
-## Installation
-
-### Quick Install (Recommended)
-
-One command to install and set up everything:
-
+### Option 1: Quick Install Script (Recommended for individual laptops)
 ```bash
 curl -fsSL https://github.com/yaniv-golan/cconductor/releases/latest/download/install.sh | bash
 ```
+**What it does**
+- Clones the latest release into `~/.cconductor` (or a path you pass as the first argument).
+- Runs `cconductor --init --yes` to prepare caches, config directories, and quality gates.
+- Prompts to add `cconductor` to your `PATH` so you can run it from anywhere.
 
-This will:
+**Remember:** This script expects the Claude Code CLI and system packages from the quick-start steps to already be installed.
 
-- Download the latest stable release
-- Verify checksums automatically  
-- Install to `~/.cconductor`
-- Run first-time setup automatically
-- Optionally add to your PATH
-
-Then use from anywhere:
-
+### Option 2: Homebrew (macOS)
 ```bash
-cconductor "your research question"
-```
-
-### Homebrew (macOS)
-
-```bash
-# Add tap
 brew tap yaniv-golan/cconductor
-
-# Install CConductor
 brew install cconductor
 
-# Install Claude Code CLI (required)
-npm install -g @anthropic-ai/claude-code
+# Install Claude Code CLI (native installer recommended)
+curl -fsSL https://claude.ai/install.sh | bash
+claude
+#   /login
+#   /status
 
-# Set up authentication - create config file:
-mkdir -p ~/.config/claude
-cat > ~/.config/claude/config.json << 'EOF'
-{
-  "api_key": "your_anthropic_api_key_here"
-}
-EOF
-
-# Start researching
-cconductor "What is quantum computing?"
+# Install supporting tools if you skipped the quick start
+brew install bash jq curl bc ripgrep git
 ```
+Homebrew installs the CLI into your PATH automatically. Re-run `claude`, then `/status`, along with `cconductor --help` to verify everything is available.
 
-### Docker
-
-**Quick Start (with existing Claude credentials)**:
-
+### Option 3: Manual Git Clone (Advanced / Contributors)
 ```bash
-docker run -v ~/.claude:/root/.claude \
-  -v ~/research:/data/research-sessions \
-  ghcr.io/yaniv-golan/cconductor:latest \
-  "What is quantum computing?"
+git clone https://github.com/yaniv-golan/cconductor.git
+cd cconductor
+
+# Prepare the workspace (non-interactive)
+./cconductor --init --yes
+
+# Run from the repo root
+./cconductor "your research question"
 ```
+Use this path if you plan to contribute code, track the `main` branch closely, or run from a fork. Add the repository directory to your PATH if you want to call `cconductor` without the leading `./`.
 
-**Using API Key** (for CI/CD):
+### Option 4: Docker & CI Pipelines
+- **Quick start (existing Claude credentials):**
+  ```bash
+  docker run -v ~/.claude:/root/.claude \
+    -v ~/research:/data/research-sessions \
+    ghcr.io/yaniv-golan/cconductor:latest \
+    "What is quantum computing?"
+  ```
+- **Using an API key in automation:**
+  ```bash
+  echo "ANTHROPIC_API_KEY=sk-ant-xxx" > .env
+  docker run --env-file .env \
+    -v ~/research:/data/research-sessions \
+    ghcr.io/yaniv-golan/cconductor:latest \
+    "What is quantum computing?"
+  ```
+- **Production (Docker Swarm example):**
+  ```bash
+  echo "sk-ant-xxx" | docker secret create anthropic_api_key -
+  docker service create \
+    --secret anthropic_api_key \
+    --mount type=volume,source=research-data,target=/data \
+    ghcr.io/yaniv-golan/cconductor:latest
+  ```
+Review [docs/DOCKER.md](docs/DOCKER.md) for extended configuration, health checks, and volume layouts.
 
-```bash
-# Create .env file
-echo "ANTHROPIC_API_KEY=sk-ant-xxx" > .env
-
-# Run with env file
-docker run --env-file .env \
-  -v ~/research:/data/research-sessions \
-  ghcr.io/yaniv-golan/cconductor:latest \
-  "What is quantum computing?"
-```
-
-**Production (Docker Swarm)**:
-
-```bash
-# Create secret
-echo "sk-ant-xxx" | docker secret create anthropic_api_key -
-
-# Deploy service
-docker service create \
-  --secret anthropic_api_key \
-  --mount type=volume,source=research-data,target=/data \
-  ghcr.io/yaniv-golan/cconductor:latest
-```
-
-See [Docker Documentation](docs/DOCKER.md) for complete details.
-
-### Verified Install (High Security)
-
-For production or security-sensitive environments:
-
+### Offline or Pinned Version Install
 ```bash
 # Download installer and checksum
 curl -LO https://github.com/yaniv-golan/cconductor/releases/latest/download/install.sh
@@ -410,56 +321,32 @@ curl -LO https://github.com/yaniv-golan/cconductor/releases/latest/download/inst
 # Verify integrity
 sha256sum -c install.sh.sha256
 
-# Install
+# Install (defaults to ~/.cconductor)
 bash install.sh
 ```
-
-### Specific Version
-
+To install a specific release, export `CCONDUCTOR_VERSION` or download the pinned installer:
 ```bash
 export CCONDUCTOR_VERSION=v0.3.1
-curl -fsSL https://github.com/yaniv-golan/cconductor/releases/download/v0.3.1/install.sh | bash
+curl -fsSL https://github.com/yaniv-golan/cconductor/releases/download/${CCONDUCTOR_VERSION}/install.sh | bash
 ```
 
-### Manual Install (Development)
+---
 
+## Upgrade & Maintenance
+
+- **Quick install / manual clone:** `git -C ~/.cconductor pull` (replace the path if you chose a custom install directory). Run `cconductor --init --yes` after pulling if new migrations are introduced.
+- **Homebrew:** `brew upgrade cconductor`
+- **Docker:** `docker pull ghcr.io/yaniv-golan/cconductor:latest`
+- **Pinned version:** rerun the installer with the desired `CCONDUCTOR_VERSION`.
+
+Built-in commands:
 ```bash
-# Clone the repository
-git clone https://github.com/yaniv-golan/cconductor.git
-cd cconductor
-
-# Start researching!
-chmod +x cconductor
-./cconductor "your research question"
+cconductor --update          # Manually fetch the latest release metadata
+cconductor --check-update    # Check if an update is available
+cconductor --no-update-check "your question"  # Skip the automatic update probe for a single run
 ```
-
-**Note:** If you get "Permission denied", run: `chmod +x cconductor`
-
-Setup happens automatically on first run.
-
-## Updates
-
-CConductor automatically checks for updates once per day.
-
-**Update manually:**
-
-```bash
-cconductor --update
-```
-
-**Check for updates:**
-
-```bash
-cconductor --check-update
-```
-
-**Disable update checks:**
-
-```bash
-# Temporarily
-cconductor --no-update-check "your question"
-
-# Permanently - edit ~/.config/cconductor/cconductor-config.json:
+To disable background update checks entirely, edit `~/.config/cconductor/cconductor-config.json`:
+```json
 {
   "update_settings": {
     "check_for_updates": false
@@ -526,43 +413,45 @@ curl -fsSL https://raw.githubusercontent.com/yaniv-golan/cconductor/main/install
 
 ## Usage
 
+> Use `cconductor` (or `./cconductor` if you are running directly from a cloned repository without updating `PATH`).
+
 ### Basic Commands
 
 ```bash
 # Start new research (auto-launches real-time dashboard)
-./cconductor "your research question"
+cconductor "your research question"
 
 # View latest results
-./cconductor sessions latest
+cconductor sessions latest
 
 # View research dashboard (auto-launched during research)
-./cconductor view-dashboard              # Latest session
-./cconductor view-dashboard mission_123  # Specific session
+cconductor view-dashboard              # Latest session
+cconductor view-dashboard mission_123  # Specific session
 
 # Export research journal as markdown
 SESSION_DIR=$(./src/utils/path-resolver.sh resolve session_dir)
 bash src/utils/export-journal.sh "$SESSION_DIR/$(cat "$SESSION_DIR/.latest")"
 
 # List all sessions
-./cconductor sessions
+cconductor sessions
 
 # Continue previous research
-./cconductor resume mission_1759420487
+cconductor resume mission_1759420487
 
 # Check if research is running
-./cconductor status
+cconductor status
 
 # View configuration
-./cconductor configure
+cconductor configure
 
 # Run/re-run initialization
-./cconductor --init
+cconductor --init
 
 # Show help
-./cconductor --help
+cconductor --help
 
 # Show version
-./cconductor --version
+cconductor --version
 ```
 
 ### Session Outputs & Storage

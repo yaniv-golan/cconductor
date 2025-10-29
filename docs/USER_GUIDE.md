@@ -55,41 +55,35 @@ Before installing CConductor, verify you have:
 
 #### Required Software
 
-**Check if you have bash**:
-
-```bash
-bash --version
-# Should show: GNU bash, version 4.0 or higher
-```
-
-**Check if Claude Code is authenticated**:
-
-```bash
-claude whoami
-# Should show your authenticated account
-# If not authenticated, run: claude login
-```
-
-**Check if you have jq**:
-
-```bash
-jq --version
-# Should show: jq-1.6 or similar
-```
-
-**Check if you have curl**:
-
-```bash
-curl --version
-# Should show: curl 7.x or higher
-```
-
-**Check if you have bc** (required for calculations):
-
-```bash
-bc --version
-# Should show: bc version
-```
+- **Bash ≥ 4.0**
+  ```bash
+  bash --version
+  # Look for version 4.0 or higher (Homebrew bash is 5.x on macOS)
+  ```
+- **Claude Code CLI with an authenticated session**
+  ```bash
+  claude
+  # At the prompt (>), type:
+  #   /login    # opens browser-based OAuth flow if needed
+  #   /status   # shows account email, plan tier, and connectivity
+  ```
+- **jq 1.6+, curl 7.x+, bc, git, ripgrep**
+  ```bash
+  jq --version
+  curl --version
+  bc --version
+  git --version
+  rg --version     # ripgrep
+  ```
+- **Python 3**
+  ```bash
+  python3 --version
+  # Most systems ship with 3.x; install if missing.
+  ```
+- **Dialog (optional but recommended for the TUI)**
+  ```bash
+  dialog --version  # install if you want the menu-driven setup
+  ```
 
 #### Installing Missing Dependencies
 
@@ -99,23 +93,23 @@ bc --version
 # Install Homebrew if you don't have it
 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
 
-# Install dependencies
-brew install jq curl
-
-# bash and bc are pre-installed on macOS
+# Install required packages (bash 5.x, jq, curl, bc, ripgrep, git, dialog)
+brew install bash jq curl bc ripgrep git dialog
 ```
 
-**Linux** (Ubuntu/Debian):
+**Linux** (Ubuntu/Debian/WSL2):
 
 ```bash
 sudo apt-get update
-sudo apt-get install jq curl bash bc
+sudo apt-get install -y git jq curl bc ripgrep dialog python3
 ```
+
+If your distribution ships an older bash, install `bash` from your package manager as well.
 
 **Windows**:
 
 - Install [WSL2 (Windows Subsystem for Linux)](https://docs.microsoft.com/en-us/windows/wsl/install)
-- Then follow Linux instructions above
+- Inside WSL, run the Linux commands above
 
 #### Claude Code Requirement
 
@@ -256,10 +250,11 @@ curl -fsSL https://github.com/yaniv-golan/cconductor/releases/latest/download/in
 
 This installer will:
 
-- Install CConductor to `~/.cconductor` (or custom location)
-- Auto-install missing dependencies (jq, curl)
-- Run first-time setup automatically
-- Optionally add `cconductor` to your PATH
+- Clone CConductor into `~/.cconductor` (or a directory you pass as the first argument)
+- Run `cconductor --init --yes` to prepare caches, configuration, and quality gates
+- Offer to add the install directory to your `PATH`
+
+> The installer expects the prerequisites from the previous section—Claude Code CLI, Bash ≥ 4.0, jq, curl, bc, ripgrep, git, dialog, and Python 3—to already be available.
 
 After installation, use from anywhere:
 
@@ -291,13 +286,12 @@ cd cconductor
 
 On your first run, CConductor automatically performs setup (~5 seconds):
 
-- Checks dependencies (jq, curl, bash)
-- Offers to auto-install missing dependencies
+- Verifies required dependencies (bash, jq, curl, bc, ripgrep)
 - Creates necessary directories
 - Sets up configuration files from templates
 - Configures .gitignore to protect your data
 - Makes scripts executable
-- Validates all configurations
+- Validates configuration and runtime paths
 
 You'll see a prompt like:
 
@@ -1502,6 +1496,8 @@ tar -czf sessions-backup.tar.gz ~/Library/Application\ Support/CConductor/resear
 | `--enable-agent-timeouts` | Force-enable per-agent timeout enforcement when configuration disables it. |
 
 **Precedence**: CLI flags take priority, followed by environment variables (`CCONDUCTOR_WATCHDOG_MODE=enabled|disabled`, `CCONDUCTOR_AGENT_TIMEOUT_MODE=enabled|disabled`), then user configs.
+
+**Environment aliases**: Legacy toggles `CCONDUCTOR_ENABLE_WATCHDOG=1` / `CCONDUCTOR_DISABLE_WATCHDOG=1` and `CCONDUCTOR_ENABLE_AGENT_TIMEOUTS=1` / `CCONDUCTOR_DISABLE_AGENT_TIMEOUTS=1` remain available for scripts that prefer boolean-style exports; they resolve to the same modes as the canonical variables above.
 
 **Configuration**: The `config/agent-timeouts.default.json` file now includes `watchdog_enabled` and `timeouts_enabled` booleans. Copy it to `~/.config/cconductor/agent-timeouts.json` to customize defaults without affecting the repository.
 
