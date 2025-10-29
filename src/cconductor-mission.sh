@@ -4,6 +4,31 @@
 
 set -euo pipefail
 
+if set -o | grep -q 'posix.*on'; then
+    set +o posix
+fi
+
+prepend_path_if_exists() {
+    local dir="$1"
+    if [[ -d "$dir" && ":$PATH:" != *":$dir:"* ]]; then
+        export PATH="$dir:$PATH"
+    fi
+}
+
+prepend_path_if_exists "/opt/homebrew/bin"
+prepend_path_if_exists "/usr/local/bin"
+
+if [[ -z "${BASH_VERSINFO:-}" ]] || (( BASH_VERSINFO[0] < 4 )); then
+    if command -v /opt/homebrew/bin/bash >/dev/null 2>&1; then
+        exec /opt/homebrew/bin/bash "$0" "$@"
+    elif command -v /usr/local/bin/bash >/dev/null 2>&1; then
+        exec /usr/local/bin/bash "$0" "$@"
+    else
+        echo "Error: Bash 4.0 or higher is required to run cconductor-mission." >&2
+        exit 1
+    fi
+fi
+
 # Re-enable bash trace if debug mode is active
 if [[ "${CCONDUCTOR_DEBUG:-0}" == "1" ]]; then
     set -x
