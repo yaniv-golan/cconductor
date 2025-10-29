@@ -1902,6 +1902,35 @@ unset CCONDUCTOR_DEBUG
 
 ---
 
+## Advanced Environment Toggles
+
+Use these environment variables when automating runs or forcing diagnostic behaviors. CLI flags remain the preferred entry point; the env toggles primarily help in CI where you cannot easily reorder flags.
+
+### Force Live Web Calls
+
+```bash
+# Disable both caches
+CCONDUCTOR_DISABLE_WEB_FETCH_CACHE=1 CCONDUCTOR_DISABLE_WEB_SEARCH_CACHE=1 ./cconductor "query"
+
+# Disable just the WebFetch cache (force re-downloads)
+CCONDUCTOR_DISABLE_WEB_FETCH_CACHE=1 ./cconductor "query"
+
+# Disable just the WebSearch cache (force new search sessions)
+CCONDUCTOR_DISABLE_WEB_SEARCH_CACHE=1 ./cconductor "query"
+```
+
+Equivalent CLI flags exist (`--no-cache`, `--no-web-fetch-cache`, `--no-web-search-cache`), but the environment variables help when you want to set defaults for an entire shell session or CI job.
+
+### Streaming & Event Tailer Diagnostics
+
+- `CCONDUCTOR_ENABLE_STREAMING=0` — fall back to the non-streaming orchestrator if you suspect streaming regressions (defaults to enabled).
+- `CCONDUCTOR_SKIP_EVENT_TAILER=1` — prevent the event tailer from attaching; isolates issues where event streaming interferes with automation output.
+- `CCONDUCTOR_STREAM_DEBUG_LOG=/path/to/log` — capture raw streaming frames for post-mortem analysis. Leave unset during normal operation to avoid large logs.
+
+Unset these variables after debugging so future runs return to the standard streaming experience.
+
+---
+
 ## Hook Debugging
 
 ### What are Hooks?

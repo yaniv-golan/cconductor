@@ -74,7 +74,6 @@ generate_provenance() {
     fi
     
     # Get environment variables (non-sensitive)
-    local seed="${CCONDUCTOR_SEED:-}"
     local verbose="${CCONDUCTOR_VERBOSE:-0}"
     local cache_enabled="${CCONDUCTOR_CACHE_ENABLED:-false}"
     
@@ -104,7 +103,6 @@ generate_provenance() {
         --argjson git_dirty "$git_dirty" \
         --arg paths_checksum "$paths_checksum" \
         --arg mcp_checksum "$mcp_checksum" \
-        --arg seed "$seed" \
         --arg verbose "$verbose" \
         --arg cache_enabled "$cache_enabled" \
         --arg os_type "$os_type" \
@@ -129,7 +127,6 @@ generate_provenance() {
                 mcp_config_checksum: $mcp_checksum
             },
             environment: {
-                seed: $seed,
                 verbose: $verbose,
                 cache_enabled: $cache_enabled
             },

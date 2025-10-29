@@ -890,6 +890,7 @@ Confidence: 45/100 (LOW)
 - Prefer disabling only timeouts (`--disable-agent-timeouts`) if you need longer runs; the watchdog still enforces heartbeat freshness.
 - If you disable the watchdog (`--disable-watchdog`), plan to supervise the mission manually—quality checks will not terminate stalled agents.
 - Re-enable protections per run with `--enable-watchdog` / `--enable-agent-timeouts` or by updating `agent-timeouts.json`.
+- Environment aliases (`CCONDUCTOR_ENABLE_WATCHDOG`, `CCONDUCTOR_DISABLE_WATCHDOG`, `CCONDUCTOR_ENABLE_AGENT_TIMEOUTS`, `CCONDUCTOR_DISABLE_AGENT_TIMEOUTS`) map to the same behaviors; document their use in review notes if you rely on them for automated workflows.
 - Document watchdog/timeout overrides in post-mission reviews so stakeholders understand the risk posture.
 
 **Quality impact**: Lower automation can reduce the consistency of quality metrics (agents may exceed budgets or return stale evidence). Use manual validation before sharing results.

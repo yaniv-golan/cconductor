@@ -5,6 +5,16 @@ All notable changes to CConductor will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.1] - Unreleased
+
+### Changed
+
+- Expanded `./cconductor --help` coverage so debug and watchdog/timeout controls (including their aliases) are surfaced directly in the CLI output.
+
+### Removed
+
+- Dropped the unused `CCONDUCTOR_SEED` metadata field from generated `provenance.json` files to keep session artifacts lean.
+
 ## [0.4.0] - 2025-10-29
 
 **⚠️ BREAKING CHANGES**: Mission state now lives under `research-sessions/mission_<id>/` with a structured layout (manifest, README, dedicated subdirectories). Sessions created on v0.3.x or earlier cannot be resumed or viewed after upgrading.

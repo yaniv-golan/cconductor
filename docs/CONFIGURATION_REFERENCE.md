@@ -54,6 +54,19 @@ PROJECT_ROOT/config/
   *.default.json                 Default versions (don't edit these!)
 ```
 
+### Environment Overrides
+
+Set these variables to point the CLI at alternative configuration roots (useful in CI or ephemeral sandboxes):
+
+- `CCONDUCTOR_CONFIG_DIR` — overrides the directory that stores the user `*.json` configs listed above.
+- `CCONDUCTOR_USER_CONFIG_DIR` — redirects mission overlays (custom missions, prompts, overrides) to a custom directory; handy for tests or experiments.
+
+Export them in your shell or prefix a single command, e.g.:
+
+```bash
+CCONDUCTOR_CONFIG_DIR=/tmp/cfg CCONDUCTOR_USER_CONFIG_DIR=/tmp/user ./cconductor "query"
+```
+
 ### The `.default` Pattern
 
 **How configs work**:
