@@ -70,7 +70,11 @@ curl -fsSL https://claude.ai/install.sh | bash
 ```bash
 claude
 ```
-At the Claude prompt, type `/login`, complete the browser flow, then type `/status`.
+At the Claude prompt:
+* Type `/login`, complete the browser flow
+* Type `/status` to confirm you are authenticated. 
+
+Use Ctrl+C followed by another Ctrl+C to exit Claude and get back to the command line.
 
 Install required system packages:
 ```bash
