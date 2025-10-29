@@ -1178,8 +1178,8 @@ log_quality_gate_event() {
                 attempt: ($attempt | tonumber? // 0),
                 mode: $mode,
                 status: $status,
-                summary_file: ($summary | select(. != "")),
-                report_file: ($report | select(. != ""))
+                summary_file: (if $summary == "" then null else $summary end),
+                report_file: (if $report == "" then null else $report end)
             }')
 
         log_event "$session_dir" "$event_type" "$event_payload"
