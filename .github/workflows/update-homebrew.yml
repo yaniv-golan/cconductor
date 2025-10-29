@@ -70,13 +70,12 @@ jobs:
           if git diff --staged --quiet; then
             echo "No changes to commit"
           else
-            git commit -m "Update cconductor to version ${VERSION}
-
-Automated update from release: ${{ github.event.release.html_url }}
-
-- Version: ${VERSION}
-- SHA256: ${{ steps.release.outputs.sha256 }}
-"
+            commit_message=$(printf 'Update cconductor to version %s\n\nAutomated update from release: %s\n\n- Version: %s\n- SHA256: %s\n' \
+              "${VERSION}" \
+              "${{ github.event.release.html_url }}" \
+              "${VERSION}" \
+              "${{ steps.release.outputs.sha256 }}")
+            git commit -m "$commit_message"
             git push
             echo "✓ Formula updated and pushed to homebrew tap"
           fi
@@ -89,4 +88,3 @@ Automated update from release: ${{ github.event.release.html_url }}
           ruby -c Formula/cconductor.rb
           
           echo "✓ Formula syntax is valid"
-
