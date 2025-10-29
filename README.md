@@ -33,44 +33,60 @@ CConductor is a multi-agent AI research system that conducts comprehensive, adap
 Use the commands for your platform to go from zero to your first mission. Replace `sudo` with your preferred privilege escalation tool if needed.
 
 #### macOS (Homebrew)
+Install the Claude Code CLI and authenticate:
 ```bash
-# 1. Install Claude Code CLI and authenticate
 curl -fsSL https://claude.ai/install.sh | bash
+```
+```bash
 claude
-# In the Claude prompt (looks like ">"), type:
-#   /login    # opens browser-based OAuth flow
-# After the browser flow completes, type:
-#   /status   # confirms account, version, and connectivity
+```
+At the Claude prompt, type `/login`, complete the browser flow, then type `/status`.
 
-# 2. Install required system packages
-# (Install Homebrew first if you do not already have it: 
-#  /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)")
+Install Homebrew if you do not already have it:
+```bash
+/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+```
+
+Install required system packages:
+```bash
 brew install bash jq curl bc ripgrep git dialog
+```
 
-# 3. Install CConductor (accept the PATH prompt when offered)
+Install CConductor (accept the PATH prompt when offered):
+```bash
 curl -fsSL https://github.com/yaniv-golan/cconductor/releases/latest/download/install.sh | bash
+```
 
-# 4. Launch the guided experience
+Launch the guided experience:
+```bash
 cconductor
 ```
 
 #### Ubuntu / Debian / WSL2
+Install the Claude Code CLI and authenticate:
 ```bash
-# 1. Install Claude Code CLI and authenticate
 curl -fsSL https://claude.ai/install.sh | bash
+```
+```bash
 claude
-# In the Claude prompt (looks like ">"), type:
-#   /login
-#   /status
+```
+At the Claude prompt, type `/login`, complete the browser flow, then type `/status`.
 
-# 2. Install required system packages
+Install required system packages:
+```bash
 sudo apt-get update
+```
+```bash
 sudo apt-get install -y git jq curl bc ripgrep dialog
+```
 
-# 3. Install CConductor (installs to ~/.cconductor by default)
+Install CConductor (installs to `~/.cconductor` by default):
+```bash
 curl -fsSL https://github.com/yaniv-golan/cconductor/releases/latest/download/install.sh | bash
+```
 
-# 4. Launch the guided experience
+Launch the guided experience:
+```bash
 cconductor
 ```
 
@@ -81,9 +97,12 @@ cconductor
 ### Verify Installation
 ```bash
 claude
-#   /status          # Confirms CLI version, account, and connectivity
-cconductor --help    # Shows available commands (use ./cconductor if running from a cloned repo)
 ```
+At the Claude prompt, type `/status` to confirm your account.
+```bash
+cconductor --help
+```
+If you installed from a cloned repository, run `./cconductor --help` instead.
 
 ### Run Your First Mission
 - **Interactive mode:** `cconductor` (or `./cconductor`) launches the dialog-based TUI for guided setup. Install `dialog` for the full menu experience.
