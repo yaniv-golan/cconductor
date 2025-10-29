@@ -3,11 +3,11 @@
   "timeouts_enabled": true,
   "default_timeout_seconds": 600,
   "per_agent_timeouts": {
-    "academic-researcher": 900,
+    "academic-researcher": 1500,
     "web-researcher": 1200,
-    "synthesis-agent": 1800,
+    "synthesis-agent": 2100,
     "quality-remediator": 900,
-    "fact-checker": 600,
+    "fact-checker": 720,
     "research-planner": 300,
     "mission-orchestrator": 300
   },
