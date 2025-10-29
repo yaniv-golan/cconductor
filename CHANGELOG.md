@@ -22,6 +22,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - Hardened journal cleanup: the export script only removes temp files when paths exist, eliminating the lingering `rm -f '' ''` warning during regeneration.
+- Fixed journal export exit codes by replacing brittle jq quoting, preventing macOS exports from aborting with status 1 despite generating output.
 
 ## [0.4.0] - 2025-10-29
 

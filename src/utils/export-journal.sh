@@ -27,11 +27,13 @@ export CCONDUCTOR_BASH_RUNTIME
 
 EXPORT_JOURNAL_TOOL_LOG_FILE=""
 EXPORT_JOURNAL_TOOL_COUNTS_FILE=""
+EXPORT_JOURNAL_GAPS_FILE=""
 
 cleanup_export_journal() {
     local files=()
     [[ -n "${EXPORT_JOURNAL_TOOL_LOG_FILE:-}" ]] && files+=("$EXPORT_JOURNAL_TOOL_LOG_FILE")
     [[ -n "${EXPORT_JOURNAL_TOOL_COUNTS_FILE:-}" ]] && files+=("$EXPORT_JOURNAL_TOOL_COUNTS_FILE")
+    [[ -n "${EXPORT_JOURNAL_GAPS_FILE:-}" ]] && files+=("$EXPORT_JOURNAL_GAPS_FILE")
     if ((${#files[@]})); then
         rm -f "${files[@]}"
     fi
@@ -468,11 +470,13 @@ export_journal() {
     # Initialize temp files for tool logging
     local tool_log_file="/tmp/tool-log-$$.txt"
     local tool_counts_file="/tmp/tool-counts-$$.json"
+    local gaps_temp_file="/tmp/gaps-$$.json"
     echo '{"searches":0,"fetches":0,"saves":0,"plans":0,"greps":0}' > "$tool_counts_file"
     : > "$tool_log_file"
     
     EXPORT_JOURNAL_TOOL_LOG_FILE="$tool_log_file"
     EXPORT_JOURNAL_TOOL_COUNTS_FILE="$tool_counts_file"
+    EXPORT_JOURNAL_GAPS_FILE="$gaps_temp_file"
     
     # Flag to track when we need a task section header after iteration
     local NEED_TASK_SECTION_HEADER=false
@@ -1627,22 +1631,34 @@ export_journal() {
             
             # Show top priority research gaps (top 10)
             if [ "$total_gaps" -gt 0 ]; then
-                echo "**Top Priority Research Gaps:**"
-                echo ""
                 find "$session_dir/work" -name "findings-*.json" -type f -print0 2>/dev/null | \
-                    xargs -0 jq -r '.gaps_identified // [] | .[]' 2>/dev/null | \
-                    jq -sr 'sort_by(.priority // 0) | reverse | .[0:10] | .[] | 
-                        "\(.priority // 0). **\(.question // .gap_description // .description)**\n   - \(.reason // .rationale // "No rationale provided")\n"' 2>/dev/null
+                    xargs -0 jq -s '[.[] | .gaps_identified // [] | .[]]' 2>/dev/null > "$gaps_temp_file"
                 
-                if [ "$total_gaps" -gt 10 ]; then
+                if [ -s "$gaps_temp_file" ]; then
+                    echo "**Top Priority Research Gaps:**"
                     echo ""
-                    echo "> [!note]- View all gaps identified ($total_gaps total)"
-                    echo ">"
-                    find "$session_dir/work" -name "findings-*.json" -type f -print0 2>/dev/null | \
-                        xargs -0 jq -r '.gaps_identified // [] | .[] | 
-                            "> - **\(.question // .gap_description // .description)**\n>   - Priority: \(.priority // 0), Reason: \(.reason // .rationale // \"Not specified\")\n>"' 2>/dev/null
+                    jq -r '
+                        def fmt_reason: (.reason // .rationale // "No rationale provided");
+                        def fmt_gap:
+                            "\(.priority // 0). **\(.question // .gap_description // .description // "Unspecified research question")**\n" +
+                            "   - \(fmt_reason)\n";
+                        sort_by(.priority // 0) | reverse | .[0:10] | map(fmt_gap) | .[]
+                    ' "$gaps_temp_file" 2>/dev/null
+                    
+                    if [ "$total_gaps" -gt 10 ]; then
+                        echo ""
+                        echo "> [!note]- View all gaps identified ($total_gaps total)"
+                        echo ">"
+                        jq -r '
+                            def fmt_reason: (.reason // .rationale // "Not specified");
+                            def fmt_gap:
+                                "> - **\(.question // .gap_description // .description // "Unspecified research question")**\n" +
+                                ">   - Priority: \(.priority // 0), Reason: \(fmt_reason)\n>";
+                            sort_by(.priority // 0) | reverse | .[10:] | map(fmt_gap) | .[]
+                        ' "$gaps_temp_file" 2>/dev/null
+                    fi
+                    echo ""
                 fi
-                echo ""
             fi
             
             # Show detailed findings (visible by default)
@@ -1692,7 +1708,7 @@ export_journal() {
                             def format_credibility:
                                 gsub("_"; " ") | split(" ") | map(.[0:1] as $first | .[1:] as $rest | ($first | ascii_upcase) + $rest) | join(" ");
                             .claims // [] | .[] | 
-                            "> - \(.statement)\n>   - Confidence: \((.confidence // 0) * 100 | floor)%, Evidence Quality: \(.evidence_quality // \"unknown\")\n>   - Sources:\n\((.sources // [] | .[0:3] | .[] | \">     - [\(.title)](\(.url)) (\(.credibility // \"unknown\" | format_credibility)\(.date // \"\" | if . != \"\" then \", \" + . else \"\" end))\"))\n>"
+                            "> - \(.statement)\n>   - Confidence: \((.confidence // 0) * 100 | floor)%, Evidence Quality: \(.evidence_quality // "unknown")\n>   - Sources:\n\((.sources // [] | .[0:3] | .[] | ">     - [\(.title)](\(.url)) (\(.credibility // "unknown" | format_credibility)\(.date // "" | if . != "" then ", " + . else "" end))"))\n>"
                         ' 2>/dev/null | tail -n +121
                     fi
                     echo ""
