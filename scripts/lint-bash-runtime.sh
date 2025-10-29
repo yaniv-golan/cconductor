@@ -40,6 +40,9 @@ while IFS= read -r match; do
   if [[ "$line_no_newline" == *'`bash '* ]]; then
     continue
   fi
+  if [[ "$trimmed_leading" == echo* ]]; then
+    continue
+  fi
 
   state_single=0
   state_double=0
