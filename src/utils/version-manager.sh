@@ -375,15 +375,9 @@ show_update_notification() {
     
     # Full notification
     echo ""
-    echo "╭────────────────────────────────────────────────────╮"
-    printf "│ 🆕 Update Available: v%-8s → v%-8s       │\n" "$current" "$latest"
-    echo "│                                                    │"
-    echo "│ Update now:                                        │"
-    echo "│   cconductor --update                              │"
-    echo "│                                                    │"
-    echo "│ Release notes:                                     │"
-    echo "│   https://github.com/${REPO}/releases/latest      │"
-    echo "╰────────────────────────────────────────────────────╯"
+    printf "→ Update available: v%s → v%s\n" "$current" "$latest"
+    echo "   Run: cconductor --update"
+    echo "   Release notes: https://github.com/${REPO}/releases/latest"
     echo ""
 }
 
@@ -699,4 +693,3 @@ EOF
             ;;
     esac
 fi
-
