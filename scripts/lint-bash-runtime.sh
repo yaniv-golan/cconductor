@@ -12,6 +12,7 @@ TARGET_DIRS=(
 violations=()
 
 while IFS= read -r match; do
+  [[ -z "$match" ]] && continue
   file="${match%%:*}"
   rest="${match#*:}"
   lineno="${rest%%:*}"
@@ -71,7 +72,7 @@ while IFS= read -r match; do
     prev="$ch"
     ((i++))
   done
-done < <(rg --no-heading --line-number --type=sh '\bbash\s+' "${TARGET_DIRS[@]}")
+done < <(rg --no-heading --line-number --glob '*.sh' '\bbash\s+' "${TARGET_DIRS[@]}" || true)
 
 if (( ${#violations[@]} > 0 )); then
   {
