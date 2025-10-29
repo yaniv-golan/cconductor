@@ -32,7 +32,6 @@ COPY cconductor ./cconductor
 COPY src/ ./src/
 COPY config/ ./config/
 COPY knowledge-base/ ./knowledge-base/
-COPY library/ ./library/
 COPY docs/ ./docs/
 COPY VERSION ./VERSION
 COPY LICENSE ./LICENSE
@@ -44,7 +43,12 @@ RUN chmod +x cconductor && \
 
 # Create data directories and library structure
 RUN mkdir -p /data/research-sessions /data/cache /data/config /data/logs && \
-    mkdir -p /opt/cconductor/library/sources /opt/cconductor/library/digests
+    mkdir -p /opt/cconductor/library/sources /opt/cconductor/library/digests && \
+    { \
+        if [ ! -f /opt/cconductor/library/manifest.json ]; then \
+            printf '{\n  "sources": [],\n  "digests": []\n}\n' > /opt/cconductor/library/manifest.json; \
+        fi; \
+    }
 
 # Add to PATH
 ENV PATH="/opt/cconductor:${PATH}"
@@ -61,4 +65,3 @@ RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 
 ENTRYPOINT ["docker-entrypoint.sh"]
 CMD ["--help"]
-
