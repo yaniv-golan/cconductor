@@ -857,6 +857,85 @@ extract_orchestrator_decision() {
     return 1
 }
 
+_orchestrator_stream_extract_decision() {
+    local stream_file="$1"
+    local session_dir="$2"
+    local wait_seconds="${3:-15}"
+    local poll_interval=0.2
+
+    [[ -f "$stream_file" ]] || return 1
+
+    local start_epoch
+    start_epoch=$(get_epoch)
+    local payload=""
+
+    while true; do
+        payload=$(json_slurp_array "$stream_file" '[]')
+
+        if [[ -n "$payload" && "$payload" != "[]" ]]; then
+            local result_candidate
+            result_candidate=$(safe_jq_from_json "$payload" 'map(select(.type == "result")) | last // empty' "" "$session_dir" "orchestrator.stream.result")
+            if [[ -n "$result_candidate" && "$result_candidate" != "null" ]]; then
+                local result_text
+                result_text=$(safe_jq_from_json "$result_candidate" '.result // empty' "" "$session_dir" "orchestrator.stream.result_text")
+                if [[ -n "$result_text" && "$result_text" != "null" ]]; then
+                    local parsed_result
+                    parsed_result=$(extract_json_from_text "$result_text" 2>/dev/null || echo "")
+                    if [[ -n "$parsed_result" ]]; then
+                        echo "$parsed_result"
+                        return 0
+                    fi
+                fi
+            fi
+
+            local aggregated_text
+            aggregated_text=$(safe_jq_from_json "$payload" 'map(select(.type == "stream_event" and .event.type == "content_block_delta") | .event.delta.text? // empty) | join("")' "" "$session_dir" "orchestrator.stream.delta_aggregate")
+            if [[ -n "$aggregated_text" ]]; then
+                local parsed_aggregate
+                parsed_aggregate=$(extract_json_from_text "$aggregated_text" 2>/dev/null || echo "")
+                if [[ -n "$parsed_aggregate" ]]; then
+                    echo "$parsed_aggregate"
+                    return 0
+                fi
+            fi
+
+            local stop_count
+            stop_count=$(safe_jq_from_json "$payload" 'map(select(.type == "stream_event" and (.event.type == "message_stop" or .event.type == "response.completed" or .event.type == "response_completed" or .event.type == "response_stop" or .event.type == "response_finished"))) | length' "0" "$session_dir" "orchestrator.stream.stop_detected")
+            if (( stop_count > 0 )); then
+                break
+            fi
+        fi
+
+        if (( $(get_epoch) - start_epoch >= wait_seconds )); then
+            break
+        fi
+        sleep "$poll_interval"
+    done
+
+    return 1
+}
+
+resolve_orchestrator_decision() {
+    local session_dir="$1"
+    local raw_output="$2"
+    local stream_file="${3:-}"
+
+    local decision_json=""
+    if decision_json=$(extract_orchestrator_decision "$raw_output" 2>/dev/null); then
+        echo "$decision_json"
+        return 0
+    fi
+
+    if [[ -n "$stream_file" && -f "$stream_file" ]]; then
+        if decision_json=$(_orchestrator_stream_extract_decision "$stream_file" "$session_dir"); then
+            echo "$decision_json"
+            return 0
+        fi
+    fi
+
+    return 1
+}
+
 # Helper: Get agent display name
 get_agent_display_name() {
     local agent_name="$1"
@@ -882,12 +961,16 @@ get_agent_display_name() {
 process_orchestrator_decisions() {
     local session_dir="$1"
     local orchestrator_output="$2"
+    local stream_file="${3:-}"
     
     # Extract decision JSON from output (may include prose)
     local decision_json
-    if ! decision_json=$(extract_orchestrator_decision "$orchestrator_output"); then
+    if ! decision_json=$(resolve_orchestrator_decision "$session_dir" "$orchestrator_output" "$stream_file"); then
         echo "⚠️  Warning: Orchestrator did not return valid decision JSON" >&2
         echo "   Output preview: $(echo "$orchestrator_output" | head -c 200)..." >&2
+        if [[ -n "$stream_file" && -f "$stream_file" ]]; then
+            echo "   Stream log: $stream_file" >&2
+        fi
         log_decision "$session_dir" "invalid_output" "$(echo "$orchestrator_output" | head -c 500)"
         return 1
     fi
@@ -1362,7 +1445,16 @@ check_mission_complete() {
     local session_dir="$1"
     local mission_profile="$2"
     local orchestrator_output="$3"
-    
+    local stream_file="${4:-$session_dir/meta/orchestrator-output.json.stream.jsonl}"
+
+    # Require a valid orchestrator decision before evaluating completion.
+    # Streaming outputs can arrive truncated when the orchestrator is still writing;
+    # treating those as completion caused premature mission exits.
+    local decision_json=""
+    if ! decision_json=$(resolve_orchestrator_decision "$session_dir" "$orchestrator_output" "$stream_file"); then
+        return 1
+    fi
+
     # Initialize completion checklist
     local planning_done=false
     local quality_gate_passed=false
@@ -1434,29 +1526,26 @@ check_mission_complete() {
     fi
     
     # 5. Check for orchestrator early_exit decision
-    local decision_json
-    if decision_json=$(extract_orchestrator_decision "$orchestrator_output" 2>/dev/null); then
-        local decision_action
-        decision_action=$(echo "$decision_json" | jq -r '.action // ""')
-        
-        if [[ "$decision_action" == "early_exit" ]]; then
-            # Orchestrator explicitly requested early exit
-            # Log completion verification with current checklist state
-            log_decision "$session_dir" "completion_verification" "$(jq -n \
-                --arg planning "$planning_done" \
-                --arg quality "$quality_gate_passed" \
-                --arg gaps "$high_priority_gaps_resolved" \
-                --arg outputs "$required_outputs_present" \
-                --arg early_exit "true" \
-                '{
-                    planning_done: ($planning == "true"),
-                    quality_gate_passed: ($quality == "true"),
-                    gaps_resolved: ($gaps == "true"),
-                    outputs_present: ($outputs == "true"),
-                    early_exit_requested: $early_exit
-                }')"
-            return 0  # Complete (early exit)
-        fi
+    local decision_action
+    decision_action=$(echo "$decision_json" | jq -r '.action // ""')
+    
+    if [[ "$decision_action" == "early_exit" ]]; then
+        # Orchestrator explicitly requested early exit
+        # Log completion verification with current checklist state
+        log_decision "$session_dir" "completion_verification" "$(jq -n \
+            --arg planning "$planning_done" \
+            --arg quality "$quality_gate_passed" \
+            --arg gaps "$high_priority_gaps_resolved" \
+            --arg outputs "$required_outputs_present" \
+            --arg early_exit "true" \
+            '{
+                planning_done: ($planning == "true"),
+                quality_gate_passed: ($quality == "true"),
+                gaps_resolved: ($gaps == "true"),
+                outputs_present: ($outputs == "true"),
+                early_exit_requested: $early_exit
+            }')"
+        return 0  # Complete (early exit)
     fi
     
     # Log completion verification
@@ -1672,8 +1761,10 @@ EOF
         
         echo ""
         
+        local orchestrator_stream_file="$session_dir/meta/orchestrator-output.json.stream.jsonl"
+
         # Process orchestrator decisions
-        if ! process_orchestrator_decisions "$session_dir" "$orchestrator_output"; then
+        if ! process_orchestrator_decisions "$session_dir" "$orchestrator_output" "$orchestrator_stream_file"; then
             local exit_code=$?
             if [[ $exit_code -eq 2 ]]; then
                 # Early exit requested
@@ -1685,8 +1776,21 @@ EOF
         
         echo ""
         
+        # Refresh stakeholder classifications for the session
+        if command -v classify_stakeholders &>/dev/null || {
+            # shellcheck source=src/utils/stakeholder-classifier.sh
+            # shellcheck disable=SC1091
+            source "$UTILS_DIR/stakeholder-classifier.sh" 2>/dev/null
+        }; then
+            if ! classify_stakeholders "$session_dir" >/dev/null 2>&1; then
+                log_warn "Stakeholder classifier run failed; gate may rely on previous results"
+            fi
+        else
+            log_warn "stakeholder-classifier.sh unavailable; skipping stakeholder refresh"
+        fi
+        
         # Check mission completion
-        if check_mission_complete "$session_dir" "$mission_profile" "$orchestrator_output"; then
+        if check_mission_complete "$session_dir" "$mission_profile" "$orchestrator_output" "$orchestrator_stream_file"; then
             echo "✓ Mission complete - all success criteria met"
             break
         fi
@@ -1972,8 +2076,10 @@ run_mission_orchestration_resume() {
         
         echo ""
         
+        local orchestrator_stream_file="$session_dir/meta/orchestrator-output.json.stream.jsonl"
+
         # Process decisions
-        if ! process_orchestrator_decisions "$session_dir" "$orchestrator_output"; then
+        if ! process_orchestrator_decisions "$session_dir" "$orchestrator_output" "$orchestrator_stream_file"; then
             local exit_code=$?
             if [[ $exit_code -eq 2 ]]; then
                 echo ""
@@ -1985,7 +2091,7 @@ run_mission_orchestration_resume() {
         echo ""
         
         # Check completion
-        if check_mission_complete "$session_dir" "$mission_profile" "$orchestrator_output"; then
+        if check_mission_complete "$session_dir" "$mission_profile" "$orchestrator_output" "$orchestrator_stream_file"; then
             echo "✓ Mission complete - all success criteria met"
             break
         fi

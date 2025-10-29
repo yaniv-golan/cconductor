@@ -369,6 +369,31 @@ extract_cost_from_output() {
     local cost
     cost=$(safe_jq_from_file "$output_file" '.usage.total_cost_usd // .total_cost_usd // 0 | tonumber? // 0' "0" "$session_dir" "invoke_agent.cost")
     
+    if [[ "$cost" == "0" || "$cost" == "0.0" ]]; then
+        local stream_log="${output_file}.stream.jsonl"
+        if [[ -f "$stream_log" ]]; then
+            local stream_payload
+            stream_payload=$(json_slurp_array "$stream_log" '[]')
+            if [[ -n "$stream_payload" && "$stream_payload" != "[]" ]]; then
+                local stream_cost
+                stream_cost=$(safe_jq_from_json "$stream_payload" '[
+                    .[] |
+                    select(.type == "stream_event") |
+                    (
+                        .event.usage.total_cost_usd? //
+                        .event.response.usage.total_cost_usd? //
+                        .event.response.usage.cost.usd? //
+                        .event.usage.cost.usd? //
+                        empty
+                    )
+                ] | last? // 0' "0" "$session_dir" "invoke_agent.stream_cost")
+                if [[ -n "$stream_cost" && "$stream_cost" != "null" ]]; then
+                    cost="$stream_cost"
+                fi
+            fi
+        fi
+    fi
+    
     # Optional: Log warning if file exists but has no cost field (verbose mode only)
     if is_verbose_enabled 2>/dev/null && [[ "$cost" == "0" ]] && [[ -s "$output_file" ]]; then
         if ! jq -e '.usage.total_cost_usd // .total_cost_usd' "$output_file" >/dev/null 2>&1; then
@@ -789,6 +814,13 @@ invoke_agent_v2() {
         local aggregated_text=""
         local last_assistant_text=""
 
+        update_heartbeat() {
+            local timestamp
+            timestamp=$(get_epoch)
+            printf '%s:%s\n' "$agent_label" "$timestamp" > "${heartbeat_path}.tmp" 2>/dev/null || true
+            mv "${heartbeat_path}.tmp" "$heartbeat_path" 2>/dev/null || true
+        }
+
         while IFS= read -r line; do
             printf '%s\n' "$line" >> "$log_file"
             if [[ -n "$debug_log" ]]; then
@@ -805,7 +837,7 @@ invoke_agent_v2() {
                     inner_type=$(safe_jq_from_json "$line" '.event.type // empty' "" "$session_dir" "invoke_agent.stream.inner_type")
                     case "$inner_type" in
                         message_start|message_delta|content_block_start|content_block_delta|content_block_stop|tool_use_start|tool_use_delta|tool_use_stop)
-                            echo "${agent_label}:$(get_epoch)" > "$heartbeat_path" 2>/dev/null || true
+                            update_heartbeat
                             ;;
                     esac
                     if [[ "$inner_type" == "content_block_delta" || "$inner_type" == "message_delta" ]]; then
@@ -817,7 +849,7 @@ invoke_agent_v2() {
                     fi
                     ;;
                 assistant|message)
-                    echo "${agent_label}:$(get_epoch)" > "$heartbeat_path" 2>/dev/null || true
+                    update_heartbeat
                     local assistant_text
                     assistant_text=$(safe_jq_from_json "$line" '[.message.content[]? | select(.type=="text") | .text] | join("")' "" "$session_dir" "invoke_agent.stream.assistant")
                     if [[ -n "$assistant_text" && "$assistant_text" != "null" ]]; then
@@ -849,6 +881,7 @@ invoke_agent_v2() {
         fi
 
         if [[ -n "$synthesized_text" ]]; then
+            update_heartbeat
             local synthetic_result
             synthetic_result=$(jq -n --arg text "$synthesized_text" --arg subtype "stream_synthesized" \
                 '{type:"result",subtype:$subtype,result:$text}')
@@ -976,7 +1009,12 @@ invoke_agent_v2() {
     local heartbeat_file="$session_dir/.agent-heartbeat"
 
     # Initialize heartbeat file
-    echo "${agent_name}:$(get_epoch)" > "$heartbeat_file" 2>/dev/null || true
+    {
+        local timestamp
+        timestamp=$(get_epoch)
+        printf '%s:%s\n' "$agent_name" "$timestamp"
+    } > "${heartbeat_file}.tmp" 2>/dev/null || true
+    mv "${heartbeat_file}.tmp" "$heartbeat_file" 2>/dev/null || true
 
     # Read task from input file
     local task

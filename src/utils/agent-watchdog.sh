@@ -79,6 +79,9 @@ while true; do
     if [ -f "$heartbeat_file" ]; then
         # Extract timestamp from heartbeat file (format: agent_name:timestamp)
         last_heartbeat=$(cut -d: -f2 "$heartbeat_file" 2>/dev/null || echo "0")
+        if [[ ! "$last_heartbeat" =~ ^[0-9]+$ ]]; then
+            last_heartbeat="$current_time"
+        fi
         current_time=$(date +%s)
         staleness=$((current_time - last_heartbeat))
         
