@@ -208,7 +208,7 @@ Most errors are handled gracefully:
 
 3. **Use debug mode for troubleshooting**:
    ```bash
-   CCONDUCTOR_DEBUG=1 ./cconductor resume session_XXX
+   CCONDUCTOR_DEBUG=1 ./cconductor resume mission_XXX
    ```
 
 4. **Archive error logs for debugging**:

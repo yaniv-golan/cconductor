@@ -5,133 +5,30 @@ All notable changes to CConductor will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.4.0] - unreleased
+## [0.4.0] - 2025-10-29
 
-**⚠️ BREAKING CHANGES**: This release introduces a new session directory structure that is incompatible with previous versions. Old sessions cannot be resumed or viewed with v0.4.0.
-
-### Added
-
-- **Session README Generator**: new `src/utils/session-readme-generator.sh` produces the user-facing root `README.md` with direct links to the final report, research journal, dashboard, and supporting directories.
-- **Structured Session Layout**: Replaced the flat session structure with an organized directory tree:
-  - `meta/` - Session metadata, provenance, and configuration
-  - `inputs/` - Original research question and input files
-  - `cache/` - Live mission web/search caches for reuse
-  - `work/` - Agent working directories (replaces `raw/`)
-  - `knowledge/` - Knowledge graph and session knowledge files
-  - `artifacts/` - Agent artifacts and manifest (replaces `artifacts/`)
-  - `logs/` - Events, orchestration decisions, quality gate results
-  - `report/` - Final mission report and research journal (replaces `final/`)
-  - `viewer/` - Interactive dashboard (moved from root)
-- **Session Manifest**: `INDEX.json` at session root provides quick navigation, file counts, and SHA-256 checksums for all deliverables
-- **Provenance Tracking**: `meta/provenance.json` captures environment details (tool versions, git commit, system info, configuration checksums) for reproducibility
-- **Session README**: `README.md` at the session root provides quick navigation, statistics, and usage examples for each session
-- **Automated Release Pipeline**: GitHub Actions now build multi-arch Docker images, publish release artifacts, and update the Homebrew tap automatically (see `docs/RELEASE_AUTOMATION.md`)
-- **Agent Watchdog & Cost Tracking**: Long-running agents are monitored by `agent-watchdog.sh`, cost data is extracted directly from Claude outputs, and a manual `tests/manual/cost-capture-validation` suite plus `tests/cost-extraction-test.sh` guard the budget tooling
-- **Watchdog & Timeout Controls**: Added CLI toggles (`--enable/--disable-watchdog`, `--enable/--disable-agent-timeouts`), environment overrides, and config defaults (`watchdog_enabled`, `timeouts_enabled`) so advanced users can relax safeguards intentionally while keeping heartbeat monitoring intact.
-- **Docker Distribution**: Official Docker images published to GitHub Container Registry (ghcr.io)
-  - Multi-platform support (linux/amd64, linux/arm64)
-  - Three authentication methods: volume mount, environment variable, Docker secrets
-  - Comprehensive documentation in `docs/DOCKER.md`
-  - Docker Compose example configuration
-  - Automated builds via GitHub Actions on release
-- **Homebrew Distribution**: Custom tap for macOS installation
-  - Formula: `brew tap yaniv-golan/cconductor && brew install cconductor`
-  - Automatic dependency management (bash, jq, curl, bc, ripgrep)
-  - Proper library directory structure initialization
-  - Installation guide in `docs/HOMEBREW.md`
-  - Automated formula updates on release via GitHub Actions
-- **Confidence Surface**: Quality gate results now visible in every report
-  - Gate output includes structured `confidence_surface` with source counts, trust scores, limitation flags
-  - Synthesis agent mandated to include "Confidence & Limitations" section in reports
-  - Render fallback ensures visibility even if synthesis omits section
-  - Optional KG integration stores `quality_gate_assessment` in claims
-  - Session-level tracking records all gate runs in `meta/session-metadata.json`
-  - Documented in `docs/RESEARCH_QUALITY_FRAMEWORK.md` and `docs/KNOWLEDGE_SYSTEM_TECHNICAL.md`
-- **Quality Remediator Improvements**:
-  - Increased timeout from 600s to 900s (15 minutes) to accommodate heavy remediation workloads
-  - QA cycle now distinguishes timeout (124) from other failures, allowing retry on timeout instead of immediately failing
-  - Better logging: "timed out" vs "failed (exit code: N)" for clearer diagnostics
-  - Strengthened prompt to prevent planning loops: agent must complete with summary after writing JSON
-  - Added explicit output format template to ensure consistent response structure
-- **TUI Session Extension**: Interactive mode now prompts for session extension when resuming completed sessions
-  - Automatically detects completed sessions and offers extension options
-  - Interactive prompts for additional iterations and time
-  - Input validation ensures only positive integers accepted
-  - Works seamlessly with refinement guidance
-- Tracked pre-commit hook (`scripts/pre-commit.sh`) now runs ShellCheck alongside `scripts/lint-jq-patterns.sh` and `scripts/audit-jq-usage.sh`; CI mirrors the same jq guardrails.
-- Regression coverage for jq helper fallback semantics and dashboard metrics on partially populated sessions.
-
-### Changed
-
-- **Meta README Flow**: `manifest-generator.sh` has been renamed to `meta-manifest-generator.sh` and now targets the `meta/` directory exclusively.
-- **Session File Paths** (breaking): All file references updated to use the new session directory structure
-- `safe_jq_from_json` and `safe_jq_from_file` return success when falling back by default, with an opt-in `strict=true` flag for callers that must treat parse failures as fatal.
-- Pre/post hook bootstrap resolves repository root via `CCONDUCTOR_ROOT`/`.cconductor-root` and replaces deprecated jq flags to stay compatible with jq 1.7.
-
-### Fixed
-
-- **Critical Production Bugs**:
-  - **Budget limits always zero (CRITICAL)**: Fixed field name mismatch (`budget_usd` → `max_cost_usd`) that silently disabled all budget enforcement
-  - **Entity updates dropping metadata (HIGH)**: Fixed merge order in `kg_add_entity` to preserve IDs, timestamps, and system fields during updates
-  - **Evidence citation mismatch (HIGH)**: Added source-to-citation ID translation mapping so `evidence_support.source_ids` correctly reference actual citation IDs
-  - **Orchestration completion (CRITICAL)**: Fixed missions looping indefinitely after quality gate failures in advisory mode; synthesis now proceeds and completion check accepts advisory failures
-  - **Orchestration logging resilience**: Added error handling and fallback entries to ensure audit trail continuity even when JSON operations fail
-- **Session Resume Bug**: Fixed `cconductor sessions resume` command not passing session ID and arguments to handler, causing "Session ID required" error. The command now correctly forwards all arguments after the subcommand.
-- **Resume UX**: Added helpful message when attempting to resume a session that has exhausted its iterations/time, with actionable suggestions including the new extension flags.
-- **Session Extension**: Added `--extend-iterations N` and `--extend-time M` flags to `cconductor sessions resume` command:
-  - `--extend-iterations N`: Add N additional iterations to completed sessions
-  - `--extend-time M`: Add M additional minutes to the time budget
-  - Preserves all accumulated knowledge, sources, and research context
-  - Both flags can be used together for comprehensive session extension
-  - **Budget Tracking**: Extension flags now properly update the persisted `meta/budget.json` file via new `budget_extend_limits` function, ensuring budget checks respect extended limits
-  - Knowledge graph: `knowledge-graph.json` → `knowledge/knowledge-graph.json`
-  - Final report: `final/mission-report.md` → `report/mission-report.md`
-  - Events log: `events.jsonl` → `logs/events.jsonl`
-  - Artifacts: `artifacts/<agent>/` → `artifacts/<agent>/`
-  - Dashboard: `dashboard.html` → `viewer/index.html`
-- **Session Metadata Files**: `budget.json`, `mission-metrics.json`, and `orchestrator-*.json` now live under `meta/`, and per-session error logs write to `logs/system-errors.log`.
-- **MCP Configuration**: `.mcp.json` remains at session root (Claude Code requirement) with organizational symlink in `meta/`
-- **Agent Prompts**: Updated synthesis-agent, mission-orchestrator, and quality-remediator system prompts with new file paths
-- **Dashboard**: Moved to `viewer/` directory, updated file references to use relative paths to parent directories
-- **Budget Tracking**: `invoke-agent.sh` now records real Claude spend per agent invocation, and mission logs/events moved under `logs/` for consistent auditing
-- **Documentation**: Every guide (README, USAGE, TROUBLESHOOTING, SESSION_RESUME, etc.) now reflects the new directory layout and agent workflow paths
-
-### Migration
-
-**No automatic migration is provided.** To work with v0.4.0:
-- Old sessions remain readable but cannot be resumed or viewed with the new dashboard
-- New missions automatically use the v0.4.0 structure
-- Manual migration: copy files from old structure to the corresponding new directories if needed
-
-### Documentation
-
-- Added dedicated guides for Docker (`docs/DOCKER.md`), Homebrew (`docs/HOMEBREW.md`), and release automation (`docs/RELEASE_AUTOMATION.md`)
-- Updated `USAGE.md`, `README.md`, `TROUBLESHOOTING.md`, and session continuity/resume guides with the new session structure
-- Added `memory-bank/systemPatterns.md` documentation for new architecture
-
-### Removed
-
-- Retired the legacy `docs/KG_ARTIFACT_PATTERN.md` guide; its schema details now live inside the new session knowledge tooling
-
-## [0.3.3] - 2025-10-23
+**⚠️ BREAKING CHANGES**: Mission state now lives under `research-sessions/mission_<id>/` with a structured layout (manifest, README, dedicated subdirectories). Sessions created on v0.3.x or earlier cannot be resumed or viewed after upgrading.
 
 ### Added
 
-- **Coverage Gap Remediation**: Missions now verify quality standards before generating final reports. Quality gate automatically triggers remediation when research doesn't meet configured thresholds for sources, domains, trust scores, or recency.
-- **Agent Timeout Protection**: Agents that become unresponsive are automatically terminated after configurable timeouts (10-20 minutes depending on agent type), allowing missions to adapt and continue.
-- **Quality Gate Modes**: Choose between "advisory" mode (flags issues but allows synthesis) or "enforce" mode (blocks synthesis until standards met) via `config/quality-gate.default.json`.
-
-### Fixed
-
-- Mission orchestration log parsing errors when starting new sessions
-- Path displays now consistently show relative paths in terminal output
-- Agents hanging indefinitely without timeout protection
+- **Structured mission navigation**: Missions now emit `INDEX.json`, a mission README, and an expanded directory tree (`artifacts/`, `cache/`, `evidence/`, `inputs/`, `knowledge/`, `library/`, `logs/`, `meta/`, `report/`, `viewer/`, `work/`) so key assets are discoverable without spelunking.
+- **Session README generator**: `src/utils/session-readme-generator.sh` keeps the mission README current with progress stats, quick links, and surfaced artifacts for reviewers.
+- **Streaming runtime & watchdog controls**: Research now runs through a streaming orchestrator backed by `agent-watchdog.sh`, configurable heartbeats, and CLI/config toggles (`--enable/disable-watchdog`, `--enable/disable-agent-timeouts`) to tune mission safety budgets.
+- **Quality surface & domain-aware guardrails**: Reports embed the new `confidence_surface`, domain heuristics, and remediation guidance; supporting scripts (`src/utils/domain-compliance-check.sh`, `src/utils/quality-surface-sync.sh`) keep evidence, gate data, and dashboards aligned.
+- **Distribution & release automation**: Official Docker images, a Homebrew tap, and release automation docs (`docs/DOCKER.md`, `docs/HOMEBREW.md`, `docs/RELEASE_AUTOMATION.md`) ship with CI workflows that publish artifacts and refresh the tap automatically.
+- **Tooling guardrails**: Safe `jq` helpers plus lint scripts (`scripts/audit-jq-usage.sh`, `scripts/lint-jq-patterns.sh`) and the tracked `scripts/pre-commit.sh` enforce consistent parsing, ShellCheck coverage, and runtime hygiene.
 
 ### Changed
 
-- **Streamlined Cache Messages**: Verbose mode now shows single-line cache notifications instead of multi-line status updates. Cache hits display as `♻️ Cache hit: <url> (from date)` and misses as `🌐 <url> (reason)`.
-- **Clearer Quality Gate Messaging**: Changed "failed" to "flagged" and "blocked" to "postponed" for more accurate, constructive terminology.
-- **Improved Cache Guidance**: Updated documentation to clarify when agents should bypass cache (only when search landscape changes, not for finding recent content).
+- **Mission orchestration & resume flow**: Resume supports refinement prompts, iteration/time extensions, richer mission metrics, and hardened orchestration loops for multi-iteration runs.
+- **CLI & prompts**: The launcher prefers Homebrew Bash when present, `./cconductor sessions` surfaces mission-centric identifiers, and agent prompts reinforce temporal and reporting checkpoints.
+- **Logging & dashboards**: Consolidated logging wrappers, refreshed dashboards, and enhanced budget tracking keep watchdog timing, costs, and provenance visible inside each mission.
+
+### Fixed
+
+- **Mission completion edge cases**: Resolved premature completion and budget rollback bugs that previously blocked multi-iteration missions from finishing cleanly.
+- **Agent reliability improvements**: Raised default timeouts for long-running agents, stabilized watchdog heartbeats, and removed stray stdout from the final banner.
+- **Quality gate regressions**: Hardened malformed-sample handling and ensured remediation timeouts trigger retries instead of failing an entire QA pass.
 
 ## [0.3.2] - 2025-10-22
 

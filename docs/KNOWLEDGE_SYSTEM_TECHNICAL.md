@@ -216,7 +216,7 @@ fi
 
 **Directory Structure Created**:
 ```
-research-sessions/session_1234567890/
+research-sessions/mission_1234567890/
 ├── .claude/
 │   ├── agents/
 │   │   ├── academic-researcher.json  ← Will be enhanced
@@ -396,7 +396,7 @@ The enhanced agent is written to the session:
 **Verification Command**:
 ```bash
 # View the enhanced agent's system prompt
-jq -r '.systemPrompt' research-sessions/session_*/\.claude/agents/academic-researcher.json | head -50
+jq -r '.systemPrompt' research-sessions/mission_*/\.claude/agents/academic-researcher.json | head -50
 # Should show knowledge context at the beginning
 ```
 
@@ -1143,10 +1143,10 @@ cat ~/.config/cconductor/knowledge-config.json | jq .
 **3. Inspect Agent Prompts**
 ```bash
 # View enhanced agent system prompt
-jq -r '.systemPrompt' research-sessions/session_*/\.claude/agents/academic-researcher.json | head -100
+jq -r '.systemPrompt' research-sessions/mission_*/\.claude/agents/academic-researcher.json | head -100
 
 # Check if knowledge was injected (look for "Domain Knowledge" section)
-jq -r '.systemPrompt' research-sessions/session_*/\.claude/agents/academic-researcher.json | grep "Domain Knowledge" -A 10
+jq -r '.systemPrompt' research-sessions/mission_*/\.claude/agents/academic-researcher.json | grep "Domain Knowledge" -A 10
 ```
 
 **4. Trace Knowledge Resolution**
@@ -1212,7 +1212,7 @@ ls -la knowledge-base-custom/healthcare-policy.md
 jq '.agent_knowledge_map["academic-researcher"]' config/knowledge-config.default.json
 
 # 3. Verify knowledge was injected into agent
-jq -r '.systemPrompt' research-sessions/session_*/\.claude/agents/academic-researcher.json | grep -c "healthcare-policy"
+jq -r '.systemPrompt' research-sessions/mission_*/\.claude/agents/academic-researcher.json | grep -c "healthcare-policy"
 # Should return >0 if knowledge was injected
 ```
 
@@ -1239,7 +1239,7 @@ jq -r '.systemPrompt' research-sessions/session_*/\.claude/agents/academic-resea
 # Session override > Custom > Core
 
 # Check if stale session override exists
-ls -la research-sessions/session_*/knowledge/healthcare-policy.md
+ls -la research-sessions/mission_*/knowledge/healthcare-policy.md
 ```
 
 **Solutions**:
@@ -1263,7 +1263,7 @@ du -h knowledge-base/*.md
 du -h knowledge-base-custom/*.md
 
 # Check agent JSON sizes
-du -h research-sessions/session_*/\.claude/agents/*.json
+du -h research-sessions/mission_*/\.claude/agents/*.json
 
 # Count knowledge mappings
 jq '.agent_knowledge_map | to_entries | length' config/knowledge-config.default.json
@@ -1473,20 +1473,20 @@ domain=$(detect_domain "$research_query")  # Custom function
 
 # Create session-specific config
 SESSION_ID=$(date +%s)
-mkdir -p "research-sessions/session_$SESSION_ID/knowledge"
+mkdir -p "research-sessions/mission_$SESSION_ID/knowledge"
 
 case "$domain" in
     healthcare)
         cp knowledge-base-custom/healthcare-*.md \
-           "research-sessions/session_$SESSION_ID/knowledge/"
+           "research-sessions/mission_$SESSION_ID/knowledge/"
         ;;
     finance)
         cp knowledge-base-custom/finance-*.md \
-           "research-sessions/session_$SESSION_ID/knowledge/"
+           "research-sessions/mission_$SESSION_ID/knowledge/"
         ;;
     technology)
         cp knowledge-base-custom/tech-*.md \
-           "research-sessions/session_$SESSION_ID/knowledge/"
+           "research-sessions/mission_$SESSION_ID/knowledge/"
         ;;
 esac
 

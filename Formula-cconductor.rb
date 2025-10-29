@@ -7,7 +7,7 @@
 class Cconductor < Formula
   desc "AI Research, Orchestrated - Multi-agent research system powered by Claude"
   homepage "https://github.com/yaniv-golan/cconductor"
-  url "https://github.com/yaniv-golan/cconductor/archive/v0.3.3.tar.gz"
+  url "https://github.com/yaniv-golan/cconductor/archive/v0.4.0.tar.gz"
   sha256 "" # Will be filled during release
   license "MIT"
   
@@ -81,4 +81,3 @@ class Cconductor < Formula
     assert_match "CConductor v#{version}", shell_output("#{bin}/cconductor --version")
   end
 end
-

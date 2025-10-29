@@ -23,13 +23,21 @@ Each research session creates a directory with complete state in your OS-appropr
 **Session structure**:
 
 ```
-session_1234567890/
-├── meta/session.json              # Metadata (question, timestamps, version, status)
-├── knowledge/knowledge-graph.json      # All findings (entities, claims, citations, gaps)
-├── task-queue.json           # Tasks (legacy - replaced by orchestration)
-├── work/                      # Raw research data from agents
-# (intermediate/ removed in v0.4.0)             # Processing artifacts
-└── report/mission-report.md        # Final report (when complete)
+mission_1760000000000000000/
+├── INDEX.json                  # Session manifest (checksums, quick links)
+├── README.md                   # Human-readable navigation map for the mission
+├── artifacts/                  # Agent-produced files with manifest.json
+├── cache/                      # Web/search cache reused within the mission
+├── evidence/                   # Footnote bundles, bibliography exports, QA data
+├── inputs/                     # Original prompt, attachments, supplemental files
+├── knowledge/knowledge-graph.json   # Consolidated entities, claims, gaps, sources
+├── library/                    # Mission-scoped Library Memory digests
+├── logs/                       # Event stream, quality gate diagnostics, errors
+├── meta/session.json           # Mission metadata, status, runtime versions, budget
+├── report/mission-report.md    # Final mission report
+├── report/research-journal.md  # Mission journal (generated via export)
+├── viewer/                     # Interactive dashboard assets
+└── work/                       # Agent working directories and intermediate outputs
 ```
 
 ### Session State
@@ -38,10 +46,11 @@ The session tracks:
 
 - **Research question** - Original question
 - **Knowledge graph** - All entities, claims, relationships, citations discovered
-- **Task queue** - What's done, what's pending, what failed
-- **Iteration count** - How many research cycles completed
-- **Confidence scores** - Overall and by category
-- **Gaps & contradictions** - Unresolved issues to address
+- **Mission profile** - Mission name, objective, configuration, and constraints
+- **Progress metrics** - Iterations completed, mission status, timestamps, watchdog metrics
+- **Budget tracking** - Claude usage, remaining budget, overruns (when watchdog enabled)
+- **Confidence scores** - Structured confidence surface exported by the quality gate
+- **Gaps & contradictions** - Knowledge graph gaps surfaced for follow-up iterations
 - **Engine version** - For compatibility checking
 
 ## Using Resume
@@ -53,7 +62,7 @@ The session tracks:
 ./cconductor "What is quantum computing?"
 
 # Later, resume that session
-./cconductor resume session_1234567890
+./cconductor resume mission_1234567890
 ```
 
 ### Finding Sessions
@@ -71,9 +80,9 @@ Available research sessions:
 
 SESSION ID                QUESTION                                           STATUS
 ----------                --------                                           ------
-session_1234567890        What is quantum computing?                         active
-session_1234567891        CRISPR gene editing advances                       completed
-session_1234567892        Market size for AI coding assistants               resumed
+mission_1234567890        What is quantum computing?                         active
+mission_1234567891        CRISPR gene editing advances                       completed
+mission_1234567892        Market size for AI coding assistants               resumed
 ```
 
 Find your latest session:
@@ -88,7 +97,7 @@ Find your latest session:
 
 ```bash
 # Initial run finishes with Quality Score: 65/100
-./cconductor resume session_1234567890
+./cconductor resume mission_1234567890
 # Expected: +10-20 quality points per additional iteration
 ```
 
@@ -96,7 +105,7 @@ Find your latest session:
 
 ```bash
 # Ctrl+C during research, or system crash, or API limits
-./cconductor resume session_1234567890
+./cconductor resume mission_1234567890
 # Picks up where it left off, completed work is preserved
 ```
 
@@ -107,17 +116,17 @@ Find your latest session:
 ./cconductor "quantum computing"
 
 # Second pass: more depth (score 88)
-./cconductor resume session_XYZ
+./cconductor resume mission_XYZ
 
 # Third pass: publication quality (score 94)
-./cconductor resume session_XYZ
+./cconductor resume mission_XYZ
 ```
 
 **4. Found Gaps After Review**
 
 ```bash
 # Read your report and realize more research needed
-./cconductor resume session_1234567890
+./cconductor resume mission_1234567890
 # Coordinator will identify and address remaining gaps
 ```
 
@@ -126,7 +135,7 @@ Find your latest session:
 ### Step 1: Session Validation
 
 ```bash
-./cconductor resume session_1234567890
+./cconductor resume mission_1234567890
 ```
 
 The system:
@@ -186,9 +195,9 @@ Sessions track their status:
 
 $ ./cconductor sessions
 SESSION ID                QUESTION                STATUS
-session_1234567890        What is Docker?         active
+mission_1234567890        What is Docker?         active
 
-$ ./cconductor resume session_1234567890
+$ ./cconductor resume mission_1234567890
 # Loads session, shows progress
 # Asks if you want to continue or regenerate tasks
 # Resumes from iteration 3 (if that's where it stopped)
@@ -202,7 +211,7 @@ $ ./cconductor "What is quantum computing?"
 # Quality Score: 68/100 - FAIR
 # 8 unresolved gaps
 
-$ ./cconductor resume session_1234567890
+$ ./cconductor resume mission_1234567890
 # Current State shows: Confidence: 0.68, Unresolved gaps: 8
 # Runs coordinator to address gaps
 # Quality Score improves to: 85/100 - VERY GOOD
@@ -215,7 +224,7 @@ $ ./cconductor "comprehensive survey of AI safety research"
 # ... makes many API calls ...
 # Error: Rate limit exceeded
 
-$ ./cconductor resume session_1234567890
+$ ./cconductor resume mission_1234567890
 # Wait for rate limit to reset (check your API provider)
 # Resume continues from where it failed
 # Completed tasks aren't re-executed
@@ -224,7 +233,7 @@ $ ./cconductor resume session_1234567890
 ### Scenario 4: No Pending Tasks
 
 ```bash
-$ ./cconductor resume session_1234567890
+$ ./cconductor resume mission_1234567890
 
 ⚠️  No pending tasks found in session.
 
@@ -242,7 +251,7 @@ Sessions include the engine version they were created with:
 ```json
 {
   "engine_version": "0.1.0",
-  "session_id": "session_1234567890",
+  "session_id": "mission_1234567890",
   "research_question": "What is quantum computing?"
 }
 ```
@@ -296,8 +305,8 @@ $ ./cconductor resume my-session
 ❌ Error: Session not found: my-session
 
 Available sessions:
-session_1234567890
-session_1234567891
+mission_1234567890
+mission_1234567891
 ```
 
 **Solution**: Use exact session ID from `./cconductor sessions`
@@ -377,8 +386,8 @@ You can resume multiple times:
 
 ```bash
 ./cconductor "question"          # Iteration 1-3
-./cconductor resume session_XYZ  # Iteration 4-6
-./cconductor resume session_XYZ  # Iteration 7-9
+./cconductor resume mission_XYZ  # Iteration 4-6
+./cconductor resume mission_XYZ  # Iteration 7-9
 ```
 
 Each resume:
@@ -392,7 +401,7 @@ Each resume:
 Currently sessions use timestamps:
 
 ```
-session_1234567890
+mission_1234567890
 ```
 
 Future enhancement (planned for future release):
@@ -408,7 +417,7 @@ Future enhancement (planned for future release):
 
 ```bash
 # Can use full path instead of session ID
-./cconductor resume session_1234567890
+./cconductor resume mission_1234567890
 
 # Find your session directory
 SESSION_DIR=$(./src/utils/path-resolver.sh resolve session_dir)
@@ -424,7 +433,7 @@ Session state is all JSON - you can query programmatically:
 SESSION_DIR=$(./src/utils/path-resolver.sh resolve session_dir)
 
 # Get session metadata
-jq '.' "$SESSION_DIR/session_1234567890/meta/session.json"
+jq '.' "$SESSION_DIR/mission_1234567890/meta/session.json"
 
 # Get knowledge graph summary
 jq '{
@@ -432,10 +441,16 @@ jq '{
   claims: .stats.total_claims,
   confidence: .confidence_scores.overall,
   gaps: .stats.unresolved_gaps
-}' "$SESSION_DIR/session_1234567890/knowledge/knowledge-graph.json"
+}' "$SESSION_DIR/mission_1234567890/knowledge/knowledge-graph.json"
 
-# Get task statistics (if available in legacy sessions)
-jq '.stats' "$SESSION_DIR/session_1234567890/task-queue.json"
+# Get mission metrics (duration, cost, watchdog status)
+jq '{
+  status,
+  started_at,
+  completed_at,
+  duration_seconds,
+  total_cost_usd
+}' "$SESSION_DIR/mission_1234567890/meta/mission-metrics.json"
 ```
 
 ### Session Migration (Future)
@@ -444,7 +459,7 @@ For major version upgrades:
 
 ```bash
 # Not yet implemented
-./cconductor migrate session_1234567890 --to-version 2.0.0
+./cconductor migrate mission_1234567890 --to-version 2.0.0
 ```
 
 ## FAQ

@@ -549,7 +549,7 @@ kill -9 <PID>
 
 # Resume research
 ./cconductor sessions
-./cconductor resume session_name
+./cconductor resume mission_id
 ```
 
 **If waiting on slow API**:
@@ -621,14 +621,14 @@ find research-sessions -name "*.lock"
 find research-sessions -name "*.lock" -exec rm -rf {} +
 
 # Or for specific session
-rm -rf research-sessions/session_*/knowledge/knowledge-graph.json.lock
-rm -rf research-sessions/session_*/task-queue.json.lock  # Legacy sessions only
+rm -rf research-sessions/mission_*/knowledge/knowledge-graph.json.lock
+rm -rf research-sessions/mission_*/task-queue.json.lock  # Legacy sessions only
 ```
 
 **Step 4: Resume research**:
 
 ```bash
-./cconductor resume session_name
+./cconductor resume mission_id
 ```
 
 **Prevention**:
@@ -703,7 +703,7 @@ ls research-sessions/my-session/
 **1. Resume research** (most effective):
 
 ```bash
-./cconductor resume session_name
+./cconductor resume mission_id
 # Adds 10-15 points typically
 ```
 
@@ -749,7 +749,7 @@ cp your-papers/*.pdf pdfs/
 **1. Resume research**:
 
 ```bash
-./cconductor resume session_name
+./cconductor resume mission_id
 # Citations improve significantly
 ```
 
@@ -815,7 +815,7 @@ Look at bibliography - when were sources published?
 **3. Resume research for more sources**:
 
 ```bash
-./cconductor resume session_name
+./cconductor resume mission_id
 # Gets additional verification
 ```
 
@@ -1347,7 +1347,7 @@ unset CCONDUCTOR_SECURITY_PROFILE
 ls research-sessions/*/report/mission-report.md
 
 # Or for specific session:
-cat research-sessions/session_*/report/mission-report.md
+cat research-sessions/mission_*/report/mission-report.md
 ```
 
 **4. Check .latest marker**:
@@ -1396,7 +1396,7 @@ du -sh research-sessions/mission_*/cache
 
 ```bash
 # Remove sessions older than 30 days
-find research-sessions -name "session_*" -type d -mtime +30 -exec rm -rf {} +
+find research-sessions -name "mission_*" -type d -mtime +30 -exec rm -rf {} +
 ```
 
 **2. Remove test/failed sessions** (safe):
@@ -1416,11 +1416,11 @@ rm -rf research-sessions/test-session-name
 mkdir -p research-sessions-archive
 
 # Move old sessions
-mv research-sessions/session_old* research-sessions-archive/
+mv research-sessions/mission_old* research-sessions-archive/
 
 # Or compress
-tar -czf research-archive-$(date +%Y%m).tar.gz research-sessions/session_old*
-rm -rf research-sessions/session_old*
+tar -czf research-archive-$(date +%Y%m).tar.gz research-sessions/mission_old*
+rm -rf research-sessions/mission_old*
 ```
 
 **4. Limit raw data retention** (advanced):
@@ -1428,7 +1428,7 @@ rm -rf research-sessions/session_old*
 ```bash
 # Keep only final reports, remove intermediate data
 # WARNING: Can't resume these sessions afterward
-for session in research-sessions/session_*; do
+for session in research-sessions/mission_*; do
   # Keep: report/mission-report.md, inputs/prompt.txt
   # Remove: work/, cache/ (large)
   rm -rf "$session/work"
@@ -1473,7 +1473,7 @@ ls -lh research-sessions/mission_*/meta/*.json
 1. Check if `report/mission-report.md` is intact:
 
    ```bash
-   cat research-sessions/session_*/report/mission-report.md
+   cat research-sessions/mission_*/report/mission-report.md
    ```
 
 2. If report is good, you have your results (other files don't matter)
@@ -1519,21 +1519,21 @@ The fix has been implemented in `src/utils/setup-hooks.sh`. Hooks are now copied
 
 ```bash
 # Option 1: Delete old sessions (clean slate)
-rm -rf research-sessions/session_*
+rm -rf research-sessions/mission_*
 
 # Option 2: Fix specific session
-bash src/utils/setup-hooks.sh research-sessions/session_XXXXX/
+bash src/utils/setup-hooks.sh research-sessions/mission_XXXXX/
 ```
 
 **Verify Hooks Are Working**:
 
 ```bash
 # 1. Check session has hooks copied
-ls -la research-sessions/session_XXXXX/.claude/hooks/
+ls -la research-sessions/mission_XXXXX/.claude/hooks/
 # Should show: pre-tool-use.sh, post-tool-use.sh
 
 # 2. Check settings.json uses relative paths
-cat research-sessions/session_XXXXX/.claude/settings.json | jq .hooks
+cat research-sessions/mission_XXXXX/.claude/settings.json | jq .hooks
 # Should show: ".claude/hooks/pre-tool-use.sh" (relative path)
 
 # 3. Run quick test
@@ -1542,7 +1542,7 @@ cat research-sessions/session_XXXXX/.claude/settings.json | jq .hooks
 #                  ✓ WebSearch (1.2s)
 
 # 4. Check events logged
-cat research-sessions/session_*/logs/events.jsonl | head -5
+cat research-sessions/mission_*/logs/events.jsonl | head -5
 # Should show tool_use_start and tool_use_complete events
 ```
 
@@ -1560,27 +1560,27 @@ cat research-sessions/session_*/logs/events.jsonl | head -5
 
 ```bash
 # Session should have its own hooks
-ls -la research-sessions/session_XXXXX/.claude/hooks/
+ls -la research-sessions/mission_XXXXX/.claude/hooks/
 
 # If missing, session was created before fix
-bash src/utils/setup-hooks.sh research-sessions/session_XXXXX/
+bash src/utils/setup-hooks.sh research-sessions/mission_XXXXX/
 ```
 
 **Check 2: Permissions**:
 
 ```bash
 # Hooks must be executable
-ls -la research-sessions/session_XXXXX/.claude/hooks/*.sh
+ls -la research-sessions/mission_XXXXX/.claude/hooks/*.sh
 
 # If not executable (should show: -rwxr-xr-x):
-chmod +x research-sessions/session_XXXXX/.claude/hooks/*.sh
+chmod +x research-sessions/mission_XXXXX/.claude/hooks/*.sh
 ```
 
 **Check 3: Settings Configuration**:
 
 ```bash
 # Check hooks configuration
-cat research-sessions/session_XXXXX/.claude/settings.json
+cat research-sessions/mission_XXXXX/.claude/settings.json
 
 # Should contain:
 # {
@@ -1594,7 +1594,7 @@ cat research-sessions/session_XXXXX/.claude/settings.json
 **Check 4: Test Hooks Directly**:
 
 ```bash
-cd research-sessions/session_XXXXX/
+cd research-sessions/mission_XXXXX/
 export CCONDUCTOR_SESSION_DIR=$(pwd)
 
 # Test pre-hook
@@ -1671,7 +1671,7 @@ ls -lh research-sessions/mission_*/viewer/dashboard-metrics.json
 # Run from terminal, not IDE
 
 # Test hooks work:
-cd research-sessions/session_XXXXX/
+cd research-sessions/mission_XXXXX/
 export CCONDUCTOR_SESSION_DIR=$(pwd)
 claude --print --settings .claude/settings.json "list files" 2>&1 | grep "HOOK"
 ```
@@ -1705,7 +1705,7 @@ export CCONDUCTOR_VERBOSE=1
 CCONDUCTOR_VERBOSE=1 ./cconductor "your research question"
 
 # Resume with verbose mode
-./cconductor sessions resume session_XXX --verbose
+./cconductor sessions resume mission_XXX --verbose
 ```
 
 ### What Verbose Mode Shows
@@ -1796,7 +1796,7 @@ export CCONDUCTOR_DEBUG=1
 CCONDUCTOR_DEBUG=1 ./cconductor "research question"
 
 # Resume with debug mode
-CCONDUCTOR_DEBUG=1 ./cconductor resume session_XXX
+CCONDUCTOR_DEBUG=1 ./cconductor resume mission_XXX
 ```
 
 ### What Debug Mode Does
@@ -1865,7 +1865,7 @@ CCONDUCTOR_DEBUG=1 ./cconductor "test"
 **Scenario 2: Agent returning invalid JSON**
 
 ```bash
-CCONDUCTOR_DEBUG=1 ./cconductor resume session_XXX
+CCONDUCTOR_DEBUG=1 ./cconductor resume mission_XXX
 # Trace shows agent invocation
 # Error log shows JSON sample that failed
 ```
@@ -2077,7 +2077,7 @@ grep ERROR logs/*.log
 ./cconductor sessions latest
 
 # Resume research
-./cconductor resume session_name
+./cconductor resume mission_id
 
 # Check version
 ./cconductor --version

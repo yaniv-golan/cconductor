@@ -547,7 +547,7 @@ bash src/utils/export-journal.sh "$SESSION_DIR/$(cat "$SESSION_DIR/.latest")"
 ./cconductor sessions
 
 # Continue previous research
-./cconductor resume session_1759420487
+./cconductor resume mission_1759420487
 
 # Check if research is running
 ./cconductor status
@@ -567,7 +567,7 @@ bash src/utils/export-journal.sh "$SESSION_DIR/$(cat "$SESSION_DIR/.latest")"
 
 ### Session Outputs & Storage
 
-Every mission writes to a timestamped directory under `research-sessions/mission_<id>/` with an organized session tree (v0.5.0):
+Every mission writes to a timestamped directory under `research-sessions/mission_<id>/` with an organized session tree (v0.4.0):
 
 - `INDEX.json` – Session manifest with file counts, checksums, and quick navigation
 - `README.md` – "start here" session map with quick links and stats
@@ -577,6 +577,8 @@ Every mission writes to a timestamped directory under `research-sessions/mission
 - `work/` – Agent working directories and intermediate findings
 - `knowledge/` – Knowledge graph and session knowledge files
 - `artifacts/` – Agent-produced artifacts with manifest
+- `evidence/` – Footnotes, bibliographies, and quality gate exports wired into the final report
+- `library/` – Mission-scoped Library Memory digests for reuse across missions
 - `logs/` – Events, orchestration decisions, quality gate diagnostics, system errors
 - `report/` – Final mission report and research journal
 - `viewer/` – Interactive dashboard (HTML/JS)
@@ -613,7 +615,7 @@ Two additional storage locations matter for reuse:
 ./cconductor "Kubernetes architecture and components"
 
 # Resume to improve quality
-./cconductor resume session_1759420487
+./cconductor resume mission_1759420487
 ```
 
 ---

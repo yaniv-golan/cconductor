@@ -405,7 +405,7 @@ If citation coverage is lower than you need:
 **Method 1: Resume research** (most effective):
 
 ```bash
-./cconductor resume session_123
+./cconductor resume mission_123
 ```
 
 Continuing research typically:
@@ -471,7 +471,7 @@ More specific questions get better-sourced results:
 1. **Resume research**:
 
    ```bash
-   ./cconductor resume session_123
+   ./cconductor resume mission_123
    ```
 
 2. **Use more specific question**:
@@ -521,7 +521,7 @@ More specific questions get better-sourced results:
 3. **Resume research**:
 
    ```bash
-   ./cconductor resume session_123
+   ./cconductor resume mission_123
    ```
 
 4. **Check report file**:
@@ -573,7 +573,7 @@ More specific questions get better-sourced results:
 4. **Resume for more academic sources**:
 
    ```bash
-   ./cconductor resume session_123
+   ./cconductor resume mission_123
    ```
 
 ---

@@ -622,7 +622,7 @@ grep -r "keyword" research-sessions/*/report/mission-report.md
 
 ```bash
 mkdir -p archive/2024-q3/
-mv research-sessions/session_old* archive/2024-q3/
+mv research-sessions/mission_old* archive/2024-q3/
 ```
 
 ---

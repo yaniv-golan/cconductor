@@ -638,7 +638,7 @@ CConductor tracks your most recent session:
 
 ```bash
 cat research-sessions/.latest
-# Output: session_1759420487
+# Output: mission_1759420487
 ```
 
 **Use it**:
@@ -909,7 +909,7 @@ See if research is running:
 
 ```bash
 mkdir -p archive/2024-q3/
-mv research-sessions/session_old* archive/2024-q3/
+mv research-sessions/mission_old* archive/2024-q3/
 ```
 
 ---
@@ -1271,7 +1271,7 @@ Breakdown:
 **Most effective method**:
 
 ```bash
-./cconductor resume session_123
+./cconductor resume mission_123
 ```
 
 **What happens**:

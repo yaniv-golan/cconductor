@@ -178,12 +178,24 @@ sessions_viewer_handler() {
         # Absolute path provided
         session_dir="$session_arg"
     else
-        # Session ID provided (with or without 'session_' prefix)
+        # Session ID provided (supports mission_* and legacy session_* prefixes)
         local session_id="$session_arg"
-        if [[ ! "$session_id" == session_* ]]; then
-            session_id="session_${session_id}"
+        local resolved_id=""
+        if [[ "$session_id" == mission_* ]]; then
+            resolved_id="$session_id"
+        elif [[ "$session_id" == session_* ]]; then
+            resolved_id="$session_id"
+            local mission_candidate="mission_${session_id#session_}"
+            if [ ! -d "$CCONDUCTOR_ROOT/research-sessions/$resolved_id" ] && [ -d "$CCONDUCTOR_ROOT/research-sessions/$mission_candidate" ]; then
+                resolved_id="$mission_candidate"
+            fi
+        else
+            resolved_id="mission_$session_id"
+            if [ ! -d "$CCONDUCTOR_ROOT/research-sessions/$resolved_id" ] && [ -d "$CCONDUCTOR_ROOT/research-sessions/session_$session_id" ]; then
+                resolved_id="session_$session_id"
+            fi
         fi
-        session_dir="$CCONDUCTOR_ROOT/research-sessions/$session_id"
+        session_dir="$CCONDUCTOR_ROOT/research-sessions/$resolved_id"
     fi
     
     # Validate session directory exists

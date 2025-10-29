@@ -446,7 +446,7 @@ The most effective way to improve quality is to continue researching:
 ./cconductor sessions
 
 # Resume it
-./cconductor resume session_name
+./cconductor resume mission_id
 ```
 
 **What happens**:
@@ -865,7 +865,7 @@ Confidence: 45/100 (LOW)
 1. **Resume research**:
 
    ```bash
-   ./cconductor resume session_name
+   ./cconductor resume mission_id
    ```
 
 2. **More specific question**:
@@ -941,7 +941,7 @@ Confidence: 45/100 (LOW)
 1. **Resume research**:
 
    ```bash
-   ./cconductor resume session_name
+   ./cconductor resume mission_id
    ```
 
    Adaptive mode identifies and fills gaps

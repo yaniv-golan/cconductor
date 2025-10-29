@@ -182,7 +182,7 @@ For one-off research with special methodology:
 
 ```bash
 # Create session-specific knowledge
-SESSION_DIR="research-sessions/session_1234567890"
+SESSION_DIR="research-sessions/mission_1234567890"
 mkdir -p "$SESSION_DIR/knowledge"
 
 # Override core methodology for this session only
@@ -196,7 +196,7 @@ Use updated metrics for this specific research:
 EOF
 
 # Run research - uses session override
-./cconductor "Business question" --resume session_1234567890
+./cconductor "Business question" --resume mission_1234567890
 
 # Other sessions still use default business-methodology.md
 ```
@@ -512,7 +512,7 @@ Test custom knowledge with simple queries before using in important research:
 ./cconductor "Simple test question about my domain"
 
 # Review output for knowledge integration
-cat research-sessions/session_*/report/mission-report.md
+cat research-sessions/mission_*/report/mission-report.md
 ```
 
 ## Examples

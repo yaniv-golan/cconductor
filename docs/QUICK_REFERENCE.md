@@ -303,7 +303,7 @@ cp "$SESSION_DIR"/$(cat "$SESSION_DIR"/.latest)/report/mission-report.md ~/Docum
 # Find your session directory first
 SESSION_DIR=$(./src/utils/path-resolver.sh resolve session_dir)
 mkdir -p "$HOME/cconductor-archive/"
-mv "$SESSION_DIR"/session_old* "$HOME/cconductor-archive/"
+mv "$SESSION_DIR"/mission_old* "$HOME/cconductor-archive/"
 ```
 
 ### Monitor Progress
@@ -394,7 +394,7 @@ mv "$SESSION_DIR"/quantum-* "$SESSION_DIR/project-alpha/"
 
 # Archive by date
 mkdir -p "$HOME/cconductor-archive/2024-q3/"
-mv "$SESSION_DIR"/session_old* "$HOME/cconductor-archive/2024-q3/"
+mv "$SESSION_DIR"/mission_old* "$HOME/cconductor-archive/2024-q3/"
 ```
 
 ---
