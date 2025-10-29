@@ -16,7 +16,7 @@
 5. [Improving Research Quality](#improving-research-quality)
 6. [Examples](#examples)
 7. [Troubleshooting](#troubleshooting)
-8. [Domain-Aware Quality & Stakeholder Patterns](#domain-aware-quality--stakeholder-patterns)
+8. [Domain-Aware Quality & Stakeholder Coverage](#domain-aware-quality--stakeholder-coverage)
 
 ---
 
@@ -962,373 +962,99 @@ Confidence: 45/100 (LOW)
 
 ---
 
-## Domain-Aware Quality & Stakeholder Patterns
+## Domain-Aware Quality & Stakeholder Coverage
 
-### What is Domain-Aware Quality?
+### Stakeholder Pipeline Overview
 
-CConductor includes **domain-aware quality checking** that adapts quality standards to your research domain.
+CConductor 0.5.0 introduces a mission-scoped stakeholder pipeline that replaces brittle substring matching with explicit policies, reproducible artifacts, and auditable gate checks. Each mission iteration runs the following steps:
 
-**How it works**:
+1. **Policy & resolver loading** – Mission-specific `policy.json` declares categories, importance, and thresholds; `resolver.json` lists deterministic patterns and aliases.
+2. **Stakeholder classifier** – `src/utils/stakeholder-classifier.sh` loads the policy/resolver, classifies each unique source in the knowledge graph, and escalates ambiguous cases to the Claude `stakeholder-classifier` agent.
+3. **Gate evaluation** – `src/utils/stakeholder-gate.sh` enforces thresholds (minimum sources, critical coverage, uncategorized ceiling) and writes JSON + Markdown reports.
+4. **Quality hook integration** – The quality gate reads the stakeholder gate output and fails the mission if critical coverage or uncategorized limits are violated.
 
-1. At mission start, CConductor analyzes your research objective
-2. Identifies domain (e.g., aviation safety, healthcare policy, tech markets)
-3. Generates domain-specific requirements:
-   - **Stakeholder categories**: Which perspectives must be represented (regulators, manufacturers, critics, etc.)
-   - **Freshness requirements**: How recent data must be per topic (regulatory decisions: 6 months, technical specs: 12 months)
-   - **Mandatory watch items**: Critical facts that must be researched (e.g., "FAA certification status", "clinical trial results")
+The pipeline keeps the knowledge graph immutable while making stakeholder decisions deterministic and reviewable.
 
-4. Quality gate enforces these requirements:
-   - Checks that all critical stakeholder perspectives are included
-   - Verifies mandatory watch items were researched
-   - Applies topic-specific recency thresholds
+### Mission Policies & Resolvers
 
-**Benefits**:
+Built-in missions now live in `config/missions/<mission>/` and include:
 
-- Reports automatically include balanced stakeholder representation
-- No more defensive or biased reporting
-- Ensures critical facts aren't omitted
-- Domain-appropriate freshness (regulatory domains get stricter thresholds than historical research)
+- `profile.json` – core mission definition.
+- `policy.json` – stakeholder categories, importance levels, and gate thresholds.
+- `resolver.json` – arrays of aliases and wildcard host patterns (shell-style globs).
 
-### Understanding Stakeholder Categories
-
-CConductor automatically identifies stakeholder perspectives from source URLs and titles:
-
-**Example - Aviation Safety Domain**:
-
-- **Regulators**: faa.gov, easa.europa.eu, sources with "FAA", "certification"
-- **Manufacturers**: boeing.com, airbus.com, sources with "manufacturer statement"
-- **Operators**: airline websites, pilot unions, sources with "fleet operations"
-- **Safety Advocates**: independent safety groups, sources with "investigation", "advocacy"
-- **Independent Analysts**: think tanks, academic researchers, sources with "analysis", "study"
-
-**How CConductor categorizes sources**:
-
-1. **Domain matching**: Checks if source URL contains known patterns (e.g., ".gov" for regulators)
-2. **Keyword matching**: Checks if source title contains category keywords (e.g., "FAA" → regulators)
-3. **Auto-learning**: Domain Heuristics Agent performs web research to discover stakeholder patterns per mission
-
-### When You Need Manual Stakeholder Patterns
-
-Sometimes CConductor encounters sources it can't automatically categorize. You'll see warnings like:
-
-```
-⚠ Note: 8 uncategorized sources detected (18%)
-   Review: artifacts/quality-gate-summary.json
-   Action: Add patterns to ~/.config/cconductor/stakeholder-patterns.json if needed
-```
-
-**When to add manual patterns**:
-
-- **Niche stakeholders**: Regional regulators (Transport Canada, CASA Australia)
-- **Specialized groups**: Patient advocacy organizations, open-source maintainers
-- **Domain-specific sources**: Industry newsletters, specialized journals
-- **International sources**: Non-English domains that don't match US/EU patterns
-
-**When NOT to add patterns**:
-
-- Generic news sites (these are usually correctly categorized or intentionally not stakeholders)
-- One-off sources (not worth maintaining patterns for)
-- Sources that shouldn't be stakeholders (personal blogs, forums)
-
-### How to Add Manual Stakeholder Patterns
-
-**Step 1: Create your patterns file**
+To customize a mission, copy the files into your user config and edit them:
 
 ```bash
-# Create config directory if it doesn't exist
-mkdir -p ~/.config/cconductor
-
-# Copy template
-cp config/stakeholder-patterns.default.json ~/.config/cconductor/stakeholder-patterns.json
+mkdir -p ~/.config/cconductor/missions/general-research
+cp config/missions/general-research/policy.json ~/.config/cconductor/missions/general-research/policy.json
+cp config/missions/general-research/resolver.json ~/.config/cconductor/missions/general-research/resolver.json
 ```
 
-**Step 2: Edit the file**
+The classifier always reads the session copies (stored in `research-sessions/<id>/meta/`) so changes take effect on the next mission run without mutating the knowledge graph.
 
-Open `~/.config/cconductor/stakeholder-patterns.json` in your editor.
+### Classification Artifacts
 
-**Example - Adding regional aviation regulators**:
+`stakeholder-classifier.sh` produces two artifacts under `session/`:
+
+| File | Purpose |
+| --- | --- |
+| `stakeholder-classifications.jsonl` | One JSON object per classified source (category, confidence, resolver path, raw tags, optional alias suggestion). |
+| `stakeholder-classifier.checkpoint.json` | Records the last processed KG source count to skip redundant work. |
+
+A sample classification entry:
 
 ```json
 {
-  "additional_patterns": {
-    "regional_regulators": {
-      "domain_patterns": [
-        "tc.gc.ca",
-        "casa.gov.au",
-        "dgca.gov.in"
-      ],
-      "keyword_patterns": [
-        "Transport Canada",
-        "CASA",
-        "DGCA",
-        "civil aviation authority"
-      ]
-    }
-  }
+  "source_id": "c9f6f2b4d1a3e5b0",
+  "url": "https://www.transport.canada.ca/...",
+  "raw_tags": ["transport.canada.ca", "transport", "canada"],
+  "resolved_category": "government",
+  "resolver_path": "pattern:*.transport.canada.ca",
+  "confidence": 0.98,
+  "llm_attempted": false,
+  "timestamp": "2025-10-29T18:22:00Z"
 }
 ```
 
-**Pattern types explained**:
+Entries with `llm_attempted: true` come from the Claude tail and may include a `suggest_alias` payload for future resolver promotion.
 
-- **domain_patterns**: URL fragments that identify sources
-  - Example: `"tc.gc.ca"` matches `https://tc.gc.ca/eng/civilaviation/`
-  - Use specific fragments: `"tc.gc.ca"` not just `".ca"`
-  
-- **keyword_patterns**: Terms that appear in source titles/snippets
-  - Example: `"Transport Canada"` matches title "Transport Canada Issues New Directive"
-  - Case-insensitive matching
-  - Include variations: `["safety advocate", "advocacy group", "safety coalition"]`
+### Stakeholder Gate Reports
 
-**Matching logic**: A source matches a stakeholder category if it matches **ANY** domain pattern **OR ANY** keyword pattern.
+After each iteration the orchestrator invokes `stakeholder-gate.sh`, which emits:
 
-**Step 3: Add multiple categories**
+- `session/stakeholder-gate.json` – machine-readable summary (`status`, counts, failed checks, alias suggestions).
+- `session/stakeholder-gate-report.md` – Markdown with category tables, critical coverage checklist, and suggested aliases.
 
-You can add as many stakeholder categories as needed:
+The quality gate reads this JSON summary and surfaces failures directly in the final quality report, pointing back to the Markdown file for remediation.
 
-```json
-{
-  "additional_patterns": {
-    "regional_regulators": {
-      "domain_patterns": ["tc.gc.ca", "casa.gov.au"],
-      "keyword_patterns": ["Transport Canada", "CASA"]
-    },
-    "safety_advocates": {
-      "domain_patterns": ["familiesof737max.org", "airsafe.org"],
-      "keyword_patterns": ["victim families", "safety advocate", "crash investigation"]
-    },
-    "pilot_unions": {
-      "domain_patterns": ["alpa.org", "swapa.org"],
-      "keyword_patterns": ["pilot union", "ALPA", "SWAPA", "pilot association"]
-    }
-  }
-}
-```
+### Customizing Categories & Patterns
 
-**Step 4: Run a test mission**
+1. **Inspect the mission policy** (`policy.json`) to see which categories are marked `critical`, `important`, or `informative`.
+2. **Update the resolver** (`resolver.json`) with host globs or alias strings (case-insensitive). Patterns use shell globs like `"*.sec.gov"` or `"investor.apple.com"`.
+3. **Promote alias suggestions** from the gate report to avoid repeated LLM calls.
+4. **Fallback defaults** live in `config/stakeholder-policy.default.json` and `config/stakeholder-resolver.default.json` if a mission does not provide templates.
 
-```bash
-# Run research on your domain
-./cconductor "Your research question about the domain"
+### Reviewing Coverage Issues
 
-# After mission completes, check uncategorized count
-cat research-sessions/mission_*/artifacts/quality-gate-summary.json | jq '.uncategorized_sources'
-```
+| Symptom | Investigation Steps |
+| --- | --- |
+| Gate failed with "Missing critical stakeholder" | Open `stakeholder-gate-report.md`, review the "Critical Coverage" section, add resolver entries or gather more sources for the missing category. |
+| Uncategorized percentage above limit | Review alias suggestions in the report, add resolver patterns/aliases, re-run the classifier (`src/utils/stakeholder-classifier.sh <session_dir>`). |
+| Classifier skips new sources | Delete `session/stakeholder-classifier.checkpoint.json` or ensure the knowledge graph updated; verify the Claude CLI is logged in if LLM batches fail. |
 
-**What to look for**:
+### Quick Reference
 
-```json
-{
-  "count": 2,           ← Should be lower than before
-  "total": 45,
-  "percentage": 4.4,    ← Should be <15%
-  "samples": [          ← Review these to see what's still uncategorized
-    {
-      "url": "https://example.com/article",
-      "title": "Example Title"
-    }
-  ]
-}
-```
+| Task | Location / Command |
+| --- | --- |
+| View classified sources | `jq '.' session/stakeholder-classifications.jsonl` |
+| Stakeholder gate summary | `jq '.' session/stakeholder-gate.json` |
+| Human-readable report | `less session/stakeholder-gate-report.md` |
+| Mission policy/resolver templates | `config/missions/<mission>/` |
+| User overrides | `~/.config/cconductor/missions/<mission>/` |
+| Manual classifier rerun | `src/utils/stakeholder-classifier.sh research-sessions/<id>` |
 
-**If count is still high**:
 
-1. Review `samples` array to see what sources are missed
-2. Add more domain/keyword patterns for those sources
-3. Run another mission to verify
-
-### Pattern Merging Behavior
-
-Your manual patterns are **merged with auto-detected patterns**, not replaced:
-
-- ✅ Auto-detected patterns still work
-- ✅ Your patterns supplement them
-- ✅ No conflict: your patterns take priority if there's overlap
-- ✅ Different missions can use different auto-detected patterns
-
-**Example**:
-
-- Mission 1 (aviation): Auto-detects FAA, EASA + your manual patterns for Transport Canada
-- Mission 2 (healthcare): Auto-detects FDA, CDC + your manual patterns for patient advocates
-- Each mission gets relevant stakeholder categories
-
-### Template File Reference
-
-CConductor provides a comprehensive template with examples:
-
-**Location**: `config/stakeholder-patterns.default.json`
-
-**Includes examples for**:
-
-- **Aviation**: Regional regulators, safety advocates
-- **Healthcare**: Medical researchers, patient advocates
-- **Technology**: Security researchers, open-source maintainers
-
-**View template**:
-
-```bash
-cat config/stakeholder-patterns.default.json
-```
-
-The template includes detailed comments explaining each field and best practices.
-
-### Best Practices
-
-**1. Start small**
-
-Don't try to add every possible stakeholder upfront. Start with the uncategorized sources you actually encounter.
-
-**2. Use specific patterns**
-
-❌ Bad: `".gov"` (too broad, matches everything)  
-✅ Good: `"tc.gc.ca"` (specific to Transport Canada)
-
-❌ Bad: `"research"` (too generic)  
-✅ Good: `"clinical trial"` (specific to medical research)
-
-**3. Include variations**
-
-```json
-"keyword_patterns": [
-  "Transport Canada",
-  "Transports Canada",
-  "TC Civil Aviation",
-  "TCCA"
-]
-```
-
-**4. Document your additions**
-
-Add comments (using `"_note"` fields) explaining why you added each category:
-
-```json
-{
-  "additional_patterns": {
-    "regional_regulators": {
-      "_note": "Added June 2025 for international aviation compliance research",
-      "domain_patterns": ["tc.gc.ca"],
-      "keyword_patterns": ["Transport Canada"]
-    }
-  }
-}
-```
-
-**5. Test incrementally**
-
-Add 1-2 categories, run a test mission, verify they work, then add more.
-
-**6. Share with your team**
-
-If multiple people research the same domains, share your `stakeholder-patterns.json` file:
-
-```bash
-# Commit to team's shared config repository
-cp ~/.config/cconductor/stakeholder-patterns.json team-configs/aviation-stakeholders.json
-```
-
-### Troubleshooting
-
-**Problem: Patterns not matching**
-
-**Symptoms**:
-- Added patterns but uncategorized count didn't decrease
-- Expected sources still show up in `samples` array
-
-**Solutions**:
-
-1. **Check pattern syntax**:
-   ```bash
-   # Validate JSON
-   jq empty ~/.config/cconductor/stakeholder-patterns.json
-   # Should print nothing if valid, error if invalid
-   ```
-
-2. **Check domain pattern specificity**:
-   ```bash
-   # View source URL from quality gate summary
-   cat research-sessions/mission_*/artifacts/quality-gate-summary.json | \
-     jq '.uncategorized_sources.samples[0].url'
-   
-   # Extract domain part manually
-   # URL: https://www.example.com/path/to/article
-   # Domain to match: "example.com" (without www, protocol, path)
-   ```
-
-3. **Check keyword case sensitivity**:
-   - Keywords are case-insensitive
-   - `"Transport Canada"` matches "transport canada", "TRANSPORT CANADA", etc.
-
-4. **Verify file location**:
-   ```bash
-   # Check if file exists
-   ls -la ~/.config/cconductor/stakeholder-patterns.json
-   
-   # If missing, copy template again
-   cp config/stakeholder-patterns.default.json ~/.config/cconductor/stakeholder-patterns.json
-   ```
-
-**Problem: Too many categories**
-
-**Symptoms**:
-- Quality gate always fails with "missing critical stakeholder"
-- You don't need all these perspectives for your research
-
-**Solution**:
-
-Domain-aware quality only flags **critical** stakeholders as missing. If you're seeing failures, it means the auto-detected heuristics deemed those perspectives critical for your domain.
-
-Options:
-
-1. **Let the orchestrator address gaps**: CConductor will automatically research missing perspectives
-2. **Review domain heuristics**: Check `meta/domain-heuristics.json` to see why perspectives were marked critical
-3. **Adjust research question**: If your question is too broad, CConductor will require more stakeholder perspectives
-
-**Problem: Patterns work for one mission but not another**
-
-**Cause**: Domain heuristics are mission-specific. Your manual patterns apply to ALL missions, but auto-detected stakeholder categories vary by mission.
-
-**Example**:
-
-- **Mission 1** (aviation safety): Auto-detects "regulators", "manufacturers", "safety_advocates"
-  - Your pattern for "regional_regulators" supplements "regulators" category
-  
-- **Mission 2** (tech security): Auto-detects "vendors", "security_researchers", "users"
-  - Your "regional_regulators" pattern doesn't match any category in this mission (correctly ignored)
-
-**This is correct behavior**: Patterns only apply when relevant stakeholder categories exist.
-
-### Advanced: Category Naming
-
-**Important**: Your manual pattern category names should be semantic and clear, but they're merged based on similarity matching.
-
-**Naming tips**:
-
-- Use singular or plural consistently: `"regulators"` not mixing with `"regulator"`
-- Use underscores for multi-word: `"safety_advocates"` not `"safety advocates"` or `"SafetyAdvocates"`
-- Match auto-detected patterns when possible: Check `meta/domain-heuristics.json` to see what CConductor named the categories
-
-**Example from heuristics**:
-
-```json
-{
-  "stakeholder_categories": {
-    "regulators": { ... },
-    "safety_advocates": { ... }
-  }
-}
-```
-
-Your patterns should use same names:
-
-```json
-{
-  "additional_patterns": {
-    "regulators": { ... },        ← Merges with auto-detected "regulators"
-    "safety_advocates": { ... }   ← Merges with auto-detected "safety_advocates"
-  }
-}
-```
-
----
 
 ## See Also
 

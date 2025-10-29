@@ -9,14 +9,15 @@ CConductor missions rely on a cooperative set of specialized agents. This guide 
 | Prompt Parser | Separates the core research question from formatting requests | Immediately after you submit a mission prompt | [System prompt](../src/claude-runtime/agents/prompt-parser/system-prompt.md)<br>[Custom output formatting](USER_GUIDE.md#custom-output-formatting) |
 | Research Planner | Breaks the cleaned objective into initial tasks and agent assignments | Mission initialization (after prompt parsing) | [System prompt](../src/claude-runtime/agents/research-planner/system-prompt.md)<br>[Research system overview](USER_GUIDE.md#research-system) |
 | Mission Orchestrator | Chooses which agents to invoke, reflects on progress, and manages the knowledge graph | Runs throughout every mission | [System prompt](../src/claude-runtime/agents/mission-orchestrator/system-prompt.md)<br>[Mission orchestration primer](MISSION_QUICKSTART.md#mission-orchestrator)<br>[Orchestrator utilities](ORCHESTRATOR_UTILITIES.md) |
-| Domain Heuristics | Produces domain-specific guardrails (stakeholders, freshness, watch items) | Early mission setup before research agents start | [System prompt](../src/claude-runtime/agents/domain-heuristics/system-prompt.md)<br>[Domain-aware quality guidance](QUALITY_GUIDE.md#understanding-stakeholder-categories)<br>[Pattern merging reference](CONFIGURATION_REFERENCE.md#pattern-merging-behavior) |
+| Domain Heuristics | Produces domain-specific guardrails (stakeholders, freshness, watch items) | Early mission setup before research agents start | [System prompt](../src/claude-runtime/agents/domain-heuristics/system-prompt.md)<br>[Stakeholder pipeline overview](QUALITY_GUIDE.md#domain-aware-quality--stakeholder-coverage)<br>[Pattern merging reference](CONFIGURATION_REFERENCE.md#pattern-merging-behavior) |
+| Stakeholder Classifier | Labels sources with mission-scoped stakeholder categories and proposes new aliases | Runs after each mission iteration when new sources enter the knowledge graph | [System prompt](../src/claude-runtime/agents/stakeholder-classifier/system-prompt.md)<br>[Stakeholder pipeline overview](QUALITY_GUIDE.md#domain-aware-quality--stakeholder-coverage) |
 | Web Researcher | Handles general web fact-finding with citations | Invoked as needed during research loops | [System prompt](../src/claude-runtime/agents/web-researcher/system-prompt.md)<br>[Web agent integration tips](RESEARCH_SOURCES.md#for-web-researcher-agent)<br>[Tool restrictions](AGENT_TOOLS_CONFIG.md#research-agent-safe) |
 | Academic Researcher | Focuses on scholarly sources, PDFs, and methodology analysis | Used when academic rigor is required | [System prompt](../src/claude-runtime/agents/academic-researcher/system-prompt.md)<br>[Academic workflow](RESEARCH_SOURCES.md#for-academic-researcher-agent)<br>[PDF research guide](PDF_RESEARCH_GUIDE.md#academic-researcher-agent) |
 | PDF Analyzer | Performs deep structured reads once PDFs are cached | Follows academic/web agents when documents need close reading | [System prompt](../src/claude-runtime/agents/pdf-analyzer/system-prompt.md)<br>[PDF research guide](PDF_RESEARCH_GUIDE.md#pdf-analyzer-agent) |
 | Market Analyzer | Builds market sizing and business intelligence findings | Triggered for market/competitive missions or planner tasks labeled “market” | [System prompt](../src/claude-runtime/agents/market-analyzer/system-prompt.md)<br>[Research system overview](USER_GUIDE.md#research-system) |
 | Code Analyzer | Audits codebases, APIs, and technical implementations | Used for technical deep dives or code-focused questions | [System prompt](../src/claude-runtime/agents/code-analyzer/system-prompt.md)<br>[Research system overview](USER_GUIDE.md#research-system) |
 | Fact Checker | Validates existing claims, adds confirmations or corrections | Runs once a knowledge base of claims exists | [System prompt](../src/claude-runtime/agents/fact-checker/system-prompt.md)<br>[Research system overview](USER_GUIDE.md#research-system) |
-| Quality Remediator | Responds to quality gate failures by sourcing stronger evidence | Invoked automatically when the quality gate flags issues | [System prompt](../src/claude-runtime/agents/quality-remediator/system-prompt.md)<br>[Quality program overview](QUALITY_GUIDE.md#domain-aware-quality--stakeholder-patterns) |
+| Quality Remediator | Responds to quality gate failures by sourcing stronger evidence | Invoked automatically when the quality gate flags issues | [System prompt](../src/claude-runtime/agents/quality-remediator/system-prompt.md)<br>[Quality program overview](QUALITY_GUIDE.md#domain-aware-quality--stakeholder-coverage) |
 | Synthesis Agent | Produces the final mission report aligned with requirements | Final stage after research + quality checks pass | [System prompt](../src/claude-runtime/agents/synthesis-agent/system-prompt.md)<br>[Synthesis expectations](USER_GUIDE.md#research-system)<br>[Tool restrictions](AGENT_TOOLS_CONFIG.md#synthesis-agent-local-only) |
 
 ## Agent Details
@@ -47,7 +48,14 @@ CConductor missions rely on a cooperative set of specialized agents. This guide 
 - **Inputs**: Mission objective and profile snapshot.
 - **Outputs**: `artifacts/domain-heuristics/domain-heuristics.json` (copied into `meta/domain-heuristics.json`) plus a lock file for progress tracking.
 - **Why it matters**: Drives domain-aware quality gates, ensuring reports include balanced perspectives and recent, critical information.
-- **Deeper docs**: [System prompt](../src/claude-runtime/agents/domain-heuristics/system-prompt.md), [Domain-aware quality guide](QUALITY_GUIDE.md#understanding-stakeholder-categories), [Pattern merging reference](CONFIGURATION_REFERENCE.md#pattern-merging-behavior)
+- **Deeper docs**: [System prompt](../src/claude-runtime/agents/domain-heuristics/system-prompt.md), [Domain-aware quality guide](QUALITY_GUIDE.md#domain-aware-quality--stakeholder-coverage), [Pattern merging reference](CONFIGURATION_REFERENCE.md#pattern-merging-behavior)
+
+### Stakeholder Classifier
+- **Role**: Consumes mission policies/resolvers and the latest knowledge graph sources, classifying each source into the mission-defined stakeholder vocabulary. Escalates ambiguous cases to Claude and records alias suggestions for future resolver promotion.
+- **Inputs**: `meta/stakeholder-policy.json`, `meta/stakeholder-resolver.json`, and the knowledge graph citations for the current session.
+- **Outputs**: `session/stakeholder-classifications.jsonl`, LLM invocation budgets, alias suggestions, and status updates used by the stakeholder gate.
+- **Why it matters**: Guarantees the quality gate can make deterministic pass/fail decisions on stakeholder coverage without modifying the knowledge graph mid-mission.
+- **Deeper docs**: [System prompt](../src/claude-runtime/agents/stakeholder-classifier/system-prompt.md), [Stakeholder pipeline overview](QUALITY_GUIDE.md#domain-aware-quality--stakeholder-coverage)
 
 ### Web Researcher
 - **Role**: Executes targeted web searches, evaluates credibility, and writes structured findings files that feed the knowledge graph.
@@ -96,7 +104,7 @@ CConductor missions rely on a cooperative set of specialized agents. This guide 
 - **Inputs**: `artifacts/quality-gate.json`, `knowledge/knowledge-graph.json`, and cache-aware web research tools.
 - **Outputs**: JSON remediation files under `work/quality-remediator/` plus a final summary that the orchestrator processes.
 - **Why it matters**: Keeps missions from shipping reports that fail quality thresholds, especially around recency, independence, and trust score requirements.
-- **Deeper docs**: [System prompt](../src/claude-runtime/agents/quality-remediator/system-prompt.md), [Quality program overview](QUALITY_GUIDE.md#domain-aware-quality--stakeholder-patterns)
+- **Deeper docs**: [System prompt](../src/claude-runtime/agents/quality-remediator/system-prompt.md), [Quality program overview](QUALITY_GUIDE.md#domain-aware-quality--stakeholder-coverage)
 
 ### Synthesis Agent
 - **Role**: Generates the final mission report, applies required structure/tone, cites sources, calls out confidence levels, and notes gaps or follow-ups.
