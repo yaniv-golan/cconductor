@@ -1,0 +1,31 @@
+{
+  "version": "0.3",
+  "importance_levels": ["critical", "important", "informative"],
+  "categories": {
+    "government": {
+      "importance": "critical",
+      "description": "Government and regulatory authorities issuing primary data or directives"
+    },
+    "academic": {
+      "importance": "critical",
+      "description": "Peer-reviewed publications and academic institutions"
+    },
+    "independent_analysis": {
+      "importance": "important",
+      "description": "Independent think tanks, analysts, or accredited research firms"
+    },
+    "company_primary": {
+      "importance": "important",
+      "description": "Official company statements, disclosures, or documentation"
+    },
+    "media": {
+      "importance": "informative",
+      "description": "Reputable journalism, newsletters, or trade press"
+    }
+  },
+  "gate": {
+    "min_sources_per_critical": 1,
+    "min_total_sources": 10,
+    "uncategorized_max_pct": 0.20
+  }
+}

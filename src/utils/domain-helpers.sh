@@ -4,6 +4,7 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 
 # shellcheck disable=SC1091
 source "$SCRIPT_DIR/core-helpers.sh"
@@ -31,6 +32,10 @@ source "$SCRIPT_DIR/json-helpers.sh"
 __DOMAIN_HELPERS_LAST_INPUT=""
 __DOMAIN_HELPERS_LAST_EFFECTIVE=""
 __DOMAIN_HELPERS_MANUAL_PATH=""
+__STAKEHOLDER_POLICY_CACHE=""
+__STAKEHOLDER_POLICY_SOURCE=""
+__STAKEHOLDER_RESOLVER_CACHE=""
+__STAKEHOLDER_RESOLVER_SOURCE=""
 
 _domain_helpers_expand_path() {
     local path="$1"
@@ -230,6 +235,123 @@ map_source_to_stakeholder() {
     echo "uncategorized"
 }
 
+domain_helpers_get_stakeholder_policy() {
+    local session_dir="${1:-}"
+    local mission_name="${2:-}"
+
+    local cache_key="${session_dir}::${mission_name}"
+    if [[ "$cache_key" == "$__STAKEHOLDER_POLICY_SOURCE" && -n "$__STAKEHOLDER_POLICY_CACHE" ]]; then
+        printf '%s' "$__STAKEHOLDER_POLICY_CACHE"
+        return 0
+    fi
+
+    local policy_json=""
+    local candidate=""
+
+    if [[ -n "$session_dir" ]]; then
+        candidate="$session_dir/meta/stakeholder-policy.json"
+        if [[ -f "$candidate" ]] && jq empty "$candidate" 2>/dev/null; then
+            policy_json=$(cat "$candidate")
+        elif [[ -f "$candidate" ]]; then
+            log_warn "domain-helpers: invalid session stakeholder policy at $candidate"
+        fi
+    fi
+
+    if [[ -z "$policy_json" && -n "$mission_name" ]]; then
+        candidate="$PROJECT_ROOT/config/missions/$mission_name/policy.json"
+        if [[ -f "$candidate" ]] && jq empty "$candidate" 2>/dev/null; then
+            policy_json=$(cat "$candidate")
+        elif [[ -f "$candidate" ]]; then
+            log_warn "domain-helpers: invalid mission stakeholder policy at $candidate"
+        fi
+    fi
+
+    if [[ -z "$policy_json" ]]; then
+        if policy_json=$(load_config "stakeholder-policy" 2>/dev/null); then
+            :
+        else
+            policy_json="{}"
+        fi
+    fi
+
+    if [[ -z "$policy_json" || "$policy_json" == "null" ]]; then
+        policy_json="{}"
+    fi
+
+    __STAKEHOLDER_POLICY_CACHE="$policy_json"
+    __STAKEHOLDER_POLICY_SOURCE="$cache_key"
+    printf '%s' "$policy_json"
+}
+
+domain_helpers_get_stakeholder_resolver() {
+    local session_dir="${1:-}"
+    local mission_name="${2:-}"
+
+    local cache_key="${session_dir}::${mission_name}"
+    if [[ "$cache_key" == "$__STAKEHOLDER_RESOLVER_SOURCE" && -n "$__STAKEHOLDER_RESOLVER_CACHE" ]]; then
+        printf '%s' "$__STAKEHOLDER_RESOLVER_CACHE"
+        return 0
+    fi
+
+    local resolver_json=""
+    local candidate=""
+
+    if [[ -n "$session_dir" ]]; then
+        candidate="$session_dir/meta/stakeholder-resolver.json"
+        if [[ -f "$candidate" ]] && jq empty "$candidate" 2>/dev/null; then
+            resolver_json=$(cat "$candidate")
+        elif [[ -f "$candidate" ]]; then
+            log_warn "domain-helpers: invalid session stakeholder resolver at $candidate"
+        fi
+    fi
+
+    if [[ -z "$resolver_json" && -n "$mission_name" ]]; then
+        candidate="$PROJECT_ROOT/config/missions/$mission_name/resolver.json"
+        if [[ -f "$candidate" ]] && jq empty "$candidate" 2>/dev/null; then
+            resolver_json=$(cat "$candidate")
+        elif [[ -f "$candidate" ]]; then
+            log_warn "domain-helpers: invalid mission stakeholder resolver at $candidate"
+        fi
+    fi
+
+    if [[ -z "$resolver_json" ]]; then
+        if resolver_json=$(load_config "stakeholder-resolver" 2>/dev/null); then
+            :
+        else
+            resolver_json="{}"
+        fi
+    fi
+
+    if [[ -z "$resolver_json" || "$resolver_json" == "null" ]]; then
+        resolver_json="{}"
+    fi
+
+    __STAKEHOLDER_RESOLVER_CACHE="$resolver_json"
+    __STAKEHOLDER_RESOLVER_SOURCE="$cache_key"
+    printf '%s' "$resolver_json"
+}
+
+domain_helpers_extract_hostname() {
+    _domain_helpers_extract_domain "$1"
+}
+
+hash_source_id() {
+    local url="${1:-}"
+    if [[ -z "$url" || "$url" == "null" ]]; then
+        echo ""
+        return 1
+    fi
+
+    local digest
+    if ! digest=$("$SCRIPT_DIR/hash-string.sh" "$url" 2>/dev/null); then
+        log_warn "domain-helpers: failed to hash url for source id"
+        echo ""
+        return 1
+    fi
+
+    printf '%s' "${digest:0:16}"
+}
+
 infer_claim_topic() {
     local claim_statement="$1"
     local heuristics_json="$2"
@@ -306,3 +428,7 @@ match_watch_item() {
 export -f map_source_to_stakeholder
 export -f infer_claim_topic
 export -f match_watch_item
+export -f domain_helpers_get_stakeholder_policy
+export -f domain_helpers_get_stakeholder_resolver
+export -f domain_helpers_extract_hostname
+export -f hash_source_id

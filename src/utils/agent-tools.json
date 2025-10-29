@@ -222,5 +222,19 @@
             "Edit",
             "NotebookEdit"
         ]
+    },
+    "stakeholder-classifier": {
+        "allowed": [],
+        "disallowed": [
+            "WebSearch",
+            "WebFetch",
+            "Read",
+            "Write",
+            "Grep",
+            "Glob",
+            "Bash",
+            "Edit",
+            "NotebookEdit"
+        ]
     }
 }

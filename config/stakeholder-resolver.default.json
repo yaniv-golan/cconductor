@@ -1,0 +1,34 @@
+{
+  "aliases": {
+    "white_house": "government",
+    "federal_reserve": "government",
+    "oecd": "government",
+    "nature": "academic",
+    "science": "academic",
+    "think_tank": "independent_analysis",
+    "consulting_study": "independent_analysis",
+    "press_release": "company_primary",
+    "investor_relations": "company_primary",
+    "reuters": "media",
+    "associated_press": "media",
+    "financial_times": "media"
+  },
+  "patterns": [
+    {"pattern": "*.gov", "category": "government"},
+    {"pattern": "*.gouv.*", "category": "government"},
+    {"pattern": "*.europa.eu", "category": "government"},
+    {"pattern": "*.who.int", "category": "government"},
+    {"pattern": "*.edu", "category": "academic"},
+    {"pattern": "*.ac.*", "category": "academic"},
+    {"pattern": "*.doi.org", "category": "academic"},
+    {"pattern": "*.rand.org", "category": "independent_analysis"},
+    {"pattern": "*.brookings.edu", "category": "independent_analysis"},
+    {"pattern": "*.mckinsey.com", "category": "independent_analysis"},
+    {"pattern": "*.investor.*", "category": "company_primary"},
+    {"pattern": "*.ir.*", "category": "company_primary"},
+    {"pattern": "*.sec.gov", "category": "company_primary"},
+    {"pattern": "*.reuters.com", "category": "media"},
+    {"pattern": "*.wsj.com", "category": "media"},
+    {"pattern": "*.ft.com", "category": "media"}
+  ]
+}

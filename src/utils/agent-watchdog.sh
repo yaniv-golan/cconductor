@@ -35,12 +35,16 @@ watchdog_mode="${CCONDUCTOR_WATCHDOG_MODE:-}"
 legacy_disable="${CCONDUCTOR_DISABLE_WATCHDOG:-}"
 legacy_enable="${CCONDUCTOR_ENABLE_WATCHDOG:-}"
 
+to_lower() {
+    printf '%s' "$1" | tr '[:upper:]' '[:lower:]'
+}
+
 if [[ -n "$legacy_disable" ]]; then
     watchdog_mode="disabled"
 elif [[ -n "$legacy_enable" ]]; then
     watchdog_mode="enabled"
 fi
-watchdog_mode="${watchdog_mode,,}"
+watchdog_mode="$(to_lower "$watchdog_mode")"
 
 if [[ "$watchdog_mode" == "disabled" ]]; then
     # Passive wait to keep heartbeat updates consistent without enforcing termination
@@ -58,7 +62,7 @@ if [[ -z "$agent_timeout_mode" ]]; then
         agent_timeout_mode="enabled"
     fi
 fi
-agent_timeout_mode="${agent_timeout_mode,,}"
+agent_timeout_mode="$(to_lower "$agent_timeout_mode")"
 
 timeouts_enforced=1
 if [[ "$agent_timeout_mode" == "disabled" ]]; then

@@ -1,0 +1,10 @@
+{
+  "name": "stakeholder-classifier",
+  "display_name": "Stakeholder Classifier",
+  "description": "Assigns mission sources to stakeholder categories defined by policy.json and surfaces alias suggestions when gaps remain.",
+  "tools": [
+    "Read"
+  ],
+  "model": "claude-haiku-4-5",
+  "action_verb": "Classifying"
+}

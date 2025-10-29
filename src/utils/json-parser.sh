@@ -21,26 +21,31 @@ parse_json_from_markdown() {
     # Strip markdown fences first
     text=$(echo "$text" | sed -e 's/^```json$//' -e 's/^```$//')
     
-    # Extract JSON using awk with proper brace balancing
-    # This handles Claude adding prose before the JSON object
+    # Extract JSON using awk with balanced brace/bracket counting
+    # Supports payloads that begin with either { } or [ ]
     local parsed_json
     parsed_json=$(echo "$text" | awk '
         BEGIN { depth=0; started=0 }
-        /{/ && !started { 
-            # Remove everything before first {
-            sub(/^[^{]*/, "")
-            started=1
-        }
-        started {
-            # Count braces on this line
-            open_count = gsub(/{/, "{")
-            close_count = gsub(/}/, "}")
-            
-            print
-            
-            depth += (open_count - close_count)
-            
-            # Exit when we close the root object
+        {
+            line=$0
+            if (!started) {
+                if (match(line, /[{[]/)) {
+                    line=substr(line, RSTART)
+                    started=1
+                } else {
+                    next
+                }
+            }
+
+            print line
+
+            open_braces = gsub(/{/, "{", line)
+            close_braces = gsub(/}/, "}", line)
+            open_brackets = gsub(/\[/, "[", line)
+            close_brackets = gsub(/\]/, "]", line)
+
+            depth += (open_braces - close_braces) + (open_brackets - close_brackets)
+
             if (depth == 0) exit
         }
     ' | sed '/^```$/d')
@@ -196,5 +201,4 @@ export -f extract_json_from_text
 export -f safe_jq_get
 export -f validate_json
 export -f validate_json_file
-
 

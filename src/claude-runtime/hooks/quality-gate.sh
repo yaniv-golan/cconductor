@@ -1,4 +1,14 @@
 #!/usr/bin/env bash
+if [[ -z ${BASH_VERSINFO:-} || ${BASH_VERSINFO[0]} -lt 4 ]]; then
+    if [[ -n ${CCONDUCTOR_BASH_RUNTIME:-} && -x ${CCONDUCTOR_BASH_RUNTIME} ]]; then
+        exec "${CCONDUCTOR_BASH_RUNTIME}" "$0" "$@"
+    elif command -v /opt/homebrew/bin/bash >/dev/null 2>&1; then
+        exec /opt/homebrew/bin/bash "$0" "$@"
+    else
+        echo "$(basename "$0") requires bash >= 4" >&2
+        exit 1
+    fi
+fi
 # Quality Gate Hook
 # Evaluates mission outputs before finalization.
 # Emits a machine-readable report and exits non-zero if thresholds fail.
@@ -92,7 +102,9 @@ fi
 
 DOMAIN_AWARE=$(echo "$CONFIG_JSON" | jq -r '.domain_aware // false' | tr '[:upper:]' '[:lower:]')
 FALLBACK_TO_GLOBAL=$(echo "$CONFIG_JSON" | jq -r '.fallback_to_global_thresholds // true' | tr '[:upper:]' '[:lower:]')
+# shellcheck disable=SC2034  # Config retained for telemetry; warn controls used in downstream reporting
 UNCAT_WARN_ENABLED=$(echo "$CONFIG_JSON" | jq -r '.uncategorized_source_warnings.enabled // false' | tr '[:upper:]' '[:lower:]')
+# shellcheck disable=SC2034  # Config retained for telemetry; warn controls used in downstream reporting
 UNCAT_WARN_THRESHOLD=$(echo "$CONFIG_JSON" | jq -r '.uncategorized_source_warnings.threshold_percentage // 15')
 UNCAT_WARN_INCLUDE=$(echo "$CONFIG_JSON" | jq -r '.uncategorized_source_warnings.include_in_summary // true' | tr '[:upper:]' '[:lower:]')
 
@@ -168,142 +180,60 @@ trap 'rm -f "$tmp_claims" "$tmp_session"' EXIT
 check_stakeholder_balance() {
     local session_dir="$1"
 
-    if [[ "$DOMAIN_AWARE" != "true" ]] || [[ -z "$DOMAIN_HEURISTICS_JSON" ]]; then
-        return 0
-    fi
-    if ! command -v map_source_to_stakeholder >/dev/null 2>&1; then
-        return 0
-    fi
-
-    local kg_file="$session_dir/knowledge/knowledge-graph.json"
-    if [[ ! -f "$kg_file" ]]; then
+    local gate_runner="$PROJECT_ROOT/src/utils/stakeholder-gate.sh"
+    if [[ ! -x "$gate_runner" ]]; then
+        log_warn "quality-gate: stakeholder-gate.sh not found; skipping stakeholder coverage check"
         return 0
     fi
 
-    declare -A stakeholder_counts=()
-    local stakeholder_keys=""
-    if ! stakeholder_keys=$(printf '%s' "$DOMAIN_HEURISTICS_JSON" | jq -r '.stakeholder_categories | keys[]?' 2>/dev/null); then
-        log_system_warning "$SESSION_DIR" "quality_gate.heuristics_parse_failure" "stakeholder_categories" "file=$HEURISTICS_FILE"
-        stakeholder_keys=""
-    fi
-    while IFS= read -r category; do
-        [[ -z "$category" ]] && continue
-        stakeholder_counts["$category"]=0
-    done <<< "$stakeholder_keys"
-
-    local sample_limit=5
-    local -a uncategorized_samples=()
     DOMAIN_TOTAL_SOURCES=0
     DOMAIN_UNCATEGORIZED_COUNT=0
-
-    local source_stream=""
-    if [[ -f "$kg_file" ]] && jq empty "$kg_file" >/dev/null 2>&1; then
-        if ! source_stream=$(jq -c '.claims[]? | .sources[]?' "$kg_file" 2>/dev/null); then
-            log_system_warning "$SESSION_DIR" "quality_gate.kg_parse_failure" "claims_sources" "file=$kg_file"
-            source_stream=""
-        fi
-    else
-        log_system_warning "$SESSION_DIR" "quality_gate.kg_missing" "claims_sources" "file=$kg_file"
-    fi
-
-    while IFS= read -r source_json; do
-        [[ -z "$source_json" || "$source_json" == "null" ]] && continue
-        DOMAIN_TOTAL_SOURCES=$((DOMAIN_TOTAL_SOURCES + 1))
-        local category
-        category=$(map_source_to_stakeholder "$source_json" "$DOMAIN_HEURISTICS_JSON")
-        if [[ -n "$category" && "$category" != "uncategorized" ]]; then
-            if [[ -z "${stakeholder_counts[$category]+_}" ]]; then
-                stakeholder_counts["$category"]=0
-            fi
-            stakeholder_counts["$category"]=$((stakeholder_counts["$category"] + 1))
-        else
-            DOMAIN_UNCATEGORIZED_COUNT=$((DOMAIN_UNCATEGORIZED_COUNT + 1))
-            if ((${#uncategorized_samples[@]} < sample_limit)); then
-                local url title sample
-                url=$(echo "$source_json" | jq -r '.url // ""')
-                title=$(echo "$source_json" | jq -r '.title // ""')
-                sample=$(jq -n --arg url "$url" --arg title "$title" '{url:$url,title:$title}')
-                uncategorized_samples+=("$sample")
-            fi
-        fi
-    done <<< "$source_stream"
-
-    # Track skipped samples for data loss visibility
-    DOMAIN_UNCATEGORIZED_SKIPPED=0
-    if ((${#uncategorized_samples[@]} > 0)); then
-        # Validate each sample is JSON before slurping
-        local valid_samples=()
-        local skipped_count=0
-        for sample in "${uncategorized_samples[@]}"; do
-            if jq_validate_json "$sample"; then
-                valid_samples+=("$sample")
-            else
-                log_system_warning "$session_dir" "quality_gate_validation" \
-                    "Skipping invalid JSON sample" "${sample:0:100}"
-                skipped_count=$((skipped_count + 1))
-            fi
-        done
-        
-        DOMAIN_UNCATEGORIZED_SKIPPED=$skipped_count
-        
-        if ((${#valid_samples[@]} > 0)); then
-            local temp_samples
-            temp_samples=$(create_temp_file "qg-samples")
-            printf '%s\n' "${valid_samples[@]}" > "$temp_samples"
-            DOMAIN_UNCATEGORIZED_SAMPLES_JSON=$(jq_slurp_array "$temp_samples" '[]')
-            rm -f "$temp_samples"
-        else
-            DOMAIN_UNCATEGORIZED_SAMPLES_JSON='[]'
-        fi
-    else
-        DOMAIN_UNCATEGORIZED_SAMPLES_JSON='[]'
-    fi
-
-    if [[ $DOMAIN_TOTAL_SOURCES -gt 0 ]]; then
-        DOMAIN_UNCATEGORIZED_PCT=$(awk "BEGIN {printf \"%.1f\", ($DOMAIN_UNCATEGORIZED_COUNT / $DOMAIN_TOTAL_SOURCES) * 100}")
-    else
-        DOMAIN_UNCATEGORIZED_PCT="0"
-    fi
-
+    DOMAIN_UNCATEGORIZED_PCT=0
+    DOMAIN_UNCATEGORIZED_SAMPLES_JSON='[]'
     DOMAIN_UNCATEGORIZED_ALERT=false
-    if [[ "$UNCAT_WARN_ENABLED" == "true" && $DOMAIN_TOTAL_SOURCES -gt 0 ]]; then
-        if awk "BEGIN {exit !($DOMAIN_UNCATEGORIZED_PCT > $UNCAT_WARN_THRESHOLD)}"; then
-            DOMAIN_UNCATEGORIZED_ALERT=true
-        fi
+    DOMAIN_UNCATEGORIZED_SKIPPED=0
+
+    local gate_status="passed"
+    if ! "$gate_runner" "$session_dir" >/dev/null 2>&1; then
+        gate_status="failed"
     fi
 
-    local missing_critical=()
-    local stakeholder_entries=""
-    if ! stakeholder_entries=$(printf '%s' "$DOMAIN_HEURISTICS_JSON" | jq -r '.stakeholder_categories | to_entries[]? | "\(.key)\t\(.value.importance)"' 2>/dev/null); then
-        log_system_warning "$SESSION_DIR" "quality_gate.heuristics_parse_failure" "stakeholder_criticality" "file=$HEURISTICS_FILE"
-        stakeholder_entries=""
-    fi
-    while IFS=$'\t' read -r category importance; do
-        [[ -z "$category" ]] && continue
-        if [[ "$importance" == "critical" ]]; then
-            if [[ ${stakeholder_counts[$category]:-0} -eq 0 ]]; then
-                missing_critical+=("$category")
-            fi
-        fi
-    done <<< "$stakeholder_entries"
+    local gate_json="$session_dir/session/stakeholder-gate.json"
+    local detail="Stakeholder coverage not evaluated"
+    if [[ -f "$gate_json" ]]; then
+        DOMAIN_TOTAL_SOURCES=$(jq -r '.totals.total_sources // 0' "$gate_json")
+        DOMAIN_UNCATEGORIZED_COUNT=$(jq -r '.totals.uncategorized_sources // 0' "$gate_json")
+        DOMAIN_UNCATEGORIZED_PCT=$(jq -r '.totals.uncategorized_pct // 0' "$gate_json")
+        DOMAIN_UNCATEGORIZED_SAMPLES_JSON='[]'
+        DOMAIN_UNCATEGORIZED_SKIPPED=0
+        local unc_status
+        unc_status=$(jq -r '[.checks[]? | select(.name == "Uncategorized share") | .status] | first // "passed"' "$gate_json")
+        DOMAIN_UNCATEGORIZED_ALERT=$([[ "$unc_status" == "failed" ]] && echo true || echo false)
 
-    if [[ ${#missing_critical[@]} -gt 0 ]]; then
-        local missing_list
-        missing_list=$(printf '%s, ' "${missing_critical[@]}" | sed 's/, $//')
-        jq -n \
-            --arg check "Stakeholder balance" \
-            --arg result "failed" \
-            --arg detail "Missing critical stakeholder perspectives: $missing_list" \
-            '{check: $check, result: $result, detail: $detail}' >>"$tmp_session"
-        return 1
+        local failed_checks
+        failed_checks=$(jq -r '[.checks[]? | select(.status == "failed") | (.name + ": " + .detail)] | join("; ")' "$gate_json")
+        if [[ -n "$failed_checks" ]]; then
+            detail="$failed_checks (see session/stakeholder-gate-report.md)"
+        else
+            detail="All stakeholder checks passed (see session/stakeholder-gate-report.md)"
+        fi
+
+        gate_status=$(jq -r '.status // "passed"' "$gate_json")
+    else
+        detail="Stakeholder gate report missing; ensure stakeholder-classifier has run."
+        gate_status="failed"
     fi
 
     jq -n \
-        --arg check "Stakeholder balance" \
-        --arg result "passed" \
-        --arg detail "All critical stakeholder categories represented" \
+        --arg check "Stakeholder coverage" \
+        --arg result "$gate_status" \
+        --arg detail "$detail" \
         '{check: $check, result: $result, detail: $detail}' >>"$tmp_session"
-    return 0
+
+    if [[ "$gate_status" == "passed" ]]; then
+        return 0
+    fi
+    return 1
 }
 
 check_mandatory_milestones() {
@@ -734,7 +664,29 @@ if (( failed_claims > 0 || overall_failures > 0 )); then
 fi
 
 uncategorized_summary='{"count":0,"total":0,"percentage":0,"samples":[],"action_required":null}'
-if [[ "$DOMAIN_AWARE" == "true" && -n "$DOMAIN_HEURISTICS_JSON" && "$UNCAT_WARN_INCLUDE" == "true" ]]; then
+if [[ -f "$SESSION_DIR/session/stakeholder-gate.json" ]]; then
+    data_loss_note=null
+    if [[ "${DOMAIN_UNCATEGORIZED_SKIPPED:-0}" -gt 0 ]]; then
+        data_loss_note="Skipped ${DOMAIN_UNCATEGORIZED_SKIPPED:-0} invalid JSON entries; check logs/system-errors.log for details"
+    fi
+    uncategorized_summary=$(jq -n \
+        --argjson count "${DOMAIN_UNCATEGORIZED_COUNT:-0}" \
+        --argjson total "${DOMAIN_TOTAL_SOURCES:-0}" \
+        --arg pct "${DOMAIN_UNCATEGORIZED_PCT:-0}" \
+        --argjson samples "${DOMAIN_UNCATEGORIZED_SAMPLES_JSON:-[]}" \
+        --arg action "Review stakeholder-gate-report.md for mitigation guidance." \
+        --arg data_loss "${data_loss_note:-null}" \
+        --argjson alert "$( [[ "$DOMAIN_UNCATEGORIZED_ALERT" == "true" ]] && echo true || echo false )" \
+        '{
+            count: $count,
+            total: $total,
+            percentage: ($pct | tonumber),
+            samples: $samples,
+            skipped_invalid_json: 0,
+            action_required: (if ($alert == true and $count > 0) then $action else null end),
+            data_loss_warning: (if $data_loss != "null" then $data_loss else null end)
+        }')
+elif [[ "$DOMAIN_AWARE" == "true" && -n "$DOMAIN_HEURISTICS_JSON" && "$UNCAT_WARN_INCLUDE" == "true" ]]; then
     samples_json="$DOMAIN_UNCATEGORIZED_SAMPLES_JSON"
     threshold_flag="false"
     [[ "$DOMAIN_UNCATEGORIZED_ALERT" == "true" ]] && threshold_flag="true"
