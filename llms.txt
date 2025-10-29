@@ -1,25 +1,23 @@
 # CConductor
 
-> CConductor is a multi-agent AI research system that conducts comprehensive, adaptive research on any topic. Powered by Claude Code and specialized AI agents, it uses mission-based orchestration to dynamically plan and execute research across academic papers, web sources, PDFs, and code repositories—delivering well-cited, validated research reports with quality scoring.
+> CConductor is a streaming, mission-based multi-agent research system. A Claude Code orchestrator coordinates specialized agents to gather evidence, enforce quality gates, and synthesize cited reports across academic papers, web sources, PDFs, and code. Sessions emit structured directories (`INDEX.json`, generated README, manifests, confidence surfaces) for audit-ready research.
 
 **Key Capabilities:**
 
-- **Mission-Based Orchestration**: Autonomous research coordination with four mission types (academic-research, market-research, competitive-analysis, technical-analysis)
-- **Multi-Agent Architecture**: Specialized agents dynamically selected based on research needs and capabilities
-- **Interactive Mode**: Dialog-based TUI for guided research setup and session management
-- **Adaptive Research**: Dynamic agent selection, budget tracking, and strategy adaptation based on findings
-- **Quality Validation**: Automatic confidence scoring (0-100), citation tracking, contradiction detection, and quality gate diagnostics with automated remediation
-- **Evidence Artifacts**: Paragraph-level citations with source deep links and comprehensive evidence tracking
-- **Multi-Source Integration**: Academic databases (arXiv, Semantic Scholar, PubMed), web content, local PDFs, markdown files, and code repositories
-- **Cache-Aware Research**: Intelligent web content caching with fine-grained control (--no-cache, --no-web-fetch-cache, --no-web-search-cache)
-- **Enhanced Observability**: Real-time progress updates, agent reasoning visibility, and comprehensive decision logging
-- **Cross-Platform**: Works on macOS, Linux, and Windows (WSL/Git Bash)
+- **Streaming Mission Orchestration**: Watchdog + timeout controls, mission extensions, and resume/refine flows across four mission templates.
+- **Structured Session Artifacts**: Auto-generated `INDEX.json`, README, manifests, provenance bundles, and confidence surface outputs synchronized with dashboards.
+- **Domain-Aware Quality Surface**: Stakeholder heuristics (`domain-compliance-check.sh`) plus remediation loops keep missions above gate thresholds.
+- **Capability-Aware Agents**: Registry-driven tool/domain restrictions ensure safe research/synthesis agents for academic, market, technical, and quality tasks.
+- **Evidence & Cache Infrastructure**: Content-addressed artifacts, paragraph-level citations, library memory digests, and cache-aware fetch/search flags.
+- **Distribution & Tooling**: Install script, Homebrew tap, Docker image, and release automation backed by lint suites and safe `jq` helpers.
+- **Cross-Platform Support**: Bash ≥ 4.0 on macOS, Linux, and Windows (WSL/Git Bash) with optional dialog-based TUI.
 
 **Important Notes:**
 
-- CConductor requires Claude Code CLI (`npm install -g @anthropic-ai/claude-code`) - it cannot run standalone with just an API key
-- Built with Bash 4.0+, uses jq for JSON processing, curl for HTTP requests, and bc for accurate calculations
-- Research sessions typically take 5-40 minutes depending on complexity and depth
+- Install the Claude Code CLI via `curl -fsSL https://claude.ai/install.sh | bash`, then run `claude`, `/login`, and `/status` (Claude Pro/Max or API credits required).
+- Run `cconductor --init --yes` after install to populate missions, caches, watchdog settings, and quality gate defaults.
+- Mission outputs live in `research-sessions/mission_<id>/` with standardized subdirectories (`artifacts/`, `cache/`, `knowledge/`, `logs/`, `meta/`, `report/`, etc.).
+- Typical missions run 5–40 minutes; PDF-heavy academic flows can extend to ~90 minutes depending on remediation passes.
 
 ## Getting Started
 
@@ -27,6 +25,7 @@
 - [User Guide](https://raw.githubusercontent.com/yaniv-golan/cconductor/main/docs/USER_GUIDE.md): Comprehensive guide for all features and usage patterns
 - [Quick Reference](https://raw.githubusercontent.com/yaniv-golan/cconductor/main/docs/QUICK_REFERENCE.md): Command cheat sheet for daily use
 - [Installation & Configuration](https://raw.githubusercontent.com/yaniv-golan/cconductor/main/docs/INSTALLATION_CONFIG.md): Detailed installation steps and configuration setup
+- [Homebrew Guide](https://raw.githubusercontent.com/yaniv-golan/cconductor/main/docs/HOMEBREW.md) & [Docker Guide](https://raw.githubusercontent.com/yaniv-golan/cconductor/main/docs/DOCKER.md): Distribution-specific workflows and release automation notes
 
 ## Core Concepts
 
@@ -36,15 +35,18 @@
 ## Configuration & Security
 
 - [Configuration Reference](https://raw.githubusercontent.com/yaniv-golan/cconductor/main/docs/CONFIGURATION_REFERENCE.md): All configuration files and options explained
+- Copy any `*.default.json` from `config/` to `~/.config/cconductor/` before editing (e.g., `quality-gate.default.json`, `stakeholder-patterns.default.json`, `paths.default.json`)
 - [Security Guide](https://raw.githubusercontent.com/yaniv-golan/cconductor/main/docs/SECURITY_GUIDE.md): Security profiles (strict/permissive/max_automation) and domain allowlists
 - [Custom Knowledge Guide](https://raw.githubusercontent.com/yaniv-golan/cconductor/main/docs/CUSTOM_KNOWLEDGE.md): Adding domain expertise without code modification
+- `./src/utils/path-resolver.sh resolve <key>` prints OS-specific paths for sessions, cache, knowledge bases, etc.
 
 ## Features & Quality
 
 - [Citations Guide](https://raw.githubusercontent.com/yaniv-golan/cconductor/main/docs/CITATIONS_GUIDE.md): Using citations and bibliography generation effectively
-- [Quality Guide](https://raw.githubusercontent.com/yaniv-golan/cconductor/main/docs/QUALITY_GUIDE.md): Understanding and improving research quality scores
+- [Quality Guide](https://raw.githubusercontent.com/yaniv-golan/cconductor/main/docs/QUALITY_GUIDE.md): Confidence surface metrics, remediation loop, stakeholder coverage
 - [PDF Research Guide](https://raw.githubusercontent.com/yaniv-golan/cconductor/main/docs/PDF_RESEARCH_GUIDE.md): Working with academic papers and local documents
 - [Session Resume Guide](https://raw.githubusercontent.com/yaniv-golan/cconductor/main/docs/SESSION_RESUME_GUIDE.md): Continuing research to improve quality
+- [Research Quality Framework](https://raw.githubusercontent.com/yaniv-golan/cconductor/main/docs/RESEARCH_QUALITY_FRAMEWORK.md): Scoring rubric and evaluation checkpoints
 
 ## Troubleshooting & Support
 
@@ -57,6 +59,7 @@
 - [Agent Metadata Schema](https://raw.githubusercontent.com/yaniv-golan/cconductor/main/docs/AGENT_METADATA_SCHEMA.md): Agent capabilities, input/output types, and metadata structure
 - [Events Contract](https://raw.githubusercontent.com/yaniv-golan/cconductor/main/docs/EVENTS_CONTRACT.md): Event schema and backward compatibility guarantees
 - [Extending Capabilities](https://raw.githubusercontent.com/yaniv-golan/cconductor/main/docs/EXTENDING_CAPABILITIES.md): Adding custom capabilities and agents
+- [Release Automation](https://raw.githubusercontent.com/yaniv-golan/cconductor/main/docs/RELEASE_AUTOMATION.md): How Homebrew, Docker, and GitHub workflows publish new versions
 
 ## Technical Reference
 
@@ -66,4 +69,3 @@
 - [Session Continuity Guide](https://raw.githubusercontent.com/yaniv-golan/cconductor/main/docs/SESSION_CONTINUITY_GUIDE.md): How session management optimizes costs and performance
 - [Knowledge Extension](https://raw.githubusercontent.com/yaniv-golan/cconductor/main/docs/KNOWLEDGE_EXTENSION.md): Advanced knowledge base customization
 - [Changelog](https://raw.githubusercontent.com/yaniv-golan/cconductor/main/CHANGELOG.md): Version history and recent updates
-

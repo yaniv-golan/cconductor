@@ -4,65 +4,61 @@ Repository: https://github.com/yaniv-golan/cconductor
 
 ## System Overview
 
-CConductor is a multi-agent AI research system built in Bash that uses mission-based orchestration to conduct comprehensive research. It features autonomous agent selection, budget tracking, and interactive session management. Integrates academic databases (arXiv, Semantic Scholar, PubMed), web sources, local PDFs, and generates cited research reports with quality scoring.
+CConductor is a Bash-first, mission-based multi-agent research platform. A streaming mission orchestrator coordinates specialized Claude Code agents to plan, gather evidence, remediate quality issues, and synthesize cited research reports. Sessions emit a structured directory layout (`INDEX.json`, generated README, `artifacts/`, `cache/`, `evidence/`, `inputs/`, `knowledge/`, `library/`, `logs/`, `meta/`, `report/`, `viewer/`, `work/`), keeping provenance and dashboards consistent. Domain-aware quality heuristics and watchdog controls ensure reliable, auditable research runs.
 
-### Core Architecture
+### Core Architecture (v0.4.1)
 
-- **Language**: Bash 4.0+ (cross-platform: macOS, Linux, Windows WSL)
-- **Agent Runtime**: Claude Code CLI (required, not just API key)
-- **Dependencies**: jq (JSON), curl (HTTP), bc (calculations)
-- **Data Format**: JSON state management, Markdown output
-- **Orchestration**: Mission-based with autonomous agent selection
-- **Agents**: 10+ specialized agents with capability-based discovery
+- **Language**: Bash 4.0+ (cross-platform: macOS, Linux, Windows via WSL2/Git Bash)
+- **Agent Runtime**: Claude Code CLI (required – run `claude`, use `/login` + `/status`)
+- **Dependencies**: `jq` (JSON), `curl` (HTTP), `bc` (math), `ripgrep` (lint/tooling), `git`, optional `dialog`
+- **Data & State**: JSON mission state + manifests, Markdown reports, content-addressed artifacts
+- **Orchestration**: Streaming mission loop with configurable watchdog + timeout controls
+- **Agents & Skills**: Capability-aware registry (16 capabilities, 12 output types) with per-agent tool restrictions
 
 ### Key Capabilities 
 
-- Mission-based orchestration with four mission types
-- Autonomous agent selection based on capabilities
-- Interactive mode with dialog-based TUI
-- Budget tracking (USD, time, invocations)
-- Decision logging and orchestration observability
-- Verbose mode with real-time progress updates
-- Agent reasoning visibility in dashboard
-- Multi-source integration (academic, web, PDFs, code)
-- Automatic citation tracking and bibliography generation
-- Evidence artifacts with paragraph-level citations and source deep links
-- Quality scoring (0-100) with detailed metrics and configurable quality gates
-- Quality remediation agent for automated issue resolution
-- Cache-aware web research with fine-grained control flags
-- Configurable security profiles
-- Session resume with refinement guidance
-- Content-addressed PDF caching
-- Custom knowledge base extension
-- Helper function consolidation for maintainability
+- Streaming mission orchestration with configurable watchdog + timeout controls
+- Structured session artifacts (`INDEX.json`, README generator, manifests, provenance) for fast audit/replay
+- Capability-aware agent registry (16 capabilities) with automated tool/domain restrictions
+- Domain-aware quality surface: confidence metrics, stakeholder coverage, remediation loops
+- Multi-source research (academic, web, local PDFs/code) with cache-aware fetch/search tooling
+- Autonomous budget tracking (USD, minutes, invocations) surfaced in mission state + journals
+- Interactive TUI wizard, resume + refinement flows, mission extensions, and quick CLI help
+- Evidence management: content-addressed artifacts, paragraph-level citations, library memory digests
+- Distribution pipeline: Homebrew tap, Docker image, install script, and release automation workflows
+- Custom knowledge base ingestion, safe jq helpers, and lint guardrails for maintainability
 
 ## Installation
 
 ### Prerequisites
 
 ```bash
-# Required
-node --version    # v18+
-npm --version     # comes with Node.js
-bash --version    # 4.0+ (macOS ships with 3.2, must upgrade via Homebrew)
+# Core tooling
+node --version        # v18+
+npm --version         # bundled with Node.js
+python3 --version     # required for knowledge graph tooling
+bash --version        # must be >= 4.0 (upgrade on macOS via Homebrew)
 jq --version
 curl --version
 bc --version
+ripgrep --version
+git --version
 
 # Install Claude Code CLI (REQUIRED)
-npm install -g @anthropic-ai/claude-code
+curl -fsSL https://claude.ai/install.sh | bash
 
-# Authenticate (requires Claude Pro/Max subscription or API credits)
-claude login
-claude whoami  # verify authentication
+# Authenticate (Claude prompt -> /login, then /status)
+claude       # launches the CLI
+/login       # inside the CLI prompt
+/status
 ```
 
 ### macOS Bash 4.0+ Installation
 
 ```bash
-brew install bash  # macOS ships with Bash 3.2
-# Apple Silicon: /opt/homebrew/bin/bash
-# Intel: /usr/local/bin/bash
+brew install bash  # macOS ships with Bash 3.2; Homebrew provides >=4.0
+# Apple Silicon path: /opt/homebrew/bin/bash
+# Intel path: /usr/local/bin/bash
 ```
 
 ### Setup
@@ -70,15 +66,33 @@ brew install bash  # macOS ships with Bash 3.2
 ```bash
 git clone https://github.com/yaniv-golan/cconductor.git
 cd cconductor
-chmod +x cconductor
-./cconductor --init  # first-time initialization
+./cconductor --help         # confirm CLI wiring + watchdog toggles
+./cconductor --init --yes   # prepare caches, mission templates, quality gates
 ```
+
+### Distribution Options
+
+- **Homebrew Tap (macOS/Linux)**  
+  ```bash
+  brew install yaniv-golan/cconductor/cconductor
+  cconductor --init --yes
+  ```
+- **Docker Image**  
+  ```bash
+  docker run --rm -v "$PWD":/workspace yanivgolan/cconductor:latest \
+    cconductor "Research topic"
+  ```
+- **Installer Script** – Latest release bundles an install script:  
+  `curl -fsSL https://github.com/yaniv-golan/cconductor/releases/latest/download/install.sh | bash`
 
 ## Basic Usage
 
 ### Commands
 
 ```bash
+# Discover CLI flags (watchdog/timeouts, debug, cache bypass)
+./cconductor --help
+
 # Interactive mode (recommended for new users)
 ./cconductor
 
@@ -102,6 +116,10 @@ chmod +x cconductor
 ./cconductor "question" --no-web-fetch-cache    # Skip web fetch cache only
 ./cconductor "question" --no-web-search-cache   # Skip web search cache only
 
+# Watchdog/timeout toggles (override defaults on demand)
+./cconductor "question" --enable-watchdog --enable-agent-timeouts
+./cconductor "question" --disable-watchdog --disable-agent-timeouts
+
 # Session management
 ./cconductor sessions list              # List all sessions
 ./cconductor sessions latest            # View latest results
@@ -114,6 +132,9 @@ chmod +x cconductor
 
 # Export research journal
 bash src/utils/export-journal.sh research-sessions/mission_ID
+
+# Regenerate session README after manual edits
+./src/utils/session-readme-generator.sh research-sessions/mission_ID
 ```
 
 ### Mission Types
@@ -129,30 +150,43 @@ bash src/utils/export-journal.sh research-sessions/mission_ID
 - Complex queries: 20-40 minutes
 - Academic with PDFs: 40-90 minutes
 
+## Session Layout & Artifacts
+
+Each mission writes to `research-sessions/mission_<id>/` with a deterministic structure:
+
+- `INDEX.json` – mission summary + quick links consumed by dashboards/CLI
+- `README.md` – generated by `session-readme-generator.sh` with progress, metrics, evidence map
+- `10_inputs/`, `20_cache/`, `30_evidence/`, `40_knowledge/`, `50_library/`, `60_logs/`, `70_report/`, `80_viewer/`, `90_work/`, and `meta/`
+- `meta/mission_state.json` – streaming mission metrics (iterations, elapsed minutes, watchdog health, budget thresholds)
+- `artifacts/quality-gate-summary.json` – gate results + stakeholder coverage
+- `report/mission-report.md` + `report/confidence_surface.json` – final synthesis with structured quality metrics
+
+Artifacts are content-addressed where applicable and synchronized via `quality-surface-sync.sh`, `meta-manifest-generator.sh`, and `provenance-generator.sh`.
+
 ## Configuration
 
 Configuration uses overlay pattern: `*.default.json` files in `config/` directory, user overrides in `~/.config/cconductor/`.
 
 ### Key Configuration Files
 
-**config/cconductor-config.json**: Main settings
+**config/cconductor-config.default.json** → override with `~/.config/cconductor/cconductor-config.json`
 - Research preferences (default mode, quality thresholds)
 - Agent settings (timeouts, retries, parallel execution)
 - Output preferences
 
-**config/security-config.json**: Security settings
+**config/security-config.default.json** → override with `~/.config/cconductor/security-config.json`
 - security_profile: "strict" (default), "permissive", "max_automation"
 - Domain allowlists/blocklists
 - Content validation rules
 
-**config/cconductor-modes.json**: Research mode definitions
+**config/cconductor-modes.default.json** → override with `~/.config/cconductor/cconductor-modes.json`
 - default, scientific, market, technical, literature_review
 - Mode-specific agent configurations
 
-**config/paths.json**: Directory path overrides
-- Override platform default paths
+**config/paths.default.json** → override with `~/.config/cconductor/paths.json`
+- Override platform default paths (session dir, cache, library)
 
-**config/adaptive-config.json**: Advanced tuning
+**config/adaptive-config.default.json** → override with `~/.config/cconductor/adaptive-config.json`
 - Termination conditions
 - Task generation settings
 
@@ -160,6 +194,10 @@ Configuration uses overlay pattern: `*.default.json` files in `config/` director
 - Configurable quality thresholds
 - Automated remediation triggers
 - Granular quality metrics control
+
+**config/stakeholder-patterns.default.json**: Domain-aware stakeholder heuristics
+- Extend source classification by copying to `~/.config/cconductor/stakeholder-patterns.json`
+- Used by `domain-compliance-check.sh` and the quality surface pipeline
 
 **config/safe-fetch-policy.default.json**: Safe-fetch security
 - URL restrictions (localhost, IP addresses)
@@ -225,51 +263,47 @@ Add domain expertise via markdown files in OS-appropriate knowledge directory:
 
 Files are auto-discovered. No configuration required.
 
-## Quality Scoring
+## Quality Scoring & Confidence Surface
 
-Every research session receives quality score (0-100):
+Each mission emits a quality gate summary and `report/confidence_surface.json`. Scores (0-100) aggregate:
 
-### Score Components
+1. **Source Quality** – weighted authority (peer-reviewed, official, primary sources) vs. medium/low credibility.
+2. **Stakeholder Coverage** – domain heuristics ensure critical stakeholder voices are represented (regulators, operators, advocates, etc.). Backed by `domain-compliance-check.sh` + stakeholder patterns.
+3. **Evidence Depth** – citation density, corroboration across independent domains, and whether claims include primary evidence.
+4. **Temporal Fitness** – recency of newest evidence vs. mission requirements.
+5. **Contradiction Health** – unresolved contradictions or knowledge graph gaps lower the surface score.
 
-1. **Source Quality (30%)**: Authority and credibility of sources
-   - High-authority: peer-reviewed, .gov, .edu
-   - Medium-authority: reputable news, industry publications
-   - Low-authority: personal blogs, unverified
+Quality gates enforce thresholds (min citations, trust score, independent domains). When failures occur, the remediation loop re-runs research with explicit guidance, then rechecks the gate.
 
-2. **Citation Coverage (25%)**: Percentage of claims with citations
-   - Academic: need 85-100%
-   - Business: 70-85%
-   - General: 60-75%
+### Score Bands
 
-3. **Completeness (20%)**: Topic coverage thoroughness
-
-4. **Evidence Quality (15%)**: Multiple sources, primary vs secondary, recency
-
-5. **Confidence (10%)**: Source agreement, absence of contradictions
-
-### Score Ranges
-
-- 90-100: EXCELLENT (publication-ready)
-- 80-89: VERY GOOD (professional quality)
-- 70-79: GOOD (solid research)
-- 60-69: ACCEPTABLE (usable with limitations)
-- <60: NEEDS WORK (significant gaps)
+- **90-100**: Excellent – publishable, all thresholds cleared
+- **80-89**: Strong – professional quality, minor optional follow-ups
+- **70-79**: Acceptable – usable with known limitations
+- **60-69**: Needs Review – remediation recommended
+- **<60**: Fails Gate – blocking issues remain
 
 ### Improving Quality
 
-**Most effective**: Resume research with refinement
 ```bash
-./cconductor sessions resume mission_ID
-./cconductor sessions resume mission_ID --refine "Focus on recent papers from 2024"
-# Typically adds +10 to +15 points
+# Resume with guidance (strongest signal)
+./cconductor sessions resume mission_ID --refine "Need recent (≤540 day) regulatory sources"
+
+# Inspect quality surfaces / gate diagnostics
+cat research-sessions/mission_ID/artifacts/quality-gate-summary.json | jq
+cat research-sessions/mission_ID/report/confidence_surface.json | jq
+
+# Extend remediation attempts if needed
+cp config/quality-gate.default.json ~/.config/cconductor/quality-gate.json
+tmp=$(mktemp)
+jq '.remediation.max_attempts = 2' ~/.config/cconductor/quality-gate.json > "$tmp"
+mv "$tmp" ~/.config/cconductor/quality-gate.json
+
+# Supplement stakeholder coverage
+cp config/stakeholder-patterns.default.json ~/.config/cconductor/stakeholder-patterns.json
 ```
 
-**Other methods**:
-- Use specific mission types (--mission academic-research for scholarly work)
-- More specific questions with time frames and keywords
-- Provide known PDF sources via --input-dir
-- Let research complete fully (don't interrupt)
-- Use academic keywords: "peer-reviewed", "published research"
+Other levers: pick the right mission (`--mission academic-research` for scholarly depth), provide authoritative PDFs via `--input-dir`, enable watchdog/timeouts for long investigations, and avoid interrupting the streaming loop before synthesis completes.
 
 ## Citations and Bibliography
 
@@ -312,8 +346,10 @@ Trigger academic mode with keywords: "peer-reviewed", "systematic review", "meta
 
 **Solution**:
 ```bash
-claude login      # Opens browser for authentication
-claude whoami     # Verify login
+claude            # Launches CLI prompt
+/login            # Run inside the prompt, completes browser auth flow
+/status           # Confirms account, credit tier, and plan
+# Exit back to shell with Ctrl+C twice
 ```
 
 **Requirements**: Claude Pro/Max subscription or API credits (free accounts don't have CLI access)
@@ -324,11 +360,8 @@ claude whoami     # Verify login
 # Check Node.js
 node --version    # Must be v18+
 
-# Install if needed (macOS)
-brew install node
-
-# Install Claude Code CLI
-npm install -g @anthropic-ai/claude-code
+# Install Claude Code CLI (recommended script)
+curl -fsSL https://claude.ai/install.sh | bash
 
 # Verify
 claude --version
@@ -348,7 +381,8 @@ brew install bash
 Check if actually stuck:
 ```bash
 ps aux | grep cconductor
-tail -f logs/research.log  # Should show activity
+tail -f research-sessions/mission_ID/60_logs/events.jsonl  # Streaming events
+cat research-sessions/mission_ID/meta/mission_state.json | jq '.streaming.status'
 ```
 
 If genuinely stuck:
