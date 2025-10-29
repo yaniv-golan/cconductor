@@ -130,5 +130,4 @@ docs/internal/knowledge-graph-schema.md
 !tests/bash-parity/fixtures/**
 tests/citation-readiness-tests/
 docs/internal/
-!docs/internal/stakeholder-classification-spec.md
 audit-results.json
