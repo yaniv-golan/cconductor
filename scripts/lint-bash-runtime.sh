@@ -70,7 +70,7 @@ while IFS= read -r match; do
     prev="$ch"
     ((i++))
   done
-done < <(rg --no-heading --color=never --line-number --glob '*.sh' '\bbash\s+' "${TARGET_DIRS[@]}" || true)
+done < <(rg --no-heading --color=never --line-number --glob '*.sh' '\bbash[[:blank:]]+' "${TARGET_DIRS[@]}" || true)
 
 if (( ${#violations[@]} > 0 )); then
   {
