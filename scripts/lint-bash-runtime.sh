@@ -13,10 +13,8 @@ violations=()
 
 while IFS= read -r match; do
   [[ -z "$match" ]] && continue
-  file="${match%%:*}"
-  rest="${match#*:}"
-  lineno="${rest%%:*}"
-  line="${rest#*:}"
+
+  IFS=":" read -r file lineno line <<< "$match"
 
   line_no_newline="${line%%$'\n'}"
   trimmed_leading="${line_no_newline#"${line_no_newline%%[![:space:]]*}"}"
