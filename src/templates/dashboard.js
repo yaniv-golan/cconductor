@@ -1,4 +1,59 @@
 // Dashboard JavaScript - Real-time metrics
+const AGENT_DISPLAY_MAP = {
+    'mission-orchestrator': {
+        icon: '🧭',
+        title: 'Coordinating Research Step',
+        type: 'analysis'
+    },
+    'research-planner': {
+        icon: '🗂️',
+        title: 'Research Strategy Planned',
+        type: 'analysis'
+    },
+    'academic-researcher': {
+        icon: '🔍',
+        title: 'Searching Academic Literature',
+        type: 'research'
+    },
+    'web-researcher': {
+        icon: '🌐',
+        title: 'Searching Web Sources',
+        type: 'research'
+    },
+    'synthesis-agent': {
+        icon: '✨',
+        title: 'Synthesizing Findings',
+        type: 'finding'
+    },
+    'research-coordinator': {
+        icon: '🧭',
+        title: 'Coordinating Research',
+        type: 'analysis'
+    },
+    'quality-remediator': {
+        icon: '🛡️',
+        title: 'Quality Remediation',
+        type: 'analysis'
+    },
+    'prompt-parser': {
+        icon: '🧾',
+        title: 'Prompt Parsed',
+        type: 'analysis',
+        formatter: () => 'Parsed the mission prompt and extracted structured objectives, constraints, and deliverables for downstream agents.'
+    },
+    'domain-heuristics': {
+        icon: '🧭',
+        title: 'Domain Heuristics Generated',
+        type: 'analysis',
+        formatter: () => 'Generated domain heuristics to guide stakeholder targeting, freshness expectations, and synthesis priorities.'
+    },
+    'stakeholder-classifier': {
+        icon: '👥',
+        title: 'Stakeholder Classification',
+        type: 'analysis'
+    }
+};
+
 class Dashboard {
     constructor() {
         this.updateInterval = 3000; // 3 seconds
@@ -8,6 +63,34 @@ class Dashboard {
         this.newTaskIds = new Set(); // Track new tasks (legacy renderTasks compatibility)
         this.runtimeInterval = null; // Track runtime interval to avoid duplicates
         this.sessionStartTime = null; // Cache session start time
+        this.sequenceHandlers = this.initializeSequenceHandlers();
+        this.defaultSubtitles = {};
+        this.sessionStatus = 'unknown';
+        this.missionInProgress = true;
+        const sessionFromBody = document.body?.dataset?.sessionId || '';
+        this.sessionId = sessionFromBody || null;
+        this.textFileExtensions = new Set(['json', 'jsonl', 'md', 'txt', 'log', 'yaml', 'yml']);
+
+        this.handleFileLinkClick = this.handleFileLinkClick.bind(this);
+        document.addEventListener('click', this.handleFileLinkClick);
+    }
+
+    initializeSequenceHandlers() {
+        return [
+            {
+                startType: 'quality_gate_started',
+                endType: 'quality_gate_completed',
+                findMatch: (start, ends, used) => this.findQualityGateMatch(start, ends, used),
+                buildEntry: (start, end) => this.buildQualityGateEntry(start, end),
+                buildInProgress: start => this.buildQualityGateInProgress(start)
+            },
+            {
+                startType: 'stakeholder_classifier_started',
+                endType: 'stakeholder_classifier_completed',
+                buildEntry: (start, end) => this.buildStakeholderClassifierEntry(start, end),
+                buildInProgress: start => this.buildStakeholderClassifierInProgress(start)
+            }
+        ];
     }
 
     async init() {
@@ -25,6 +108,7 @@ class Dashboard {
 
             // Store metrics for use in journal rendering (completion messages)
             this.currentMetrics = metrics;
+            this.currentEvents = events || [];
 
             this.renderHeader(session);
             this.renderStats(metrics);
@@ -139,6 +223,10 @@ class Dashboard {
     renderHeader(session) {
         if (!session) return;
 
+        this.sessionStatus = session.status || 'unknown';
+        const terminalStatuses = ['completed', 'completed_with_advisory', 'blocked_quality_gate', 'failed'];
+        this.missionInProgress = !terminalStatuses.includes(this.sessionStatus);
+
         // Display clean objective (primary display)
         const questionElement = document.getElementById('research-question');
         const objectiveText = session.objective || session.research_question || 'Loading...';
@@ -178,9 +266,7 @@ class Dashboard {
             questionElement.parentNode.appendChild(details);
         }
 
-        // Display session ID from URL parameter if available
-        const urlParams = new URLSearchParams(window.location.search);
-        const sessionId = urlParams.get('session');
+        const sessionId = this.sessionId;
         if (sessionId) {
             // Add session ID as a subtitle (create element if it doesn't exist)
             let sessionIdElement = document.getElementById('session-id-display');
@@ -350,6 +436,141 @@ class Dashboard {
         this.runtimeInterval = setInterval(updateRuntime, 1000);
     }
 
+    cacheSubtitle(subtitleId) {
+        if (!subtitleId || this.defaultSubtitles[subtitleId]) {
+            return;
+        }
+        const subtitleEl = document.getElementById(subtitleId);
+        if (subtitleEl) {
+            this.defaultSubtitles[subtitleId] = subtitleEl.textContent;
+        }
+    }
+
+    setMetricDisplay({
+        valueId,
+        subtitleId,
+        value,
+        formatValue,
+        hint,
+        readyCheck,
+        onReady
+    }) {
+        const valueEl = document.getElementById(valueId);
+        if (!valueEl) return;
+
+        const subtitleEl = subtitleId ? document.getElementById(subtitleId) : null;
+        if (subtitleId) {
+            this.cacheSubtitle(subtitleId);
+        }
+
+        let numericValue = typeof value === 'number' ? value : Number(value);
+        if (Number.isNaN(numericValue) || numericValue === null) {
+            numericValue = 0;
+        }
+
+        const isReady = readyCheck ? readyCheck(value, numericValue) : (numericValue !== 0);
+        const showPlaceholder = !isReady && this.missionInProgress;
+
+        if (showPlaceholder) {
+            valueEl.textContent = 'Not yet';
+            valueEl.classList.add('placeholder');
+            if (subtitleEl && hint) {
+                subtitleEl.textContent = hint;
+            }
+            if (onReady) onReady(numericValue, true, subtitleEl);
+        } else {
+            const formattedValue = formatValue ? formatValue(numericValue) : `${numericValue}`;
+            valueEl.textContent = formattedValue;
+            valueEl.classList.remove('placeholder');
+            const handled = onReady ? onReady(numericValue, false, subtitleEl) : false;
+            if (!handled && subtitleEl && this.defaultSubtitles[subtitleId]) {
+                subtitleEl.textContent = this.defaultSubtitles[subtitleId];
+            }
+        }
+    }
+
+    isLikelyFilePath(text) {
+        if (!text) return false;
+        const trimmed = text.trim();
+        if (trimmed.length === 0) return false;
+        if (trimmed.includes('*') || trimmed.includes('?')) return false;
+        if (/^https?:\/\//i.test(trimmed)) return true;
+        if (/^file:\/\//i.test(trimmed)) return true;
+        if (trimmed.startsWith('/') || trimmed.startsWith('./') || trimmed.startsWith('../')) return true;
+        if (trimmed.includes('research-sessions/')) return true;
+        if (trimmed.includes('mission_')) return true;
+        if (/[\\\/]/.test(trimmed) && /\.[A-Za-z0-9]+$/.test(trimmed)) return true;
+        return false;
+    }
+
+    resolveSessionRelativePath(path) {
+        if (!path) return null;
+        let candidate = path.trim().replace(/\\/g, '/');
+        if (candidate.length === 0) return null;
+
+        if (/^https?:\/\//i.test(candidate) || /^file:\/\//i.test(candidate)) {
+            return candidate;
+        }
+
+        if ((candidate.startsWith('"') && candidate.endsWith('"')) ||
+            (candidate.startsWith("'") && candidate.endsWith("'"))) {
+            candidate = candidate.slice(1, -1);
+        }
+
+        const missionRegex = /(mission|session)_\d{10,}/;
+        const missionMatch = candidate.match(missionRegex);
+        let sessionIdFromPath = missionMatch ? missionMatch[0] : null;
+
+        if (sessionIdFromPath) {
+            const index = candidate.indexOf(sessionIdFromPath);
+            candidate = candidate.slice(index + sessionIdFromPath.length);
+        }
+
+        candidate = candidate.replace(/^[:]?/, '');
+        candidate = candidate.replace(/^\/+/, '');
+
+        while (candidate.startsWith('../')) {
+            candidate = candidate.slice(3);
+        }
+        candidate = candidate.replace(/^\.\/+/, '');
+
+        const lowered = candidate.toLowerCase();
+        if (lowered === 'user-prompt.txt' || lowered === 'inputs/user-prompt.txt') {
+            candidate = 'work/prompt-parser/input.txt';
+        }
+
+        if (!candidate) {
+            candidate = 'viewer/index.html';
+        }
+
+        const sessionId = sessionIdFromPath || this.sessionId;
+        if (!sessionId) {
+            return candidate.startsWith('/') ? candidate : `/${candidate}`;
+        }
+
+        return `/${sessionId}/${candidate}`;
+    }
+
+    renderFileLink(original, display) {
+        if (!original) {
+            return this.escapeHtml(display || '');
+        }
+
+        if (!this.isLikelyFilePath(original)) {
+            return this.escapeHtml(display || original);
+        }
+
+        const resolved = this.resolveSessionRelativePath(original);
+        if (!resolved) {
+            return this.escapeHtml(display || original);
+        }
+
+        const href = this.escapeAttribute(encodeURI(resolved));
+        const label = display || original;
+
+        return `<a href="${href}" target="_blank" rel="noopener noreferrer" data-file-link="1">${this.escapeHtml(label)}</a>`;
+    }
+
     renderStats(metrics) {
         if (!metrics) {
             // Show loading indicator if metrics don't exist yet
@@ -360,17 +581,101 @@ class Dashboard {
         // Remove loading indicator if it exists
         this.hideLoadingState();
 
-        document.getElementById('stat-iteration').textContent = metrics.iteration || 0;
-        document.getElementById('stat-confidence').textContent =
-            Math.round((metrics.confidence || 0) * 100) + '%';
-        document.getElementById('stat-entities').textContent =
-            metrics.knowledge?.entities || 0;
-        document.getElementById('stat-claims').textContent =
-            metrics.knowledge?.claims || 0;
-        document.getElementById('stat-cost').textContent =
-            (metrics.costs?.total_usd || 0).toFixed(2);
-        document.getElementById('stat-cost-per-iter').textContent =
-            (metrics.costs?.per_iteration || 0).toFixed(2);
+        this.setMetricDisplay({
+            valueId: 'stat-iteration',
+            subtitleId: 'stat-iteration-subtitle',
+            value: metrics.iteration || 0,
+            formatValue: val => `${val}`,
+            hint: 'Starts after the first orchestration loop.'
+        });
+
+        this.setMetricDisplay({
+            valueId: 'stat-confidence',
+            subtitleId: 'stat-confidence-subtitle',
+            value: metrics.confidence || 0,
+            formatValue: val => `${Math.round(val * 100)}%`,
+            hint: 'Appears once knowledge graph scoring runs.',
+            readyCheck: () => (metrics.iteration || 0) > 0 || (metrics.confidence || 0) !== 0
+        });
+
+        this.setMetricDisplay({
+            valueId: 'stat-entities',
+            subtitleId: 'stat-entities-subtitle',
+            value: metrics.knowledge?.entities || 0,
+            formatValue: val => `${val}`,
+            hint: 'Populates after researchers add new entities.',
+            readyCheck: () => (metrics.iteration || 0) > 0 || (metrics.knowledge?.entities || 0) !== 0
+        });
+
+        this.setMetricDisplay({
+            valueId: 'stat-claims',
+            subtitleId: 'stat-claims-subtitle',
+            value: metrics.knowledge?.claims || 0,
+            formatValue: val => `${val}`,
+            hint: 'Populates after evidence is synthesized.',
+            readyCheck: () => (metrics.iteration || 0) > 0 || (metrics.knowledge?.claims || 0) !== 0
+        });
+
+        this.setMetricDisplay({
+            valueId: 'stat-cost',
+            subtitleId: 'stat-cost-subtitle',
+            value: metrics.costs?.total_usd || 0,
+            formatValue: val => `$${val.toFixed(2)}`,
+            hint: 'Costs appear once agents invoke tools.',
+            readyCheck: () => (metrics.progress?.completed_invocations || 0) > 0 || (metrics.costs?.total_usd || 0) !== 0,
+            onReady: (val, placeholder, subtitleEl) => {
+                if (!subtitleEl) {
+                    return false;
+                }
+                if (placeholder) {
+                    subtitleEl.textContent = 'Will estimate per iteration once agents complete.';
+                    return true;
+                }
+                const perIteration = metrics.costs?.per_iteration || 0;
+                subtitleEl.textContent = `$${perIteration.toFixed(2)} per iteration`;
+                return true;
+            }
+        });
+
+        const preflight = metrics.preflight || {};
+        const preflightHeuristics = preflight.domain_heuristics_runs || 0;
+        const preflightPrompt = preflight.prompt_parser_runs || 0;
+        const preflightStakeholders = preflight.stakeholder_classifications || 0;
+        const preflightTotal = preflightHeuristics + preflightPrompt + preflightStakeholders;
+        const preflightCard = document.getElementById('preflight-card');
+
+        if (preflightCard) {
+            if (preflightTotal > 0 || this.missionInProgress) {
+                preflightCard.style.display = '';
+                const heuristicsEl = document.getElementById('preflight-heuristics-count');
+                const promptEl = document.getElementById('preflight-prompt-count');
+                const stakeholdersEl = document.getElementById('preflight-stakeholders-count');
+                const subtitleEl = document.getElementById('preflight-subtitle');
+
+                const setPreflightValue = (el, count) => {
+                    if (!el) return;
+                    const showPlaceholder = count === 0 && this.missionInProgress;
+                    el.textContent = showPlaceholder ? 'Not yet' : `${count}`;
+                    el.classList.toggle('placeholder', showPlaceholder);
+                };
+
+                setPreflightValue(heuristicsEl, preflightHeuristics);
+                setPreflightValue(promptEl, preflightPrompt);
+                setPreflightValue(stakeholdersEl, preflightStakeholders);
+
+                if (subtitleEl) {
+                    if (preflightTotal > 0) {
+                        subtitleEl.textContent = `${preflightTotal} early checks recorded`;
+                    } else if (this.missionInProgress) {
+                        subtitleEl.textContent = 'Early checks will appear as setup agents complete.';
+                    } else {
+                        subtitleEl.textContent = 'No preflight activity recorded.';
+                    }
+                }
+            } else {
+                preflightCard.style.display = 'none';
+            }
+        }
 
         // Runtime is now calculated dynamically in startLiveRuntime() for live updates
         // No need to set it here - it updates every second automatically
@@ -382,13 +687,12 @@ class Dashboard {
             'stat-confidence', 
             'stat-entities',
             'stat-claims',
-            'stat-cost',
-            'stat-cost-per-iter'
+            'stat-cost'
         ];
         
         statElements.forEach(id => {
             const el = document.getElementById(id);
-            if (el && el.textContent === '0' || el.textContent === '0%' || el.textContent === '0.00') {
+            if (el && (el.textContent === '0' || el.textContent === '0%' || el.textContent === '0.00')) {
                 el.innerHTML = '<span style="opacity: 0.5; font-size: 0.8em;">...</span>';
             }
         });
@@ -690,6 +994,7 @@ class Dashboard {
             
             // Get friendly tool name
             const friendlyToolName = this.getFriendlyToolName(call.tool);
+            const detailHtml = this.renderFileLink(call.summary, truncSummary);
 
             return `
                 <div class="tool-item ${statusClass}" title="${this.escapeHtml(call.summary)}">
@@ -699,7 +1004,7 @@ class Dashboard {
                             <span class="tool-name">${friendlyToolName}</span>
                             <span class="tool-status ${statusIconClass}">${statusIcon}</span>
                         </div>
-                        <div class="tool-details">${this.escapeHtml(truncSummary)}</div>
+                        <div class="tool-details">${detailHtml}</div>
                         <div class="tool-footer">
                             <span>${call.agent}</span>
                             <span>${durationText || time}</span>
@@ -758,10 +1063,13 @@ class Dashboard {
 
     groupEventsIntoJournalEntries(events) {
         const entries = [];
-        
-        // Entry 1: Session/Mission start
+
+        if (!events || events.length === 0) {
+            return entries;
+        }
+
         const sessionCreated = events.find(e => e.type === 'session_created' || e.type === 'mission_started');
-        if (sessionCreated) {
+        if (sessionCreated && this.isValidTimestamp(sessionCreated.timestamp)) {
             const objective = sessionCreated.data?.objective || 'research query';
             entries.push({
                 type: 'milestone',
@@ -775,41 +1083,45 @@ class Dashboard {
                 events: [sessionCreated]
             });
         }
-        
-        // Entry 2-N: Agent invocations
-        const agentNames = ['mission-orchestrator', 'research-planner', 'academic-researcher', 'web-researcher', 'synthesis-agent', 'quality-remediator'];
-        
-        agentNames.forEach(agentName => {
+
+        const orderedAgents = this.buildOrderedAgents(events);
+        orderedAgents.forEach(agentName => {
             const invocations = events.filter(e => e.type === 'agent_invocation' && e.data.agent === agentName);
             const results = events.filter(e => e.type === 'agent_result' && e.data.agent === agentName);
-            
-            // Match invocations with results
-            for (let i = 0; i < Math.min(invocations.length, results.length); i++) {
+            const pairCount = Math.min(invocations.length, results.length);
+
+            for (let i = 0; i < pairCount; i++) {
                 const invocation = invocations[i];
                 const result = results[i];
-                
+                const startTime = invocation?.timestamp || result?.timestamp || null;
+                const endTime = result?.timestamp || null;
+                const resultData = result?.data || {};
+
+                if (!this.isValidTimestamp(startTime)) {
+                    continue;
+                }
+
                 entries.push({
                     type: this.getEntryType(agentName),
                     icon: this.getAgentIcon(agentName),
                     title: this.getAgentTitle(agentName),
-                    startTime: invocation.timestamp,
-                    endTime: result.timestamp,
-                    content: this.formatAgentWork(agentName, result.data),
+                    startTime,
+                    endTime: this.isValidTimestamp(endTime) ? endTime : null,
+                    content: this.formatAgentWork(agentName, resultData),
                     agent: agentName,
                     metadata: {
-                        duration: this.calculateDurationSeconds(invocation.timestamp, result.timestamp),
-                        cost: result.data.cost_usd || 0,
-                        ...result.data // Include all agent-specific metadata
+                        duration: this.calculateDurationSeconds(invocation?.timestamp, result?.timestamp),
+                        cost: resultData.cost_usd || 0,
+                        ...resultData
                     },
                     events: [invocation, result],
                     tasks: this.getTasksForAgent(agentName, events),
-                    tools: this.getToolsForAgent(agentName, events, invocation.timestamp, result.timestamp)
+                    tools: this.getToolsForAgent(agentName, events, startTime, endTime)
                 });
             }
         });
-        
-        // Entry N+1: Iteration completions
-        events.filter(e => e.type === 'iteration_complete').forEach(e => {
+
+        events.filter(e => e.type === 'iteration_complete' && this.isValidTimestamp(e.timestamp)).forEach(e => {
             entries.push({
                 type: 'milestone',
                 icon: '✅',
@@ -822,21 +1134,19 @@ class Dashboard {
                 events: [e]
             });
         });
-        
-        // Entry N+2: Research completion (support both old and new event types)
-        const researchComplete = events.find(e => e.type === 'research_complete' || e.type === 'mission_completed');
+
+        const researchComplete = events.find(e => (e.type === 'research_complete' || e.type === 'mission_completed') && this.isValidTimestamp(e.timestamp));
         if (researchComplete) {
             const reportFile = researchComplete.data?.report_file || 'report/mission-report.md';
-            
-            // For mission_completed events, we need to enrich data from metrics
-            // The formatResearchComplete function expects claims_synthesized, entities_integrated, report_sections
-            const completionData = researchComplete.type === 'mission_completed' ? {
-                claims_synthesized: this.currentMetrics?.knowledge?.claims || 0,
-                entities_integrated: this.currentMetrics?.knowledge?.entities || 0,
-                report_sections: 0, // Not tracked separately
-                report_file: reportFile
-            } : researchComplete.data;
-            
+            const completionData = researchComplete.type === 'mission_completed'
+                ? {
+                    claims_synthesized: this.currentMetrics?.knowledge?.claims || 0,
+                    entities_integrated: this.currentMetrics?.knowledge?.entities || 0,
+                    report_sections: this.currentMetrics?.report?.sections || 0,
+                    report_file: reportFile
+                }
+                : researchComplete.data || {};
+
             entries.push({
                 type: 'milestone',
                 icon: '🎉',
@@ -854,18 +1164,19 @@ class Dashboard {
                 events: [researchComplete]
             });
         }
-        
-        // Add "in progress" entries for unfinished work
-        // These will appear at the top (newest first) to show current activity
-        agentNames.forEach(agentName => {
+
+        entries.push(...this.processSequenceEventHandlers(events));
+
+        orderedAgents.forEach(agentName => {
             const invocations = events.filter(e => e.type === 'agent_invocation' && e.data.agent === agentName);
             const results = events.filter(e => e.type === 'agent_result' && e.data.agent === agentName);
-            
-            // If more invocations than results, last invocation is in progress
             if (invocations.length > results.length) {
                 const inProgressInvocation = invocations[invocations.length - 1];
+                if (!this.isValidTimestamp(inProgressInvocation?.timestamp)) {
+                    return;
+                }
                 const elapsedSeconds = this.calculateDurationSeconds(inProgressInvocation.timestamp, new Date().toISOString());
-                
+
                 entries.push({
                     type: 'in_progress',
                     icon: '⏳',
@@ -879,88 +1190,248 @@ class Dashboard {
                         status: 'running'
                     },
                     events: [inProgressInvocation],
-                    tasks: this.getTasksForAgent(agentName, events), // Show tasks assigned to this agent
-                    tools: [] // No completed tools yet
-                });
-            }
-        });
-
-        // Track quality gate runs as their own entries
-        const gateStarts = events.filter(e => e.type === 'quality_gate_started');
-        const gateResults = events.filter(e => e.type === 'quality_gate_completed');
-        const usedGateResults = new Set();
-
-        gateStarts.forEach(start => {
-            const attempt = start.data?.attempt ?? gateResults.length + 1;
-            const result = gateResults.find(res => !usedGateResults.has(res.timestamp) && (res.data?.attempt ?? null) === attempt && new Date(res.timestamp) >= new Date(start.timestamp));
-
-            if (result) {
-                usedGateResults.add(result.timestamp);
-                const status = result.data?.status || 'unknown';
-                const passed = status === 'passed';
-                entries.push({
-                    type: passed ? 'milestone' : 'warning',
-                    icon: passed ? '🛡️' : '⚠️',
-                    title: passed ? `Quality Gate Passed (Attempt ${attempt})` : `Quality Gate Flagged Issues (Attempt ${attempt})`,
-                    startTime: start.timestamp,
-                    endTime: result.timestamp,
-                    content: this.formatQualityGateContent(result.data || start.data),
-                    agent: 'quality-gate',
-                    metadata: result.data || {},
-                    events: [start, result],
-                    tasks: [],
-                    tools: []
-                });
-            } else {
-                entries.push({
-                    type: 'in_progress',
-                    icon: '🛡️',
-                    title: `Quality Gate Running (Attempt ${attempt})`,
-                    startTime: start.timestamp,
-                    endTime: null,
-                    content: 'Evaluating claims against trust, recency, and coverage thresholds...',
-                    agent: 'quality-gate',
-                    metadata: start.data || {},
-                    events: [start],
-                    tasks: [],
+                    tasks: this.getTasksForAgent(agentName, events),
                     tools: []
                 });
             }
         });
-        
-        // Also check for in-progress tasks
+
         const taskStarts = events.filter(e => e.type === 'task_started');
         const taskEnds = events.filter(e => e.type === 'task_completed' || e.type === 'task_failed');
         const taskEndIds = new Set(taskEnds.map(e => e.data.task_id));
-        
+
         taskStarts.forEach(taskStart => {
-            if (!taskEndIds.has(taskStart.data.task_id)) {
-                const elapsedSeconds = this.calculateDurationSeconds(taskStart.timestamp, new Date().toISOString());
-                entries.push({
-                    type: 'in_progress',
-                    icon: '📋',
-                    title: `Task ${taskStart.data.task_id} (In Progress)`,
-                    startTime: taskStart.timestamp,
-                    endTime: null,
-                    content: `Working on: "${taskStart.data.query}" (${Math.floor(elapsedSeconds)}s elapsed)`,
-                    agent: taskStart.data.agent,
-                    metadata: {
-                        elapsed: elapsedSeconds,
-                        status: 'running',
-                        task_id: taskStart.data.task_id
-                    },
-                    events: [taskStart],
-                    tasks: [],
-                    tools: []
-                });
+            if (taskEndIds.has(taskStart.data.task_id) || !this.isValidTimestamp(taskStart.timestamp)) {
+                return;
             }
+            const elapsedSeconds = this.calculateDurationSeconds(taskStart.timestamp, new Date().toISOString());
+            entries.push({
+                type: 'in_progress',
+                icon: '📋',
+                title: `Task ${taskStart.data.task_id} (In Progress)`,
+                startTime: taskStart.timestamp,
+                endTime: null,
+                content: `Working on: "${taskStart.data.query}" (${Math.floor(elapsedSeconds)}s elapsed)`,
+                agent: taskStart.data.agent,
+                metadata: {
+                    elapsed: elapsedSeconds,
+                    status: 'running',
+                    task_id: taskStart.data.task_id
+                },
+                events: [taskStart],
+                tasks: [],
+                tools: []
+            });
         });
-        
-        // Sort by time (newest first)
-        return entries.sort((a, b) => new Date(b.startTime) - new Date(a.startTime));
+
+        const validEntries = entries.filter(entry => this.isValidTimestamp(entry.startTime));
+        return validEntries.sort((a, b) => this.parseTimestamp(b.startTime) - this.parseTimestamp(a.startTime));
+    }
+
+
+    buildOrderedAgents(events) {
+        const agentEvents = (events || []).filter(e =>
+            (e.type === 'agent_invocation' || e.type === 'agent_result') &&
+            e.data && e.data.agent
+        );
+        const discovered = [...new Set(agentEvents.map(e => e.data.agent))];
+        const preferredOrder = [
+            'mission-orchestrator',
+            'domain-heuristics',
+            'prompt-parser',
+            'research-planner',
+            'academic-researcher',
+            'web-researcher',
+            'stakeholder-classifier',
+            'research-coordinator',
+            'synthesis-agent',
+            'quality-remediator'
+        ];
+        return [
+            ...preferredOrder.filter(agent => discovered.includes(agent)),
+            ...discovered.filter(agent => !preferredOrder.includes(agent))
+        ];
+    }
+
+    processSequenceEventHandlers(events) {
+        const sequenceEntries = [];
+        this.sequenceHandlers.forEach(handler => {
+            const starts = events.filter(e => e.type === handler.startType);
+            const ends = events.filter(e => e.type === handler.endType);
+            const usedEnds = new Set();
+
+            starts.forEach(start => {
+                let match;
+                if (typeof handler.findMatch === 'function') {
+                    match = handler.findMatch(start, ends, usedEnds);
+                } else {
+                    match = this.findDefaultSequenceMatch(start, ends, usedEnds);
+                }
+
+                if (match) {
+                    usedEnds.add(match);
+                    if (typeof handler.buildEntry === 'function') {
+                        sequenceEntries.push(handler.buildEntry(start, match));
+                    }
+                } else if (typeof handler.buildInProgress === 'function') {
+                    sequenceEntries.push(handler.buildInProgress(start));
+                }
+            });
+        });
+        return sequenceEntries;
+    }
+
+    findDefaultSequenceMatch(start, ends, usedEnds) {
+        const startTime = this.parseTimestamp(start?.timestamp);
+        return ends.find(end => {
+            if (usedEnds.has(end)) {
+                return false;
+            }
+            const endTime = this.parseTimestamp(end?.timestamp);
+            if (startTime !== null && endTime !== null && endTime < startTime) {
+                return false;
+            }
+            return true;
+        }) || null;
+    }
+
+    findQualityGateMatch(start, ends, usedEnds) {
+        const startTime = this.parseTimestamp(start?.timestamp);
+        const attempt = start?.data?.attempt ?? null;
+        return ends.find(end => {
+            if (usedEnds.has(end)) {
+                return false;
+            }
+            const endAttempt = end?.data?.attempt ?? null;
+            if (attempt !== null && endAttempt !== attempt) {
+                return false;
+            }
+            const endTime = this.parseTimestamp(end?.timestamp);
+            if (startTime !== null && endTime !== null && endTime < startTime) {
+                return false;
+            }
+            return true;
+        }) || null;
+    }
+
+    buildQualityGateEntry(start, end) {
+        const attempt = end?.data?.attempt ?? start?.data?.attempt ?? 1;
+        const status = end?.data?.status || 'unknown';
+        const passed = status === 'passed';
+        return {
+            type: passed ? 'milestone' : 'warning',
+            icon: passed ? '🛡️' : '⚠️',
+            title: passed ? `Quality Gate Passed (Attempt ${attempt})` : `Quality Gate Flagged Issues (Attempt ${attempt})`,
+            startTime: start?.timestamp || null,
+            endTime: end?.timestamp || null,
+            content: this.formatQualityGateContent(end?.data || start?.data || {}),
+            agent: 'quality-gate',
+            metadata: end?.data || {},
+            events: [start, end],
+            tasks: [],
+            tools: []
+        };
+    }
+
+    buildQualityGateInProgress(start) {
+        const attempt = start?.data?.attempt ?? 1;
+        return {
+            type: 'in_progress',
+            icon: '🛡️',
+            title: `Quality Gate Running (Attempt ${attempt})`,
+            startTime: start?.timestamp || null,
+            endTime: null,
+            content: 'Evaluating claims against trust, recency, and coverage thresholds...',
+            agent: 'quality-gate',
+            metadata: start?.data || {},
+            events: [start],
+            tasks: [],
+            tools: []
+        };
+    }
+
+    buildStakeholderClassifierEntry(start, end) {
+        const startData = start?.data || {};
+        const endData = end?.data || {};
+        const startTime = start?.timestamp || startData.started_at || null;
+        const endTime = end?.timestamp || endData.completed_at || null;
+        return {
+            type: this.getEntryType('stakeholder-classifier'),
+            icon: this.getAgentIcon('stakeholder-classifier'),
+            title: 'Stakeholder Classification Completed',
+            startTime,
+            endTime: this.isValidTimestamp(endTime) ? endTime : null,
+            content: this.formatStakeholderClassifierContent(startData, endData),
+            agent: 'stakeholder-classifier',
+            metadata: {
+                total_sources: endData.total_sources ?? startData.total_sources ?? 0,
+                classifications: endData.classifications ?? 0,
+                needs_review: endData.needs_review ?? 0,
+                pending_sources: endData.pending_sources ?? 0
+            },
+            events: [start, end],
+            tasks: [],
+            tools: []
+        };
+    }
+
+    buildStakeholderClassifierInProgress(start) {
+        const startData = start?.data || {};
+        const sources = startData.total_sources ?? 0;
+        return {
+            type: 'in_progress',
+            icon: this.getAgentIcon('stakeholder-classifier'),
+            title: 'Stakeholder Classification Running',
+            startTime: start?.timestamp || startData.started_at || null,
+            endTime: null,
+            content: `Classifying ${sources} knowledge graph source${sources === 1 ? '' : 's'}...`,
+            agent: 'stakeholder-classifier',
+            metadata: {
+                total_sources: sources,
+                status: 'running'
+            },
+            events: [start],
+            tasks: [],
+            tools: []
+        };
+    }
+
+    formatStakeholderClassifierContent(startData, endData) {
+        const total = endData.total_sources ?? startData.total_sources ?? 0;
+        const classified = endData.classifications ?? 0;
+        const needs = endData.needs_review ?? 0;
+        const pending = endData.pending_sources ?? 0;
+
+        let message = `Classified ${classified} source${classified === 1 ? '' : 's'} out of ${total}.`;
+        if (needs > 0) {
+            message += ` Flagged ${needs} for review.`;
+        }
+        if (pending > 0) {
+            message += ` ${pending} source${pending === 1 ? '' : 's'} pending.`;
+        }
+        return message;
+    }
+
+    isValidTimestamp(timestamp) {
+        return this.parseTimestamp(timestamp) !== null;
+    }
+
+    parseTimestamp(timestamp) {
+        if (!timestamp) {
+            return null;
+        }
+        const value = Date.parse(timestamp);
+        if (Number.isNaN(value)) {
+            return null;
+        }
+        return value;
     }
 
     getEntryType(agentName) {
+        const config = AGENT_DISPLAY_MAP[agentName];
+        if (config?.type) {
+            return config.type;
+        }
         const types = {
             'research-planner': 'analysis',
             'academic-researcher': 'research',
@@ -973,6 +1444,10 @@ class Dashboard {
     }
 
     getAgentIcon(agentName) {
+        const config = AGENT_DISPLAY_MAP[agentName];
+        if (config?.icon) {
+            return config.icon;
+        }
         const icons = {
             'research-planner': '🗂️',
             'academic-researcher': '🔍',
@@ -985,6 +1460,10 @@ class Dashboard {
     }
 
     getAgentTitle(agentName) {
+        const config = AGENT_DISPLAY_MAP[agentName];
+        if (config?.title) {
+            return config.title;
+        }
         const titles = {
             'mission-orchestrator': 'Coordinating Research Step',
             'research-planner': 'Research Strategy Planned',
@@ -998,37 +1477,43 @@ class Dashboard {
     }
 
     formatAgentWork(agentName, resultData) {
+        const data = resultData || {};
+        const mapFormatter = AGENT_DISPLAY_MAP[agentName]?.formatter;
+        if (typeof mapFormatter === 'function') {
+            return mapFormatter(data);
+        }
+
         const templates = {
             'research-planner': () => {
-                const tasks = resultData.tasks_generated || 0;
+                const tasks = data.tasks_generated || 0;
                 return `I analyzed the query and identified ${tasks} critical research area${tasks !== 1 ? 's' : ''} to explore.`;
             },
             'academic-researcher': () => {
-                const papers = resultData.papers_found || 0;
-                const searches = resultData.searches_performed || 0;
+                const papers = data.papers_found || 0;
+                const searches = data.searches_performed || 0;
                 return `I conducted ${searches} systematic search${searches !== 1 ? 'es' : ''} across academic databases and found ${papers} relevant paper${papers !== 1 ? 's' : ''} with focus on peer-reviewed sources.`;
             },
             'web-researcher': () => {
-                const sources = resultData.sources_found || 0;
-                const searches = resultData.searches_performed || 0;
+                const sources = data.sources_found || 0;
+                const searches = data.searches_performed || 0;
                 return `I performed ${searches} web search${searches !== 1 ? 'es' : ''} and analyzed ${sources} source${sources !== 1 ? 's' : ''} to gather current information on the research topic.`;
             },
             'synthesis-agent': () => {
-                const claims = resultData.claims_synthesized || 0;
-                const gaps = resultData.gaps_found || 0;
+                const claims = data.claims_synthesized || 0;
+                const gaps = data.gaps_found || 0;
                 return `I synthesized ${claims} claim${claims !== 1 ? 's' : ''} from all gathered sources and identified ${gaps} knowledge gap${gaps !== 1 ? 's' : ''} requiring further investigation.`;
             },
             'quality-remediator': () => {
                 return 'I reviewed the quality gate diagnostics and gathered additional evidence for the flagged claims. See work/quality-remediator/ for remediation notes.';
             },
             'research-coordinator': () => {
-                const entities = resultData.entities_discovered || 0;
-                const claims = resultData.claims_validated || 0;
-                const gaps = resultData.gaps_identified || 0;
+                const entities = data.entities_discovered || 0;
+                const claims = data.claims_validated || 0;
+                const gaps = data.gaps_identified || 0;
                 return `I processed the research findings and discovered ${entities} key entit${entities !== 1 ? 'ies' : 'y'}, validated ${claims} claim${claims !== 1 ? 's' : ''}, and identified ${gaps} gap${gaps !== 1 ? 's' : ''} in the current knowledge.`;
             }
         };
-        
+
         const formatter = templates[agentName];
         return formatter ? formatter() : `I completed ${agentName} work.`;
     }
@@ -1152,30 +1637,39 @@ class Dashboard {
 
     getToolsForAgent(agentName, events, startTime, endTime) {
         const tools = [];
-        const startMs = new Date(startTime).getTime();
-        const endMs = new Date(endTime).getTime();
-        
-        // Find tool_use_start events for this agent in the time range
-        const toolStarts = events.filter(e => 
+        const startMs = this.parseTimestamp(startTime);
+        const endMs = this.parseTimestamp(endTime);
+
+        if (startMs === null || endMs === null) {
+            return tools;
+        }
+
+        const toolStarts = events.filter(e =>
             e.type === 'tool_use_start' &&
             e.data.agent === agentName &&
-            new Date(e.timestamp).getTime() >= startMs &&
-            new Date(e.timestamp).getTime() <= endMs
+            this.parseTimestamp(e.timestamp) !== null &&
+            this.parseTimestamp(e.timestamp) >= startMs &&
+            this.parseTimestamp(e.timestamp) <= endMs
         );
-        
+
         toolStarts.forEach(start => {
             const tool = start.data.tool;
-            const startToolTime = new Date(start.timestamp).getTime();
-            
-            // Find corresponding complete event
-            const complete = events.find(e => 
-                e.type === 'tool_use_complete' &&
-                e.data.tool === tool &&
-                new Date(e.timestamp).getTime() > startToolTime &&
-                new Date(e.timestamp).getTime() <= endMs &&
-                new Date(e.timestamp).getTime() - startToolTime < 60000
-            );
-            
+            const startToolTime = this.parseTimestamp(start.timestamp);
+            if (startToolTime === null) {
+                return;
+            }
+
+            const complete = events.find(e => {
+                if (e.type !== 'tool_use_complete' || e.data.tool !== tool) {
+                    return false;
+                }
+                const completeTime = this.parseTimestamp(e.timestamp);
+                if (completeTime === null) {
+                    return false;
+                }
+                return completeTime > startToolTime && completeTime <= endMs && (completeTime - startToolTime) < 60000;
+            });
+
             tools.push({
                 tool: tool,
                 icon: this.getToolIcon(tool),
@@ -1431,11 +1925,13 @@ class Dashboard {
                 truncDetails = tool.details;
             }
             
+            const detailHtml = this.renderFileLink(tool.details, truncDetails);
+
             return `
                 <div class="tool-used-item ${tool.status}">
                     <span class="tool-used-icon">${tool.icon}</span>
                     <span class="tool-used-name">${tool.tool}</span>
-                    <span class="tool-used-details" title="${this.escapeHtml(tool.details)}">${this.escapeHtml(truncDetails)}</span>
+                    <span class="tool-used-details" title="${this.escapeHtml(tool.details)}">${detailHtml}</span>
                     <span class="tool-used-result ${tool.status}">
                         ${tool.result || '...'}
                     </span>
@@ -1459,7 +1955,11 @@ class Dashboard {
     }
 
     formatTime(timestamp) {
-        return new Date(timestamp).toLocaleTimeString('en-US', { 
+        const parsed = this.parseTimestamp(timestamp);
+        if (parsed === null) {
+            return '--:--:--';
+        }
+        return new Date(parsed).toLocaleTimeString('en-US', { 
             hour: '2-digit', 
             minute: '2-digit',
             second: '2-digit',
@@ -1468,9 +1968,13 @@ class Dashboard {
     }
 
     calculateDurationSeconds(startTime, endTime) {
-        const start = new Date(startTime).getTime();
-        const end = new Date(endTime).getTime();
-        return Math.round((end - start) / 1000);
+        const start = this.parseTimestamp(startTime);
+        const end = this.parseTimestamp(endTime);
+        if (start === null || end === null) {
+            return 0;
+        }
+        const delta = Math.round((end - start) / 1000);
+        return delta < 0 ? 0 : delta;
     }
 
     // ========================================
@@ -1563,6 +2067,115 @@ class Dashboard {
         const div = document.createElement('div');
         div.textContent = text;
         return div.innerHTML;
+    }
+
+    escapeAttribute(value) {
+        return String(value)
+            .replace(/&/g, '&amp;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;');
+    }
+
+    shouldStreamInline(extension) {
+        if (!extension) return false;
+        return this.textFileExtensions.has(extension.toLowerCase());
+    }
+
+    formatFetchedText(text, extension) {
+        const ext = (extension || '').toLowerCase();
+        if (ext === 'json') {
+            try {
+                const parsed = JSON.parse(text);
+                return JSON.stringify(parsed, null, 2);
+            } catch (error) {
+                console.warn('Failed to pretty-print JSON file', error);
+                return text;
+            }
+        }
+
+        if (ext === 'jsonl') {
+            const lines = text.split(/\r?\n/);
+            const formatted = [];
+            const failures = [];
+            lines.forEach((line, index) => {
+                const trimmed = line.trim();
+                if (!trimmed) {
+                    formatted.push(line);
+                    return;
+                }
+                try {
+                    const parsedLine = JSON.parse(trimmed);
+                    formatted.push(JSON.stringify(parsedLine, null, 2));
+                } catch (error) {
+                    failures.push(index + 1);
+                    formatted.push(line);
+                }
+            });
+            if (failures.length > 0) {
+                console.warn(`Failed to pretty-print ${failures.length} JSONL lines: ${failures.join(', ')}`);
+            }
+            return formatted.join('\n\n');
+        }
+
+        return text;
+    }
+
+    // Some Chromium- and WebKit-based browsers refuse to display text/plain files opened via
+    // window.open from intercepted links, leaving users on about:blank. Fetching the content and
+    // streaming it through a blob URL keeps the UX consistent across Chrome, Edge, and Safari while
+    // also letting us pretty-print structured text like JSON.
+    async openTextFileInNewTab(url, extension = '', fallbackTarget = '_blank') {
+        try {
+            const response = await fetch(url, { cache: 'no-store' });
+            if (!response.ok) {
+                window.open(url, fallbackTarget, 'noopener');
+                return;
+            }
+            const text = await response.text();
+            const normalizedExtension = (extension || '').toLowerCase();
+            const formatted = this.formatFetchedText(text, normalizedExtension);
+            const mimeType = normalizedExtension === 'json'
+                ? 'application/json;charset=utf-8'
+                : 'text/plain;charset=utf-8';
+            const blob = new Blob([formatted], { type: mimeType });
+            const blobUrl = URL.createObjectURL(blob);
+            const opened = window.open(blobUrl, fallbackTarget, 'noopener');
+            if (opened) {
+                setTimeout(() => URL.revokeObjectURL(blobUrl), 60_000);
+            } else {
+                URL.revokeObjectURL(blobUrl);
+                window.open(url, fallbackTarget, 'noopener');
+            }
+        } catch (error) {
+            console.error('Failed to stream file, falling back to default behavior', error);
+            window.open(url, fallbackTarget, 'noopener');
+        }
+    }
+
+    handleFileLinkClick(event) {
+        const link = event.target.closest('a[data-file-link="1"]');
+        if (!link) {
+            return;
+        }
+
+        const url = link.href;
+        let extension = '';
+        try {
+            const withoutQuery = url.split('#')[0].split('?')[0];
+            const parts = withoutQuery.split('.');
+            extension = parts.length > 1 ? parts.pop() : '';
+        } catch (err) {
+            extension = '';
+        }
+
+        if (!this.shouldStreamInline(extension)) {
+            return;
+        }
+
+        event.preventDefault();
+        this.openTextFileInNewTab(url, extension, link.target || '_blank');
     }
 
     formatEvent(event) {

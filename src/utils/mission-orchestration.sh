@@ -1572,6 +1572,53 @@ check_mission_complete() {
     return 1
 }
 
+mission_orchestration_maybe_launch_dashboard() {
+    local session_dir="$1"
+    local context="${2:-startup}"
+
+    if [[ -z "$session_dir" ]]; then
+        return 0
+    fi
+
+    local sentinel_file="$session_dir/.dashboard-launched"
+    local pid_file="$session_dir/.dashboard-server.pid"
+
+    # shellcheck disable=SC1091
+    if ! source "$UTILS_DIR/dashboard.sh" 2>/dev/null; then
+        log_system_error "$session_dir" "dashboard_source" "Failed to source dashboard.sh during ${context} launch"
+        echo "  ⚠ Dashboard utility not found" >&2
+        return 1
+    fi
+
+    dashboard_cleanup_orphans "$(dirname "$session_dir")" >/dev/null 2>&1 || true
+
+    if [[ -n "${CCONDUCTOR_DISABLE_VIEWER:-}" ]]; then
+        return 0
+    fi
+
+    if [[ -f "$sentinel_file" ]]; then
+        if [[ -f "$pid_file" ]]; then
+            local existing_pid
+            existing_pid=$(<"$pid_file")
+            if [[ -n "$existing_pid" ]] && ps -p "$existing_pid" >/dev/null 2>&1; then
+                return 0
+            fi
+        fi
+        rm -f "$sentinel_file"
+    fi
+
+    echo "→ Launching Research Journal Viewer..."
+    if dashboard_view "$session_dir"; then
+        touch "$sentinel_file"
+        echo "  ✓ Dashboard viewer launched"
+        return 0
+    fi
+
+    log_system_error "$session_dir" "dashboard_launch_${context}" "Dashboard viewer failed to launch"
+    echo "  ⚠ Dashboard viewer failed (check logs/system-errors.log)" >&2
+    return 1
+}
+
 # Main mission orchestration loop
 run_mission_orchestration() {
     local mission_profile="$1"
@@ -1588,6 +1635,8 @@ run_mission_orchestration() {
     # Initialize mission state
     echo "→ Initializing mission state..."
     init_orchestration_log "$session_dir"
+    # Launch early so logs/events.jsonl exists before the dashboard begins polling.
+    mission_orchestration_maybe_launch_dashboard "$session_dir" "startup" || true
     artifact_init "$session_dir"
     budget_init "$session_dir" "$mission_profile"
     
@@ -1644,27 +1693,6 @@ EOF
             objective: $objective,
             started_at: (now | strftime("%Y-%m-%dT%H:%M:%SZ"))
         }')"
-    
-    # Clean up stale dashboard servers from previous sessions
-    # shellcheck disable=SC1091
-    if source "$UTILS_DIR/dashboard.sh" 2>/dev/null; then
-        dashboard_cleanup_orphans "$(dirname "$session_dir")" >/dev/null 2>&1 || true
-    fi
-    
-    # Launch dashboard viewer
-    echo "→ Launching Research Journal Viewer..."
-    # shellcheck disable=SC1091
-        if source "$UTILS_DIR/dashboard.sh"; then
-            if dashboard_view "$session_dir"; then
-                echo "  ✓ Dashboard viewer launched"
-            else
-                log_system_error "$session_dir" "dashboard_launch" "Dashboard viewer failed to launch"
-                echo "  ⚠ Dashboard viewer failed (check logs/system-errors.log)" >&2
-            fi
-        else
-            log_system_error "$session_dir" "dashboard_source" "Failed to source dashboard.sh"
-            echo "  ⚠ Dashboard utility not found" >&2
-        fi
     
     echo ""
     
@@ -2009,19 +2037,7 @@ run_mission_orchestration_resume() {
         return 0
     fi
     
-    # Launch dashboard if not already running
-    if [ ! -f "$session_dir/.dashboard-server.pid" ]; then
-        echo "→ Launching Research Journal Viewer..."
-        # shellcheck disable=SC1091
-        if source "$UTILS_DIR/dashboard.sh"; then
-            if ! dashboard_view "$session_dir"; then
-                log_system_error "$session_dir" "dashboard_refresh" "Dashboard refresh failed on resume"
-            fi
-        else
-            log_system_error "$session_dir" "dashboard_source" "Failed to source dashboard.sh on resume"
-        fi
-    fi
-    
+    mission_orchestration_maybe_launch_dashboard "$session_dir" "resume" || true
     echo ""
     
     # Continue orchestration loop

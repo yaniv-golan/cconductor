@@ -83,6 +83,7 @@ dashboard_ensure_json() {
 dashboard_generate_metrics() {
     local session_dir="$1"
     local metrics_file="$session_dir/viewer/dashboard-metrics.json"
+    local events_file="$session_dir/logs/events.jsonl"
     
     # Read current state from files with locking to prevent partial reads
     local kg
@@ -98,6 +99,13 @@ dashboard_generate_metrics() {
     else
         session='{}'
     fi
+
+    local events_payload='[]'
+    local events_available=0
+    if [ -f "$events_file" ] && [ -s "$events_file" ]; then
+        events_payload=$(json_slurp_array "$events_file" '[]')
+        events_available=1
+    fi
     
     # Extract stats
     local iteration
@@ -109,16 +117,14 @@ dashboard_generate_metrics() {
     
     # NEW: Get agent invocation stats from events (v0.2.0 mission system)
     local total_invocations=0
-    if [ -f "$session_dir/logs/events.jsonl" ]; then
-        total_invocations=$(grep -c '"agent_invocation"' "$session_dir/logs/events.jsonl" 2>/dev/null || true)
-        total_invocations=${total_invocations:-0}
+    if [[ $events_available -eq 1 ]]; then
+        total_invocations=$(dashboard_jq_payload "$session_dir" "$events_payload" 'map(select(.type == "agent_invocation")) | length' "0" "events.total_invocations" "false")
     fi
     total_invocations=$(dashboard_sanitize_number "$total_invocations")
 
     local completed_invocations=0
-    if [ -f "$session_dir/logs/events.jsonl" ]; then
-        completed_invocations=$(grep -c '"agent_result"' "$session_dir/logs/events.jsonl" 2>/dev/null || true)
-        completed_invocations=${completed_invocations:-0}
+    if [[ $events_available -eq 1 ]]; then
+        completed_invocations=$(dashboard_jq_payload "$session_dir" "$events_payload" 'map(select(.type == "agent_result")) | length' "0" "events.completed_invocations" "false")
     fi
     completed_invocations=$(dashboard_sanitize_number "$completed_invocations")
 
@@ -127,11 +133,29 @@ dashboard_generate_metrics() {
     in_progress=$(dashboard_sanitize_number "$in_progress")
 
     local failed=0
-    if [ -f "$session_dir/logs/events.jsonl" ]; then
-        failed=$(grep '"agent_result"' "$session_dir/logs/events.jsonl" 2>/dev/null | grep -c '"status":"failed"' 2>/dev/null || true)
-        failed=${failed:-0}
+    if [[ $events_available -eq 1 ]]; then
+        failed=$(dashboard_jq_payload "$session_dir" "$events_payload" 'map(select(.type == "agent_result" and ((.data.status // "") == "failed"))) | length' "0" "events.failed_invocations" "false")
     fi
     failed=$(dashboard_sanitize_number "$failed")
+
+    local preflight_heuristics=0
+    local preflight_prompt=0
+    local preflight_stakeholders=0
+    if [[ $events_available -eq 1 ]]; then
+        preflight_heuristics=$(dashboard_jq_payload "$session_dir" "$events_payload" 'map(select(.type == "agent_result" and .data.agent == "domain-heuristics")) | length' "0" "events.preflight_heuristics" "false")
+        preflight_prompt=$(dashboard_jq_payload "$session_dir" "$events_payload" 'map(select(.type == "agent_result" and .data.agent == "prompt-parser")) | length' "0" "events.preflight_prompt" "false")
+        preflight_stakeholders=$(dashboard_jq_payload "$session_dir" "$events_payload" 'map(select(.type == "stakeholder_classifier_completed")) | length' "0" "events.preflight_stakeholders" "false")
+    fi
+    preflight_heuristics=$(dashboard_sanitize_number "$preflight_heuristics")
+    preflight_prompt=$(dashboard_sanitize_number "$preflight_prompt")
+    preflight_stakeholders=$(dashboard_sanitize_number "$preflight_stakeholders")
+
+    local preflight_json
+    preflight_json=$(jq -n \
+        --argjson heuristics "$preflight_heuristics" \
+        --argjson prompt "$preflight_prompt" \
+        --argjson stakeholders "$preflight_stakeholders" \
+        '{domain_heuristics_runs: $heuristics, prompt_parser_runs: $prompt, stakeholder_classifications: $stakeholders}') || preflight_json='{}'
     
     local entities
     entities=$(dashboard_jq_payload "$session_dir" "$kg" '.stats.total_entities // 0' "0" "kg.entities")
@@ -194,9 +218,7 @@ dashboard_generate_metrics() {
     # Exclude resolved observations by checking for matching observation_resolved events
     local observations
     local observations='[]'
-    if [ -f "$session_dir/logs/events.jsonl" ]; then
-        local events_payload
-        events_payload=$(json_slurp_array "$session_dir/logs/events.jsonl" '[]')
+    if [[ $events_available -eq 1 ]]; then
         if [[ -n "$events_payload" ]]; then
             # shellcheck disable=SC2016
             observations=$(dashboard_jq_payload "$session_dir" "$events_payload" '
@@ -258,6 +280,7 @@ dashboard_generate_metrics() {
         --argjson observations "$observations" \
         --argjson errors "$error_count" \
         --argjson warnings "$warning_count" \
+        --argjson preflight "$preflight_json" \
         --arg session_status "$session_status" \
         --arg session_created "$created_at" \
         --arg session_completed "$completed_at" \
@@ -281,6 +304,7 @@ dashboard_generate_metrics() {
                 failed: $failed,
                 iteration: $iter
             },
+            preflight: $preflight,
             knowledge: {
                 entities: $entities,
                 claims: $claims,
@@ -409,11 +433,16 @@ dashboard_generate_html() {
     # Copy JS to viewer directory
     cp "$js_template" "$session_dir/viewer/dashboard.js"
     
+    local session_id
+    session_id=$(basename "$session_dir")
+    
     # Generate HTML with cache-busting timestamp for JS file
     # This forces browser to reload JS on each dashboard generation (critical for file:// protocol)
     local js_version
     js_version="v=$(get_epoch)"
-    sed "s|<script src=\"./dashboard.js\"></script>|<script src=\"./dashboard.js?${js_version}\"></script>|" \
+    sed \
+        -e "s|<body>|<body data-session-id=\"${session_id}\">|" \
+        -e "s|<script src=\"./dashboard.js\"></script>|<script src=\"/${session_id}/viewer/dashboard.js?${js_version}\"></script>|" \
         "$template" > "$session_dir/viewer/index.html"
     
     # Only output file path in verbose mode (session-relative)
@@ -484,8 +513,11 @@ dashboard_serve() {
     fi
     
     # Start HTTP server in background
-    cd "$session_dir"
-    npx --yes http-server -p "$dashboard_port" --silent >/dev/null 2>&1 &
+    local parent_dir
+    parent_dir=$(dirname "$session_dir")
+    
+    cd "$parent_dir"
+    npx --yes http-server "$parent_dir" -p "$dashboard_port" --silent >/dev/null 2>&1 &
     local server_pid=$!
     cd - >/dev/null
     
@@ -496,7 +528,10 @@ dashboard_serve() {
     local max_wait=10  # Maximum 10 seconds
     local elapsed=0
     while [ $elapsed -lt $max_wait ]; do
-        if curl -s -o /dev/null -w "%{http_code}" "http://localhost:$dashboard_port/" 2>/dev/null | grep -q "200\|404"; then
+        local session_id
+        session_id=$(basename "$session_dir")
+        local health_url="http://localhost:$dashboard_port/$session_id/"
+        if curl -s -o /dev/null -w "%{http_code}" "$health_url" 2>/dev/null | grep -q "200\|404"; then
             # Server is responding (200 or 404 both mean server is up)
             break
         fi
@@ -509,9 +544,7 @@ dashboard_serve() {
     fi
     
     # Add session ID to URL to prevent caching
-    local session_id
-    session_id=$(basename "$session_dir")
-    local viewer_url="http://localhost:$dashboard_port/viewer/index.html?session=$session_id"
+    local viewer_url="http://localhost:$dashboard_port/$session_id/viewer/index.html"
     
     echo "  ✓ Research Journal Viewer: $viewer_url"
     # Only show server details in verbose mode
@@ -593,7 +626,7 @@ dashboard_get_url() {
     
     local session_id
     session_id=$(basename "$session_dir")
-    echo "http://localhost:$port/viewer/index.html?session=$session_id"
+    echo "http://localhost:$port/$session_id/viewer/index.html"
     return 0
 }
 

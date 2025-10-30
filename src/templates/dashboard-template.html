@@ -109,13 +109,54 @@
             }
         }
 
-        .card {
-            background: #1a1f3a;
-            border-radius: 12px;
-            padding: 20px;
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-        }
+.card {
+    background: #1a1f3a;
+    border-radius: 12px;
+    padding: 20px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.card-value.placeholder {
+    color: rgba(224, 230, 237, 0.7);
+    font-weight: 600;
+}
         
+        .preflight-metrics {
+            margin-top: 12px;
+            display: grid;
+            gap: 8px;
+        }
+
+        .preflight-metric {
+            display: flex;
+            align-items: baseline;
+            justify-content: space-between;
+            background: rgba(255, 255, 255, 0.04);
+            padding: 8px 10px;
+            border-radius: 6px;
+            font-size: 12px;
+        }
+
+.preflight-metric .count {
+    font-size: 20px;
+    font-weight: 700;
+    color: #a855f7;
+}
+
+.preflight-metric .label {
+    opacity: 0.7;
+}
+
+.preflight-metric .placeholder {
+    color: rgba(224, 230, 237, 0.7);
+}
+
+        .preflight-subtitle {
+            font-size: 12px;
+            opacity: 0.6;
+            margin-top: 6px;
+        }
+
         .card-wide {
             grid-column: span 2;
         }
@@ -275,6 +316,18 @@
             text-overflow: ellipsis;
             white-space: nowrap;
             font-size: 11px;
+        }
+
+        .tool-details a,
+        .tool-used-details a {
+            color: #a5f3fc;
+            text-decoration: underline;
+        }
+
+        .tool-details a:hover,
+        .tool-used-details a:hover {
+            color: #ffffff;
+            text-decoration: underline;
         }
 
         .tool-footer {
@@ -917,36 +970,52 @@
             <div class="card">
                 <div class="card-title">Iteration</div>
                 <div class="card-value" id="stat-iteration">0</div>
-                <div class="card-subtitle">Current progress</div>
+                <div class="card-subtitle" id="stat-iteration-subtitle">Current progress</div>
             </div>
             <div class="card">
                 <div class="card-title">Confidence</div>
                 <div class="card-value" id="stat-confidence">0%</div>
-                <div class="card-subtitle">Research quality</div>
+                <div class="card-subtitle" id="stat-confidence-subtitle">Research quality</div>
             </div>
             <div class="card clickable" onclick="dashboard.showEntities()">
                 <div class="card-title">Entities</div>
                 <div class="card-value" id="stat-entities">0</div>
-                <div class="card-subtitle">Key concepts (click to view)</div>
+                <div class="card-subtitle" id="stat-entities-subtitle">Key concepts (click to view)</div>
             </div>
             <div class="card clickable" onclick="dashboard.showClaims()">
                 <div class="card-title">Claims</div>
                 <div class="card-value" id="stat-claims">0</div>
-                <div class="card-subtitle">Verified facts (click to view)</div>
+                <div class="card-subtitle" id="stat-claims-subtitle">Verified facts (click to view)</div>
             </div>
             <div class="card">
                 <div class="card-title">Total Cost</div>
-                <div class="card-value">$<span id="stat-cost">0.00</span></div>
-                <div class="card-subtitle">
-                    $<span id="stat-cost-per-iter">0.00</span>/iteration
-                </div>
+                <div class="card-value" id="stat-cost">$0.00</div>
+                <div class="card-subtitle" id="stat-cost-subtitle">$0.00 per iteration</div>
             </div>
             <div class="card">
                 <div class="card-title">Runtime</div>
                 <div class="card-value" id="stat-runtime">0m</div>
                 <div class="card-subtitle">Elapsed time</div>
             </div>
-            <div class="card card-wide">
+            <div class="card" id="preflight-card" style="display:none;">
+                <div class="card-title">Preflight Checks</div>
+                <div class="preflight-metrics">
+                    <div class="preflight-metric">
+                        <span class="label">Domain heuristics runs</span>
+                        <span class="count" id="preflight-heuristics-count">0</span>
+                    </div>
+                    <div class="preflight-metric">
+                        <span class="label">Prompt parses</span>
+                        <span class="count" id="preflight-prompt-count">0</span>
+                    </div>
+                    <div class="preflight-metric">
+                        <span class="label">Stakeholder classifications</span>
+                        <span class="count" id="preflight-stakeholders-count">0</span>
+                    </div>
+                </div>
+                <div class="preflight-subtitle" id="preflight-subtitle"></div>
+            </div>
+            <div class="card">
                 <div class="card-title">System Health</div>
                 <div id="health-container-inline">
                     <div class="health-summary">✅ No issues detected</div>

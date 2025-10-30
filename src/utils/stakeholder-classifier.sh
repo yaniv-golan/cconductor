@@ -625,7 +625,11 @@ classify_stakeholders() {
     timestamp=$(get_timestamp)
 
     if command -v log_event &>/dev/null; then
-        log_event "$session_dir" "stakeholder_classifier_started" "$(jq -n --arg mission "$mission_name" --argjson sources "$kg_source_count" '{mission: $mission, total_sources: $sources}')"
+        log_event "$session_dir" "stakeholder_classifier_started" "$(jq -n \
+            --arg mission "$mission_name" \
+            --argjson sources "$kg_source_count" \
+            --arg started "$timestamp" \
+            '{mission: $mission, total_sources: $sources, started_at: $started}')"
     fi
 
     local classifications_written=0
@@ -703,8 +707,23 @@ classify_stakeholders() {
 
     append_checkpoint "$checkpoint_file" "$timestamp" "$kg_source_count" "$classifications_written" "$needs_review"
 
+    local completed_at
+    completed_at=$(get_timestamp)
+    local pending_sources
+    pending_sources=$((kg_source_count - classifications_written))
+    if (( pending_sources < 0 )); then
+        pending_sources=0
+    fi
+
     if command -v log_event &>/dev/null; then
-        log_event "$session_dir" "stakeholder_classifier_completed" "$(jq -n --arg mission "$mission_name" --argjson sources "$kg_source_count" --argjson written "$classifications_written" --argjson needs "$needs_review" '{mission: $mission, total_sources: $sources, classifications: $written, needs_review: $needs}')"
+        log_event "$session_dir" "stakeholder_classifier_completed" "$(jq -n \
+            --arg mission "$mission_name" \
+            --argjson sources "$kg_source_count" \
+            --argjson classified "$classifications_written" \
+            --argjson needs "$needs_review" \
+            --arg completed "$completed_at" \
+            --argjson pending "$pending_sources" \
+            '{mission: $mission, total_sources: $sources, classifications: $classified, needs_review: $needs, completed_at: $completed, pending_sources: $pending}')"
     fi
 
     echo "Classified $classifications_written sources for mission $mission_name"
