@@ -973,7 +973,7 @@ CConductor 0.5.0 introduces a mission-scoped stakeholder pipeline that replaces 
 3. **Gate evaluation** – `src/utils/stakeholder-gate.sh` enforces thresholds (minimum sources, critical coverage, uncategorized ceiling) and writes JSON + Markdown reports.
 4. **Quality hook integration** – The quality gate reads the stakeholder gate output and fails the mission if critical coverage or uncategorized limits are violated.
 
-The pipeline keeps the knowledge graph immutable while making stakeholder decisions deterministic and reviewable.
+The Research Journal viewer now includes a **Preflight Checks** card that surfaces domain heuristics runs, prompt parsing, and stakeholder classifications as soon as a session starts. Use it to confirm the stakeholder pipeline executed before deeper quality checks begin.
 
 ### Mission Policies & Resolvers
 

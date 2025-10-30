@@ -1548,6 +1548,24 @@ cat research-sessions/mission_*/logs/events.jsonl | head -5
 
 ---
 
+### Viewer Links Return 404
+
+**Symptoms**:
+
+- Clicking `user-prompt.txt`, `mission-report.md`, or artifact links opens `http://localhost:<port>/filename` which 404s.
+- Only the dashboard landing page loads; nested resources fail.
+
+**Checklist**:
+
+1. **Use the session-prefixed URL** — Every viewer asset now lives under `http://localhost:<port>/<session_id>/...`. For example: `http://localhost:8890/mission_123/report/mission-report.md`.
+2. **Viewer running from session parent** — The server now serves the entire `research-sessions/` directory. If you opened an older dashboard, regenerate it: `./cconductor sessions viewer mission_123 --regenerate`.
+3. **Check body data attribute** — Inspect the viewer with Developer Tools and confirm `<body data-session-id="mission_123">` is present. If missing, run `dashboard_generate_html` again.
+4. **Confirm dashboard server is live** — Run `lsof -i :<port>` or re-launch via `./cconductor sessions viewer mission_123`.
+
+If links still fail, note the URL being opened and include the `viewer/index.html` snippet when filing an issue.
+
+---
+
 ### Events Not Logging to logs/events.jsonl
 
 **Symptoms**:

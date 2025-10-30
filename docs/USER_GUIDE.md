@@ -747,8 +747,9 @@ CConductor automatically launches a **Research Journal Viewer** when you start r
 - **Agent Statistics**: Papers found, searches performed, gaps identified
 - **System Health**: Early warnings about potential issues
 - **Cost Tracking**: Running total of API usage
+- **Preflight Checks**: Domain heuristics runs, prompt parsing, and stakeholder classification status before orchestration spins up
 
-**Auto-launched**: The viewer opens automatically when research begins, updating every 3 seconds.
+**Auto-launched**: The viewer opens immediately after the session log initializes, so you'll see preflight activity in real time. It updates every 3 seconds.
 
 **Manual access**: If you closed it or want to view a completed session:
 
@@ -758,6 +759,10 @@ CConductor automatically launches a **Research Journal Viewer** when you start r
 ```
 
 The dashboard shows your research unfold in real-time, including agent reasoning and decision-making.
+
+**URL structure**: Every viewer asset is served from `http://localhost:<port>/<session_id>/...`. For example, the mission report lives at `http://localhost:8890/mission_123/report/mission-report.md`. File links inside the dashboard use this prefix automatically—if you bookmark or share a link, keep the session id segment intact. Regenerate the viewer (`./cconductor sessions viewer <id>`) for older missions to pick up this layout.
+
+> Need to keep things quiet? Set `CCONDUCTOR_DISABLE_VIEWER=1` before launching a mission to skip the auto-launched dashboard. You can still open the dashboard later with `./cconductor sessions viewer`.
 
 ### Exporting Research Journal
 
