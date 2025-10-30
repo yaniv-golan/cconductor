@@ -12,12 +12,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Stakeholder classification pipeline with a dedicated Claude agent, deterministic classifier (`src/utils/stakeholder-classifier.sh`), gate evaluator (`src/utils/stakeholder-gate.sh`), and default policy/resolver templates to guarantee mission-aware stakeholder coverage.
 - Mission-scoped stakeholder policies and resolvers for every built-in mission, plus global defaults under `config/stakeholder-policy.default.json` and `config/stakeholder-resolver.default.json`.
 - Quality gate regression coverage that seeds classification artifacts so the new stakeholder checks remain stable.
+- Research Journal Viewer preflight dashboard that launches as soon as orchestration initializes, surfaces domain heuristics / prompt parsing / stakeholder counts, and streams text artifacts (JSON, JSONL, Markdown, logs) through blob-backed tabs with automatic pretty-printing.
 
 ### Changed
 
 - Reinforced the quality gate hook to delegate stakeholder coverage decisions to the new gate reports, improving uncategorized tracking and failure messaging.
 - Reorganized built-in mission profiles into directory-based bundles (`profile.json`, `policy.json`, `resolver.json`) and taught `mission-loader.sh` to discover them transparently.
 - Documented the stakeholder pipeline in the Quality Guide and agent directory so maintainers know how the classifier and gate cooperate.
+- Dashboard viewer assets now live under session-prefixed URLs (`http://localhost:<port>/<session_id>/...`), `dashboard.sh` serves the mission parent directory, and the HTML template injects session metadata so all file links remain stable across multiple concurrent viewers.
+- Updated the User Guide and Troubleshooting guide to explain the new viewer URL pattern, preflight card, and debugging steps when links 404 or tabs open blank.
+
+### Fixed
+
+- Trimmed noisy update notifications in `version-manager.sh` so resume/startup logs only display the latest available version tag.
 
 ## [0.4.1] - 2025-10-29
 
