@@ -617,13 +617,13 @@ CCONDUCTOR_SESSION_DIR     # Override session directory
 
 **Mission System **:
 - Mission Quick Start: https://raw.githubusercontent.com/yaniv-golan/cconductor/main/docs/MISSION_QUICKSTART.md
-- Agent Metadata Schema: https://raw.githubusercontent.com/yaniv-golan/cconductor/main/docs/AGENT_METADATA_SCHEMA.md
-- Events Contract: https://raw.githubusercontent.com/yaniv-golan/cconductor/main/docs/EVENTS_CONTRACT.md
-- Extending Capabilities: https://raw.githubusercontent.com/yaniv-golan/cconductor/main/docs/EXTENDING_CAPABILITIES.md
+- Agent Metadata Schema: https://raw.githubusercontent.com/yaniv-golan/cconductor/main/docs/contributers/AGENT_METADATA_SCHEMA.md
+- Events Contract: https://raw.githubusercontent.com/yaniv-golan/cconductor/main/docs/contributers/EVENTS_CONTRACT.md
+- Extending Capabilities: https://raw.githubusercontent.com/yaniv-golan/cconductor/main/docs/contributers/EXTENDING_CAPABILITIES.md
 
 **Technical**:
 - Knowledge System: https://raw.githubusercontent.com/yaniv-golan/cconductor/main/docs/KNOWLEDGE_SYSTEM_TECHNICAL.md
-- Agent Tools Config: https://raw.githubusercontent.com/yaniv-golan/cconductor/main/docs/AGENT_TOOLS_CONFIG.md
+- Agent Tools Config: https://raw.githubusercontent.com/yaniv-golan/cconductor/main/docs/contributers/AGENT_TOOLS_CONFIG.md
 - Session Continuity: https://raw.githubusercontent.com/yaniv-golan/cconductor/main/docs/SESSION_CONTINUITY_GUIDE.md
 - KG Artifact Pattern: https://raw.githubusercontent.com/yaniv-golan/cconductor/main/docs/KG_ARTIFACT_PATTERN.md
 - Error Log Format: https://raw.githubusercontent.com/yaniv-golan/cconductor/main/docs/ERROR_LOG_FORMAT.md

@@ -21,6 +21,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Documented the stakeholder pipeline in the Quality Guide and agent directory so maintainers know how the classifier and gate cooperate.
 - Dashboard viewer assets now live under session-prefixed URLs (`http://localhost:<port>/<session_id>/...`), `dashboard.sh` serves the mission parent directory, and the HTML template injects session metadata so all file links remain stable across multiple concurrent viewers.
 - Updated the User Guide and Troubleshooting guide to explain the new viewer URL pattern, preflight card, and debugging steps when links 404 or tabs open blank.
+- Split public-facing docs from contributor references by moving maintainer material into `docs/contributers/` (with an argument subfolder) and refreshed internal links so the published guide set stays streamlined.
 
 ### Fixed
 
@@ -55,7 +56,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Session README generator**: `src/utils/session-readme-generator.sh` keeps the mission README current with progress stats, quick links, and surfaced artifacts for reviewers.
 - **Streaming runtime & watchdog controls**: Research now runs through a streaming orchestrator backed by `agent-watchdog.sh`, configurable heartbeats, and CLI/config toggles (`--enable/disable-watchdog`, `--enable/disable-agent-timeouts`) to tune mission safety budgets.
 - **Quality surface & domain-aware guardrails**: Reports embed the new `confidence_surface`, domain heuristics, and remediation guidance; supporting scripts (`src/utils/domain-compliance-check.sh`, `src/utils/quality-surface-sync.sh`) keep evidence, gate data, and dashboards aligned.
-- **Distribution & release automation**: Official Docker images, a Homebrew tap, and release automation docs (`docs/DOCKER.md`, `docs/HOMEBREW.md`, `docs/RELEASE_AUTOMATION.md`) ship with CI workflows that publish artifacts and refresh the tap automatically.
+- **Distribution & release automation**: Official Docker images, a Homebrew tap, and release automation docs (`docs/DOCKER.md`, `docs/HOMEBREW.md`, `docs/contributers/RELEASE_AUTOMATION.md`) ship with CI workflows that publish artifacts and refresh the tap automatically.
 - **Tooling guardrails**: Safe `jq` helpers plus lint scripts (`scripts/audit-jq-usage.sh`, `scripts/lint-jq-patterns.sh`) and the tracked `scripts/pre-commit.sh` enforce consistent parsing, ShellCheck coverage, and runtime hygiene.
 
 ### Changed

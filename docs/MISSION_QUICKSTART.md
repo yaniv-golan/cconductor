@@ -390,6 +390,6 @@ Error: Mission validation failed
 ## Further Reading
 
 - `config/missions/README.md` - Mission profile structure
-- `docs/AGENT_METADATA_SCHEMA.md` - Agent metadata documentation
-- `docs/EVENTS_CONTRACT.md` - Event system details
+- `docs/contributers/AGENT_METADATA_SCHEMA.md` - Agent metadata documentation
+- `docs/contributers/EVENTS_CONTRACT.md` - Event system details
 - `IMPLEMENTATION_SUMMARY.md` - Architecture overview

@@ -196,7 +196,7 @@ When adding a new utility script:
 1. Create new test file: `tests/test-your-util.sh`
 2. Add to `test-all-utils.sh` runner
 3. Add to whitelist in `pre-tool-use.sh`
-4. Document in `docs/ORCHESTRATOR_UTILITIES.md`
+4. Document in `docs/contributers/ORCHESTRATOR_UTILITIES.md`
 5. Update system prompt for mission-orchestrator
 
 ## Known Issues
@@ -216,8 +216,8 @@ Tests are written to work on both Linux and macOS.
 
 ## Related Documentation
 
-- **Utility Documentation**: `docs/ORCHESTRATOR_UTILITIES.md`
-- **Security Model**: `docs/AGENT_TOOLS_CONFIG.md`
+- **Utility Documentation**: `docs/contributers/ORCHESTRATOR_UTILITIES.md`
+- **Security Model**: `docs/contributers/AGENT_TOOLS_CONFIG.md`
 - **System Architecture**: `memory-bank/systemPatterns.md`
 - **Implementation Details**: `memory-bank/implementationDetails.md`
 
@@ -247,4 +247,3 @@ Potential improvements (not implemented yet):
 **Test Suite Version:** 1.0  
 **Total Test Count:** 35 tests  
 **Execution Time:** ~2 seconds
-

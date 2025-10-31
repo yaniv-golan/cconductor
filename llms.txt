@@ -54,16 +54,15 @@
 ## Advanced Topics
 
 - [Mission Quick Start](https://raw.githubusercontent.com/yaniv-golan/cconductor/main/docs/MISSION_QUICKSTART.md): Mission-based orchestration guide and mission types
-- [Agent Metadata Schema](https://raw.githubusercontent.com/yaniv-golan/cconductor/main/docs/AGENT_METADATA_SCHEMA.md): Agent capabilities, input/output types, and metadata structure
-- [Events Contract](https://raw.githubusercontent.com/yaniv-golan/cconductor/main/docs/EVENTS_CONTRACT.md): Event schema and backward compatibility guarantees
-- [Extending Capabilities](https://raw.githubusercontent.com/yaniv-golan/cconductor/main/docs/EXTENDING_CAPABILITIES.md): Adding custom capabilities and agents
+- [Agent Metadata Schema](https://raw.githubusercontent.com/yaniv-golan/cconductor/main/docs/contributers/AGENT_METADATA_SCHEMA.md): Agent capabilities, input/output types, and metadata structure
+- [Events Contract](https://raw.githubusercontent.com/yaniv-golan/cconductor/main/docs/contributers/EVENTS_CONTRACT.md): Event schema and backward compatibility guarantees
+- [Extending Capabilities](https://raw.githubusercontent.com/yaniv-golan/cconductor/main/docs/contributers/EXTENDING_CAPABILITIES.md): Adding custom capabilities and agents
 
 ## Technical Reference
 
 - [Knowledge System Technical Deep Dive](https://raw.githubusercontent.com/yaniv-golan/cconductor/main/docs/KNOWLEDGE_SYSTEM_TECHNICAL.md): Complete architecture, step-by-step impact traces, and debugging guides
-- [Agent Tools Configuration](https://raw.githubusercontent.com/yaniv-golan/cconductor/main/docs/AGENT_TOOLS_CONFIG.md): Tool restrictions and security boundaries for agents
+- [Agent Tools Configuration](https://raw.githubusercontent.com/yaniv-golan/cconductor/main/docs/contributers/AGENT_TOOLS_CONFIG.md): Tool restrictions and security boundaries for agents
 - [Research Sources](https://raw.githubusercontent.com/yaniv-golan/cconductor/main/docs/RESEARCH_SOURCES.md): Supported academic databases and data sources
 - [Session Continuity Guide](https://raw.githubusercontent.com/yaniv-golan/cconductor/main/docs/SESSION_CONTINUITY_GUIDE.md): How session management optimizes costs and performance
 - [Knowledge Extension](https://raw.githubusercontent.com/yaniv-golan/cconductor/main/docs/KNOWLEDGE_EXTENSION.md): Advanced knowledge base customization
 - [Changelog](https://raw.githubusercontent.com/yaniv-golan/cconductor/main/CHANGELOG.md): Version history and recent updates
-
