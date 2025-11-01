@@ -11,6 +11,8 @@ PROJECT_ROOT="$(dirname "$(dirname "$SCRIPT_DIR")")"
 # shellcheck disable=SC1091
 source "$SCRIPT_DIR/core-helpers.sh"
 # shellcheck disable=SC1091
+source "$SCRIPT_DIR/date-helpers.sh"
+# shellcheck disable=SC1091
 source "$SCRIPT_DIR/error-messages.sh"
 # shellcheck disable=SC1091
 source "$SCRIPT_DIR/json-helpers.sh"
@@ -401,27 +403,17 @@ calculate_total_cost() {
 # Calculate elapsed seconds
 calculate_elapsed_seconds() {
     local start_time="$1"
-    
+
     if [ -z "$start_time" ]; then
         echo "0"
         return
     fi
-    
-    # Platform-agnostic approach to parse ISO 8601 UTC timestamp
+
     local start_epoch
+    start_epoch=$(parse_iso_to_epoch "$start_time")
     local now_epoch
-    
-    # Detect OS type
-    if [[ "$(uname -s)" == "Darwin" ]]; then
-        # macOS (BSD date) - use -j flag to not set system time
-        start_epoch=$(date -ju -f "%Y-%m-%dT%H:%M:%SZ" "$start_time" +%s 2>/dev/null || echo "0")
-        now_epoch=$(date -ju +%s)
-    else
-        # Linux (GNU date) - use -d flag for date parsing
-        start_epoch=$(date -u -d "$start_time" +%s 2>/dev/null || echo "0")
-        now_epoch=$(get_epoch)
-    fi
-    
+    now_epoch=$(get_epoch)
+
     # If parsing failed (start_epoch is 0), return 0
     if [ "$start_epoch" = "0" ]; then
         echo "0"

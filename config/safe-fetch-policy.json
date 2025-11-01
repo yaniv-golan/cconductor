@@ -1,0 +1,19 @@
+{
+  "_comment": "Safe fetch security policy configuration (project baseline)",
+  "_description": "Controls security restrictions for web fetching operations; override via ~/.config/cconductor/safe-fetch-policy.json for local adjustments.",
+  "url_restrictions": {
+    "allow_localhost": false,
+    "allow_ip_addresses": false,
+    "allowed_protocols": [
+      "https",
+      "http"
+    ],
+    "custom_allowed_domains": []
+  },
+  "content_restrictions": {
+    "block_executables": true,
+    "block_archives": true,
+    "block_compressed": false,
+    "allowed_mime_types": []
+  }
+}

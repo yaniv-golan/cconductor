@@ -14,6 +14,10 @@ source "$PROJECT_ROOT/src/utils/core-helpers.sh" 2>/dev/null || {
     is_valid_json() { echo "$1" | jq empty 2>/dev/null; }
 }
 
+# Source shared-state utilities (provides get_timestamp, locking helpers)
+# shellcheck disable=SC1091
+source "$PROJECT_ROOT/src/shared-state.sh" 2>/dev/null || true
+
 # Configuration
 LOG_DIR="$HOME/.claude/research-engine"
 AUDIT_LOG="$LOG_DIR/audit.log"

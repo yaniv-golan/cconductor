@@ -9,6 +9,10 @@ SESSION_UTILS_ROOT="${CCONDUCTOR_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.
 if [ -f "$SESSION_UTILS_ROOT/src/utils/json-helpers.sh" ]; then
     source "$SESSION_UTILS_ROOT/src/utils/json-helpers.sh"
 fi
+# shellcheck disable=SC1091
+if [ -f "$SESSION_UTILS_ROOT/src/utils/date-helpers.sh" ]; then
+    source "$SESSION_UTILS_ROOT/src/utils/date-helpers.sh"
+fi
 
 session_utils_primary_dir() {
     if [ -n "${SESSION_UTILS_PRIMARY_DIR:-}" ]; then
@@ -91,13 +95,23 @@ session_utils_format_timestamp() {
         local epoch
         epoch=$(stat -f '%m' "$path" 2>/dev/null || echo "")
         if [ -n "$epoch" ]; then
-            date -r "$epoch" "+%Y-%m-%d %H:%M" 2>/dev/null || echo ""
+            local formatted
+            if formatted=$(format_epoch_custom "$epoch" "+%Y-%m-%d %H:%M"); then
+                echo "$formatted"
+            else
+                echo ""
+            fi
         fi
     elif stat -c '%Y' "$path" >/dev/null 2>&1; then
         local epoch
         epoch=$(stat -c '%Y' "$path" 2>/dev/null || echo "")
         if [ -n "$epoch" ]; then
-            date -d "@$epoch" "+%Y-%m-%d %H:%M" 2>/dev/null || echo ""
+            local formatted
+            if formatted=$(format_epoch_custom "$epoch" "+%Y-%m-%d %H:%M"); then
+                echo "$formatted"
+            else
+                echo ""
+            fi
         fi
     fi
 }
@@ -108,59 +122,28 @@ session_utils_pretty_timestamp() {
         echo ""
         return
     fi
-
     local normalized="$raw"
+    normalized="${normalized//$'\r'/}"
+    normalized="${normalized//$'\n'/}"
 
-    if [[ "$normalized" =~ \.[0-9]+Z$ ]]; then
-        normalized="${normalized%Z}"
-        normalized="${normalized%%.*}Z"
-    elif [[ "$normalized" =~ \.[0-9]+([+-][0-9]{2}:[0-9]{2})$ ]]; then
-        normalized="${normalized%%.*}${BASH_REMATCH[1]}"
-    fi
-
-    if [[ "$normalized" =~ [+-][0-9]{2}:[0-9]{2}$ ]]; then
-        normalized="${normalized:0:${#normalized}-3}${normalized:${#normalized}-2}"
-    fi
-
+    local epoch=""
     if [[ "$normalized" =~ ^[0-9]+(\.[0-9]+)?$ ]]; then
-        local epoch="${normalized%%.*}"
-        if date -r "$epoch" "+%b %d, %H:%M" >/dev/null 2>&1; then
-            date -r "$epoch" "+%b %d, %H:%M"
-            return
-        elif date -d "@$epoch" "+%b %d, %H:%M" >/dev/null 2>&1; then
-            date -d "@$epoch" "+%b %d, %H:%M"
-            return
+        epoch="${normalized%%.*}"
+    else
+        epoch=$(parse_iso_to_epoch "$normalized")
+        if [[ "$epoch" == "0" ]]; then
+            if [[ "$normalized" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}(T| )[0-9]{2}:[0-9]{2}$ ]]; then
+                epoch=$(parse_iso_to_epoch "${normalized}:00")
+            elif [[ "$normalized" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]]; then
+                epoch=$(parse_iso_to_epoch "${normalized}T00:00:00")
+            fi
         fi
     fi
 
-    if date --version >/dev/null 2>&1; then
-        if date -u -d "$normalized" "+%b %d, %H:%M" >/dev/null 2>&1; then
-            date -u -d "$normalized" "+%b %d, %H:%M"
-            return
-        fi
-        if date -u -d "${normalized}Z" "+%b %d, %H:%M" >/dev/null 2>&1; then
-            date -u -d "${normalized}Z" "+%b %d, %H:%M"
-            return
-        fi
-        if date -u -d "$normalized UTC" "+%b %d, %H:%M" >/dev/null 2>&1; then
-            date -u -d "$normalized UTC" "+%b %d, %H:%M"
-            return
-        fi
-    else
-        local formats=(
-            "%Y-%m-%dT%H:%M:%SZ"
-            "%Y-%m-%dT%H:%M:%S%z"
-            "%Y-%m-%d %H:%M"
-        )
-        local fmt
-        for fmt in "${formats[@]}"; do
-            if date -u -j -f "$fmt" "$normalized" "+%b %d, %H:%M" >/dev/null 2>&1; then
-                date -u -j -f "$fmt" "$normalized" "+%b %d, %H:%M"
-                return
-            fi
-        done
-        if date -u -j -f "%s" "$normalized" "+%b %d, %H:%M" >/dev/null 2>&1; then
-            date -u -j -f "%s" "$normalized" "+%b %d, %H:%M"
+    if [[ -n "$epoch" && "$epoch" != "0" ]]; then
+        local formatted
+        if formatted=$(format_epoch_custom "$epoch" "+%b %d, %H:%M"); then
+            echo "$formatted"
             return
         fi
     fi

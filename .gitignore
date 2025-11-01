@@ -36,6 +36,7 @@ logs/
 # Config files: only .default.json should be tracked
 config/*.json
 !config/*.default.json
+!config/safe-fetch-policy.json
 !config/schemes.jsonld
 !config/units.json
 !config/currency.json
@@ -101,6 +102,8 @@ test-*.sh
 !tests/test-artifact-contracts.sh
 !tests/test-argument-event-graph.sh
 !tests/test-orchestrator-dual-mode.sh
+!tests/test-security-fixes.sh
+!tests/test-date-helpers.sh
 obsidian/
 
 # Additional development notes patterns
@@ -138,4 +141,5 @@ docs/internal/knowledge-graph-schema.md
 !tests/bash-parity/fixtures/**
 tests/citation-readiness-tests/
 docs/internal/*
+!docs/internal/01_bug-report-validation.md
 audit-results.json

@@ -17,22 +17,41 @@ setup_tool_hooks() {
     script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
     local source_hooks_dir="$script_dir/hooks"
     
+    local changed=0
+
     # Ensure session hooks directory exists
     local session_hooks_dir="$session_dir/.claude/hooks"
-    mkdir -p "$session_hooks_dir"
+    if [ ! -d "$session_hooks_dir" ]; then
+        mkdir -p "$session_hooks_dir"
+        changed=1
+    fi
     
-    # Copy hooks to session directory
-    # This avoids issues with spaces in paths and makes sessions portable
-    cp "$source_hooks_dir/pre-tool-use.sh" "$session_hooks_dir/"
-    cp "$source_hooks_dir/post-tool-use.sh" "$session_hooks_dir/"
-    cp "$source_hooks_dir/stop-build-evidence.sh" "$session_hooks_dir/"
-    cp "$source_hooks_dir/evidence_fragment.pl" "$session_hooks_dir/"
-    cp "$source_hooks_dir/hook-bootstrap.sh" "$session_hooks_dir/"
-    chmod +x "$session_hooks_dir/pre-tool-use.sh"
-    chmod +x "$session_hooks_dir/post-tool-use.sh"
-    chmod +x "$session_hooks_dir/stop-build-evidence.sh"
-    chmod +x "$session_hooks_dir/hook-bootstrap.sh"
-    chmod +x "$session_hooks_dir/evidence_fragment.pl"
+    # Copy hooks to session directory only when contents differ
+    local hook_files=(
+        "pre-tool-use.sh"
+        "post-tool-use.sh"
+        "stop-build-evidence.sh"
+        "evidence_fragment.pl"
+        "hook-bootstrap.sh"
+    )
+
+    local hook_file
+    for hook_file in "${hook_files[@]}"; do
+        local source_file="$source_hooks_dir/$hook_file"
+        local dest_file="$session_hooks_dir/$hook_file"
+
+        if [ ! -f "$source_file" ]; then
+            echo "Warning: Missing hook source $source_file" >&2
+            continue
+        fi
+
+        if [ ! -f "$dest_file" ] || ! cmp -s "$source_file" "$dest_file"; then
+            cp "$source_file" "$dest_file"
+            changed=1
+        fi
+
+        chmod +x "$dest_file"
+    done
     
     # Path to settings file
     local settings_file="$session_dir/.claude/settings.json"
@@ -40,6 +59,7 @@ setup_tool_hooks() {
     # Initialize settings if it doesn't exist
     if [ ! -f "$settings_file" ]; then
         echo '{}' > "$settings_file"
+        changed=1
     fi
     
     # Create hooks configuration using RELATIVE paths
@@ -74,15 +94,27 @@ setup_tool_hooks() {
     # Note: This intentionally REPLACES hook arrays (not merges) to ensure session isolation.
     # Each session gets a clean set of cconductor hooks, preventing conflicts between
     # different research sessions running concurrently. This is by design for session safety.
+    local temp_settings
+    temp_settings=$(mktemp "${TMPDIR:-/tmp}/setup-hooks.XXXXXX")
     jq --argjson hooks "$hooks_config" '
         .hooks = (.hooks // {}) |
         .hooks.PreToolUse = $hooks.hooks.PreToolUse |
         .hooks.PostToolUse = $hooks.hooks.PostToolUse |
         .hooks.Stop = $hooks.hooks.Stop
-    ' "$settings_file" > "${settings_file}.tmp"
-    mv "${settings_file}.tmp" "$settings_file"
+    ' "$settings_file" > "$temp_settings"
+
+    if ! cmp -s "$temp_settings" "$settings_file"; then
+        mv "$temp_settings" "$settings_file"
+        changed=1
+    else
+        rm -f "$temp_settings"
+    fi
     
-    echo "✓ Tool observability hooks configured (copied to session)" >&2
+    if [ "$changed" -eq 0 ]; then
+        echo "• Tool observability hooks already configured (no changes)" >&2
+    else
+        echo "✓ Tool observability hooks configured (copied to session)" >&2
+    fi
     return 0
 }
 

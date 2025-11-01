@@ -63,8 +63,22 @@ resolve_path() {
     expanded_path="${expanded_path//\$\{PLATFORM_LOGS\}/$PLATFORM_LOGS}"
     expanded_path="${expanded_path//\$\{PLATFORM_CONFIG\}/$PLATFORM_CONFIG}"
 
-    # Resolve to absolute path (handle ~ and relative paths)
-    expanded_path=$(eval echo "$expanded_path")
+    # Resolve to absolute path (handle ~ and relative paths) without eval
+    case "$expanded_path" in
+        ~ | ~/* )
+            expanded_path="${expanded_path/#\~/$HOME}"
+            ;;
+        ~+ | ~+/* )
+            expanded_path="${expanded_path/#~+/$PWD}"
+            ;;
+        ~- | ~-/* )
+            if [ -n "${OLDPWD:-}" ]; then
+                expanded_path="${expanded_path/#~-/$OLDPWD}"
+            else
+                expanded_path="${expanded_path/#~-/$PWD}"
+            fi
+            ;;
+    esac
 
     # Normalize path (remove trailing slashes, resolve ..)
     # Only normalize if parent directory exists, otherwise keep the expanded path

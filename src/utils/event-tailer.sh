@@ -14,6 +14,8 @@ source "$SCRIPT_DIR/verbose.sh" 2>/dev/null || {
 
 # shellcheck disable=SC1091
 source "$SCRIPT_DIR/json-helpers.sh"
+# shellcheck disable=SC1091
+source "$SCRIPT_DIR/date-helpers.sh"
 
 TAILER_CURRENT_AGENT=""
 TAILER_CACHE_ACTIVITY=0
@@ -85,15 +87,18 @@ tailer_format_timestamp() {
     
     # Convert Z to +00:00 for date parsing
     local iso_fixed="${iso//Z/+00:00}"
-    
-    # Try GNU date first (Linux), then BSD date (macOS)
+
+    local epoch
+    epoch=$(parse_iso_to_epoch "$iso_fixed")
+    if [[ "$epoch" == "0" ]]; then
+        echo "$iso"
+        return 0
+    fi
+
     local formatted
-    if formatted=$(date -d "$iso_fixed" "+%b %d %Y, %I:%M %p %Z" 2>/dev/null); then
-        echo "$formatted"
-    elif formatted=$(date -j -f "%Y-%m-%dT%H:%M:%S%z" "$iso_fixed" "+%b %d %Y, %I:%M %p %Z" 2>/dev/null); then
+    if formatted=$(format_epoch_custom "$epoch" "+%b %d %Y, %I:%M %p %Z"); then
         echo "$formatted"
     else
-        # Fallback: return original if parsing fails
         echo "$iso"
     fi
 }

@@ -44,6 +44,8 @@ source "$SCRIPT_DIR/json-parser.sh" 2>/dev/null || {
 # shellcheck disable=SC1091
 source "$SCRIPT_DIR/core-helpers.sh"
 # shellcheck disable=SC1091
+source "$SCRIPT_DIR/date-helpers.sh"
+# shellcheck disable=SC1091
 source "$SCRIPT_DIR/json-helpers.sh"
 
 safe_export_journal_from_file() {
@@ -126,8 +128,8 @@ calculate_elapsed_time() {
     
     # Convert timestamps to epoch
     local start_epoch event_epoch
-    start_epoch=$(TZ=UTC date -j -f "%Y-%m-%dT%H:%M:%SZ" "$session_start" "+%s" 2>/dev/null || echo "0")
-    event_epoch=$(TZ=UTC date -j -f "%Y-%m-%dT%H:%M:%SZ" "$event_time" "+%s" 2>/dev/null || echo "0")
+    start_epoch=$(parse_iso_to_epoch "$session_start")
+    event_epoch=$(parse_iso_to_epoch "$event_time")
     
     if [ "$start_epoch" = "0" ] || [ "$event_epoch" = "0" ]; then
         echo ""
@@ -523,9 +525,12 @@ export_journal() {
             local formatted_date
             # Convert UTC to local time: parse UTC to epoch, then format in local timezone
             local epoch
-            epoch=$(TZ=UTC date -j -f "%Y-%m-%dT%H:%M:%SZ" "$session_created" "+%s" 2>/dev/null || echo "0")
+            epoch=$(parse_iso_to_epoch "$session_created")
             if [ "$epoch" != "0" ]; then
-                formatted_date=$(date -r "$epoch" "+%B %d, %Y" 2>/dev/null || echo "$session_created")
+                formatted_date=$(format_epoch_date "$epoch")
+                if [ "$formatted_date" = "$epoch" ]; then
+                    formatted_date="$session_created"
+                fi
             else
                 formatted_date="$session_created"
             fi
@@ -563,8 +568,8 @@ export_journal() {
         end_time=$(jq -r '.completed_at // ""' "$session_file" 2>/dev/null)
         if [ -n "$session_created" ] && [ "$session_created" != "unknown" ] && [ -n "$end_time" ] && [ "$end_time" != "" ]; then
             local start_epoch end_epoch
-            start_epoch=$(TZ=UTC date -j -f "%Y-%m-%dT%H:%M:%SZ" "$session_created" "+%s" 2>/dev/null || echo "0")
-            end_epoch=$(TZ=UTC date -j -f "%Y-%m-%dT%H:%M:%SZ" "$end_time" "+%s" 2>/dev/null || echo "0")
+            start_epoch=$(parse_iso_to_epoch "$session_created")
+            end_epoch=$(parse_iso_to_epoch "$end_time")
             if [ "$start_epoch" != "0" ] && [ "$end_epoch" != "0" ]; then
                 total_duration_min=$(( (end_epoch - start_epoch) / 60 ))
             fi
@@ -673,11 +678,15 @@ export_journal() {
             local clean_timestamp
             # shellcheck disable=SC2001
             clean_timestamp=$(echo "$timestamp" | sed 's/\.[0-9]*Z$/Z/')
-            # Convert UTC to local: parse UTC to epoch (using -u flag), then format in local timezone
+            # Convert UTC to local: parse UTC to epoch, then format in local timezone
             local epoch
-            epoch=$(TZ=UTC date -j -f "%Y-%m-%dT%H:%M:%SZ" "$clean_timestamp" "+%s" 2>/dev/null || echo "0")
+            epoch=$(parse_iso_to_epoch "$clean_timestamp")
             if [ "$epoch" != "0" ]; then
-                formatted_time=$(date -r "$epoch" "+%B %d, %Y at %l:%M %p" 2>/dev/null | sed 's/  / /g' || echo "$timestamp")
+                if formatted_time=$(format_epoch_custom "$epoch" "+%B %d, %Y at %l:%M %p"); then
+                    formatted_time=$(echo "$formatted_time" | sed -E 's/  +/ /g')
+                else
+                    formatted_time="$timestamp"
+                fi
             else
                 formatted_time="$timestamp"
             fi
@@ -1784,10 +1793,12 @@ export_journal() {
         
         if [ -n "$start_time" ] && [ -n "$end_time" ] && [ "$end_time" != "" ]; then
             local start_epoch end_epoch duration_seconds
-            start_epoch=$(TZ=UTC date -j -f "%Y-%m-%dT%H:%M:%SZ" "$start_time" "+%s" 2>/dev/null || echo "0")
-            end_epoch=$(TZ=UTC date -j -f "%Y-%m-%dT%H:%M:%SZ" "$end_time" "+%s" 2>/dev/null || echo "0")
-            duration_seconds=$((end_epoch - start_epoch))
-            duration_minutes=$((duration_seconds / 60))
+            start_epoch=$(parse_iso_to_epoch "$start_time")
+            end_epoch=$(parse_iso_to_epoch "$end_time")
+            if [ "$start_epoch" != "0" ] && [ "$end_epoch" != "0" ]; then
+                duration_seconds=$((end_epoch - start_epoch))
+                duration_minutes=$((duration_seconds / 60))
+            fi
         fi
         
         # Get iteration count and entity/claim counts
