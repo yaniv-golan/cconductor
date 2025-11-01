@@ -1,22 +1,19 @@
 #!/usr/bin/env bash
-if [[ -z ${BASH_VERSINFO:-} || ${BASH_VERSINFO[0]} -lt 4 ]]; then
-    if [[ -n ${CCONDUCTOR_BASH_RUNTIME:-} && -x ${CCONDUCTOR_BASH_RUNTIME} ]]; then
-        exec "${CCONDUCTOR_BASH_RUNTIME}" "$0" "$@"
-    elif command -v /opt/homebrew/bin/bash >/dev/null 2>&1; then
-        exec /opt/homebrew/bin/bash "$0" "$@"
-    else
-        echo "$(basename "$0") requires bash >= 4" >&2
-        exit 1
-    fi
-fi
+
+HOOK_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(cd "$HOOK_DIR/../../.." && pwd)"
+
+# shellcheck disable=SC1091
+source "$PROJECT_ROOT/src/utils/bash-runtime.sh"
+
+ensure_modern_bash "$@"
+resolve_cconductor_bash_runtime >/dev/null
+
 # Quality Gate Hook
 # Evaluates mission outputs before finalization.
 # Emits a machine-readable report and exits non-zero if thresholds fail.
 
 set -euo pipefail
-
-HOOK_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_ROOT="$(cd "$HOOK_DIR/../../.." && pwd)"
 
 # Source core helpers with fallback (hooks must never fail)
 # shellcheck disable=SC1091

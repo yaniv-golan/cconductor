@@ -1,19 +1,15 @@
 #!/usr/bin/env bash
-if [[ -z ${BASH_VERSINFO:-} || ${BASH_VERSINFO[0]} -lt 4 ]]; then
-    if [[ -n ${CCONDUCTOR_BASH_RUNTIME:-} && -x ${CCONDUCTOR_BASH_RUNTIME} ]]; then
-        exec "${CCONDUCTOR_BASH_RUNTIME}" "$0" "$@"
-    elif command -v /opt/homebrew/bin/bash >/dev/null 2>&1; then
-        exec /opt/homebrew/bin/bash "$0" "$@"
-    else
-        echo "$(basename "$0") requires bash >= 4" >&2
-        exit 1
-    fi
-fi
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# shellcheck disable=SC1091
+source "$SCRIPT_DIR/bash-runtime.sh"
+
+ensure_modern_bash "$@"
+resolve_cconductor_bash_runtime >/dev/null
 
 set -euo pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 
 # Dependencies
@@ -31,6 +27,8 @@ source "$SCRIPT_DIR/agent-registry.sh"
 source "$SCRIPT_DIR/budget-tracker.sh" 2>/dev/null || true
 # shellcheck disable=SC1091
 source "$SCRIPT_DIR/event-logger.sh" 2>/dev/null || true
+# shellcheck disable=SC1091
+source "$PROJECT_ROOT/src/shared-state.sh"
 
 # Optional agent invocation helper (loaded lazily)
 INVOKE_AGENT_LOADED=0
@@ -62,6 +60,11 @@ declare -ga CLASSIFIER_PATTERNS=()
 declare -ga CLASSIFIER_PATTERN_CATEGORIES=()
 
 declare -gA CLASSIFIER_EXISTING_IDS=()
+STAKEHOLDER_PASS_NEW_WRITTEN=0
+STAKEHOLDER_PASS_NEEDS_REVIEW=0
+STAKEHOLDER_PASS_TOTAL_SOURCES=0
+STAKEHOLDER_PASS_PENDING=0
+STAKEHOLDER_PASS_CLASSIFIED_TOTAL=0
 
 policy_has_category() {
     local key="${1:-}"
@@ -582,26 +585,9 @@ process_pending_batch() {
     queue_ref=()
 }
 
-classify_stakeholders() {
-    local session_dir="${1:-}"
-    if [[ -z "$session_dir" ]]; then
-        usage >&2
-        return 1
-    fi
-
-    if [[ ! -d "$session_dir" ]]; then
-        log_error "stakeholder-classifier: session directory not found: $session_dir"
-        return 1
-    fi
-
-    if declare -f agent_registry_init >/dev/null 2>&1; then
-        agent_registry_init
-    fi
-
-    local session_meta="$session_dir/meta/session.json"
-    local mission_name
-    mission_name=$(safe_jq_from_file "$session_meta" '.mission_name // ""' "" "$session_dir" "stakeholder_classifier.mission" "true" || echo "")
-    [[ -z "$mission_name" ]] && mission_name="general-research"
+stakeholder_classifier_single_pass() {
+    local session_dir="$1"
+    local mission_name="$2"
 
     ensure_session_config "$session_dir" "$mission_name" policy
     ensure_session_config "$session_dir" "$mission_name" resolver
@@ -624,20 +610,11 @@ classify_stakeholders() {
     local timestamp
     timestamp=$(get_timestamp)
 
-    if command -v log_event &>/dev/null; then
-        log_event "$session_dir" "stakeholder_classifier_started" "$(jq -n \
-            --arg mission "$mission_name" \
-            --argjson sources "$kg_source_count" \
-            --arg started "$timestamp" \
-            '{mission: $mission, total_sources: $sources, started_at: $started}')"
-    fi
-
     local classifications_written=0
     local needs_review=0
 
-    # shellcheck disable=SC2034
     local -a pending_queue=()
-    # shellcheck disable=SC2034
+    # shellcheck disable=SC2034  # referenced via nameref in process_pending_batch
     declare -A pending_map=()
     local batch_limit=25
 
@@ -656,7 +633,7 @@ classify_stakeholders() {
         local host
         host=$(domain_helpers_extract_hostname "$url")
         local host_lower="${host,,}"
-        # shellcheck disable=SC2034
+        # shellcheck disable=SC2034  # populated via nameref consumers
         local -a raw_tags=()
         build_raw_tags "$host" "$title" raw_tags
         local tags_json
@@ -679,7 +656,7 @@ classify_stakeholders() {
                 --argjson tags "$tags_json" \
                 '{source_id: $id, url: $url, title: $title, host: $host, raw_tags: $tags}')
             pending_queue+=("$source_id")
-            # shellcheck disable=SC2034
+            # shellcheck disable=SC2034  # stored for batch classification via nameref
             pending_map["$source_id"]="$entry_json"
             if (( ${#pending_queue[@]} >= batch_limit )); then
                 process_pending_batch "$session_dir" "$policy_json" "$classifications_file" pending_queue pending_map classifications_written needs_review
@@ -707,26 +684,111 @@ classify_stakeholders() {
 
     append_checkpoint "$checkpoint_file" "$timestamp" "$kg_source_count" "$classifications_written" "$needs_review"
 
-    local completed_at
-    completed_at=$(get_timestamp)
-    local pending_sources
-    pending_sources=$((kg_source_count - classifications_written))
+    local total_classified="${#CLASSIFIER_EXISTING_IDS[@]}"
+    local pending_sources=$((kg_source_count - total_classified))
     if (( pending_sources < 0 )); then
         pending_sources=0
     fi
 
+    STAKEHOLDER_PASS_NEW_WRITTEN=$classifications_written
+    STAKEHOLDER_PASS_NEEDS_REVIEW=$needs_review
+    STAKEHOLDER_PASS_TOTAL_SOURCES=$kg_source_count
+    STAKEHOLDER_PASS_PENDING=$pending_sources
+    STAKEHOLDER_PASS_CLASSIFIED_TOTAL=$total_classified
+}
+
+stakeholder_classifier_run_loop() {
+    local session_dir="$1"
+    local mission_name="$2"
+
+    local initial_sources_json
+    initial_sources_json=$(load_unique_sources "$session_dir/knowledge/knowledge-graph.json" "$session_dir")
+    local initial_source_count
+    initial_source_count=$(jq 'length' <<<"$initial_sources_json")
+
+    local started_at
+    started_at=$(get_timestamp)
+    if command -v log_event &>/dev/null; then
+        log_event "$session_dir" "stakeholder_classifier_started" "$(jq -n \
+            --arg mission "$mission_name" \
+            --argjson sources "$initial_source_count" \
+            --arg started "$started_at" \
+            '{mission: $mission, total_sources: $sources, started_at: $started}')"
+    fi
+
+    local total_written=0
+    local total_needs_review=0
+    local total_sources="$initial_source_count"
+    local pending=0
+    local total_classified=0
+    local pass=1
+
+    while true; do
+        stakeholder_classifier_single_pass "$session_dir" "$mission_name"
+        local pass_written="$STAKEHOLDER_PASS_NEW_WRITTEN"
+        local pass_needs="$STAKEHOLDER_PASS_NEEDS_REVIEW"
+        total_sources="$STAKEHOLDER_PASS_TOTAL_SOURCES"
+        pending="$STAKEHOLDER_PASS_PENDING"
+        total_classified="$STAKEHOLDER_PASS_CLASSIFIED_TOTAL"
+        total_written=$((total_written + pass_written))
+        total_needs_review=$((total_needs_review + pass_needs))
+        echo "Stakeholder classifier pass $pass: added $pass_written records (pending: $pending)."
+        if (( pending <= 0 )) || (( pass_written == 0 )); then
+            if (( pass_written == 0 )) && (( pending > 0 )); then
+                log_warn "stakeholder-classifier: unable to classify $pending sources automatically; manual review required."
+            fi
+            break
+        fi
+        pass=$((pass + 1))
+    done
+
+    local completed_at
+    completed_at=$(get_timestamp)
     if command -v log_event &>/dev/null; then
         log_event "$session_dir" "stakeholder_classifier_completed" "$(jq -n \
             --arg mission "$mission_name" \
-            --argjson sources "$kg_source_count" \
-            --argjson classified "$classifications_written" \
-            --argjson needs "$needs_review" \
+            --argjson sources "$total_sources" \
+            --argjson total_classifications "$total_classified" \
+            --argjson new_classifications "$total_written" \
+            --argjson needs "$total_needs_review" \
+            --arg started "$started_at" \
             --arg completed "$completed_at" \
-            --argjson pending "$pending_sources" \
-            '{mission: $mission, total_sources: $sources, classifications: $classified, needs_review: $needs, completed_at: $completed, pending_sources: $pending}')"
+            --argjson pending "$pending" \
+            '{mission: $mission, total_sources: $sources, total_classifications: $total_classifications, new_classifications: $new_classifications, needs_review: $needs, started_at: $started, completed_at: $completed, pending_sources: $pending}')"
     fi
 
-    echo "Classified $classifications_written sources for mission $mission_name"
+    echo "Stakeholder classifier complete: total classifications $total_classified, pending $pending."
+}
+
+classify_stakeholders() {
+    local session_dir="${1:-}"
+    if [[ -z "$session_dir" ]]; then
+        usage >&2
+        return 1
+    fi
+
+    if [[ ! -d "$session_dir" ]]; then
+        log_error "stakeholder-classifier: session directory not found: $session_dir"
+        return 1
+    fi
+
+    if declare -f agent_registry_init >/dev/null 2>&1; then
+        agent_registry_init
+    fi
+
+    local session_meta="$session_dir/meta/session.json"
+    local mission_name
+    mission_name=$(safe_jq_from_file "$session_meta" '.mission_name // ""' "" "$session_dir" "stakeholder_classifier.mission" "true" || echo "")
+    [[ -z "$mission_name" ]] && mission_name="general-research"
+
+    local lock_file="$session_dir/session/.locks/stakeholder-classifier.lock"
+    mkdir -p "$(dirname "$lock_file")"
+
+    if declare -F with_lock >/dev/null 2>&1; then
+        with_lock "$lock_file" stakeholder_classifier_run_loop "$session_dir" "$mission_name"
+    else
+        stakeholder_classifier_run_loop "$session_dir" "$mission_name"
+    fi
 }
 
 if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then

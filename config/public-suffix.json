@@ -1,0 +1,16 @@
+{
+  "version": "2025-10-30",
+  "publicSuffixes": [
+    "com",
+    "org",
+    "net",
+    "gov",
+    "edu",
+    "co.uk",
+    "co.jp",
+    "gov.il",
+    "com.cn",
+    "org.au",
+    "ca"
+  ]
+}

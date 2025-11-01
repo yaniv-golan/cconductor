@@ -1,19 +1,15 @@
 #!/usr/bin/env bash
-if [[ -z ${BASH_VERSINFO:-} || ${BASH_VERSINFO[0]} -lt 4 ]]; then
-    if [[ -n ${CCONDUCTOR_BASH_RUNTIME:-} && -x ${CCONDUCTOR_BASH_RUNTIME} ]]; then
-        exec "${CCONDUCTOR_BASH_RUNTIME}" "$0" "$@"
-    elif command -v /opt/homebrew/bin/bash >/dev/null 2>&1; then
-        exec /opt/homebrew/bin/bash "$0" "$@"
-    else
-        echo "$(basename "$0") requires bash >= 4" >&2
-        exit 1
-    fi
-fi
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# shellcheck disable=SC1091
+source "$SCRIPT_DIR/bash-runtime.sh"
+
+ensure_modern_bash "$@"
+resolve_cconductor_bash_runtime >/dev/null
 
 set -euo pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # Dependencies
 # shellcheck disable=SC1091
