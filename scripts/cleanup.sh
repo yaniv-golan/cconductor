@@ -2,7 +2,7 @@
 # CConductor Cleanup Script
 # Cleans up old sessions, processes, and temporary files
 
-set -e
+set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
@@ -78,7 +78,9 @@ clean_sessions() {
         echo "  ✓ No sessions to clean"
     else
         echo "  → Found $session_count session(s) (Total: $session_size)"
-        read -r -p "  → Delete all sessions? [y/N] " response
+        if ! read -r -p "  → Delete all sessions? [y/N] " response; then
+            response="n"
+        fi
         if [[ "$response" =~ ^[Yy]$ ]]; then
             rm -rf research-sessions/mission_* 2>/dev/null || true
             rm -f research-sessions/.latest 2>/dev/null || true
@@ -129,7 +131,9 @@ clean_temp_files() {
         # shellcheck disable=SC2155  # Combined declaration is intentional
         local log_count=$(find logs -name "*.log" 2>/dev/null | wc -l | tr -d ' ')
         if [ "$log_count" -gt 0 ]; then
-            read -r -p "  → Delete $log_count log file(s)? [y/N] " response
+            if ! read -r -p "  → Delete $log_count log file(s)? [y/N] " response; then
+                response="n"
+            fi
             if [[ "$response" =~ ^[Yy]$ ]]; then
                 rm -f logs/*.log 2>/dev/null || true
                 echo "  ✓ Removed $log_count log file(s)"
@@ -186,4 +190,3 @@ main() {
 
 # Run main
 main
-

@@ -857,7 +857,7 @@ set -euo pipefail
 
 ---
 
-### ⚠️ M6: Security test uses `-eo pipefail` instead of `-euo pipefail`
+### ✅ M6: Security test uses `-eo pipefail` instead of `-euo pipefail`
 
 **File:** `tests/test-security-fixes.sh:5-8`
 
@@ -865,9 +865,13 @@ set -euo pipefail
 
 **Remediation:** Add `-u` flag if confirmed.
 
+**Implementation Update (2025-11-01):**
+- Updated `tests/test-security-fixes.sh` to use `set -euo pipefail`, ensuring unset variables trigger failures during the security regression suite.
+- Verified the script still passes via `shellcheck tests/test-security-fixes.sh`.
+
 ---
 
-### ⚠️ M7: Cleanup script uses only `-e`
+### ✅ M7: Cleanup script uses only `-e`
 
 **File:** `scripts/cleanup.sh:5`
 
@@ -907,6 +911,10 @@ source "$PROJECT_ROOT/src/utils/core-helpers.sh"
 ```bash
 read -r -p "..." response || response="n"
 ```
+
+**Implementation Update (2025-11-01):**
+- Switched `scripts/cleanup.sh` to `set -euo pipefail` and added fallbacks for every interactive `read` so non-interactive runs default to “no” rather than aborting.
+- Ensured existing cleanup logic remains intact by re-running `shellcheck scripts/cleanup.sh`.
 
 **Testing:**
 1. Run interactively
@@ -953,7 +961,7 @@ local cconductor_pids=$(ps aux | grep -E "[c]conductor|cconductor-mission" | awk
 
 ---
 
-### ⚠️ M9: Interactive confirmation breaks under `set -e` in non-interactive shells
+### ✅ M9: Interactive confirmation breaks under `set -e` in non-interactive shells
 
 **File:** `scripts/cleanup.sh:59-84`
 
@@ -962,6 +970,9 @@ local cconductor_pids=$(ps aux | grep -E "[c]conductor|cconductor-mission" | awk
 If M7 adds `set -e`, then `read -p` in CI will abort the script.
 
 **Remediation:** Already covered in M7 remediation above.
+
+**Implementation Update (2025-11-01):**
+- Added `read ... || response="n"` guards everywhere the cleanup script prompts the operator, preventing abrupt exits when stdin is closed (CI/non-interactive environments).
 
 ---
 
