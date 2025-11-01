@@ -6,6 +6,8 @@
 # from logs/events.jsonl
 #
 
+set -euo pipefail
+
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # shellcheck disable=SC1091
@@ -118,6 +120,90 @@ make_path_relative() {
     else
         # Otherwise return as-is
         echo "$path"
+    fi
+}
+
+# Resolve absolute path without relying on Python
+journal_abs_path() {
+    local input="$1"
+
+    if command -v realpath >/dev/null 2>&1; then
+        realpath "$input" 2>/dev/null && return 0
+    fi
+
+    local dir_part
+    dir_part=$(dirname -- "$input" 2>/dev/null || echo ".")
+    local base_part
+    base_part=$(basename -- "$input" 2>/dev/null || echo "$input")
+    if dir_part=$(cd "$dir_part" 2>/dev/null && pwd -P); then
+        printf '%s/%s\n' "$dir_part" "$base_part"
+    else
+        printf '%s\n' "$input"
+    fi
+}
+
+# Compute relative path between target and base using portable shell logic
+journal_relpath() {
+    local target="$1"
+    local base="$2"
+
+    if command -v realpath >/dev/null 2>&1; then
+        local relative
+        if relative=$(realpath --relative-to="$base" "$target" 2>/dev/null); then
+            printf '%s\n' "$relative"
+            return 0
+        fi
+    fi
+
+    local abs_target abs_base
+    abs_target=$(journal_abs_path "$target")
+    abs_base=$(journal_abs_path "$base")
+
+    if [[ -z "$abs_target" || -z "$abs_base" ]]; then
+        printf '%s\n' "$target"
+        return 0
+    fi
+
+    # Trim trailing slashes
+    abs_target="${abs_target%/}"
+    abs_base="${abs_base%/}"
+
+    if [[ "$abs_target" == "$abs_base" ]]; then
+        printf '.\n'
+        return 0
+    fi
+
+    local IFS='/'
+    read -r -a target_parts <<< "${abs_target#/}"
+    read -r -a base_parts <<< "${abs_base#/}"
+
+    local common=0
+    local max_parts=${#target_parts[@]}
+    if (( ${#base_parts[@]} < max_parts )); then
+        max_parts=${#base_parts[@]}
+    fi
+
+    while (( common < max_parts )) && [[ "${target_parts[$common]}" == "${base_parts[$common]}" ]]; do
+        ((common++))
+    done
+
+    local rel_parts=()
+    local idx
+    for ((idx=common; idx<${#base_parts[@]}; idx++)); do
+        if [[ -n "${base_parts[$idx]}" ]]; then
+            rel_parts+=("..")
+        fi
+    done
+    for ((idx=common; idx<${#target_parts[@]}; idx++)); do
+        if [[ -n "${target_parts[$idx]}" ]]; then
+            rel_parts+=("${target_parts[$idx]}")
+        fi
+    done
+
+    if (( ${#rel_parts[@]} == 0 )); then
+        printf '.\n'
+    else
+        (IFS='/'; printf '%s\n' "${rel_parts[*]}")
     fi
 }
 
@@ -1975,26 +2061,10 @@ export_journal() {
     } > "$output_file"
     
     # Display path relative to current working directory
-    local display_output="$output_file"
-    if command -v python3 >/dev/null 2>&1; then
-        display_output=$(python3 - "$output_file" "$(pwd)" <<'PY'
-import os, sys
-path = sys.argv[1]
-cwd = sys.argv[2]
-try:
-    print(os.path.relpath(path, cwd))
-except Exception:
-    print(path)
-PY
-)
-    else
-        # Fallback: try bash string manipulation relative to pwd
-        local pwd_path
-        pwd_path="$(pwd)"
-        if [[ "$output_file" == "$pwd_path"* ]]; then
-            display_output="${output_file#"$pwd_path"}"
-            display_output="${display_output#/}"
-        fi
+    local display_output
+    display_output=$(journal_relpath "$output_file" "$(pwd)")
+    if [[ -z "$display_output" ]]; then
+        display_output="$output_file"
     fi
     echo "  ✓ Research journal exported to: $display_output" >&2
 }

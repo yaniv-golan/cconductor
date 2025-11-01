@@ -9,26 +9,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- Stakeholder classification pipeline with a dedicated Claude agent, deterministic classifier (`src/utils/stakeholder-classifier.sh`), gate evaluator (`src/utils/stakeholder-gate.sh`), and default policy/resolver templates to guarantee mission-aware stakeholder coverage.
-- Mission-scoped stakeholder policies and resolvers for every built-in mission, plus global defaults under `config/stakeholder-policy.default.json` and `config/stakeholder-resolver.default.json`.
-- Quality gate regression coverage that seeds classification artifacts so the new stakeholder checks remain stable.
-- Research Journal Viewer preflight dashboard that launches as soon as orchestration initializes, surfaces domain heuristics / prompt parsing / stakeholder counts, and streams text artifacts (JSON, JSONL, Markdown, logs) through blob-backed tabs with automatic pretty-printing.
-- Argument Event Graph pipeline with event writer (`src/utils/argument-writer.sh`), materialiser (`src/utils/materialize-argument-graph.sh`), AIF exporter (`src/utils/export-aif.sh`), claim ID migrator (`src/utils/migrate-claim-ids.sh`), configuration tables (`config/schemes.jsonld`, `config/units.json`, `config/currency.json`, `config/public-suffix.json`, `config/url-tracker-keys.json`), agent streaming contract updates, documentation set, and an end-to-end regression test (`tests/test-argument-event-graph.sh`).
-- Argument Contract Claude skill (`src/claude-runtime/skills/argument-contract/`) with deterministic ID/envelope helper (`src/utils/argument-events.sh`), updated agent prompts (academic researcher, web researcher, pdf analyzer, market analyzer, fact checker, quality remediator) to stream `argument_event` payloads via the skill, and refreshed documentation/rollout matrices.
-- Session manifest pipeline (`src/utils/session-manifest-builder.sh`) that regenerates `meta/session-manifest.json` before every orchestrator turn, feeds the orchestrator prompt with a curated manifest snapshot, and ships with documentation (`docs/internal/session-manifest-schema.md`) plus regression coverage (`tests/test-session-manifest.sh`).
-- Write-tool artifact contract system with per-agent expected manifests (`config/artifact-contracts/`), schema catalog (`config/schemas/artifacts/`), validator test (`tests/test-artifact-contracts.sh`), and fixture-backed KG coverage to keep manifest ingestion stable.
+- Stakeholder classification pipeline with a dedicated Claude agent, deterministic classifier, gate evaluator, and defaults so every mission automatically maintains stakeholder coverage; includes a `cconductor stakeholders refresh <session_id>` helper for reruns.
+- Mission-scoped stakeholder policies and resolvers for all built-in missions, plus global defaults you can override in your own config.
+- Quality gate regression coverage that seeds classification artifacts and keeps the new stakeholder checks stable.
+- Research Journal Viewer now launches a preflight dashboard with domain heuristics, prompt parsing, and stakeholder summaries, and streams text artifacts through session-aware tabs.
+- Argument Event Graph (AEG) pipeline that captures the claims and evidence each agent produces, lets you review relationships inside the dashboard, and can export to Argument Interchange Format (AIF)—a standard JSON-LD model used by argument-mapping tools—for outside analysis.
+- Argument Contract Claude skill that standardizes how agents stream `argument_event` payloads, giving you consistent IDs and envelopes across academic, market, fact-checking, and quality roles.
+- Session manifest pipeline that regenerates a curated `session-manifest.json` before every orchestrator turn so prompts and dashboards share the same source of truth.
+- Write-tool artifact contract system that defines expected outputs per agent, validates them against shared schemas, and ships fixtures plus tests to prevent regressions.
+- Optional independent source enforcement toggle (`CCONDUCTOR_REQUIRE_INDEPENDENT_SOURCES`) that blocks synthesis until claims cite enough distinct domains and logs missing coverage to `meta/independent-source-issues.json`.
 
 ### Changed
 
-- Reinforced the quality gate hook to delegate stakeholder coverage decisions to the new gate reports, improving uncategorized tracking and failure messaging.
-- Reorganized built-in mission profiles into directory-based bundles (`profile.json`, `policy.json`, `resolver.json`) and taught `mission-loader.sh` to discover them transparently.
-- Documented the stakeholder pipeline in the Quality Guide and agent directory so maintainers know how the classifier and gate cooperate.
-- Dashboard viewer assets now live under session-prefixed URLs (`http://localhost:<port>/<session_id>/...`), `dashboard.sh` serves the mission parent directory, and the HTML template injects session metadata so all file links remain stable across multiple concurrent viewers.
-- Updated the User Guide and Troubleshooting guide to explain the new viewer URL pattern, preflight card, and debugging steps when links 404 or tabs open blank.
-- Split public-facing docs from contributor references by moving maintainer material into `docs/contributers/` (with an argument subfolder) and refreshed internal links so the published guide set stays streamlined.
-- Mission state builder now emits knowledge-graph and orchestration log paths relative to the session root (with absolute fallbacks for legacy tooling) so orchestrator prompts and agent reads remain sandbox-friendly.
-- Streaming handler tolerates missing terminal `result` events by assembling partial JSON/text deltas and logging a warning, preventing orchestrator stalls during Claude CLI streaming runs.
-- Agent invocation now enforces artifact contracts (`work/<agent>/manifest.actual.json`), logs `artifact_contract` metrics to events/dashboards, updates mission/orchestrator prompts to reflect the Write-tool-first workflow, and ships updated docs (Quick Start, Troubleshooting, Quality Guide) covering validation and bypass modes.
+- Non-interactive installs now auto-provision required dependencies (including ripgrep) when you pass `--yes` and fail fast if tooling can’t be installed.
+- Quality gate hook delegates stakeholder coverage decisions to the new reports, improving uncategorized tracking and failure messaging.
+- Mission profiles are organized as discoverable bundles so mission loader updates happen transparently.
+- Quality Guide and agent directory explain how the stakeholder classifier, policies, and gate cooperate.
+- Dashboard viewer URLs are now session-prefixed, keeping links stable across concurrent viewers while the server serves the mission root.
+- User Guide and Troubleshooting guide cover the new viewer URL pattern, preflight card, and recovery tips for blank tabs or 404s.
+- Public docs are streamlined by moving maintainer references to the contributor section, with refreshed internal links.
+- Mission state builder emits knowledge-graph and orchestration log paths relative to the session root, keeping prompts and agent reads sandbox-friendly.
+- Streaming handler tolerates missing terminal `result` events by assembling partial deltas and warning instead of stalling.
+- Agent invocation enforces artifact contracts, reports failures clearly in events/dashboards, and documents validation/bypass workflows in the Quick Start, Troubleshooting, and Quality guides.
 
 ### Fixed
 

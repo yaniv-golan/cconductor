@@ -771,28 +771,7 @@ local relative_path="${agent_output_file#"$session_dir"/}"
 
 **File:** `src/utils/export-journal.sh:1-33`
 
-**Validation:** ⚠️ **PARTIALLY CONFIRMED**
-
-**Evidence:**
-```bash
-# Lines 1-8:
-#!/usr/bin/env bash
-#
-# export-journal.sh - Export research journal as markdown
-#
-
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-
-# Lines 11-15:
-source "$SCRIPT_DIR/bash-runtime.sh"
-
-ensure_modern_bash "$@"
-resolve_cconductor_bash_runtime >/dev/null
-```
-
-The script sources `bash-runtime.sh` which calls `ensure_modern_bash`. Looking at that infrastructure, it appears to set strict mode as part of the runtime setup.
-
-However, the bug report is correct that there's no explicit `set -euo pipefail` in the file header before sourcing, which is against the AGENTS.md guidelines.
+**Validation:** ✅ CONFIRMED
 
 **Remediation Plan:**
 
@@ -816,6 +795,10 @@ source "$SCRIPT_DIR/bash-runtime.sh"
 Even if bash-runtime.sh sets strict mode, being explicit follows project conventions and prevents issues if that file is refactored.
 
 **Estimated effort:** 5 minutes (copy pattern from other files)
+
+**Implementation Update (2025-11-01):**
+- Added `set -euo pipefail` to the top of `src/utils/export-journal.sh` to comply with the standard script header pattern.
+- Confirmed the script remains lint-clean via `shellcheck src/utils/export-journal.sh`.
 
 ---
 
@@ -861,7 +844,7 @@ set -euo pipefail
 
 **File:** `tests/test-security-fixes.sh:5-8`
 
-**Validation:** Requires file inspection
+**Validation:** ✅ CONFIRMED
 
 **Remediation:** Add `-u` flag if confirmed.
 
@@ -1080,7 +1063,7 @@ Apply same fix to research-logger.sh.
 
 **File:** `src/claude-runtime/hooks/research-logger.sh:35-57`
 
-**Validation:** Requires file inspection (likely valid)
+**Validation:** ✅ CONFIRMED
 
 **Remediation Plan:**
 
@@ -1100,6 +1083,11 @@ jq -n --arg q "$query" --arg ts "$(get_timestamp)" \
 This ensures each query is a single JSON line, preventing injection.
 
 **Estimated effort:** 30 minutes
+
+**Implementation Update (2025-11-01):**
+- Replaced plain-text logging in `src/claude-runtime/hooks/research-logger.sh` with JSON line entries via `jq -n`, preventing newline/log injection.
+- Added `append_json_line` helper plus secure file initialization (chmod 600, umask 077) for both audit and query logs.
+- Re-verified with `shellcheck src/claude-runtime/hooks/research-logger.sh`.
 
 ---
 

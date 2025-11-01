@@ -23,7 +23,16 @@ LOG_DIR="$HOME/.claude/research-engine"
 AUDIT_LOG="$LOG_DIR/audit.log"
 QUERY_LOG="$LOG_DIR/queries.log"
 
+umask 077
 mkdir -p "$LOG_DIR"
+touch "$AUDIT_LOG" "$QUERY_LOG" 2>/dev/null || true
+chmod 600 "$AUDIT_LOG" "$QUERY_LOG" 2>/dev/null || true
+
+append_json_line() {
+    local file="$1"
+    local payload="$2"
+    printf '%s\n' "$payload" >> "$file"
+}
 
 # Read and validate stdin
 input=$(cat)
@@ -40,31 +49,31 @@ TIMESTAMP=$(get_timestamp)
 case "$TOOL_NAME" in
     WebSearch)
         QUERY=$(echo "$input" | jq -r '.tool_input.query')
-        echo "$TIMESTAMP | WebSearch | $QUERY" >> "$QUERY_LOG"
-        echo "$TIMESTAMP | WebSearch | Query: $QUERY" >> "$AUDIT_LOG"
+        append_json_line "$QUERY_LOG" "$(jq -n --arg ts "$TIMESTAMP" --arg tool "$TOOL_NAME" --arg query "$QUERY" '{timestamp:$ts, tool:$tool, query:$query}')"
+        append_json_line "$AUDIT_LOG" "$(jq -n --arg ts "$TIMESTAMP" --arg tool "$TOOL_NAME" --arg query "$QUERY" '{timestamp:$ts, event:"web_search", query:$query, tool:$tool}')"
         ;;
 
     WebFetch)
         URL=$(echo "$input" | jq -r '.tool_input.url')
-        echo "$TIMESTAMP | WebFetch | $URL" >> "$QUERY_LOG"
-        echo "$TIMESTAMP | WebFetch | URL: $URL" >> "$AUDIT_LOG"
+        append_json_line "$QUERY_LOG" "$(jq -n --arg ts "$TIMESTAMP" --arg tool "$TOOL_NAME" --arg url "$URL" '{timestamp:$ts, tool:$tool, url:$url}')"
+        append_json_line "$AUDIT_LOG" "$(jq -n --arg ts "$TIMESTAMP" --arg tool "$TOOL_NAME" --arg url "$URL" '{timestamp:$ts, event:"web_fetch", url:$url, tool:$tool}')"
         ;;
 
     Task)
         AGENT=$(echo "$input" | jq -r '.tool_input.subagent_type')
         DESCRIPTION=$(echo "$input" | jq -r '.tool_input.description')
-        echo "$TIMESTAMP | Task | Agent: $AGENT | $DESCRIPTION" >> "$AUDIT_LOG"
+        append_json_line "$AUDIT_LOG" "$(jq -n --arg ts "$TIMESTAMP" --arg tool "$TOOL_NAME" --arg agent "$AGENT" --arg desc "$DESCRIPTION" '{timestamp:$ts, event:"task", agent:$agent, description:$desc, tool:$tool}')"
         ;;
 
     Read)
         FILE=$(echo "$input" | jq -r '.tool_input.file_path')
-        echo "$TIMESTAMP | Read | File: $FILE" >> "$AUDIT_LOG"
+        append_json_line "$AUDIT_LOG" "$(jq -n --arg ts "$TIMESTAMP" --arg tool "$TOOL_NAME" --arg file "$FILE" '{timestamp:$ts, event:"read", file:$file, tool:$tool}')"
         ;;
 
     Grep)
         PATTERN=$(echo "$input" | jq -r '.tool_input.pattern')
         SEARCH_PATH=$(echo "$input" | jq -r '.tool_input.path // "."')
-        echo "$TIMESTAMP | Grep | Pattern: $PATTERN | Path: $SEARCH_PATH" >> "$AUDIT_LOG"
+        append_json_line "$AUDIT_LOG" "$(jq -n --arg ts "$TIMESTAMP" --arg tool "$TOOL_NAME" --arg pattern "$PATTERN" --arg path "$SEARCH_PATH" '{timestamp:$ts, event:"grep", pattern:$pattern, path:$path, tool:$tool}')"
         ;;
 esac
 

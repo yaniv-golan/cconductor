@@ -37,6 +37,8 @@ source "$PROJECT_ROOT/src/utils/core-helpers.sh" 2>/dev/null || {
 
 # shellcheck disable=SC1091
 source "$PROJECT_ROOT/src/utils/json-helpers.sh" 2>/dev/null || true
+# shellcheck disable=SC1091
+source "$PROJECT_ROOT/src/utils/date-helpers.sh" 2>/dev/null || true
 
 # Source shared-state for atomic operations (with fallback)
 # shellcheck disable=SC1091
@@ -71,18 +73,6 @@ safe_realpath() {
 
     if command -v realpath >/dev/null 2>&1; then
         realpath "$target" 2>/dev/null && return 0
-    fi
-
-    if command -v python3 >/dev/null 2>&1; then
-        python3 - "$target" <<'PY' 2>/dev/null && return 0
-import os
-import sys
-
-try:
-    print(os.path.realpath(sys.argv[1]))
-except Exception:
-    sys.exit(1)
-PY
     fi
 
     local dir_part
@@ -537,28 +527,26 @@ url=$(hook_field '.tool_input.url // empty' '' 'web_fetch.url')
                             if [[ "$ttl_days" -lt 0 ]]; then
                                 is_fresh=1
                             elif [[ "$ttl_days" -gt 0 ]]; then
-                                if command -v python3 >/dev/null 2>&1; then
-                                    debug_log "guard_checking_ttl last_updated=$last_updated"
-                                    if python3 - "$last_updated" "$ttl_days" <<'PY'
-import sys
-from datetime import datetime, timezone
-
-last = sys.argv[1]
-ttl_days = int(sys.argv[2])
-try:
-    if last.endswith("Z"):
-        last_dt = datetime.fromisoformat(last.replace("Z", "+00:00"))
-    else:
-        last_dt = datetime.fromisoformat(last)
-except ValueError:
-    sys.exit(2)
-age = (datetime.now(timezone.utc) - last_dt).total_seconds() / 86400.0
-sys.exit(0 if age <= ttl_days else 1)
-PY
-                                    then
-                                        is_fresh=1
+                                debug_log "guard_checking_ttl last_updated=$last_updated"
+                                if declare -F parse_iso_to_epoch >/dev/null 2>&1 && command -v bc >/dev/null 2>&1; then
+                                    ttl_last_epoch=""
+                                    ttl_now_epoch=""
+                                    ttl_age_seconds=0
+                                    ttl_age_days=""
+                                    ttl_cmp=""
+                                    if ttl_last_epoch=$(parse_iso_to_epoch "$last_updated") && [[ "$ttl_last_epoch" =~ ^[0-9]+$ ]] && (( ttl_last_epoch > 0 )); then
+                                        ttl_now_epoch=$(get_epoch)
+                                        ttl_age_seconds=$(( ttl_now_epoch - ttl_last_epoch ))
+                                        if (( ttl_age_seconds < 0 )); then
+                                            ttl_age_seconds=$(( -ttl_age_seconds ))
+                                        fi
+                                        ttl_age_days=$(printf 'scale=6; %s / 86400\n' "$ttl_age_seconds" | bc -l)
+                                        ttl_cmp=$(printf 'scale=6; %s <= %s\n' "$ttl_age_days" "$ttl_days" | bc -l)
+                                        if [[ "$ttl_cmp" == "1" ]]; then
+                                            is_fresh=1
+                                        fi
+                                        debug_log "guard_ttl_result age_days=$ttl_age_days fresh=$is_fresh"
                                     fi
-                                    debug_log "guard_ttl_result fresh=$is_fresh"
                                 fi
                             fi
                         fi
