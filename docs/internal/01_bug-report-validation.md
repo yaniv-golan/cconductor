@@ -267,6 +267,11 @@ Also update lines 64 and 68 to check the new path first with fallback.
 
 **Estimated effort:** 15 minutes
 
+**Implementation Update (2025-11-01):**
+- Updated `tests/test-simple-query.sh` to prioritize the modern `report/mission-report.md` layout, fall back to `final/mission-report.md`, and retain support for legacy `70_report/mission-report.md`.
+- The script now surfaces which path was validated while keeping the existing executive-summary and sources checks intact.
+- Validated the changes with `shellcheck tests/test-simple-query.sh`.
+
 ---
 
 ### ✅ C4: Citation tracker lock file leak on early exit

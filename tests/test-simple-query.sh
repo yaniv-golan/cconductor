@@ -57,20 +57,29 @@ if [ -z "$SESSION_DIR" ]; then
     exit 1
 fi
 
-if [ -f "$SESSION_DIR/70_report/mission-report.md" ]; then
-    echo "✓ Report generated successfully"
+REPORT_PATH=""
+if [ -f "$SESSION_DIR/report/mission-report.md" ]; then
+    REPORT_PATH="$SESSION_DIR/report/mission-report.md"
+elif [ -f "$SESSION_DIR/final/mission-report.md" ]; then
+    REPORT_PATH="$SESSION_DIR/final/mission-report.md"
+elif [ -f "$SESSION_DIR/70_report/mission-report.md" ]; then
+    REPORT_PATH="$SESSION_DIR/70_report/mission-report.md"
+fi
 
-    # Basic validation
-    if grep -q "Executive Summary" "$SESSION_DIR/70_report/mission-report.md"; then
-        echo "✓ Report contains executive summary"
-    fi
-
-    if grep -q "Sources" "$SESSION_DIR/70_report/mission-report.md"; then
-        echo "✓ Report contains sources"
-    fi
-else
-    echo "✗ Report not found"
+if [ -z "$REPORT_PATH" ]; then
+    echo "✗ Report not found in expected locations"
     exit 1
+fi
+
+echo "✓ Report generated successfully ($REPORT_PATH)"
+
+# Basic validation
+if grep -q "Executive Summary" "$REPORT_PATH"; then
+    echo "✓ Report contains executive summary"
+fi
+
+if grep -q "Sources" "$REPORT_PATH"; then
+    echo "✓ Report contains sources"
 fi
 
 echo "=== Test Complete ==="
