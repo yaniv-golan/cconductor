@@ -50,6 +50,7 @@ EXAMPLES:
   cconductor sessions viewer mission_123 # View research dashboard
   cconductor sessions resume mission_123 # Continue research
   cconductor sessions resume mission_123 --refine "Focus on 2024 papers"
+  cconductor stakeholders refresh mission_123 # Refresh stakeholder classifications
   
   # Export research journal
   bash src/utils/export-journal.sh research-sessions/mission_123

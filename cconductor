@@ -660,6 +660,33 @@ main() {
             done
             handle_sessions_command "$subcommand" "${session_args[@]}"
             ;;
+        stakeholders)
+            local stakeholders_subcommand
+            stakeholders_subcommand=$(get_arg 1)
+            case "$stakeholders_subcommand" in
+                refresh)
+                    local session_id
+                    session_id=$(get_arg 2)
+                    if [[ -z "$session_id" ]]; then
+                        echo "Usage: cconductor stakeholders refresh <session_id>" >&2
+                        exit 1
+                    fi
+                    local session_dir
+                    session_dir=$("$CCONDUCTOR_ROOT/src/utils/path-resolver.sh" resolve session_dir "$session_id" 2>/dev/null || true)
+                    if [[ -z "$session_dir" || ! -d "$session_dir" ]]; then
+                        echo "Error: Could not locate session directory for '$session_id'" >&2
+                        exit 1
+                    fi
+                    echo "↻ Refreshing stakeholder classifications for $session_id..."
+                    "$CCONDUCTOR_ROOT/src/utils/stakeholder-classifier.sh" "$session_dir"
+                    ;;
+                *)
+                    echo "Error: Unknown stakeholders subcommand: ${stakeholders_subcommand:-<none>}" >&2
+                    echo "Supported: refresh" >&2
+                    exit 1
+                    ;;
+            esac
+            ;;
         status)
             echo "Checking for running research sessions..."
             

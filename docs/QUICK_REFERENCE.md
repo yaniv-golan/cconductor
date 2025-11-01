@@ -34,6 +34,7 @@
 ./cconductor sessions viewer mission_123 # View research journal
 ./cconductor sessions resume mission_123 # Continue research
 ./cconductor sessions resume mission_123 --refine "Focus on X"  # Resume with refinement
+./cconductor stakeholders refresh mission_123 # Refresh stakeholder classifications
 
 # Export research journal as markdown
 SESSION_DIR=$(./src/utils/path-resolver.sh resolve session_dir)

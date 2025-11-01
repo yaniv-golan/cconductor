@@ -85,6 +85,16 @@ Need the legacy report layout without footnotes? Use `--evidence-mode collect`. 
 cat research-sessions/mission_1759420487/report/mission-report.md
 ```
 
+### Refreshing Stakeholder Classifications
+
+Run the stakeholder classifier again after you add new sources or when synthesis reports a stale classifier:
+
+```bash
+./cconductor stakeholders refresh mission_1759420487
+```
+
+The command acquires a session lock and loops until every knowledge-graph source is classified or marked for manual review.
+
 ---
 
 ### Where Files Are Stored

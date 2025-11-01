@@ -75,6 +75,7 @@ Before installing CConductor, verify you have:
   git --version
   rg --version     # ripgrep
   ```
+  > CConductor intentionally stays within a Bash + POSIX-tooling stack. Please do not install new language runtimes or large dependencies unless a maintainer explicitly requests it.
 - **Python 3**
   ```bash
   python3 --version
@@ -648,6 +649,54 @@ cat research-sessions/$(cat research-sessions/.latest)/report/mission-report.md
 ./cconductor sessions latest  # Simpler!
 ```
 
+#### Who Writes Each Session Folder?
+
+```mermaid
+graph LR
+    subgraph Session_Dir
+        Inputs["inputs/"]
+        Cache["cache/"]
+        Knowledge["knowledge/knowledge-graph.json"]
+        ArtifactsDir["artifacts/manifest.json"]
+        Logs["logs/orchestration.jsonl"]
+        Meta["meta/mission_state.json<br/>budget.json"]
+        Reports["report/mission-report.md"]
+        Viewer["viewer/"]
+        Evidence["evidence/"]
+        Work["work/"]
+    end
+    MissionInit["mission-session-init.sh"] -->|create + seed| Inputs
+    MissionInit -->|create + seed| Logs
+    MissionInit -->|create + seed| Meta
+    MissionInit -->|prepare| Work
+    HooksSetup["setup-hooks.sh"] -->|copy| HooksDir[".claude/hooks/*"]
+    HooksDir -->|used by| Hooks["pre/post tool hooks"]
+    OrchestratorNode["mission-orchestration.sh"] -->|append decisions| Logs
+    OrchestratorNode -->|atomic writes| Knowledge
+    OrchestratorNode -->|register + write| ArtifactsDir
+    OrchestratorNode -->|read configs| Meta
+    InvokeAgentNode["invoke-agent.sh"] -->|store outputs| Work
+    InvokeAgentNode -->|synthesis agent writes| Reports
+    BudgetTrackerNode["budget-tracker.sh"] -->|atomic update| Meta
+    QualitySyncNode["quality-surface-sync.sh"] -->|read gate JSON| ArtifactsDir
+    QualitySyncNode -->|merge assessments| Knowledge
+    MissionStateNode["mission-state-builder.sh"] -->|read| Knowledge
+    MissionStateNode -->|read| Meta
+    MissionStateNode -->|read| Logs
+    MissionStateNode -->|write| Meta
+    SessionReadmeNode["session-readme-generator.sh"] -->|read| Meta
+    SessionReadmeNode -->|write README.md| Reports
+    RenderReportNode["render_mission_report.sh"] -->|read| Evidence
+    RenderReportNode -->|read| ArtifactsDir
+    RenderReportNode -->|write| Reports
+    DashboardNode["dashboard.sh"] -->|read| Meta
+    DashboardNode -->|write bundle| Viewer
+    Hooks -->|append events| Logs
+    Hooks -->|write evidence.json| Evidence
+    Hooks -->|read session policies| Meta
+    WebCacheNode["web-cache.sh"] -->|read/write cache| Cache
+```
+
 ---
 
 # Part 2: Core Features
@@ -658,8 +707,80 @@ CConductor uses multiple specialized AI agents working together:
 
 ### How It Works
 
+#### Mission Execution Loop (Visual)
+
+```mermaid
+sequenceDiagram
+    participant User
+    participant CLI as cconductor
+    participant Mission as Mission CLI
+    participant Loader as mission-loader
+    participant SessionInit as mission-session-init
+    participant Orchestrator as mission-orchestration
+    participant Registry as agent-registry
+    participant SessionMgr as session-manager
+    participant Invoke as invoke-agent
+    participant Watchdog as agent-watchdog
+    participant Claude as Claude CLI
+    participant KG as knowledge-graph
+    participant Budget as budget-tracker
+    participant Artifacts as artifact-manager
+    participant State as mission-state-builder
+
+    User->>CLI: ./cconductor "objective"
+    CLI->>Mission: dispatch run/resume
+    Mission->>Loader: resolve mission profile & config
+    Mission->>SessionInit: create session tree + hooks
+    Mission->>Orchestrator: begin plan/act loop
+    Orchestrator->>Registry: fetch agent metadata
+    Orchestrator->>SessionMgr: start/resume agent session
+    SessionMgr->>Invoke: invoke agent with session context
+    Invoke->>Watchdog: launch supervisor
+    Invoke->>Claude: stream agent turn
+    Claude-->>Invoke: JSON result + session ids
+    Invoke-->>SessionMgr: persist output
+    SessionMgr-->>Orchestrator: return findings
+    Orchestrator->>Budget: record spend/time/tool use
+    Orchestrator->>KG: merge entities/claims
+    Orchestrator->>Artifacts: register artifacts
+    Orchestrator->>State: rebuild mission_state.json
+    State-->>Mission: updated metrics
+    Mission-->>CLI: reports, dashboards
+    CLI-->>User: expose outputs
 ```
-Question → Understanding → Decomposition → Research → Synthesis → Report
+
+#### Component Roles
+
+```mermaid
+graph TD
+    subgraph CLI
+        A["cconductor<br/>CLI wrapper"]
+        B["cconductor-mission.sh<br/>Mission CLI"]
+    end
+    subgraph Runtime_Services
+        C["mission-loader.sh<br/>Profile & configuration"]
+        D["mission-session-init.sh<br/>Session bootstrap"]
+        E["mission-orchestration.sh<br/>Plan/Act loop"]
+        F["agent-registry.sh<br/>Catalog"]
+        G["session-manager.sh<br/>Agent sessions"]
+        H["invoke-agent.sh<br/>Claude adapter"]
+        I["agent-watchdog.sh<br/>Heartbeat & timeout"]
+        J["budget-tracker.sh<br/>Budget ledger"]
+        K["artifact-manager.sh<br/>Artifacts registry"]
+        L["knowledge-graph.sh<br/>Shared knowledge graph"]
+        M["mission-state-builder.sh<br/>Mission metrics"]
+        N["session-readme-generator.sh<br/>Session README"]
+        O["quality-surface-sync.sh<br/>Quality gate merge"]
+    end
+    A -->|CLI flags| B -->|mission profile| C
+    B -->|session root| D -->|initialize dirs| E
+    E -->|lookup| F
+    E -->|resume/start| G -->|invoke| H -->|monitor| I
+    E -->|writes ledger| J
+    E -->|register artifacts| K
+    E -->|mutations| L
+    E -->|metrics request| M -->|summary markdown| N
+    K -->|gate results update| O -->|mutations| L
 ```
 
 **Agents involved**:
@@ -888,6 +1009,16 @@ Continue previous research to improve quality:
 - Need more citations
 
 **Note**: Session resumption improvements are ongoing
+
+### Refreshing Stakeholder Classifications
+
+New sources added to the knowledge graph after a mission starts can leave the stakeholder classifier out of date. Refresh it at any time:
+
+```bash
+./cconductor stakeholders refresh mission_1759420487
+```
+
+The refresh command acquires a lock and reruns the classifier until all knowledge-graph sources are labeled or marked for manual review. Run it whenever synthesis is blocked with a "stakeholder classifier stale" warning or after ingesting new evidence manually.
 
 ### Checking Status
 
