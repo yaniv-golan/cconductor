@@ -2,6 +2,8 @@
 # Citation Tracker Hook
 # Maintains a database of all sources accessed during research
 
+set -euo pipefail
+
 # Find project root robustly (hooks may run in various contexts)
 HOOK_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$HOOK_DIR/../../.." && pwd)"
@@ -16,6 +18,10 @@ source "$PROJECT_ROOT/src/utils/core-helpers.sh" 2>/dev/null || {
     is_valid_json() { echo "$1" | jq empty 2>/dev/null; }
 }
 
+# Source path resolver for configuration-aware locations (optional)
+# shellcheck disable=SC1091
+source "$PROJECT_ROOT/src/utils/path-resolver.sh" 2>/dev/null || true
+
 # Source shared-state for atomic operations (with fallback)
 # shellcheck disable=SC1091
 source "$PROJECT_ROOT/src/shared-state.sh" 2>/dev/null || {
@@ -24,11 +30,59 @@ source "$PROJECT_ROOT/src/shared-state.sh" 2>/dev/null || {
     atomic_json_update() { return 1; }
 }
 
-CITATIONS_DB="$HOME/.claude/research-engine/citations.json"
+CITATIONS_DB_DEFAULT="$HOME/.claude/research-engine/citations.json"
+if command -v resolve_path >/dev/null 2>&1; then
+    CITATIONS_DB=$(resolve_path "citations_db" 2>/dev/null || echo "$CITATIONS_DB_DEFAULT")
+else
+    CITATIONS_DB="$CITATIONS_DB_DEFAULT"
+fi
+
 mkdir -p "$(dirname "$CITATIONS_DB")"
 
 # Initialize citations file if it doesn't exist
 [ ! -f "$CITATIONS_DB" ] && echo "[]" > "$CITATIONS_DB"
+
+if ! command -v jq >/dev/null 2>&1; then
+    exit 0
+fi
+
+citation_apply_update() {
+    local expr="$1"
+    shift
+    local -a args=("$@")
+    local tmp="${CITATIONS_DB}.tmp"
+
+    if jq "${args[@]}" "$expr" "$CITATIONS_DB" > "$tmp" 2>/dev/null; then
+        mv "$tmp" "$CITATIONS_DB"
+        return 0
+    fi
+
+    rm -f "$tmp"
+    return 1
+}
+
+update_citations() {
+    local expr="$1"
+    shift
+    local -a args=("$@")
+
+    if type atomic_json_update &>/dev/null; then
+        atomic_json_update "$CITATIONS_DB" "${args[@]}" "$expr"
+        return $?
+    fi
+
+    if command -v with_lock >/dev/null 2>&1; then
+        with_lock "$CITATIONS_DB" citation_apply_update "$expr" "${args[@]}"
+        return $?
+    fi
+
+    if command -v with_simple_lock >/dev/null 2>&1; then
+        with_simple_lock "${CITATIONS_DB}.lock" citation_apply_update "$expr" "${args[@]}"
+        return $?
+    fi
+
+    citation_apply_update "$expr" "${args[@]}"
+}
 
 # Read and validate stdin
 input=$(cat)
@@ -43,42 +97,12 @@ TIMESTAMP=$(get_timestamp)
 # Track web sources
 if [ "$TOOL_NAME" = "WebFetch" ]; then
     URL=$(echo "$input" | jq -r '.tool_input.url')
-
-    # Add to citations database with atomic update
-    # Source shared-state if available, otherwise use basic locking
-    if type atomic_json_update &>/dev/null; then
-        # shellcheck disable=SC2016
-        atomic_json_update "$CITATIONS_DB" --arg url "$URL" --arg ts "$TIMESTAMP" \
-            '. += [{url: $url, accessed: $ts, type: "web"}]'
-    else
-        # Fallback: manual temp file with brief lock attempt
-        lock_dir="${CITATIONS_DB}.lock"
-        if mkdir "$lock_dir" 2>/dev/null; then
-            jq --arg url "$URL" --arg ts "$TIMESTAMP" \
-                '. += [{url: $url, accessed: $ts, type: "web"}]' \
-                "$CITATIONS_DB" > "$CITATIONS_DB.tmp" && mv "$CITATIONS_DB.tmp" "$CITATIONS_DB"
-            rmdir "$lock_dir"
-        fi
-    fi
-
+    # shellcheck disable=SC2016
+    update_citations '. += [{url: $url, accessed: $ts, type: "web"}]' --arg url "$URL" --arg ts "$TIMESTAMP"
 elif [ "$TOOL_NAME" = "Read" ]; then
     FILE=$(echo "$input" | jq -r '.tool_input.file_path')
-
-    # Add file to citations with atomic update
-        # shellcheck disable=SC2016
-    if type atomic_json_update &>/dev/null; then
-        atomic_json_update "$CITATIONS_DB" --arg file "$FILE" --arg ts "$TIMESTAMP" \
-            '. += [{file: $file, accessed: $ts, type: "code"}]'
-    else
-        # Fallback: manual temp file with brief lock attempt
-        lock_dir="${CITATIONS_DB}.lock"
-        if mkdir "$lock_dir" 2>/dev/null; then
-            jq --arg file "$FILE" --arg ts "$TIMESTAMP" \
-                '. += [{file: $file, accessed: $ts, type: "code"}]' \
-                "$CITATIONS_DB" > "$CITATIONS_DB.tmp" && mv "$CITATIONS_DB.tmp" "$CITATIONS_DB"
-            rmdir "$lock_dir"
-        fi
-    fi
+    # shellcheck disable=SC2016
+    update_citations '. += [{file: $file, accessed: $ts, type: "code"}]' --arg file "$FILE" --arg ts "$TIMESTAMP"
 fi
 
 exit 0

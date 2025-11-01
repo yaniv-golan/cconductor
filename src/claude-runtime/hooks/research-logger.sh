@@ -2,6 +2,8 @@
 # Research Logger Hook
 # Logs all research activities for audit trail and reproducibility
 
+set -euo pipefail
+
 # Find project root robustly (hooks may run in various contexts)
 HOOK_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$HOOK_DIR/../../.." && pwd)"
@@ -14,14 +16,36 @@ source "$PROJECT_ROOT/src/utils/core-helpers.sh" 2>/dev/null || {
     is_valid_json() { echo "$1" | jq empty 2>/dev/null; }
 }
 
+# Source path resolver for configurable locations (fallback to defaults)
+# shellcheck disable=SC1091
+source "$PROJECT_ROOT/src/utils/path-resolver.sh" 2>/dev/null || true
+
+# shellcheck disable=SC1091
+source "$PROJECT_ROOT/src/utils/json-helpers.sh" 2>/dev/null || true
+
 # Source shared-state utilities (provides get_timestamp, locking helpers)
 # shellcheck disable=SC1091
 source "$PROJECT_ROOT/src/shared-state.sh" 2>/dev/null || true
 
 # Configuration
-LOG_DIR="$HOME/.claude/research-engine"
-AUDIT_LOG="$LOG_DIR/audit.log"
+AUDIT_LOG_DEFAULT="$HOME/.claude/research-engine/audit.log"
+AUDIT_LOG_PATH="$AUDIT_LOG_DEFAULT"
+
+if command -v resolve_path >/dev/null 2>&1; then
+    resolved_audit_log=$(resolve_path "audit_log" 2>/dev/null || true)
+    if [[ -n "${resolved_audit_log:-}" ]]; then
+        AUDIT_LOG_PATH="$resolved_audit_log"
+    fi
+fi
+
+LOG_DIR="$(dirname "$AUDIT_LOG_PATH")"
+AUDIT_LOG="$AUDIT_LOG_PATH"
 QUERY_LOG="$LOG_DIR/queries.log"
+
+if ! command -v jq >/dev/null 2>&1; then
+    # jq is required for structured logging; exit gracefully if unavailable
+    exit 0
+fi
 
 umask 077
 mkdir -p "$LOG_DIR"
@@ -41,41 +65,63 @@ if [[ -z "$input" ]] || ! is_valid_json "$input"; then
     exit 0
 fi
 
-# Parse tool call information from stdin (JSON)
-TOOL_NAME=$(echo "$input" | jq -r '.tool_name')
+# Memoized parsing: emit pre-built log payloads from a single jq run
 TIMESTAMP=$(get_timestamp)
 
-# Log based on tool type (parse from $input)
-case "$TOOL_NAME" in
-    WebSearch)
-        QUERY=$(echo "$input" | jq -r '.tool_input.query')
-        append_json_line "$QUERY_LOG" "$(jq -n --arg ts "$TIMESTAMP" --arg tool "$TOOL_NAME" --arg query "$QUERY" '{timestamp:$ts, tool:$tool, query:$query}')"
-        append_json_line "$AUDIT_LOG" "$(jq -n --arg ts "$TIMESTAMP" --arg tool "$TOOL_NAME" --arg query "$QUERY" '{timestamp:$ts, event:"web_search", query:$query, tool:$tool}')"
-        ;;
+# shellcheck disable=SC2016
+while IFS=$'\t' read -r target payload_b64; do
+    [ -n "$target" ] || continue
+    payload=$(printf '%s' "$payload_b64" | base64 --decode)
+    case "$target" in
+        query)
+            append_json_line "$QUERY_LOG" "$payload"
+            ;;
+        audit)
+            append_json_line "$AUDIT_LOG" "$payload"
+            ;;
+    esac
+done < <(printf '%s' "$input" | jq -r --arg ts "$TIMESTAMP" '
+    def base: {timestamp:$ts, tool:.tool_name};
+    def record($target; $obj):
+        ($obj // empty) | [$target, (base + .) | @base64];
+    (
+        if .tool_name == "WebSearch" then
+            [
+                record("query"; {query: .tool_input.query}),
+                record("audit"; {event:"web_search", query: .tool_input.query})
+            ]
+        elif .tool_name == "WebFetch" then
+            [
+                record("query"; {url: .tool_input.url}),
+                record("audit"; {event:"web_fetch", url: .tool_input.url})
+            ]
+        elif .tool_name == "Task" then
+            [
+                record("audit"; {
+                    event: "task",
+                    agent: (.tool_input.subagent_type // ""),
+                    description: (.tool_input.description // "")
+                })
+            ]
+        elif .tool_name == "Read" then
+            [
+                record("audit"; {
+                    event: "read",
+                    file: (.tool_input.file_path // "")
+                })
+            ]
+        elif .tool_name == "Grep" then
+            [
+                record("audit"; {
+                    event: "grep",
+                    pattern: (.tool_input.pattern // ""),
+                    path: (.tool_input.path // ".")
+                })
+            ]
+        else
+            []
+        end
+    ) | .[] | @tsv
+')
 
-    WebFetch)
-        URL=$(echo "$input" | jq -r '.tool_input.url')
-        append_json_line "$QUERY_LOG" "$(jq -n --arg ts "$TIMESTAMP" --arg tool "$TOOL_NAME" --arg url "$URL" '{timestamp:$ts, tool:$tool, url:$url}')"
-        append_json_line "$AUDIT_LOG" "$(jq -n --arg ts "$TIMESTAMP" --arg tool "$TOOL_NAME" --arg url "$URL" '{timestamp:$ts, event:"web_fetch", url:$url, tool:$tool}')"
-        ;;
-
-    Task)
-        AGENT=$(echo "$input" | jq -r '.tool_input.subagent_type')
-        DESCRIPTION=$(echo "$input" | jq -r '.tool_input.description')
-        append_json_line "$AUDIT_LOG" "$(jq -n --arg ts "$TIMESTAMP" --arg tool "$TOOL_NAME" --arg agent "$AGENT" --arg desc "$DESCRIPTION" '{timestamp:$ts, event:"task", agent:$agent, description:$desc, tool:$tool}')"
-        ;;
-
-    Read)
-        FILE=$(echo "$input" | jq -r '.tool_input.file_path')
-        append_json_line "$AUDIT_LOG" "$(jq -n --arg ts "$TIMESTAMP" --arg tool "$TOOL_NAME" --arg file "$FILE" '{timestamp:$ts, event:"read", file:$file, tool:$tool}')"
-        ;;
-
-    Grep)
-        PATTERN=$(echo "$input" | jq -r '.tool_input.pattern')
-        SEARCH_PATH=$(echo "$input" | jq -r '.tool_input.path // "."')
-        append_json_line "$AUDIT_LOG" "$(jq -n --arg ts "$TIMESTAMP" --arg tool "$TOOL_NAME" --arg pattern "$PATTERN" --arg path "$SEARCH_PATH" '{timestamp:$ts, event:"grep", pattern:$pattern, path:$path, tool:$tool}')"
-        ;;
-esac
-
-# Always allow the tool to proceed
 exit 0
