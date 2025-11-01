@@ -157,7 +157,7 @@ main() {
     # Run initialization
     echo ""
     info "Running first-time setup..."
-    ./cconductor --init --yes
+    AUTO_INSTALL=true ./cconductor --init --yes
     
     echo ""
     echo "══════════════════════════════════════════════"
@@ -207,4 +207,3 @@ main() {
 
 # Run installer
 main "$@"
-

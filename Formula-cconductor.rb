@@ -17,7 +17,7 @@ class Cconductor < Formula
   depends_on "jq"
   depends_on "curl"
   depends_on "bc"
-  depends_on "ripgrep" => :recommended
+  depends_on "ripgrep"
   depends_on "node" => :recommended # For Claude Code CLI
 
   def install

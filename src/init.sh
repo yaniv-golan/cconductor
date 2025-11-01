@@ -7,6 +7,31 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
+# Flag defaults
+NON_INTERACTIVE=false
+AUTO_INSTALL_WAS_SET="${AUTO_INSTALL+x}"
+
+# Parse arguments for non-interactive mode and auto-install override
+while (($# > 0)); do
+    case "$1" in
+        --yes|-y|--non-interactive)
+            NON_INTERACTIVE=true
+            if [ -z "$AUTO_INSTALL_WAS_SET" ]; then
+                AUTO_INSTALL="true"
+            fi
+            ;;
+        --auto-install)
+            AUTO_INSTALL="true"
+            ;;
+        --no-auto-install)
+            AUTO_INSTALL="false"
+            ;;
+        *)
+            ;;
+    esac
+    shift
+done
+
 echo "========================================"
 echo "CConductor Setup"
 echo "========================================"
@@ -23,7 +48,7 @@ echo ""
 
 # Step 1: Check dependencies
 echo "1. Checking dependencies..."
-echo "   (claude, python3, jq, curl, bash, bc)"
+echo "   (claude, python3, jq, curl, bash, bc, ripgrep)"
 echo ""
 
 missing_deps=()
@@ -119,21 +144,16 @@ if ! command -v bc &> /dev/null; then
     missing_deps+=("bc")
 fi
 
-# Check for optional but recommended: ripgrep (for Search tool)
+# Check for ripgrep (required for search tooling)
 if ! command -v rg &> /dev/null; then
-    echo ""
-    echo "   ⚠️  Recommended: ripgrep not found"
-    echo "      Many agents use the Search tool which requires ripgrep."
-    echo ""
-    echo "      Install with:"
-    echo "        macOS:        brew install ripgrep"
-    echo "        Ubuntu/Debian: sudo apt install ripgrep"
-    echo "        Arch Linux:    sudo pacman -S ripgrep"
-    echo ""
-    echo "      Without ripgrep, Search tool may not work properly."
-    echo "      Press Enter to continue without ripgrep, or Ctrl+C to cancel and install it first."
-    echo ""
-    read -r
+    echo "   ✗ ripgrep (rg) not found" >&2
+    echo "" >&2
+    echo "   Install ripgrep (fast project-wide search utility):" >&2
+    echo "     macOS:   brew install ripgrep" >&2
+    echo "     Linux:   sudo apt install ripgrep  (or pacman -S ripgrep)" >&2
+    echo "     Windows: Use WSL2 and install via apt" >&2
+    echo "" >&2
+    missing_deps+=("ripgrep")
 fi
 
 # Function to auto-install dependencies
@@ -189,8 +209,14 @@ if [ ${#missing_deps[@]} -gt 0 ]; then
     # Check if we should offer auto-install
     # Skip auto-install if --no-auto-install flag is set
     if [ "${AUTO_INSTALL:-true}" = "true" ]; then
-        echo "Would you like to install missing dependencies automatically? [Y/n]"
-        read -r response
+        response=""
+        if [ "$NON_INTERACTIVE" = "true" ]; then
+            echo "Auto-installing missing dependencies (--yes provided)."
+            response="y"
+        else
+            echo "Would you like to install missing dependencies automatically? [Y/n]"
+            read -r response
+        fi
         
         case "${response:-y}" in
             [Yy]|[Yy][Ee][Ss]|"")
@@ -230,12 +256,14 @@ if [ ${#missing_deps[@]} -gt 0 ]; then
 fi
 
 # Verify all dependencies are now available
-if command -v jq &> /dev/null && command -v curl &> /dev/null && command -v bash &> /dev/null && command -v bc &> /dev/null; then
+if command -v claude &> /dev/null && command -v python3 &> /dev/null && command -v jq &> /dev/null && command -v curl &> /dev/null && command -v bash &> /dev/null && command -v bc &> /dev/null && command -v rg &> /dev/null; then
     echo "   ✓ claude (Claude Code CLI) - REQUIRED"
+    echo "   ✓ python3 (knowledge graph tooling)"
     echo "   ✓ jq (JSON processor)"
     echo "   ✓ curl (HTTP client)"
     echo "   ✓ bash (shell)"
     echo "   ✓ bc (calculator for math operations)"
+    echo "   ✓ ripgrep (fast search utility)"
 else
     echo "   ✗ Dependencies still missing after installation attempt"
     exit 1

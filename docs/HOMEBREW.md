@@ -40,15 +40,14 @@ EOF
 export ANTHROPIC_API_KEY="your_anthropic_api_key_here"
 ```
 
-### Optional Dependencies
+### Shell Dependencies (Required)
 
 ```bash
-# Install ripgrep (recommended for Search tool)
-brew install ripgrep
-
-# Upgrade bash to 4.0+ (macOS ships with 3.2)
-brew install bash
+# CConductor relies on bash, jq, curl, bc, and ripgrep.
+brew install bash jq curl bc ripgrep
 ```
+
+> macOS ships with bash 3.2. Homebrew's `bash` formula installs the required 4.x+ runtime. We intentionally keep the runtime stack to portable shell tooling; introduce additional languages only with maintainer approval.
 
 ## Usage
 
@@ -138,4 +137,3 @@ Data directories follow standard paths:
 - [Installation Guide](../README.md#installation)
 - [User Guide](USER_GUIDE.md)
 - [Troubleshooting](TROUBLESHOOTING.md)
-

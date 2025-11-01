@@ -30,6 +30,7 @@ mission_1760000000000000000/
 ├── cache/                      # Web/search cache reused within the mission
 ├── evidence/                   # Footnote bundles, bibliography exports, QA data
 ├── inputs/                     # Original prompt, attachments, supplemental files
+├── argument/                   # Argument Event Graph logs, materialised graph, and quality metrics
 ├── knowledge/knowledge-graph.json   # Consolidated entities, claims, gaps, sources
 ├── library/                    # Mission-scoped Library Memory digests
 ├── logs/                       # Event stream, quality gate diagnostics, errors
@@ -164,6 +165,18 @@ Current State:
   • Claims: 78
   • Unresolved gaps: 3
 ```
+
+### Regenerating Missing Artifacts
+
+If the session manifest flags missing Write-tool outputs while resuming:
+
+1. Identify the failing slot via `jq '.artifact_contract' meta/session-manifest.json`.
+2. Re-run the responsible agent (or craft a refinement) so it regenerates the required file—most commonly `artifacts/<agent>/output.md`.
+3. After the artifact exists, validate in-place with:
+   ```bash
+   bash -lc 'source src/utils/artifact-manager.sh; artifact_finalize_manifest <session_dir> <agent>'
+   ```
+4. Resume the mission; the contract status should report `present`.
 
 ### Step 3: Resume Execution
 
@@ -409,6 +422,27 @@ Future enhancement (planned for future release):
 ```bash
 ./cconductor "question" --name my-research-2024
 ./cconductor resume my-research-2024
+```
+
+### Regenerating Synthesis Artifacts
+
+If a resumed session reports malformed or missing synthesis artifacts (for example, the quality gate fails because `completion.json` or `coverage.json` is out of schema), rebuild the required files with the regeneration helper:
+
+```bash
+./src/utils/regenerate-synthesis-artifacts.sh --force research-sessions/mission_1234567890
+```
+
+The script:
+
+- Recreates schema-compliant skeletons for `completion.json`, `key-findings.json`, `coverage.json`, and `confidence-scores.json`
+- Pulls iteration counts, claim totals, and other safe defaults from the current knowledge graph when available
+- Overwrites existing files only when `--force` is supplied (omit the flag to keep existing data)
+
+After regeneration, rerun the applicable quality gate or resume the mission:
+
+```bash
+./tests/test-quality-gate.sh            # optional local verification
+./cconductor resume mission_1234567890  # continue the mission
 ```
 
 ## Advanced Usage

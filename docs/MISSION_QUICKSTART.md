@@ -21,6 +21,48 @@ An autonomous agent that:
 - Manages budget and constraints
 - Generates comprehensive reports
 
+#### Mission Execution Loop (Visual)
+
+```mermaid
+sequenceDiagram
+    participant User
+    participant CLI as cconductor
+    participant Mission as Mission CLI
+    participant Loader as mission-loader
+    participant SessionInit as mission-session-init
+    participant Orchestrator as mission-orchestration
+    participant Registry as agent-registry
+    participant SessionMgr as session-manager
+    participant Invoke as invoke-agent
+    participant Watchdog as agent-watchdog
+    participant Claude as Claude CLI
+    participant KG as knowledge-graph
+    participant Budget as budget-tracker
+    participant Artifacts as artifact-manager
+    participant State as mission-state-builder
+
+    User->>CLI: ./cconductor "objective"
+    CLI->>Mission: dispatch run/resume
+    Mission->>Loader: resolve mission profile & config
+    Mission->>SessionInit: create session tree + hooks
+    Mission->>Orchestrator: start plan/act loop
+    Orchestrator->>Registry: fetch agent metadata
+    Orchestrator->>SessionMgr: start/resume agent session
+    SessionMgr->>Invoke: invoke agent with session context
+    Invoke->>Watchdog: launch supervisor
+    Invoke->>Claude: stream agent turn
+    Claude-->>Invoke: JSON result + session ids
+    Invoke-->>SessionMgr: persist output
+    SessionMgr-->>Orchestrator: return findings
+    Orchestrator->>Budget: record spend/time/tool use
+    Orchestrator->>KG: merge entities/claims
+    Orchestrator->>Artifacts: register artifacts
+    Orchestrator->>State: rebuild mission_state.json
+    State-->>Mission: updated metrics
+    Mission-->>CLI: reports, dashboards
+    CLI-->>User: expose outputs
+```
+
 ### Agents
 Specialized AI agents with defined capabilities:
 - Discovered dynamically from project + user directories
@@ -124,8 +166,14 @@ Outputs in session directory:
 - `logs/orchestration.jsonl` - Decision log with rationale
 - `logs/events.jsonl` - Event stream
 - `artifacts/manifest.json` - All artifacts produced
+- `meta/session-manifest.json` - Canonical paths, agent manifest summaries, and artifact contract status
+- `artifacts/<agent>/output.md` - Markdown digests emitted via the Write tool for every contract-bearing agent
 - `knowledge/knowledge-graph.json` - Entities, claims, handoffs
 - `meta/session.json` - Session metadata and budget tracking
+- `viewer/dashboard-metrics.json` - Aggregated performance metrics (see `artifact_contract` block for manifest health)
+- `work/<agent>/manifest.actual.json` - Per-agent artifact validation results (generated automatically; do not edit manually)
+
+Use `jq '.artifact_contract' viewer/dashboard-metrics.json` to confirm that all required artifacts passed validation. If a manifest fails, inspect the corresponding `work/<agent>/manifest.actual.json` entry and re-run the agent with a refinement that targets the missing slot.
 
 ## Creating Custom Missions
 

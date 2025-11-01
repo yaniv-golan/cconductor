@@ -468,6 +468,23 @@ The most effective way to improve quality is to continue researching:
 
 ---
 
+### Method 1B: Resolve Artifact Contract Failures
+
+If the `artifact_contract` block in `viewer/dashboard-metrics.json` shows failed evaluations, quality scoring will stall until the missing deliverables are fixed.
+
+**Checklist**:
+
+1. Run `jq '.artifact_contract' viewer/dashboard-metrics.json` to see which agent missed a slot.
+2. Inspect `work/<agent>/manifest.actual.json` for `status: "missing"` or `messages` describing the problem.
+3. Resume the mission and instruct the agent to regenerate the specific slot (e.g., “Recreate `quality_remediation_json` summarizing the gaps flagged by the gate”).
+4. Re-run the agent or mission step; the manifest should flip to `status: "present"`.
+
+Once all required artifacts pass validation, quality gating will automatically pull the new data into the report.
+
+> **Write-tool first:** All contract-bearing agents now publish their deliverables via the Write tool (for example `artifacts/<agent>/output.md`). `.result` text remains informational only—dashboards, downstream agents, and quality gates rely on the validated files captured in `manifest.actual.json`.
+
+---
+
 ### Method 2: More Specific Questions
 
 Quality improves with more specific, focused questions.

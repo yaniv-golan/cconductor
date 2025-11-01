@@ -87,6 +87,8 @@ rg --version          # ripgrep for jq lint automation
 bc --version
 ```
 
+> We intentionally keep the project Bash-first. Please do not introduce new runtimes or external dependencies (Python packages, compiled binaries, etc.) without explicit maintainer approval.
+
 ### Installing Development Tools
 
 **ShellCheck** (required for pre-commit hooks and CI):

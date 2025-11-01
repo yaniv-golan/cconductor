@@ -13,6 +13,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Mission-scoped stakeholder policies and resolvers for every built-in mission, plus global defaults under `config/stakeholder-policy.default.json` and `config/stakeholder-resolver.default.json`.
 - Quality gate regression coverage that seeds classification artifacts so the new stakeholder checks remain stable.
 - Research Journal Viewer preflight dashboard that launches as soon as orchestration initializes, surfaces domain heuristics / prompt parsing / stakeholder counts, and streams text artifacts (JSON, JSONL, Markdown, logs) through blob-backed tabs with automatic pretty-printing.
+- Argument Event Graph pipeline with event writer (`src/utils/argument-writer.sh`), materialiser (`src/utils/materialize-argument-graph.sh`), AIF exporter (`src/utils/export-aif.sh`), claim ID migrator (`src/utils/migrate-claim-ids.sh`), configuration tables (`config/schemes.jsonld`, `config/units.json`, `config/currency.json`, `config/public-suffix.json`, `config/url-tracker-keys.json`), agent streaming contract updates, documentation set, and an end-to-end regression test (`tests/test-argument-event-graph.sh`).
+- Argument Contract Claude skill (`src/claude-runtime/skills/argument-contract/`) with deterministic ID/envelope helper (`src/utils/argument-events.sh`), updated agent prompts (academic researcher, web researcher, pdf analyzer, market analyzer, fact checker, quality remediator) to stream `argument_event` payloads via the skill, and refreshed documentation/rollout matrices.
+- Session manifest pipeline (`src/utils/session-manifest-builder.sh`) that regenerates `meta/session-manifest.json` before every orchestrator turn, feeds the orchestrator prompt with a curated manifest snapshot, and ships with documentation (`docs/internal/session-manifest-schema.md`) plus regression coverage (`tests/test-session-manifest.sh`).
+- Write-tool artifact contract system with per-agent expected manifests (`config/artifact-contracts/`), schema catalog (`config/schemas/artifacts/`), validator test (`tests/test-artifact-contracts.sh`), and fixture-backed KG coverage to keep manifest ingestion stable.
 
 ### Changed
 
@@ -22,10 +26,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Dashboard viewer assets now live under session-prefixed URLs (`http://localhost:<port>/<session_id>/...`), `dashboard.sh` serves the mission parent directory, and the HTML template injects session metadata so all file links remain stable across multiple concurrent viewers.
 - Updated the User Guide and Troubleshooting guide to explain the new viewer URL pattern, preflight card, and debugging steps when links 404 or tabs open blank.
 - Split public-facing docs from contributor references by moving maintainer material into `docs/contributers/` (with an argument subfolder) and refreshed internal links so the published guide set stays streamlined.
+- Mission state builder now emits knowledge-graph and orchestration log paths relative to the session root (with absolute fallbacks for legacy tooling) so orchestrator prompts and agent reads remain sandbox-friendly.
+- Streaming handler tolerates missing terminal `result` events by assembling partial JSON/text deltas and logging a warning, preventing orchestrator stalls during Claude CLI streaming runs.
+- Agent invocation now enforces artifact contracts (`work/<agent>/manifest.actual.json`), logs `artifact_contract` metrics to events/dashboards, updates mission/orchestrator prompts to reflect the Write-tool-first workflow, and ships updated docs (Quick Start, Troubleshooting, Quality Guide) covering validation and bypass modes.
 
 ### Fixed
 
 - Trimmed noisy update notifications in `version-manager.sh` so resume/startup logs only display the latest available version tag.
+- Fixed non-interactive installs hanging on the ripgrep prompt by teaching `src/init.sh` to honor `--yes` and wiring installers/updates to pass the flag through.
 
 ## [0.4.1] - 2025-10-29
 

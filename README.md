@@ -25,7 +25,7 @@ CConductor is a multi-agent AI research system that conducts comprehensive, adap
 ### Prerequisites
 - **Claude Code CLI access** – You need a Claude Pro/Max subscription or API credits plus the Claude Code CLI (run `claude`, then `/status` to confirm your account). Install via the native script (`curl -fsSL https://claude.ai/install.sh | bash`) or, if you already have Node.js 18+, `npm install -g @anthropic-ai/claude-code`.
 - **Supported platforms** – macOS 10.15+, Linux distros with GNU coreutils (Ubuntu 20.04+, Debian 10+, Fedora 33+), or Windows via WSL2.
-- **System packages** – Bash ≥ 4.0, `git`, `jq`, `curl`, `bc`, and `ripgrep`. The quick-start commands below install them for you.
+- **System packages** – Bash ≥ 4.0, `git`, `jq`, `curl`, `bc`, and `ripgrep`. The quick-start commands below install them for you. We deliberately keep the runtime stack to portable shell tooling; introduce new languages or heavy dependencies only with explicit maintainer approval.
 - **Python 3** – Used for knowledge graph tooling (pre-installed on most systems).
 - **Optional (installed in quick start):** `dialog` for the full interactive TUI experience.
 

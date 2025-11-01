@@ -501,6 +501,42 @@ echo $HTTPS_PROXY
 
 ---
 
+### Artifact Contract Validation Failure
+
+**Symptoms**:
+
+- Agent output looks correct but orchestrator reports `✗ Artifact contract validation failed for <agent>`
+- Dashboard shows `artifact_contract.failed` counts increasing
+- `work/<agent>/manifest.actual.json` lists `status: "missing"` or `status: "invalid"`
+
+**What it means**: The Write-tool deliverables required by the agent's contract were not published or failed schema validation. Orchestrator now fails closed to keep downstream pipelines consistent.
+
+**How to diagnose**:
+
+```bash
+# Inspect latest manifest summary (per agent)
+jq '.summary' work/<agent>/manifest.actual.json
+
+# Quick view of overall status
+jq '.artifact_contract' viewer/dashboard-metrics.json
+
+# Identify missing slots
+jq '.summary.missing_slots' work/<agent>/manifest.actual.json
+```
+
+**Recovery steps**:
+
+1. **Read the manifest entry**: Note the `slot` and `messages` field indicating what is missing or invalid.
+2. **Refine the agent prompt**: Re-run the agent and explicitly ask for the missing slot (e.g., “Regenerate `summary_markdown` including citation list”).
+3. **Validate locally** (optional): Use `artifact_finalize_manifest <session_dir> <agent>` to regenerate the manifest after manual adjustments.
+4. **Bypass only for legacy missions**: Set `CCONDUCTOR_ALLOW_CONTRACT_BYPASS=1` when resuming sessions created before the manifest rollout. This logs an audit event and should not be used for new missions.
+
+**Prevention**:
+- When updating an agent prompt or tooling, update the corresponding contract in `config/artifact-contracts/<agent>/manifest.expected.json` and run `./tests/test-artifact-contracts.sh`.
+- Keep fixtures under `tests/data/artifact-contracts/` aligned with actual outputs to catch regressions early.
+
+---
+
 ### Research Hangs or Freezes
 
 **Symptoms**:

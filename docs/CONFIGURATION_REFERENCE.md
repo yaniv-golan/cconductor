@@ -1475,6 +1475,7 @@ export LOG_LEVEL=debug
 - `RESEARCH_MODE` - Research mode
 - `LOG_LEVEL` - Logging level
 - `MAX_PARALLEL_AGENTS` - Agent parallelism
+- `CCONDUCTOR_REQUIRE_INDEPENDENT_SOURCES` - Default `0`. When set to `1`/`true`, dedupes sources by eTLD+1 during knowledge-graph ingestion and blocks synthesis until each claim has the required number of independent domains.
 
 ---
 
