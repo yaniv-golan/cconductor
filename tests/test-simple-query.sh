@@ -6,6 +6,11 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
 
+# shellcheck disable=SC1091
+source "$PROJECT_ROOT/src/utils/core-helpers.sh"
+
+require_command python3 "brew install python3" "apt install python3" || exit 1
+
 echo "=== Testing Simple Query ==="
 
 # Test question

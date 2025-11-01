@@ -1304,7 +1304,7 @@ fi
 
 ---
 
-### ⚠️ L5: Test harness relies on python3 without guard
+### ✅ L5: Test harness relies on python3 without guard
 
 **File:** `tests/test-simple-query.sh:31-43`
 
@@ -1337,6 +1337,10 @@ require_command python3 "brew install python3" "apt install python3" || exit 1
 **Alternative:** Rewrite the Python logic in pure bash using stat/ls commands.
 
 **Estimated effort:** 30 minutes
+
+**Implementation Update (2025-11-01):**
+- Updated `tests/test-simple-query.sh` to source `core-helpers.sh` and invoke `require_command python3`, providing actionable install guidance when Python is missing.
+- Re-verified the script with `shellcheck tests/test-simple-query.sh` to ensure the new sourcing is lint-clean.
 
 ---
 
