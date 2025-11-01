@@ -34,6 +34,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Trimmed noisy update notifications in `version-manager.sh` so resume/startup logs only display the latest available version tag.
 - Fixed non-interactive installs hanging on the ripgrep prompt by teaching `src/init.sh` to honor `--yes` and wiring installers/updates to pass the flag through.
+- When the provider reports "Session limit reached", `invoke-agent.sh` now logs the failure, emits a friendly CLI warning, and the mission halts immediately instead of falling back to defaults or continuing with a broken run.
 
 ## [0.4.1] - 2025-10-29
 

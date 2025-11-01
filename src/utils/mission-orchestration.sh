@@ -86,6 +86,22 @@ source "$UTILS_DIR/session-manager.sh"
 
 MISSION_ORCH_BASE_DIR="$(pwd)"
 
+mission_abort_due_to_provider_limit() {
+    local session_dir="$1"
+    local sentinel="$session_dir/meta/provider-session-limit.flag"
+    local provider_message="Session limit reached. Wait for the provider reset window before resuming."
+
+    if [[ -f "$sentinel" ]]; then
+        provider_message=$(<"$sentinel")
+        rm -f "$sentinel" 2>/dev/null || true
+    fi
+
+    echo ""
+    echo "⚠ Mission paused: $provider_message" >&2
+    echo "   Resume after the reset with: ./cconductor resume \"$session_dir\"" >&2
+    exit 1
+}
+
 rel_path_for_display() {
     local raw_path="$1"
     local session_dir="$2"
@@ -1043,6 +1059,9 @@ EOF
     else
         local exit_code=$invocation_status
         echo "  ✗ $agent_name invocation failed" >&2
+        if [[ -f "$session_dir/meta/provider-session-limit.flag" ]]; then
+            mission_abort_due_to_provider_limit "$session_dir"
+        fi
         return $exit_code
     fi
 }
@@ -2326,6 +2345,9 @@ run_mission_orchestration() {
         if command -v needs_prompt_parsing &>/dev/null && needs_prompt_parsing "$session_dir"; then
             if command -v parse_prompt &>/dev/null; then
                 if ! parse_prompt "$session_dir"; then
+                    if [[ -f "$session_dir/meta/provider-session-limit.flag" ]]; then
+                        mission_abort_due_to_provider_limit "$session_dir"
+                    fi
                     log_warn "Prompt parsing failed before domain heuristics; using original prompt"
                 fi
             fi
@@ -2365,6 +2387,9 @@ EOF
                 echo "  ⚠ Domain heuristics agent did not produce expected output"
             fi
         else
+            if [[ -f "$session_dir/meta/provider-session-limit.flag" ]]; then
+                mission_abort_due_to_provider_limit "$session_dir"
+            fi
             echo "  ⚠ Domain heuristics agent failed, using defaults"
         fi
     else
@@ -2411,6 +2436,9 @@ EOF
                 if parse_prompt "$session_dir"; then
                     echo ""
                 else
+                    if [[ -f "$session_dir/meta/provider-session-limit.flag" ]]; then
+                        mission_abort_due_to_provider_limit "$session_dir"
+                    fi
                     log_warn "Prompt parsing fallback during iteration failed; continuing with existing objective"
                 fi
             fi
@@ -2458,6 +2486,10 @@ EOF
         orch_start_time=$(get_epoch)
         invoke_mission_orchestrator "$session_dir" "$context_json" > "$orchestrator_output_file"
         orchestrator_output=$(cat "$orchestrator_output_file")
+
+        if [[ -f "$session_dir/meta/provider-session-limit.flag" ]]; then
+            mission_abort_due_to_provider_limit "$session_dir"
+        fi
         
         # Record orchestrator cost in budget
         local orchestrator_cost

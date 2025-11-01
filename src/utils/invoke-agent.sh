@@ -12,6 +12,51 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
+_notify_provider_session_limit() {
+    local output_file="$1"
+    local session_dir="${2:-}"
+    local agent_name="${3:-unknown-agent}"
+    local use_streaming_flag="${4:-0}"
+
+    if [[ ! -f "$output_file" ]]; then
+        return 1
+    fi
+
+    local result_is_error
+    result_is_error=$(safe_jq_from_file "$output_file" '.is_error // false' "false" "$session_dir" "invoke_agent.provider.is_error")
+    if [[ "$result_is_error" != "true" ]]; then
+        return 1
+    fi
+
+    local provider_message
+    provider_message=$(safe_jq_from_file "$output_file" '.result // "Session limit reached."' "Session limit reached." "$session_dir" "invoke_agent.provider.message")
+    local streaming_flag
+    streaming_flag=$([[ "$use_streaming_flag" -eq 1 ]] && echo true || echo false)
+
+    if [[ -n "$session_dir" ]] && command -v log_system_error &>/dev/null; then
+        log_system_error "$session_dir" "provider_session_limit" \
+            "Claude session limit reached for agent $agent_name" \
+            "message=$(printf '%s' "$provider_message" | tr $'\n' ' ') streaming=$streaming_flag"
+    fi
+    if [[ -n "$session_dir" ]] && command -v log_event &>/dev/null; then
+        local provider_event
+        provider_event=$(jq -n \
+            --arg agent "$agent_name" \
+            --arg message "$provider_message" \
+            --argjson streaming "$([[ "$streaming_flag" == "true" ]] && echo true || echo false)" \
+            '{agent:$agent, message:$message, streaming:$streaming}')
+        log_event "$session_dir" "provider_session_limit" "$provider_event" || true
+    fi
+    if [[ -n "$session_dir" ]]; then
+        local sentinel="$session_dir/meta/provider-session-limit.flag"
+        mkdir -p "$(dirname "$sentinel")"
+        printf '%s\n' "$provider_message" > "$sentinel" 2>/dev/null || true
+    fi
+
+    echo "⚠ $agent_name aborted: $provider_message" >&2
+    return 0
+}
+
 # Source core helpers first
 # shellcheck disable=SC1091
 source "$SCRIPT_DIR/core-helpers.sh"
@@ -1270,34 +1315,7 @@ invoke_agent_v2() {
             jq 'keys' "$output_file" >&2
             return 1
         fi
-
-        # Detect provider-imposed session limits surfaced as error envelopes
-        local result_is_error
-        result_is_error=$(safe_jq_from_file "$output_file" '.is_error // false' "false" "$session_dir" "invoke_agent.result.is_error")
-        if [[ "$result_is_error" == "true" ]]; then
-            local provider_message
-            provider_message="$result"
-            local streaming_flag
-            streaming_flag=$([[ "$use_streaming" -eq 1 ]] && echo true || echo false)
-
-            if [[ -n "$session_dir" ]]; then
-                if command -v log_system_error &>/dev/null; then
-                    log_system_error "$session_dir" "provider_session_limit" \
-                        "Claude session limit reached for agent $agent_name" \
-                        "message=$(printf '%s' "$provider_message" | tr '\n' ' ') streaming=$streaming_flag"
-                fi
-                if command -v log_event &>/dev/null; then
-                    local provider_event
-                    provider_event=$(jq -n \
-                        --arg agent "$agent_name" \
-                        --arg message "$provider_message" \
-                        --argjson streaming "$streaming_flag" \
-                        '{agent:$agent, message:$message, streaming:$streaming}')
-                    log_event "$session_dir" "provider_session_limit" "$provider_event" || true
-                fi
-            fi
-
-            echo "⚠ $agent_name aborted: $provider_message" >&2
+        if _notify_provider_session_limit "$output_file" "$session_dir" "$agent_name" "$use_streaming"; then
             return 1
         fi
         
@@ -1569,12 +1587,13 @@ invoke_agent_v2() {
             friendly_name="${agent_name//-/ }"
         fi
         
-        # In non-verbose mode, add newline before message (to end progress dots line)
+        if _notify_provider_session_limit "$output_file" "$session_dir" "$agent_name" "$use_streaming"; then
+            return 1
+        fi
+
         if [[ "${CCONDUCTOR_VERBOSE:-0}" != "1" ]]; then
             echo "" >&2
         fi
-        
-        # Note: Exit code 124/143 (timeout) is handled earlier, so this handles other failures
         echo "✗ $friendly_name failed with code $exit_code" >&2
         return 1
     fi
@@ -1596,7 +1615,8 @@ if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
             check_claude_cli && echo "✓ Claude CLI is available"
             ;;
         *)
-            cat <<EOF
+            {
+                cat <<'EOF'
 Usage: $0 <command> [args...]
 
 Commands:
@@ -1648,6 +1668,8 @@ Validation:
   - Tool restrictions: test-04, test-05, test-06
   - JSON extraction: diagnostic-json-structure.sh
 EOF
+            } >&2
+            exit 1
             ;;
     esac
 fi

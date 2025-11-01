@@ -38,6 +38,7 @@ needs_prompt_parsing() {
 parse_prompt() {
     local session_dir="$1"
     local session_file="$session_dir/meta/session.json"
+    local sentinel_file="$session_dir/meta/provider-session-limit.flag"
     
     echo "→ Parsing research prompt..." >&2
     
@@ -154,6 +155,10 @@ parse_prompt() {
         echo "  ⚠ Warning: Could not extract parsed results, using original prompt" >&2
     else
         echo "  ⚠ Warning: Prompt parsing failed, using original prompt" >&2
+    fi
+
+    if [[ -f "$sentinel_file" ]]; then
+        return 2
     fi
     
     # Mark as parsed even if it failed (to avoid retrying)
