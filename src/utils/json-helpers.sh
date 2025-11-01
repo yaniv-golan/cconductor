@@ -15,6 +15,90 @@ source "$SCRIPT_DIR/core-helpers.sh"
 # shellcheck disable=SC1091
 source "$PROJECT_ROOT/src/shared-state.sh"
 
+JSON_PARSER_SCRIPT="$SCRIPT_DIR/json-parser.sh"
+if [ -f "$JSON_PARSER_SCRIPT" ]; then
+    # shellcheck disable=SC1090
+    source "$JSON_PARSER_SCRIPT"
+else
+    parse_json_from_markdown() {
+        local text="$1"
+        text=$(echo "$text" | sed -e 's/^```json$//' -e 's/^```$//')
+        local parsed_json
+        parsed_json=$(echo "$text" | awk '
+            BEGIN { depth=0; started=0 }
+            {
+                line=$0
+                if (!started) {
+                    if (match(line, /[{[]/)) {
+                        line=substr(line, RSTART)
+                        started=1
+                    } else {
+                        next
+                    }
+                }
+                print line
+                open_braces = gsub(/{/, "{", line)
+                close_braces = gsub(/}/, "}", line)
+                open_brackets = gsub(/\[/, "[", line)
+                close_brackets = gsub(/\]/, "]", line)
+                depth += (open_braces - close_braces) + (open_brackets - close_brackets)
+                if (depth == 0) exit
+            }
+        ' | sed '/^```$/d')
+        echo "$parsed_json"
+    }
+
+    extract_json_from_agent_output() {
+        local output_file="$1"
+        local allow_non_json="${2:-false}"
+        local result
+        result=$(jq -r '.result // empty' "$output_file" 2>/dev/null)
+        if [[ -z "$result" ]]; then
+            if [[ "$allow_non_json" == "true" ]]; then
+                cat "$output_file" 2>/dev/null || echo ""
+                return 0
+            fi
+            return 1
+        fi
+        local raw_result
+        if [[ "$result" == \"*\" ]] && echo "$result" | jq empty 2>/dev/null; then
+            raw_result=$(echo "$result" | jq -r '.')
+        else
+            raw_result="$result"
+        fi
+        if echo "$raw_result" | jq empty 2>/dev/null; then
+            echo "$raw_result"
+            return 0
+        fi
+        local extracted
+        extracted=$(parse_json_from_markdown "$raw_result")
+        if [[ -n "$extracted" ]] && echo "$extracted" | jq empty 2>/dev/null; then
+            echo "$extracted"
+            return 0
+        fi
+        if [[ "$allow_non_json" == "true" ]]; then
+            echo "$raw_result"
+            return 0
+        fi
+        return 1
+    }
+
+    extract_json_from_text() {
+        local text="$1"
+        if echo "$text" | jq empty 2>/dev/null; then
+            echo "$text"
+            return 0
+        fi
+        local extracted
+        extracted=$(parse_json_from_markdown "$text")
+        if [[ -n "$extracted" ]] && echo "$extracted" | jq empty 2>/dev/null; then
+            echo "$extracted"
+            return 0
+        fi
+        return 1
+    }
+fi
+
 # Safely merge two JSON files
 # Usage: json_merge_files file1.json file2.json output.json [jq_merge_expression]
 json_merge_files() {
@@ -478,3 +562,6 @@ export -f jq_slurp_array
 export -f jq_read_object
 export -f safe_jq_from_json
 export -f safe_jq_from_file
+export -f parse_json_from_markdown
+export -f extract_json_from_agent_output
+export -f extract_json_from_text

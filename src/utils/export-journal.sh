@@ -10,9 +10,16 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
+# Source core helpers first per repository standards
+# shellcheck disable=SC1091
+source "$SCRIPT_DIR/core-helpers.sh"
+# shellcheck disable=SC1091
+source "$SCRIPT_DIR/json-helpers.sh"
+# shellcheck disable=SC1091
+source "$SCRIPT_DIR/file-helpers.sh"
+
 # shellcheck disable=SC1091
 source "$SCRIPT_DIR/bash-runtime.sh"
-
 ensure_modern_bash "$@"
 resolve_cconductor_bash_runtime >/dev/null
 
@@ -32,23 +39,8 @@ cleanup_export_journal() {
 
 trap cleanup_export_journal EXIT
 
-# Source JSON parser for robust JSON extraction
-# shellcheck disable=SC1091
-source "$SCRIPT_DIR/json-parser.sh" 2>/dev/null || {
-    # Fallback if json-parser not available - use manual extraction
-    extract_json_from_text() {
-        local text="$1"
-        # shellcheck disable=SC2016
-        echo "$text" | sed 's/^```json\s*//;s/\s*```$//'
-    }
-}
-
-# shellcheck disable=SC1091
-source "$SCRIPT_DIR/core-helpers.sh"
 # shellcheck disable=SC1091
 source "$SCRIPT_DIR/date-helpers.sh"
-# shellcheck disable=SC1091
-source "$SCRIPT_DIR/json-helpers.sh"
 
 safe_export_journal_from_file() {
     local file_path="$1"
@@ -243,22 +235,32 @@ get_findings_stats() {
         echo "0"
         return
     fi
-    
+
+    local -a findings=()
+    while IFS= read -r -d '' file; do
+        findings+=("$file")
+    done < <(find "$session_dir/work" -name "findings-*.json" -type f -print0 2>/dev/null)
+
+    if ((${#findings[@]} == 0)); then
+        echo "0"
+        return
+    fi
+
     case "$stat_type" in
         entities)
-            find "$session_dir/work" -name "findings-*.json" -type f -print0 2>/dev/null | \
-                xargs -0 jq -r '[.entities_discovered // [] | .[]] | length' 2>/dev/null | \
+            jq -r '[.entities_discovered // [] | .[]] | length' "${findings[@]}" 2>/dev/null | \
                 awk '{sum+=$1} END {print sum+0}'
             ;;
         claims)
-            find "$session_dir/work" -name "findings-*.json" -type f -print0 2>/dev/null | \
-                xargs -0 jq -r '[.claims // [] | .[]] | length' 2>/dev/null | \
+            jq -r '[.claims // [] | .[]] | length' "${findings[@]}" 2>/dev/null | \
                 awk '{sum+=$1} END {print sum+0}'
             ;;
         sources)
-            find "$session_dir/work" -name "findings-*.json" -type f -print0 2>/dev/null | \
-                xargs -0 jq -r '.claims[]?.sources[]?.url // empty' 2>/dev/null | \
+            jq -r '.claims[]?.sources[]?.url // empty' "${findings[@]}" 2>/dev/null | \
                 sort -u | wc -l | tr -d ' '
+            ;;
+        *)
+            echo "0"
             ;;
     esac
 }
