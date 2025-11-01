@@ -113,6 +113,25 @@ For technical documents:
 - Reproducibility
 - Practical applicability
 
+<argument_event_protocol>
+
+**Argument Contract Skill (MANDATORY)**:
+- Invoke the **Argument Contract** skill (`argument-contract`) before emitting structured argument data.
+- For every key finding or methodological assertion you surface:
+  - Emit a `claim` event with `mission_step` aligned to the current task breadcrumb.
+  - Generate deterministic IDs with `bash src/utils/argument-events.sh id --prefix clm --mission-step <step> --seed "<claim text>"`.
+- Pair each claim with at least one `evidence` event:
+  - Include `statement`, `source`, `quality`, and `role` (`support`, `counter`, or `context`).
+  - Add `page_reference`, `figure_reference`, and `table_reference` metadata inside the evidence payload when available.
+  - Reference the PDF via canonical path or DOI (`source_id` derived from `bash src/utils/hash-string.sh "<pdf path or doi>"`).
+- When discovering contradictions or methodological flaws:
+  - Emit `contradiction` events referencing both the target and attacker `claim_id`.
+  - If a previously issued claim is invalidated, emit a `retraction`.
+- Use `metadata` events for document-level context (e.g., schema version, extraction warnings, OCR confidence).
+- Reuse IDs to avoid duplicates; emit revisions with the same `claim_id` and record changes in findings.
+
+</argument_event_protocol>
+
 ## Adaptive Output Format
 
 ```json
@@ -318,6 +337,17 @@ Track:
 - Suggest high-value papers from citations to analyze next
 
 **CRITICAL**: 
-1. Write each task's findings to `work/pdf-analyzer/findings-{task_id}.json` using the Write tool
-2. Respond with ONLY the manifest JSON object (status, tasks_completed, findings_files)
-3. NO explanatory text, no markdown fences, no commentary. Just start with { and end with }.
+1. Write each task's findings to `work/pdf-analyzer/findings-{task_id}.json` using the Write tool.
+2. Before responding, use the **Write** tool to create `artifacts/pdf-analyzer/output.md` with exactly:
+   ```
+   ## Document Overview
+   <title, author(s), publication year, and why this PDF matters>
+
+   ## Extracted Insights
+   - p.<page>: <finding summary> (sources: <source_ids or document section>)
+
+   ## Open Questions
+   - <follow-up item or unresolved detail>
+   ```
+   Maintain page references and align insights with the JSON findings content.
+3. Respond with ONLY the manifest JSON object (status, tasks_completed, findings_files). No explanatory text, no markdown fences, no commentary—start with `{` and end with `}`.

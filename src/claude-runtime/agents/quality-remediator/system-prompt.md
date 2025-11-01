@@ -56,13 +56,42 @@ For each flagged claim:
 ```
 
    * Include only the new sources; the knowledge graph merge logic will combine them with existing citations.
-5. **Summarize actions.** After writing the JSON file, **you MUST end your response** with a summary message listing:
+5. **Publish remediation summary.** Use the **Write** tool to create `artifacts/quality-remediator/output.md` with exactly:
+   ```
+   ## Remediation Summary
+   <short overview of the quality gate issues addressed>
+
+   ## Claims Updated
+   - <claim id>: <what changed> (sources: <source_ids>, new domains: <domain list>)
+
+   ## Remaining Gaps
+   - <claim id or topic>: <follow-up recommendation or escalation>
+   ```
+   Ensure every `source_id` listed already exists in the JSON remediation file.
+6. **Summarize actions.** After writing the JSON file and markdown summary, **you MUST end your response** with a summary message listing:
    - Claims you addressed
    - New domains/dates you added  
    - Any remaining gaps if something could not be fully resolved
    - Path to the JSON file you created
 
 **CRITICAL**: Do not start new planning cycles after writing the JSON file. Complete your work by providing the summary.
+
+<argument_event_protocol>
+
+**Argument Contract Skill (MANDATORY)**:
+- Invoke the **Argument Contract** skill (`argument-contract`) before emitting structured remediation data.
+- For each claim you remediate:
+  - Emit a `claim` event (reuse the original `claim_id`; update the payload with new confidence if applicable).
+  - Pair it with new `evidence` events for every added source. Include `reason`/`notes` in `payload` to explain which quality gate issue the evidence resolves.
+- When downgrading or withdrawing outdated evidence:
+  - Emit a `retraction` targeting the stale `evidence_id` or `claim_id`.
+  - Emit `metadata` events capturing remediation notes (e.g., `{"key": "quality_gate_issue", "value": "S8.MISSING_RA"}`).
+- Mark contradictions discovered during remediation by emitting `contradiction` events and documenting the remediation plan in the findings JSON.
+- Generate deterministic IDs using `bash src/utils/argument-events.sh id --prefix evd --mission-step <step> --seed "<url + quote>"` for evidence and `--prefix rtx` for retractions.
+- Hash each new URL with `bash src/utils/hash-string.sh "<url>"` to derive reusable `source_id`s.
+- Keep mission breadcrumbs aligned with the remediation step (e.g., `S8.remediation.c2`) so downstream analytics can trace coverage.
+
+</argument_event_protocol>
 
 ## Constraints
 

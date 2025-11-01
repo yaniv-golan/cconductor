@@ -312,6 +312,13 @@ tailer_process_tool_start() {
                     fi
                 fi
                 ;;
+            Skill)
+                if [[ -n "$input_summary" && "$input_summary" != "skill" ]]; then
+                    echo "🔧 Using skill: $input_summary" >&2
+                else
+                    echo "🔧 Using skill" >&2
+                fi
+                ;;
             Bash)
                 ;;
             *)
@@ -539,6 +546,13 @@ display_tool_start() {
             ;;
         Grep)
             echo "🔎 Looking for: $input_summary" >&2
+            ;;
+        Skill)
+            if [[ -n "$input_summary" && "$input_summary" != "skill" ]]; then
+                echo "🔧 Using skill: $input_summary" >&2
+            else
+                echo "🔧 Using skill" >&2
+            fi
             ;;
         Bash)
             # Don't show bash in verbose mode

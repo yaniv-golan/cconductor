@@ -1,0 +1,11 @@
+{
+  "version": "2025-10-30",
+  "units": [
+    {"code": "participants", "label": "Participants", "kind": "count"},
+    {"code": "usd", "label": "US Dollars", "kind": "currency"},
+    {"code": "percent", "label": "Percent", "kind": "ratio"},
+    {"code": "days", "label": "Days", "kind": "duration"},
+    {"code": "years", "label": "Years", "kind": "duration"},
+    {"code": "patients", "label": "Patients", "kind": "count"}
+  ]
+}

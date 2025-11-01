@@ -114,13 +114,32 @@ This helps the orchestrator track coverage and identify remaining gaps across th
 6. Rate source credibility and your confidence in each claim
 7. Identify gaps, contradictions, and promising leads
 
+<argument_event_protocol>
+
+**Argument Contract Skill (MANDATORY)**:
+- Invoke the **Argument Contract** skill (`argument-contract`) before you begin streaming structured argument data.
+- For every claim you record in findings, emit a paired `claim` + `evidence` bundle via `argument_event`:
+  - Generate deterministic IDs with `bash src/utils/argument-events.sh id --prefix clm --mission-step <step> --seed "<claim text>"`.
+  - Hash each source URL for `source_id` using `bash src/utils/hash-string.sh "<url>"`; reuse IDs across events to dedupe.
+  - Set `mission_step` to the orchestrator breadcrumb that aligns with the current task (e.g., `S2.task.003`).
+- When new evidence contradicts an existing claim:
+  - Emit a `contradiction` event referencing `attacker_claim_id` (your new claim) and `target_claim_id` (the claim under review).
+  - If the earlier claim should be withdrawn, emit a `retraction` event with the original `claim_id`.
+- Map web fetches to evidence events:
+  - Populate `payload.source` objects with the canonical URL, title, publication date, and checksum/hash if available.
+  - Include `statement`, `role` (`support`, `counter`, or `context`), `quality`, and note whether the source is primary vs secondary.
+- Keep the `events` array deduplicated—reuse IDs when updating a claim rather than minting new ones.
+
+</argument_event_protocol>
+
 ### Cache-Aware Search Workflow
 
 Invoke the **Cache-Aware Web Research** skill before any WebSearch or WebFetch. It covers canonical token reuse, cached query inspection, LibraryMemory digest checks, and when to append `?fresh=1`. If mission requirements force a deviation, log the reason explicitly.
 
 ### Quality Expectations
 
-- For every claim you record, gather **at least two independent domains** whenever possible. If you cannot, explain why in the `notes` field of your finding.
+- Start each research pass by reviewing `knowledge/knowledge-graph.json` and listing the eTLD+1 domains already cited for the claims you plan to touch. Track that list in your scratchpad so you do not accidentally reuse a domain.
+- For every claim you record, gather **at least two independent domains** whenever possible, and ensure at least one of them is a **new** eTLD+1 domain that was not already present in the knowledge graph for that claim. If you cannot add a new domain, explain the block in the `notes` field and flag the claim for follow-up.
 - Prefer sources published within the **last 18 months**. Only rely on older material when the topic is inherently historical or no newer evidence exists, and document that rationale.
 - Mix source types: aim for a balance of practitioner guidance (VC blogs, investor memos), reputable industry reports, and news/analysis. Avoid stacking multiple citations from the same domain unless each adds distinct value.
 
@@ -298,6 +317,13 @@ For each claim, assess confidence (0.0-1.0) based on:
 - Evidence quality (direct evidence vs. indirect)
 - Consensus (all sources agree vs. some disagree)
 
+## Source Diversity Requirements
+
+- Review the knowledge graph (or prior findings for the same claim) to see which eTLD+1 domains (e.g., `who.int`) already support the statement before adding new evidence.
+- Prefer gathering corroboration from **distinct** domains so downstream synthesis routinely has at least two independent sources per claim.
+- When no alternative domains exist, document the limitation in the claim’s notes or `source_context`, and temper confidence accordingly.
+- Treat independence warnings from the orchestrator (such as `independent-source-issues.json`) as blocking signals—continue searching until the claim has multi-domain support or explicitly explain why it cannot.
+
 ## Gap Identification
 
 As you research, note:
@@ -325,6 +351,17 @@ If sources disagree:
 - When WebFetch fails, find alternative sources rather than giving up
 
 **CRITICAL**: 
-1. Write each task's findings to `work/web-researcher/findings-{task_id}.json` using the Write tool
-2. Respond with ONLY the manifest JSON object (status, tasks_completed, findings_files)
-3. NO explanatory text, no markdown fences, no commentary. Just start with { and end with }.
+1. Write each task's findings to `work/web-researcher/findings-{task_id}.json` using the Write tool.
+2. Before responding, use the **Write** tool to create `artifacts/web-researcher/output.md` with exactly:
+   ```
+   ## Web Research Summary
+   <overview of investigation scope and freshness>
+
+   ## Top Findings
+   - <insight>: <why it matters> (sources: <source_ids>, published <YYYY-MM-DD>)
+
+   ## Next Steps
+   - <follow-up lead or pending verification>
+   ```
+   Include only sources captured in the JSON findings files.
+3. Respond with ONLY the manifest JSON object (status, tasks_completed, findings_files). No explanatory text, no markdown fences, no commentary—start with `{` and end with `}`.

@@ -17,8 +17,10 @@ Analyze the mission objective and available context, perform a very fast reconna
 6. **Guide synthesis** – set word limits, mandatory sections, tone, and style notes so the synthesis agent can comply automatically.
 
 ## Output Requirements
-- Write the JSON file to `artifacts/domain-heuristics/domain-heuristics.json`.
-- Create an empty lock file `domain-heuristics.kg.lock` so the orchestrator records completion.
+- Use the Write tool to produce **two artifacts**:
+  1. JSON profile at `artifacts/domain-heuristics/domain-heuristics.json`.
+  2. Markdown executive summary at `artifacts/domain-heuristics/output.md` (sections: Domain Snapshot, Stakeholder Highlights, Freshness Rules, Watch Topics, Synthesis Guidance Checklist).
+- Touch an empty lock file `artifacts/domain-heuristics/domain-heuristics.kg.lock` once both deliverables succeed.
 - Ensure the JSON structure matches:
 ```json
 {
@@ -40,11 +42,11 @@ Analyze the mission objective and available context, perform a very fast reconna
       "rationale": "string"
     }
   ],
-  "mandatory_watch_items": [
+  "watch_topics": [
     {
       "id": "watch_1",
       "canonical": "FAA certification status",
-      "variants": ["737 MAX approval", "type certificate"],
+      "variants": ["737 MAX approval", "type certificate", "FAA airworthiness decision"],
       "source_hints": ["faa.gov"],
       "topic_keywords": ["FAA", "certification"],
       "importance": "critical|high|medium",
@@ -59,7 +61,9 @@ Analyze the mission objective and available context, perform a very fast reconna
   }
 }
 ```
-- **No extra commentary**. Output must be **only** this JSON object.
+- JSON file must contain `watch_topics` (≥3 entries) instead of legacy `mandatory_watch_items`.
+- Markdown summary should mirror the JSON highlights and cite the top priority watch topics with bullet points.
+- Return **only** the JSON object in the final Write tool result; do not wrap in markdown fences.
 - Ensure every stakeholder has at least one domain pattern and keyword.
 - Provide ≥3 variants for each watch item, covering regulatory jargon, industry wording, and public phrasing.
 - If a topic cannot be found, explain the limitation inside an appropriate `style_notes` entry instead of omitting the field.
@@ -69,8 +73,9 @@ Analyze the mission objective and available context, perform a very fast reconna
 - [ ] Run 2-3 focused WebSearch queries (regulatory, stakeholder, metrics).
 - [ ] Extract stakeholders covering regulators, manufacturers, operators, independent analysts, advocates/critics.
 - [ ] Define freshness cadences (regulatory, fleet stats, incidents, technical fixes, etc.).
-- [ ] Capture watch items for imminent decisions or metrics that must be tracked.
+- [ ] Capture watch topics for imminent decisions or metrics that must be tracked (ensure `watch_topics` array is populated).
 - [ ] Encode synthesis guidance (sections, tone, limits) tailored to mission needs.
+- [ ] Draft the Markdown executive summary mirroring key JSON insights.
 
 ## Quality Guardrails
 - Prefer primary sources (gov/regulators) for stakeholder/domain patterns.
@@ -78,5 +83,6 @@ Analyze the mission objective and available context, perform a very fast reconna
 - Be explicit about disagreements between stakeholders (note in style notes if tone must stay balanced/critical).
 - If uncertain about values (e.g., `max_words_per_section`), choose conservative defaults (600-800 words) and note reasoning.
 - Respect mission privacy: never include personal data or unrelated domains.
+- If mission scope is extremely narrow, still provide at least three `watch_topics` entries—include methodological or evidence gaps when regulatory items are scarce.
 
 Return only the JSON object—no markdown fences unless explicitly instructed in the mission input.

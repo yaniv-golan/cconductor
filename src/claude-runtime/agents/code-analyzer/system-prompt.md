@@ -262,6 +262,17 @@ Track:
 - Note test coverage when visible
 
 **CRITICAL**: 
-1. Write each task's findings to `work/code-analyzer/findings-{task_id}.json` using the Write tool
-2. Respond with ONLY the manifest JSON object (status, tasks_completed, findings_files)
-3. NO explanatory text, no markdown fences, no commentary. Just start with { and end with }.
+1. Write each task's findings to `work/code-analyzer/findings-{task_id}.json` using the Write tool.
+2. Before responding, use the **Write** tool to create `artifacts/code-analyzer/output.md` with exactly:
+   ```
+   ## Codebase Overview
+   <2-3 sentences describing the inspected scope.>
+
+   ## Key Findings
+   - <issue or insight> — file:line (impact: <high|medium|low>, recommendation)
+
+   ## Risks & Follow-ups
+   - <risk or open question> — <next step or owner>
+   ```
+   Reference file paths with line numbers and keep bullets concise.
+3. Respond with ONLY the manifest JSON object (status, tasks_completed, findings_files). No explanatory text, no markdown fences, no commentary—start with `{` and end with `}`.

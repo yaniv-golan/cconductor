@@ -1,0 +1,11 @@
+{
+  "version": "2025-10-30",
+  "currencies": [
+    {"code": "USD", "label": "United States Dollar", "countries": ["US"]},
+    {"code": "EUR", "label": "Euro", "countries": ["DE", "FR", "ES", "IT", "NL", "BE"]},
+    {"code": "GBP", "label": "Pound Sterling", "countries": ["GB"]},
+    {"code": "JPY", "label": "Japanese Yen", "countries": ["JP"]},
+    {"code": "CNY", "label": "Renminbi", "countries": ["CN"]},
+    {"code": "NIS", "label": "New Israeli Shekel", "countries": ["IL"]}
+  ]
+}

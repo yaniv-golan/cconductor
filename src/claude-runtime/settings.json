@@ -10,6 +10,7 @@
       "Bash(grep:*)",
       "Bash(library-memory/hash-url.sh:*)",
       "Bash(library-memory/show-digest.sh:*)",
+      "Skill",
       "WebSearch",
       "WebFetch",
       "Read"

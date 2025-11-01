@@ -1,0 +1,46 @@
+{
+  "@context": {
+    "aif": "http://www.arg.dundee.ac.uk/aif#",
+    "schema": "http://schema.org/",
+    "cc": "https://cconductor.ai/aeg#"
+  },
+  "@id": "https://cconductor.ai/aeg/schemes",
+  "@type": "cc:SchemeRegistry",
+  "version": "2025-10-30",
+  "argumentSchemes": [
+    {
+      "@id": "supporting-evidence",
+      "@type": "aif:ArgumentScheme",
+      "schema:name": "Supporting Evidence",
+      "cc:description": "Premises cite primary or secondary sources supporting the conclusion.",
+      "cc:defaultRole": "support",
+      "cc:strength": "standard"
+    },
+    {
+      "@id": "contradiction",
+      "@type": "aif:ArgumentScheme",
+      "schema:name": "Contradiction",
+      "cc:description": "Attacking claim contradicts the target via conflicting facts.",
+      "cc:defaultRole": "attack",
+      "cc:strength": "strong"
+    },
+    {
+      "@id": "preference-evidence-quality",
+      "@type": "aif:ArgumentScheme",
+      "schema:name": "Preference (Evidence Quality)",
+      "cc:description": "Preferred claim backed by higher quality evidence.",
+      "cc:defaultRole": "preference",
+      "cc:strength": "moderate"
+    }
+  ],
+  "contradictionBasis": [
+    {"code": "conflicting-statistic", "label": "Conflicting statistic"},
+    {"code": "outdated-source", "label": "Outdated source"},
+    {"code": "methodology-flaw", "label": "Methodology flaw"}
+  ],
+  "preferenceCriteria": [
+    {"code": "evidence-quality", "label": "Evidence quality"},
+    {"code": "authority", "label": "Source authority"},
+    {"code": "timeliness", "label": "Recency / freshness"}
+  ]
+}

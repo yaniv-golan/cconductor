@@ -242,6 +242,15 @@ case "$tool_name" in
             tool_input_summary=$(hook_field '[.tool_input.todos[]?.content // empty] | .[0:3] | join("; ")' 'tasks' 'tool_input.todo_any')
         fi
         ;;
+    Skill)
+        tool_input_summary=$(hook_field '.tool_input.command // ""' '' 'tool_input.skill_command')
+        if [[ -z "$tool_input_summary" ]]; then
+            tool_input_summary=$(hook_field '.tool_input.skill // ""' '' 'tool_input.skill_name')
+        fi
+        if [[ -z "$tool_input_summary" ]]; then
+            tool_input_summary="skill"
+        fi
+        ;;
     *)
         tool_input_summary=$(hook_field '.tool_input | keys | join(", ")' '...' 'tool_input.generic')
         ;;

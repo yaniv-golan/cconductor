@@ -72,7 +72,7 @@ run_initialization() {
         esac
     else
         # Non-interactive mode
-        "$CCONDUCTOR_ROOT/src/init.sh"
+        "$CCONDUCTOR_ROOT/src/init.sh" --yes
     fi
 }
 
@@ -92,7 +92,7 @@ perform_update() {
         git pull origin main
         
         echo "→ Running initialization..."
-        "$CCONDUCTOR_ROOT/src/init.sh"
+        "$CCONDUCTOR_ROOT/src/init.sh" --yes
         
         local new_version
         new_version=$(cat "$CCONDUCTOR_ROOT/VERSION" 2>/dev/null || echo "unknown")

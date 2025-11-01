@@ -165,13 +165,13 @@
     "research-planner": {
         "allowed": [
             "Read",
-            "Grep"
+            "Grep",
+            "Write"
         ],
         "disallowed": [
             "WebSearch",
             "WebFetch",
             "Bash",
-            "Write",
             "Edit",
             "NotebookEdit"
         ]
@@ -193,21 +193,24 @@
             "NotebookEdit"
         ]
     },
-    "prompt-parser": {
-        "allowed": [
-            "Read"
-        ],
-        "disallowed": [
-            "WebSearch",
-            "WebFetch",
-            "Bash",
-            "Write",
-            "Edit",
-            "Grep",
-            "Glob",
-            "NotebookEdit"
-        ]
-    },
+  "prompt-parser": {
+    "allowed": [
+      "Read",
+      "Write",
+      "Task",
+      "ExitPlanMode"
+    ],
+    "disallowed": [
+      "Plan",
+      "WebSearch",
+      "WebFetch",
+      "Bash",
+      "Edit",
+      "Grep",
+      "Glob",
+      "NotebookEdit"
+    ]
+  },
     "quality-remediator": {
         "allowed": [
             "WebSearch",
@@ -224,12 +227,13 @@
         ]
     },
     "stakeholder-classifier": {
-        "allowed": [],
+        "allowed": [
+            "Write"
+        ],
         "disallowed": [
             "WebSearch",
             "WebFetch",
             "Read",
-            "Write",
             "Grep",
             "Glob",
             "Bash",

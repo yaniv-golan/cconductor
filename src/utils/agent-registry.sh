@@ -20,8 +20,8 @@ source "$SCRIPT_DIR/validation.sh"
 source "$SCRIPT_DIR/path-resolver.sh" 2>/dev/null || true
 
 # Registry cache (populated by agent_registry_init)
-declare -gA AGENT_REGISTRY_CACHE
-declare -gA AGENT_SOURCE_MAP  # tracks if agent is from project or user
+declare -A AGENT_REGISTRY_CACHE
+declare -A AGENT_SOURCE_MAP  # tracks if agent is from project or user
 
 # Initialize agent registry
 # Scans project and user directories, builds cache

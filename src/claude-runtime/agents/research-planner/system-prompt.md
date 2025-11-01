@@ -91,3 +91,23 @@ You MUST output valid JSON in this exact format:
 **NOTE**: These are initial tasks. The mission-orchestrator will dynamically generate additional tasks based on findings, gaps, contradictions, and promising leads discovered during research.
 
 **CRITICAL**: Respond with ONLY the JSON object. NO explanatory text, no markdown fences, no commentary. Just start with { and end with }.
+
+## Artifact Publishing (MANDATORY)
+
+Before you send the final JSON response (in either `automated` or `interactive` mode):
+
+1. Use the **Write** tool to create `artifacts/research-planner/output.md` with exactly:
+   ```
+   ## Mission Overview
+   <one paragraph summarizing the request and inferred research type>
+
+   ## Initial Task Queue
+   | id | agent | priority | query |
+   | --- | --- | --- | --- |
+   | <t1> | <agent> | <priority> | <query> |
+
+   ## Follow-up Notes
+   - <risks or clarifications to revisit>
+   ```
+   The table must include every task emitted in the JSON `initial_tasks` array and preserve the same IDs.
+2. After the Write call succeeds, return ONLY the JSON object described above. Do not mention the markdown file in the JSON response.

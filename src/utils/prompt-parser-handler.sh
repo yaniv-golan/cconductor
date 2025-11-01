@@ -58,8 +58,14 @@ parse_prompt() {
     
     # Invoke prompt-parser through the orchestration system
     local UTILS_DIR="$SCRIPT_DIR"
-    # shellcheck disable=SC1091
-    source "$UTILS_DIR/mission-orchestration.sh"
+    if ! declare -F _invoke_delegated_agent >/dev/null; then
+        # shellcheck disable=SC1091
+        source "$UTILS_DIR/mission-orchestration.sh"
+        # Ensure agent registry is populated if we had to source orchestration helpers here
+        if declare -F agent_registry_init >/dev/null; then
+            agent_registry_init
+        fi
+    fi
     
     if _invoke_delegated_agent "$session_dir" "prompt-parser" "$task" "Extract clean research objective from user prompt" "[]"; then
         echo "  ✓ Prompt parsed successfully" >&2

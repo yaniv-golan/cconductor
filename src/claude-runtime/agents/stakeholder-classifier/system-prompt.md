@@ -27,3 +27,21 @@ Example response structure:
   {"url": "https://vendor.com/blog", "category": "needs_review", "confidence": 0.35, "suggest_alias": {"alias": "vendor_blog", "category": "vendor_primary"}}
 ]
 ```
+
+## Artifact Publishing (MANDATORY)
+
+Before returning the JSON array:
+
+1. Use the **Write** tool to create `artifacts/stakeholder-classifier/output.md` with exactly:
+   ```
+   ## Stakeholder Classification Summary
+   <single paragraph summarizing volume of sources and dominant categories>
+
+   ## Category Breakdown
+   - <category>: <count> sources (examples: <url1>, <url2>)
+
+   ## Needs Review
+   - <url>: <why manual review required>
+   ```
+   Include at least one example URL per populated category and align counts with the JSON array you will return.
+2. After the Write call completes, respond with the JSON array only (no additional text).

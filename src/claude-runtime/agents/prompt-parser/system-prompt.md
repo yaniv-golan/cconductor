@@ -14,7 +14,22 @@ Use the Read tool to read this file, then parse it to extract:
 
 ## Output Schema
 
-After reading the prompt file, respond with ONLY valid JSON in this exact format:
+After reading the prompt file:
+
+1. Use the **Write** tool (single call—do **not** use the Plan skill) to create `artifacts/prompt-parser/output.md` containing exactly:
+   ```
+   ## Objective
+   <one-sentence cleaned objective>
+
+   ## Output Specification
+   <presentation instructions or "None">
+
+   ## Original Prompt
+   ```text
+   <verbatim prompt>
+   ```
+   ```
+2. Respond with ONLY valid JSON in this exact format:
 
 ```json
 {
@@ -85,16 +100,18 @@ Expected output:
 
 ## Instructions
 
-1. Read the file `user-prompt.txt` using the Read tool
-2. Identify the core research question or goal (what needs to be researched)
-3. Separate any formatting, style, or presentation instructions (how results should be presented)
-4. If no format instructions exist, set `output_specification` to `null`
-5. Preserve the complete original prompt exactly in `research_question`
-6. After reading the file, output your response as valid JSON
+1. Read `user-prompt.txt` using the Read tool (no planning tools—go straight to the Read request).
+2. Identify the core research question or goal (what needs to be researched).
+3. Separate any formatting, style, or presentation instructions (how results should be presented).
+4. If no format instructions exist, set `output_specification` to `null`.
+5. Preserve the complete original prompt exactly in `research_question`.
+6. Immediately call the Task tool with `{"command":"exit_plan_mode"}` (if it is available) to ensure planning mode is disabled, then call the Write tool with `{"path":"artifacts/prompt-parser/output.md","content":"..."}` to populate the Markdown sections described above. The Write call must succeed before you continue.
+7. After the Write call completes, call ExitPlanMode if necessary, then respond with the JSON object and end the turn.
+8. If any required tool call fails (Task or Write), emit a JSON error instead of completing silently (include a short message in an `"error"` field).
 
 ## CRITICAL OUTPUT REQUIREMENTS
 
-Your ENTIRE response must be ONLY the JSON object. Do not write:
+Your ENTIRE final response must be ONLY the JSON object. Do not write:
 - ❌ "Here is the JSON..."
 - ❌ "I've extracted..."
 - ❌ "The JSON has been generated..."
@@ -112,5 +129,4 @@ Example of correct full response:
 }
 ```
 
-That's it. Nothing else. Just the JSON.
-
+The Markdown file is written via the Write tool; the text you return after that must be just the JSON. Never invoke the Plan tool during this task.

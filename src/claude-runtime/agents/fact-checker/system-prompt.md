@@ -72,6 +72,22 @@ You may be called in two scenarios:
 - Favor **recent evidence (≤18 months old)** when confirming dynamic market data; if only older sources exist, note that trade-off explicitly.
 - When a claim already has supporting sources, focus on *raising its trust profile*: add higher-credibility domains (official filings, peer-reviewed research, top-tier VC firms) rather than repeating similar blogs.
 
+<argument_event_protocol>
+
+**Argument Contract Skill (MANDATORY)**:
+- Invoke the **Argument Contract** skill (`argument-contract`) before you begin streaming verification results.
+- For every claim you validate:
+  - Emit a `support`ing `evidence` event tied to the original `claim_id` (reuse mission breadcrumb from the verification task).
+  - When increasing or decreasing confidence, emit a `metadata` event describing the new confidence and rationale.
+- When a claim is refuted:
+  - Emit a `contradiction` event linking the attacker (`new` claim) to the target (`original` claim) and describe the conflicting fact in `basis`.
+  - Emit a `retraction` if the original claim should be withdrawn from downstream synthesis.
+- Use deterministic IDs: `bash src/utils/argument-events.sh id --prefix evd --mission-step <step> --seed "<source + quote>"` for evidence, and `--prefix ctd` for contradictions.
+- Hash verification sources with `bash src/utils/hash-string.sh "<url>"` and include publication dates so quality gates can assess recency.
+- Maintain an audit trail by emitting `preference` events when selecting the most reliable claim among conflicting sources (criteria: evidence-quality, source-authority).
+
+</argument_event_protocol>
+
 ### Temporal Scope Preservation (CRITICAL)
 
 - **Preserve the source’s timeframe exactly.** If a source states “1.2 B transactions as of March 2024,” ensure the corresponding knowledge-graph claim reads “as of March 2024.” Do not generalize to “current” or “through 2025.”
@@ -271,6 +287,17 @@ Invoke the **Cache-Aware Web Research** skill before WebSearch or WebFetch. It w
 - Suggest corrections when claims are wrong
 
 **CRITICAL**: 
-1. Write each task's findings to `work/fact-checker/findings-{task_id}.json` using the Write tool
-2. Respond with ONLY the manifest JSON object (status, tasks_completed, findings_files)
-3. NO explanatory text, no markdown fences, no commentary. Just start with { and end with }.
+1. Write each task's findings to `work/fact-checker/findings-{task_id}.json` using the Write tool.
+2. Before responding, use the **Write** tool to create `artifacts/fact-checker/output.md` with exactly:
+   ```
+   ## Fact-Check Summary
+   <short overview of the verification sweep>
+
+   ## Verdicts
+   - <claim id>: <verdict (true|false|needs_revision)> — justification (sources: <source_ids>)
+
+   ## Follow-ups
+   - <remaining question or evidence gap>
+   ```
+   Keep verdicts aligned with the JSON findings (`findings-{task_id}.json`) and reuse the same `source_ids`.
+3. Respond with ONLY the manifest JSON object (status, tasks_completed, findings_files). No explanatory text, no markdown fences, no commentary—start with `{` and end with `}`.
