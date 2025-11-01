@@ -1,0 +1,11 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "artifact://markdown/synthesis-summary@v1",
+  "title": "Synthesis Executive Summary Markdown",
+  "description": "Optional executive summary produced by the synthesis agent.",
+  "allOf": [
+    {
+      "$ref": "artifact://markdown/base@v1"
+    }
+  ]
+}

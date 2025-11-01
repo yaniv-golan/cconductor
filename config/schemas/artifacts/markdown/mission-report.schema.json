@@ -1,0 +1,11 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "artifact://markdown/mission-report@v1",
+  "title": "Mission Report Markdown",
+  "description": "Markdown mission report produced by the synthesis agent.",
+  "allOf": [
+    {
+      "$ref": "artifact://markdown/base@v1"
+    }
+  ]
+}

@@ -1,0 +1,123 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "artifact://system/manifest-actual@v1",
+  "title": "Agent Artifact Manifest (Actual)",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "agent",
+    "generated_at",
+    "artifacts"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "string"
+    },
+    "agent": {
+      "type": "string",
+      "minLength": 1
+    },
+    "generated_at": {
+      "type": "string"
+    },
+    "contract_path": {
+      "type": "string"
+    },
+    "contract_sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "validation_phase": {
+      "type": "string",
+      "enum": ["phase1", "phase2", "phase3"]
+    },
+    "artifacts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "slot",
+          "relative_path",
+          "schema_id",
+          "required",
+          "status"
+        ],
+        "properties": {
+          "slot": {
+            "type": "string",
+            "minLength": 1
+          },
+          "relative_path": {
+            "type": "string"
+          },
+          "content_type": {
+            "type": "string"
+          },
+          "schema_id": {
+            "type": "string",
+            "pattern": "^artifact://[a-z0-9-]+(/[a-z0-9-]+)*@v[0-9]+$"
+          },
+          "required": {
+            "type": "boolean"
+          },
+          "status": {
+            "type": "string",
+            "enum": ["present", "missing", "invalid"]
+          },
+          "sha256": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "size_bytes": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "validated_at": {
+            "type": "string"
+          },
+          "validation": {
+            "type": "object",
+            "properties": {
+              "schema": {
+                "type": "string",
+                "enum": ["passed", "failed", "skipped"]
+              },
+              "checksum": {
+                "type": "string",
+                "enum": ["passed", "failed", "skipped"]
+              }
+            },
+            "additionalProperties": true
+          },
+          "messages": {
+            "type": "array",
+            "items": {"type": "string"}
+          }
+        },
+        "additionalProperties": true
+      }
+    },
+    "summary": {
+      "type": "object",
+      "properties": {
+        "required_total": {"type": "integer", "minimum": 0},
+        "required_present": {"type": "integer", "minimum": 0},
+        "optional_present": {"type": "integer", "minimum": 0},
+        "missing_slots": {
+          "type": "array",
+          "items": {"type": "string"}
+        },
+        "checksum_failures": {
+          "type": "array",
+          "items": {"type": "string"}
+        },
+        "schema_failures": {
+          "type": "array",
+          "items": {"type": "string"}
+        }
+      },
+      "additionalProperties": true
+    }
+  },
+  "additionalProperties": false
+}

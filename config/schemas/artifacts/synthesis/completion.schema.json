@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "artifact://synthesis/completion@v1",
+  "title": "Synthesis Completion Metadata",
+  "type": "object",
+  "required": [
+    "synthesized_at",
+    "report_generated",
+    "report_path",
+    "knowledge_graph_path",
+    "quality_gate_status"
+  ],
+  "properties": {
+    "synthesized_at": {"type": "string"},
+    "synthesis_iteration": {"type": "integer", "minimum": 0},
+    "report_generated": {"type": "boolean"},
+    "report_path": {"type": "string"},
+    "knowledge_graph_path": {"type": "string"},
+    "quality_gate_status": {"type": "string"},
+    "total_claims_synthesized": {"type": "integer", "minimum": 0},
+    "total_entities_referenced": {"type": "integer", "minimum": 0},
+    "total_sources_cited": {"type": "integer", "minimum": 0}
+  },
+  "additionalProperties": true
+}

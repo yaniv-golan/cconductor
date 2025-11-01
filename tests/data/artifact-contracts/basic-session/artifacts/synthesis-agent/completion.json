@@ -1,0 +1,13 @@
+{
+  "synthesized_at": "2025-10-31T00:00:00Z",
+  "synthesis_iteration": 1,
+  "report_generated": true,
+  "report_path": "./report/mission-report.md",
+  "knowledge_graph_path": "./knowledge/knowledge-graph.json",
+  "quality_gate_status": "passed",
+  "total_claims_synthesized": 5,
+  "total_entities_referenced": 4,
+  "total_sources_cited": 6,
+  "synthesis_approach": "summary",
+  "domain": "aviation"
+}

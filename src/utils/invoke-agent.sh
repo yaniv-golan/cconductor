@@ -19,6 +19,13 @@ source "$SCRIPT_DIR/core-helpers.sh"
 source "$SCRIPT_DIR/error-messages.sh"
 # shellcheck disable=SC1091
 source "$SCRIPT_DIR/json-helpers.sh"
+# shellcheck disable=SC1091
+if ! source "$SCRIPT_DIR/argument-writer.sh" 2>/dev/null; then
+    if [[ -z "${INVOKE_AGENT_ARGUMENT_WARNED:-}" ]]; then
+        log_warn "Optional argument-writer.sh failed to load (argument event capture disabled)"
+        INVOKE_AGENT_ARGUMENT_WARNED=1
+    fi
+fi
 
 # Source event logger for Phase 2 metrics
 # shellcheck disable=SC1091
@@ -49,6 +56,26 @@ if ! source "$SCRIPT_DIR/process-cleanup.sh" 2>/dev/null; then
         INVOKE_AGENT_PROC_CLEANUP_WARNED=1
     fi
 fi
+# shellcheck disable=SC1091
+if ! source "$SCRIPT_DIR/artifact-manager.sh" 2>/dev/null; then
+    log_error "artifact-manager.sh failed to load; cannot enforce artifact contracts"
+    exit 1
+fi
+
+ARTIFACT_VALIDATION_PHASE="${CCONDUCTOR_ARTIFACT_PHASE:-phase2}"
+case "$ARTIFACT_VALIDATION_PHASE" in
+    phase1|phase2|phase3) ;;
+    *)
+        ARTIFACT_VALIDATION_PHASE="phase2"
+        ;;
+esac
+
+ARTIFACT_CONTRACT_BYPASS=0
+case "${CCONDUCTOR_ALLOW_CONTRACT_BYPASS:-}" in
+    1|true|TRUE|yes|YES)
+        ARTIFACT_CONTRACT_BYPASS=1
+        ;;
+esac
 
 
 # Check if Claude CLI is available
@@ -496,6 +523,12 @@ invoke_agent_v2() {
         return 1
     fi
 
+    if command -v artifact_prepare_directories >/dev/null 2>&1; then
+        if ! artifact_prepare_directories "$session_dir" "$agent_name"; then
+            log_warn "Failed to prepare artifact directories for $agent_name (session: $session_dir)"
+        fi
+    fi
+
     # Check Claude CLI
     check_claude_cli || return 1
 
@@ -796,6 +829,47 @@ invoke_agent_v2() {
     }
     trap 'cleanup_invoke_agent' EXIT INT TERM HUP
 
+    dispatch_argument_events() {
+        local session_dir="$1"
+        local agent_label="$2"
+        local line="$3"
+
+        if ! command -v argument_writer_append_events >/dev/null 2>&1; then
+            return 0
+        fi
+        if ! argument_writer_enabled; then
+            return 0
+        fi
+
+        local payload
+        payload=$(printf '%s\n' "$line" | jq -c '
+            if (.type == "stream_event")
+               and (.event.type == "custom_event")
+               and ((.event.name // "") | test("argument_event"))
+            then
+                if (.event.payload.events? // empty) != empty then
+                    {events: .event.payload.events}
+                else
+                    .event.payload
+                end
+            elif (.type == "argument_event") then
+                if (.event.events? // empty) != empty then
+                    {events: .event.events}
+                else
+                    .event
+                end
+            else
+                empty
+            end
+        ' 2>/dev/null || true)
+
+        if [[ -z "$payload" || "$payload" == "null" ]]; then
+            return 0
+        fi
+
+        argument_writer_append_events "$session_dir" "$payload" "$agent_label" ""
+    }
+
     process_stream_events() {
         local pipe_path="$1"
         local log_file="$2"
@@ -831,6 +905,8 @@ invoke_agent_v2() {
             local event_type
             event_type=$(safe_jq_from_json "$line" '.type // empty' "" "$session_dir" "invoke_agent.stream.event_type")
 
+            dispatch_argument_events "$session_dir" "$agent_label" "$line" || true
+
             case "$event_type" in
                 stream_event)
                     local inner_type
@@ -841,11 +917,28 @@ invoke_agent_v2() {
                             ;;
                     esac
                     if [[ "$inner_type" == "content_block_delta" || "$inner_type" == "message_delta" ]]; then
-                        local delta_text
-                        delta_text=$(safe_jq_from_json "$line" '.event.delta.text? // empty' "" "$session_dir" "invoke_agent.stream.delta")
-                        if [[ -n "$delta_text" && "$delta_text" != "null" ]]; then
-                            aggregated_text+="$delta_text"
+                        local delta_chunk
+                        delta_chunk=$(safe_jq_from_json "$line" '
+                            if (.event.delta? | type == "object") then
+                                [
+                                    (.event.delta.partial_json? // empty),
+                                    (.event.delta.partial_output_json? // empty),
+                                    (.event.delta.partial_markdown? // empty),
+                                    (.event.delta.partial_text? // empty),
+                                    (.event.delta.partial_tool_response? // empty),
+                                    (.event.delta.text? // empty)
+                                ]
+                                | map(select(. != "" and . != "null"))
+                                | join("")
+                            else
+                                ""
+                            end
+                        ' "" "$session_dir" "invoke_agent.stream.delta_chunk")
+                        if [[ -n "$delta_chunk" ]]; then
+                            aggregated_text+="$delta_chunk"
                         fi
+                    elif [[ "$inner_type" == "content_block_stop" || "$inner_type" == "message_stop" ]]; then
+                        aggregated_text+=$'\n'
                     fi
                     ;;
                 assistant|message)
@@ -882,6 +975,11 @@ invoke_agent_v2() {
 
         if [[ -n "$synthesized_text" ]]; then
             update_heartbeat
+            if command -v log_system_warning &>/dev/null; then
+                log_system_warning "$session_dir" "claude_stream_missing_result" \
+                    "Claude stream ended without final result event; using synthesized output" \
+                    "agent=$agent_label"
+            fi
             local synthetic_result
             synthetic_result=$(jq -n --arg text "$synthesized_text" --arg subtype "stream_synthesized" \
                 '{type:"result",subtype:$subtype,result:$text}')
@@ -907,6 +1005,14 @@ invoke_agent_v2() {
 
     # Change to session directory for context
     cd "$session_dir" || return 1
+    local current_cwd
+    current_cwd=$(pwd)
+    if [[ "$current_cwd" != "$session_dir" ]]; then
+        log_system_warning "$session_dir" "invoke_agent_cwd_mismatch" \
+            "Working directory mismatch before agent invocation" \
+            "expected=$session_dir actual=$current_cwd"
+        cd "$session_dir" || return 1
+    fi
 
     # Load agent timeout from config (before showing start message)
     load_agent_timeout() {
@@ -1164,6 +1270,36 @@ invoke_agent_v2() {
             jq 'keys' "$output_file" >&2
             return 1
         fi
+
+        # Detect provider-imposed session limits surfaced as error envelopes
+        local result_is_error
+        result_is_error=$(safe_jq_from_file "$output_file" '.is_error // false' "false" "$session_dir" "invoke_agent.result.is_error")
+        if [[ "$result_is_error" == "true" ]]; then
+            local provider_message
+            provider_message="$result"
+            local streaming_flag
+            streaming_flag=$([[ "$use_streaming" -eq 1 ]] && echo true || echo false)
+
+            if [[ -n "$session_dir" ]]; then
+                if command -v log_system_error &>/dev/null; then
+                    log_system_error "$session_dir" "provider_session_limit" \
+                        "Claude session limit reached for agent $agent_name" \
+                        "message=$(printf '%s' "$provider_message" | tr '\n' ' ') streaming=$streaming_flag"
+                fi
+                if command -v log_event &>/dev/null; then
+                    local provider_event
+                    provider_event=$(jq -n \
+                        --arg agent "$agent_name" \
+                        --arg message "$provider_message" \
+                        --argjson streaming "$streaming_flag" \
+                        '{agent:$agent, message:$message, streaming:$streaming}')
+                    log_event "$session_dir" "provider_session_limit" "$provider_event" || true
+                fi
+            fi
+
+            echo "⚠ $agent_name aborted: $provider_message" >&2
+            return 1
+        fi
         
         # NEW: Validate .result field is extractable JSON for research agents (Tier 0 requirement)
         if [[ "$agent_name" =~ ^(web-researcher|academic-researcher|pdf-analyzer|code-analyzer|fact-checker|market-analyzer)$ ]]; then
@@ -1193,6 +1329,28 @@ invoke_agent_v2() {
                         echo "   Tier 0 extraction will fail. Falling back to Tier 1/2." >&2
                     fi
                 else
+                    local fallback_used=0
+                    if [[ "$agent_name" == "academic-researcher" ]]; then
+                        local manifest_file="$session_dir/work/academic-researcher/manifest.json"
+                        if [[ -f "$manifest_file" ]]; then
+                            local manifest_json
+                            manifest_json=$(cat "$manifest_file")
+                            if [[ -n "$manifest_json" ]] && echo "$manifest_json" | jq empty >/dev/null 2>&1; then
+                                local tmp_output
+                                tmp_output=$(mktemp "${TMPDIR:-/tmp}/agent-output.XXXXXX.json")
+                                if jq --argjson manifest "$manifest_json" '.result = $manifest' "$output_file" > "$tmp_output" 2>/dev/null; then
+                                    mv "$tmp_output" "$output_file"
+                                    extracted_json="$manifest_json"
+                                    fallback_used=1
+                                    echo "  ✓ Academic researcher manifest parsed via fallback (Tier 0)" >&2
+                                else
+                                    rm -f "$tmp_output"
+                                fi
+                            fi
+                        fi
+                    fi
+
+                    if [[ "$fallback_used" -eq 0 ]]; then
                     echo "⚠️  Warning: Agent $agent_name output could not be parsed as JSON" >&2
                     echo "   Tier 0 extraction will fail. Falling back to Tier 1/2." >&2
                     
@@ -1205,6 +1363,16 @@ invoke_agent_v2() {
                         log_event "$session_dir" "tier0_format_mismatch" \
                             "Agent $agent_name returned non-parseable result" \
                             "{\"agent\": \"$agent_name\", \"result_preview\": \"$result_preview\"}" || true
+                    fi
+                    else
+                        if [[ -n "$extracted_json" ]] && echo "$extracted_json" | jq empty 2>/dev/null; then
+                            echo "  ✓ Agent $agent_name output validated as JSON" >&2
+                            if echo "$extracted_json" | jq -e 'has("status") and has("findings_files")' >/dev/null 2>&1; then
+                                echo "  ✓ Manifest structure valid" >&2
+                            else
+                                echo "  ⚠️  Warning: Manifest missing required fields (status, findings_files)" >&2
+                            fi
+                        fi
                     fi
                 fi
             else
@@ -1232,11 +1400,67 @@ invoke_agent_v2() {
             metadata=$(safe_jq_from_json "$metadata" '.' '{}' "$session_dir" "invoke_agent.metadata.normalize" false)
         fi
         
+        local manifest_result=""
+        local manifest_status=0
+        if [ -n "${session_dir:-}" ] && command -v artifact_finalize_manifest &>/dev/null; then
+            set +e
+            manifest_result=$(artifact_finalize_manifest "$session_dir" "$agent_name" "$ARTIFACT_VALIDATION_PHASE" "$ARTIFACT_CONTRACT_BYPASS")
+            manifest_status=$?
+            set -e
+            if [[ $manifest_status -eq 0 ]]; then
+                echo "  ✓ Artifact contract validated ($ARTIFACT_VALIDATION_PHASE)" >&2
+            else
+                if [[ "$ARTIFACT_CONTRACT_BYPASS" -eq 1 || "$ARTIFACT_VALIDATION_PHASE" == "phase1" ]]; then
+                    echo "  ⚠ Artifact contract violations bypassed for $agent_name" >&2
+                else
+                    echo "✗ Artifact contract validation failed for $agent_name" >&2
+                fi
+            fi
+        fi
+
+        local bypass_active_flag
+        if [[ "$ARTIFACT_VALIDATION_PHASE" == "phase1" || "$ARTIFACT_CONTRACT_BYPASS" -eq 1 ]]; then
+            bypass_active_flag=true
+        else
+            bypass_active_flag=false
+        fi
+
+        if [[ -n "$manifest_result" ]]; then
+            local contract_metrics
+            contract_metrics=$(echo "$manifest_result" | jq -c \
+                --arg phase "$ARTIFACT_VALIDATION_PHASE" \
+                --arg pass_flag "$([[ $manifest_status -eq 0 ]] && echo true || echo false)" \
+                --arg bypass_active "$bypass_active_flag" \
+                '{
+                    artifact_contract: {
+                        pass: ($pass_flag == "true"),
+                        validation_phase: $phase,
+                        bypass_active: ($bypass_active == "true"),
+                        validation_duration_ms: (.validation_duration_ms // 0),
+                        required_total: (.summary.required_total // 0),
+                        required_present: (.summary.required_present // 0),
+                        optional_present: (.summary.optional_present // 0),
+                        total_artifacts: (.summary.total_artifacts // 0),
+                        missing_slots: (.summary.missing_slots // []),
+                        checksum_failures: (.summary.checksum_failures // []),
+                        schema_failures: (.summary.schema_failures // [])
+                    }
+                }' 2>/dev/null || echo '{}')
+
+            if [[ -n "$contract_metrics" && "$contract_metrics" != "{}" ]]; then
+                metadata=$(echo "$metadata" | jq -c --argjson contract "$contract_metrics" '. * $contract' 2>/dev/null || echo "$metadata")
+            fi
+        fi
+
         # Log agent result with metrics, metadata, and model
         if [ -n "${session_dir:-}" ] && command -v log_agent_result &>/dev/null; then
             log_agent_result "$session_dir" "$agent_name" "$cost" "$duration" "$metadata" "$agent_model" || true
         fi
-        
+
+        if [[ $manifest_status -ne 0 && "$ARTIFACT_VALIDATION_PHASE" != "phase1" && "$ARTIFACT_CONTRACT_BYPASS" -eq 0 ]]; then
+            return 1
+        fi
+
         # Integrate findings into knowledge graph for research agents
         if [[ "$agent_name" =~ ^(web-researcher|academic-researcher|pdf-analyzer|code-analyzer|fact-checker|market-analyzer)$ ]]; then
             if [ -n "${session_dir:-}" ]; then

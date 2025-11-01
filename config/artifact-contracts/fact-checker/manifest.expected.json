@@ -1,0 +1,30 @@
+{
+  "schema_version": "1.0.0",
+  "agent": "fact-checker",
+  "description": "Fact-checker verification notes and structured outputs.",
+  "artifacts": [
+    {
+      "slot": "fact_check_markdown",
+      "description": "Markdown catalog of fact-check verdicts and evidence.",
+      "relative_path": "artifacts/fact-checker/output.md",
+      "content_type": "text/markdown",
+      "schema_id": "artifact://markdown/fact-check-summary@v1",
+      "required": true,
+      "checksum": {
+        "algorithm": "sha256"
+      }
+    },
+    {
+      "slot": "fact_check_findings_json",
+      "description": "Structured fact-check findings for knowledge graph ingestion.",
+      "path_pattern": "work/fact-checker/findings-*.json",
+      "content_type": "application/json",
+      "schema_id": "artifact://research/findings@v1",
+      "required": true,
+      "allow_multiple": true,
+      "checksum": {
+        "algorithm": "sha256"
+      }
+    }
+  ]
+}

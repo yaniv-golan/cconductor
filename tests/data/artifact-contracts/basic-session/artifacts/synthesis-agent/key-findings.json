@@ -1,0 +1,20 @@
+{
+  "well_supported_claims": [
+    {
+      "claim": "Dual AOA sensors prevent single-sensor MCAS activations",
+      "confidence": 0.9,
+      "evidence": "FAA AD 2020-24-02",
+      "claim_ids": ["c1"]
+    }
+  ],
+  "partially_supported_claims": [],
+  "contradicted_claims": [],
+  "promise_vs_implementation_gaps": [],
+  "engineering_verdict": {
+    "question_a_specific_crash_scenarios": {
+      "answer": "Yes",
+      "confidence": 0.9,
+      "rationale": "Threshold exceeds documented failure magnitudes"
+    }
+  }
+}

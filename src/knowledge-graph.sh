@@ -28,10 +28,32 @@ debug "knowledge-graph.sh: Sourcing validation.sh"
 source "$KG_SCRIPT_DIR/utils/validation.sh"
 # shellcheck disable=SC1091
 source "$KG_SCRIPT_DIR/utils/json-helpers.sh"
+# shellcheck disable=SC1091
+source "$KG_SCRIPT_DIR/utils/domain-helpers.sh"
 debug "knowledge-graph.sh: Sourcing event-logger.sh"
 # shellcheck disable=SC1091
 source "$KG_SCRIPT_DIR/utils/event-logger.sh" || true
 debug "knowledge-graph.sh: All dependencies sourced"
+
+ARTIFACT_VALIDATION_PHASE="${CCONDUCTOR_ARTIFACT_PHASE:-phase2}"
+case "$ARTIFACT_VALIDATION_PHASE" in
+    phase1|phase2|phase3) ;;
+    *)
+        ARTIFACT_VALIDATION_PHASE="phase2"
+        ;;
+esac
+
+ARTIFACT_CONTRACT_BYPASS=0
+case "${CCONDUCTOR_ALLOW_CONTRACT_BYPASS:-}" in
+    1|true|TRUE|yes|YES)
+        ARTIFACT_CONTRACT_BYPASS=1
+        ;;
+esac
+
+ALLOW_LEGACY_MANIFEST=0
+if [[ "$ARTIFACT_VALIDATION_PHASE" == "phase1" || "$ARTIFACT_CONTRACT_BYPASS" -eq 1 ]]; then
+    ALLOW_LEGACY_MANIFEST=1
+fi
 
 # Initialize a new knowledge graph
 kg_init() {
@@ -1285,10 +1307,26 @@ kg_integrate_agent_output() {
     local session_dir="$1"
     local agent_output_file="$2"
     local kg_file="$session_dir/knowledge/knowledge-graph.json"
+    local agent_name=""
     
     if [ ! -f "$kg_file" ]; then
         echo "Error: Knowledge graph not found at $kg_file" >&2
         return 1
+    fi
+
+    # Derive agent name from output path when available
+    if [[ "$agent_output_file" == "$session_dir/"* ]]; then
+        local relative_path="${agent_output_file#"$session_dir"/}"
+        agent_name="${relative_path#work/}"
+        agent_name="${agent_name%%/*}"
+    elif [[ "$agent_output_file" == work/* ]]; then
+        local trimmed="${agent_output_file#work/}"
+        agent_name="${trimmed%%/*}"
+    fi
+
+    if [[ -z "$agent_name" ]]; then
+        # Attempt to infer agent name from manifest location (output.json convention)
+        agent_name=$(basename "$(dirname "$agent_output_file")")
     fi
     
     # Backup knowledge graph before any writes
@@ -1347,11 +1385,14 @@ kg_integrate_agent_output() {
                 
                 # Add claims to KG
                 if [[ "$claim_count" -gt 0 ]]; then
-                    echo "$claims" | jq -c '.[]' | while IFS= read -r claim; do
+                    printf '%s\n' "$claims" | jq -c '.[]' | while IFS= read -r claim; do
                         local claim_text
                         claim_text=$(echo "$claim" | jq -r '.statement // .claim // empty')
                         if [[ -n "$claim_text" ]]; then
-                            kg_add_claim "$session_dir" "$claim" >/dev/null 2>&1 && integrated=$((integrated + 1))
+                            local normalized_claim
+                            normalized_claim=$(kg_normalize_claim_sources "$session_dir" "$claim" "$agent_name")
+                            [[ -z "$normalized_claim" ]] && normalized_claim="$claim"
+                            kg_add_claim "$session_dir" "$normalized_claim" >/dev/null 2>&1 && integrated=$((integrated + 1))
                         fi
                     done
                 fi
@@ -1364,52 +1405,74 @@ kg_integrate_agent_output() {
         fi
     fi
     
-    # Tier 1: Extract findings files list from agent output manifest
-    # Try multiple extraction paths to be resilient to output variations
     local findings_files=""
-    
-    # Tier 1a: Try root level .findings_files[] (legacy/direct format)
-    findings_files=$(jq -r '.findings_files[]? // empty' "$agent_output_file" 2>/dev/null)
-    
-    # Tier 1b: Try parsing .result as JSON string, then extract findings_files
-    if [ -z "$findings_files" ]; then
-        findings_files=$(jq -r '.result // empty' "$agent_output_file" 2>/dev/null | \
-                        jq -r '.findings_files[]? // empty' 2>/dev/null)
+    local manifest_file=""
+    if [[ -n "$agent_name" ]]; then
+        manifest_file="$session_dir/work/${agent_name}/manifest.actual.json"
     fi
-    
-    # Tier 1c: Try parsing .result as JSON string (if it's a string), then extract
-    if [ -z "$findings_files" ]; then
-        local result_content
-        result_content=$(jq -r '.result // empty' "$agent_output_file" 2>/dev/null)
-        if [[ -n "$result_content" ]]; then
-            # Try to parse result_content as JSON
-            findings_files=$(echo "$result_content" | jq -r '.findings_files[]? // empty' 2>/dev/null)
+    if [[ -n "$manifest_file" && -f "$manifest_file" ]]; then
+        local manifest_findings
+        manifest_findings=$(jq -r '.artifacts[] | select((.schema_id // "") == "artifact://research/findings@v1" and (.status // "") == "present") | .relative_path' "$manifest_file" 2>/dev/null)
+        if [[ -n "$manifest_findings" ]]; then
+            while IFS= read -r rel_path; do
+                [[ -z "$rel_path" ]] && continue
+                local abs_path="$session_dir/$rel_path"
+                if [[ -f "$abs_path" ]]; then
+                    findings_files+="$abs_path"$'\n'
+                else
+                    echo "  ⚠ Warning: Manifest referenced missing findings file $rel_path" >&2
+                fi
+            done <<< "$manifest_findings"
         fi
     fi
-    
-    # Tier 1d: Try .result.findings_files[] if .result is already an object
-    if [ -z "$findings_files" ]; then
-        findings_files=$(jq -r '.result.findings_files[]? // empty' "$agent_output_file" 2>/dev/null)
-    fi
-    
-    if [ -z "$findings_files" ]; then
-        # Tier 2: Filesystem fallback - look in work/ and session root
-        # Look for patterns: work/*/findings-*.json, *-findings.json, *findings*.json
-        local found_files=""
-        
-        # Check work/ directory (v0.4.0 structure)
-        if [ -d "$session_dir/work" ]; then
-            for f in "$session_dir/work"/*/findings-*.json "$session_dir/work"/*/*findings*.json; do
-                [ -f "$f" ] && found_files="${found_files}${f}"$'\n'
+
+    if [[ -z "$findings_files" && "$ALLOW_LEGACY_MANIFEST" -eq 1 ]]; then
+        # Legacy fallback for pre-contract missions or explicit bypass
+        local legacy_files=""
+
+        # Tier 1: Attempt to extract findings from agent output JSON
+        local legacy_manifest
+        legacy_manifest=$(jq -r '.findings_files[]? // empty' "$agent_output_file" 2>/dev/null)
+
+        if [[ -z "$legacy_manifest" ]]; then
+            legacy_manifest=$(jq -r '.result // empty' "$agent_output_file" 2>/dev/null | jq -r '.findings_files[]? // empty' 2>/dev/null)
+        fi
+
+        if [[ -z "$legacy_manifest" ]]; then
+            local legacy_result
+            legacy_result=$(jq -r '.result // empty' "$agent_output_file" 2>/dev/null)
+            if [[ -n "$legacy_result" ]]; then
+                legacy_manifest=$(echo "$legacy_result" | jq -r '.findings_files[]? // empty' 2>/dev/null)
+            fi
+        fi
+
+        if [[ -z "$legacy_manifest" ]]; then
+            legacy_manifest=$(jq -r '.result.findings_files[]? // empty' "$agent_output_file" 2>/dev/null)
+        fi
+
+        if [[ -n "$legacy_manifest" ]]; then
+            while IFS= read -r rel_path; do
+                [[ -z "$rel_path" ]] && continue
+                if [[ "$rel_path" != /* ]]; then
+                    rel_path="$session_dir/$rel_path"
+                fi
+                [[ -f "$rel_path" ]] && legacy_files+="$rel_path"$'\n'
+            done <<< "$legacy_manifest"
+        fi
+
+        if [[ -z "$legacy_files" ]]; then
+            # Tier 2: Filesystem glob
+            if [ -d "$session_dir/work" ]; then
+                for f in "$session_dir/work"/*/findings-*.json "$session_dir/work"/*/*findings*.json; do
+                    [ -f "$f" ] && legacy_files="${legacy_files}${f}"$'\n'
+                done
+            fi
+            for f in "$session_dir"/*-findings.json "$session_dir"/*findings*.json; do
+                [ -f "$f" ] && legacy_files="${legacy_files}${f}"$'\n'
             done
         fi
-        
-        # Check session root
-        for f in "$session_dir"/*-findings.json "$session_dir"/*findings*.json; do
-            [ -f "$f" ] && found_files="${found_files}${f}"$'\n'
-        done
-        
-        findings_files=$(echo "$found_files" | grep -v '^$')
+
+        findings_files=$(echo "$legacy_files" | grep -v '^$')
     fi
     
     if [ -z "$findings_files" ]; then
@@ -1461,7 +1524,10 @@ kg_integrate_agent_output() {
                 
                 if [ -n "$statement" ]; then
                     # Pass the entire claim JSON object to kg_add_claim
-                    kg_add_claim "$session_dir" "$claim" >/dev/null 2>&1
+                    local normalized_claim
+                    normalized_claim=$(kg_normalize_claim_sources "$session_dir" "$claim" "$agent_name")
+                    [[ -z "$normalized_claim" ]] && normalized_claim="$claim"
+                    kg_add_claim "$session_dir" "$normalized_claim" >/dev/null 2>&1
                     integrated=$((integrated + 1))
                 fi
             done <<< "$claims_json"
@@ -1527,3 +1593,91 @@ if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
             ;;
     esac
 fi
+# Determine whether independent source enforcement is enabled
+kg_independence_enforced() {
+    case "${CCONDUCTOR_REQUIRE_INDEPENDENT_SOURCES:-0}" in
+        1|true|TRUE|yes|YES|enforce|ENFORCE)
+            return 0
+            ;;
+    esac
+    return 1
+}
+
+# Normalize claim sources by removing duplicate domains when enforcement is enabled
+kg_normalize_claim_sources() {
+    local session_dir="$1"
+    local claim_json="$2"
+    local agent_name="${3:-}"
+
+    if ! kg_independence_enforced; then
+        printf '%s\n' "$claim_json"
+        return 0
+    fi
+
+    if [[ -z "$claim_json" || "$claim_json" == "null" ]]; then
+        printf '%s\n' "$claim_json"
+        return 0
+    fi
+
+    local claim_id
+    claim_id=$(safe_jq_from_json "$claim_json" '.id // ""' "" "$session_dir" "kg.normalize.claim_id")
+    local claim_statement=""
+    if [[ -z "$claim_id" ]]; then
+        claim_statement=$(safe_jq_from_json "$claim_json" '.statement // ""' "" "$session_dir" "kg.normalize.statement")
+    fi
+
+    local -a unique_sources=()
+    local -A seen_domains=()
+    local -A duplicate_domains=()
+    local duplicates=0
+
+    while IFS= read -r source_json; do
+        [[ -z "$source_json" || "$source_json" == "null" ]] && continue
+
+        local url
+        url=$(safe_jq_from_json "$source_json" '.url // ""' "" "$session_dir" "kg.normalize.source_url")
+        local domain_key=""
+        if [[ -n "$url" ]]; then
+            domain_key=$(domain_helpers_extract_etld1 "$url")
+        fi
+        if [[ -z "$domain_key" ]]; then
+            domain_key=$(safe_jq_from_json "$source_json" '.domain // ""' "" "$session_dir" "kg.normalize.source_domain")
+        fi
+        local normalized_key="${domain_key,,}"
+
+        if [[ -n "$normalized_key" && -n "${seen_domains[$normalized_key]:-}" ]]; then
+            duplicates=$((duplicates + 1))
+            duplicate_domains["$normalized_key"]=1
+            continue
+        fi
+
+        if [[ -n "$normalized_key" ]]; then
+            seen_domains["$normalized_key"]=1
+        fi
+
+        unique_sources+=("$source_json")
+    done < <(printf '%s\n' "$claim_json" | jq -c '.sources[]?' 2>/dev/null)
+
+    local sources_json="[]"
+    if (( ${#unique_sources[@]} > 0 )); then
+        sources_json=$(printf '%s\n' "${unique_sources[@]}" | jq -s '.')
+    fi
+
+    if (( duplicates > 0 )); then
+        local duplicate_list=()
+        for domain_key in "${!duplicate_domains[@]}"; do
+            duplicate_list+=("$domain_key")
+        done
+        local duplicate_summary
+        duplicate_summary=$(printf '%s\n' "${duplicate_list[@]}" | sort | tr '\n' ',' | sed 's/,$//')
+        if [[ -z "$duplicate_summary" ]]; then
+            duplicate_summary="${duplicate_list[*]}"
+        fi
+        local claim_ref="${claim_id:-${claim_statement:0:80}}"
+        log_warn "knowledge-graph: removed $duplicates duplicate domain source(s) (${duplicate_summary}) for claim ${claim_ref:-unknown}${agent_name:+ via $agent_name}"
+    fi
+
+    local normalized_claim
+    normalized_claim=$(printf '%s\n' "$claim_json" | jq -c --argjson sources "$sources_json" '.sources = $sources' 2>/dev/null || printf '%s\n' "$claim_json")
+    printf '%s\n' "$normalized_claim"
+}

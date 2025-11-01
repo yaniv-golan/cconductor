@@ -1,0 +1,11 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "artifact://markdown/market-analysis-summary@v1",
+  "title": "Market Analysis Summary Markdown",
+  "description": "Market analyzer insights captured as markdown.",
+  "allOf": [
+    {
+      "$ref": "artifact://markdown/base@v1"
+    }
+  ]
+}

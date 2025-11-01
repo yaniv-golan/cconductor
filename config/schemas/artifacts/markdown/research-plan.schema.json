@@ -1,0 +1,11 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "artifact://markdown/research-plan@v1",
+  "title": "Research Plan Markdown",
+  "description": "Research planner task plan captured in markdown.",
+  "allOf": [
+    {
+      "$ref": "artifact://markdown/base@v1"
+    }
+  ]
+}

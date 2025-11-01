@@ -1,0 +1,30 @@
+{
+  "schema_version": "1.0.0",
+  "agent": "web-researcher",
+  "description": "Web research findings, captured via Write tool outputs.",
+  "artifacts": [
+    {
+      "slot": "web_research_notes",
+      "description": "Markdown digest of prioritized web findings and citations.",
+      "relative_path": "artifacts/web-researcher/output.md",
+      "content_type": "text/markdown",
+      "schema_id": "artifact://markdown/web-research-summary@v1",
+      "required": true,
+      "checksum": {
+        "algorithm": "sha256"
+      }
+    },
+    {
+      "slot": "web_research_findings",
+      "description": "Structured findings exported for knowledge graph ingestion.",
+      "path_pattern": "work/web-researcher/findings-*.json",
+      "content_type": "application/json",
+      "schema_id": "artifact://research/findings@v1",
+      "required": true,
+      "allow_multiple": true,
+      "checksum": {
+        "algorithm": "sha256"
+      }
+    }
+  ]
+}

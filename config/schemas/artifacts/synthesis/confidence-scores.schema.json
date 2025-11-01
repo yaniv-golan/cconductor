@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "artifact://synthesis/confidence-scores@v1",
+  "title": "Synthesis Confidence Scores",
+  "type": "object",
+  "required": ["overall"],
+  "properties": {
+    "overall": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
+    },
+    "by_category": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "number",
+        "minimum": 0,
+        "maximum": 1
+      }
+    },
+    "methodology": {
+      "type": "string"
+    },
+    "limitations": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "additionalProperties": true
+}

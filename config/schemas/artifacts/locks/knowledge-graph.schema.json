@@ -1,0 +1,13 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "artifact://locks/knowledge-graph@v1",
+  "title": "Knowledge Graph Lock File",
+  "type": "object",
+  "properties": {
+    "content_type": {
+      "const": "application/x.lock"
+    }
+  },
+  "required": ["content_type"],
+  "additionalProperties": true
+}

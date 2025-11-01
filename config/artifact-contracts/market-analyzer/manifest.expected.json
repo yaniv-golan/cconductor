@@ -1,0 +1,18 @@
+{
+  "schema_version": "1.0.0",
+  "agent": "market-analyzer",
+  "description": "Market analyzer deliverables for economic research missions.",
+  "artifacts": [
+    {
+      "slot": "market_analysis_markdown",
+      "description": "Markdown narrative summarizing market research and quantitative insights.",
+      "relative_path": "artifacts/market-analyzer/output.md",
+      "content_type": "text/markdown",
+      "schema_id": "artifact://markdown/market-analysis-summary@v1",
+      "required": true,
+      "checksum": {
+        "algorithm": "sha256"
+      }
+    }
+  ]
+}

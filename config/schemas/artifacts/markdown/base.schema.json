@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "artifact://markdown/base@v1",
+  "type": "object",
+  "properties": {
+    "content_type": {
+      "const": "text/markdown"
+    },
+    "size_bytes": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    }
+  },
+  "required": ["content_type"],
+  "additionalProperties": true
+}

@@ -174,6 +174,7 @@ _domain_helpers_extract_domain() {
     fi
     local domain="${url#*://}"
     domain="${domain%%/*}"
+    domain="${domain%%:*}"
     domain="${domain#www.}"
     printf '%s' "$domain"
 }
@@ -335,6 +336,76 @@ domain_helpers_extract_hostname() {
     _domain_helpers_extract_domain "$1"
 }
 
+__DOMAIN_HELPERS_SUFFIXES_LOADED=0
+declare -a __DOMAIN_HELPERS_SUFFIXES=()
+DOMAIN_HELPERS_SUFFIX_FILE="$PROJECT_ROOT/config/public-suffix.json"
+
+_domain_helpers_load_public_suffixes() {
+    if [[ "$__DOMAIN_HELPERS_SUFFIXES_LOADED" -eq 1 ]]; then
+        return 0
+    fi
+
+    if [[ -f "$DOMAIN_HELPERS_SUFFIX_FILE" ]] && command -v jq >/dev/null 2>&1; then
+        mapfile -t __DOMAIN_HELPERS_SUFFIXES < <(jq -r '.publicSuffixes[]?' "$DOMAIN_HELPERS_SUFFIX_FILE" 2>/dev/null | tr '[:upper:]' '[:lower:]')
+    else
+        __DOMAIN_HELPERS_SUFFIXES=()
+    fi
+
+    __DOMAIN_HELPERS_SUFFIXES_LOADED=1
+}
+
+domain_helpers_extract_etld1() {
+    local url="$1"
+    local host
+    host=$(_domain_helpers_extract_domain "$url")
+    if [[ -z "$host" ]]; then
+        echo ""
+        return 1
+    fi
+
+    local lowered="${host,,}"
+
+    _domain_helpers_load_public_suffixes
+
+    if [[ "${#__DOMAIN_HELPERS_SUFFIXES[@]}" -eq 0 ]]; then
+        echo "$lowered"
+        return 0
+    fi
+
+    local best_suffix=""
+    for suffix in "${__DOMAIN_HELPERS_SUFFIXES[@]}"; do
+        [[ -z "$suffix" ]] && continue
+        if [[ "$lowered" == "$suffix" ]]; then
+            best_suffix="$suffix"
+            break
+        fi
+        if [[ "$lowered" == *".${suffix}" ]]; then
+            if [[ ${#suffix} -gt ${#best_suffix} ]]; then
+                best_suffix="$suffix"
+            fi
+        fi
+    done
+
+    if [[ -z "$best_suffix" ]]; then
+        echo "$lowered"
+        return 0
+    fi
+
+    local remainder="${lowered%."$best_suffix"}"
+    if [[ -z "$remainder" || "$remainder" == "$lowered" ]]; then
+        echo "$lowered"
+        return 0
+    fi
+
+    local last_label="${remainder##*.}"
+    if [[ -z "$last_label" ]]; then
+        echo "$lowered"
+        return 0
+    fi
+
+    echo "${last_label}.${best_suffix}"
+}
+
 hash_source_id() {
     local url="${1:-}"
     if [[ -z "$url" || "$url" == "null" ]]; then
@@ -431,4 +502,5 @@ export -f match_watch_item
 export -f domain_helpers_get_stakeholder_policy
 export -f domain_helpers_get_stakeholder_resolver
 export -f domain_helpers_extract_hostname
+export -f domain_helpers_extract_etld1
 export -f hash_source_id

@@ -156,6 +156,29 @@ dashboard_generate_metrics() {
         --argjson prompt "$preflight_prompt" \
         --argjson stakeholders "$preflight_stakeholders" \
         '{domain_heuristics_runs: $heuristics, prompt_parser_runs: $prompt, stakeholder_classifications: $stakeholders}') || preflight_json='{}'
+
+    local contract_metrics_json='{"evaluations":0,"passed":0,"failed":0,"avg_duration_ms":0,"total_missing_slots":0,"latest_missing_slots":[]}'
+    if [[ $events_available -eq 1 ]]; then
+        local contract_metrics_filter
+        contract_metrics_filter=$(cat <<'JQ'
+            (map(select(.type == "agent_result" and (.data.artifact_contract // null) != null))) as $events |
+            if ($events | length) == 0 then
+                {evaluations:0, passed:0, failed:0, avg_duration_ms:0, total_missing_slots:0, latest_missing_slots:[]}
+            else
+                {
+                    evaluations: ($events | length),
+                    passed: ($events | map(select(.data.artifact_contract.pass == true)) | length),
+                    failed: ($events | map(select(.data.artifact_contract.pass == false)) | length),
+                    avg_duration_ms: (($events | map((.data.artifact_contract.validation_duration_ms // 0)) | add) / ($events | length)),
+                    total_missing_slots: ($events | map((.data.artifact_contract.missing_slots // []) | length) | add),
+                    latest_missing_slots: ($events[-1].data.artifact_contract.missing_slots // [])
+                }
+            end
+JQ
+)
+        contract_metrics_json=$(dashboard_jq_payload "$session_dir" "$events_payload" "$contract_metrics_filter" '{}' "events.contract_metrics" "false")
+    fi
+    contract_metrics_json=$(dashboard_ensure_json "$contract_metrics_json" '{"evaluations":0,"passed":0,"failed":0,"avg_duration_ms":0,"total_missing_slots":0,"latest_missing_slots":[]}')
     
     local entities
     entities=$(dashboard_jq_payload "$session_dir" "$kg" '.stats.total_entities // 0' "0" "kg.entities")
@@ -281,6 +304,7 @@ dashboard_generate_metrics() {
         --argjson errors "$error_count" \
         --argjson warnings "$warning_count" \
         --argjson preflight "$preflight_json" \
+        --argjson contract "$contract_metrics_json" \
         --arg session_status "$session_status" \
         --arg session_created "$created_at" \
         --arg session_completed "$completed_at" \
@@ -322,6 +346,7 @@ dashboard_generate_metrics() {
                 elapsed_seconds: $elapsed,
                 active_agents: $agents
             },
+            artifact_contract: $contract,
             system_health: {
                 errors: $errors,
                 warnings: $warnings,

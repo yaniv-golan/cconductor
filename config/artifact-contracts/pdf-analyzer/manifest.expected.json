@@ -1,0 +1,18 @@
+{
+  "schema_version": "1.0.0",
+  "agent": "pdf-analyzer",
+  "description": "PDF analyzer observations and structured outputs.",
+  "artifacts": [
+    {
+      "slot": "pdf_analysis_markdown",
+      "description": "Markdown notes summarizing extracted PDF findings.",
+      "relative_path": "artifacts/pdf-analyzer/output.md",
+      "content_type": "text/markdown",
+      "schema_id": "artifact://markdown/pdf-analysis-summary@v1",
+      "required": true,
+      "checksum": {
+        "algorithm": "sha256"
+      }
+    }
+  ]
+}

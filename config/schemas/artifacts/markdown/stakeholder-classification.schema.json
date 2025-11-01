@@ -1,0 +1,11 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "artifact://markdown/stakeholder-classification@v1",
+  "title": "Stakeholder Classification Markdown",
+  "description": "Stakeholder classifier assignments summarized in markdown.",
+  "allOf": [
+    {
+      "$ref": "artifact://markdown/base@v1"
+    }
+  ]
+}

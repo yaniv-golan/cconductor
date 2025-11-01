@@ -36,6 +36,11 @@ logs/
 # Config files: only .default.json should be tracked
 config/*.json
 !config/*.default.json
+!config/schemes.jsonld
+!config/units.json
+!config/currency.json
+!config/public-suffix.json
+!config/url-tracker-keys.json
 
 # Docker credential files (NEVER commit these)
 .env
@@ -93,6 +98,9 @@ test-*.sh
 !tests/test-web-cache.sh
 !tests/test-library-memory-hook.sh
 !tests/test-mission-report-paths.sh
+!tests/test-artifact-contracts.sh
+!tests/test-argument-event-graph.sh
+!tests/test-orchestrator-dual-mode.sh
 obsidian/
 
 # Additional development notes patterns
@@ -129,5 +137,5 @@ docs/internal/knowledge-graph-schema.md
 !tests/bash-parity/fixtures/
 !tests/bash-parity/fixtures/**
 tests/citation-readiness-tests/
-docs/internal/
+docs/internal/*
 audit-results.json

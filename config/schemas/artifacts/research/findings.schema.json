@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "artifact://research/findings@v1",
+  "title": "Research Agent Findings",
+  "type": "object",
+  "required": ["status"],
+  "properties": {
+    "task_id": {"type": "string"},
+    "status": {"type": "string"},
+    "query": {"type": "string"},
+    "entities_discovered": {
+      "type": "array",
+      "items": {"type": "object"}
+    },
+    "claims": {
+      "type": "array",
+      "items": {"type": "object"}
+    }
+  },
+  "additionalProperties": true
+}

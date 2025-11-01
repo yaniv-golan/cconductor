@@ -1,0 +1,30 @@
+{
+  "schema_version": "1.0.0",
+  "agent": "academic-researcher",
+  "description": "Academic researcher findings and structured notes.",
+  "artifacts": [
+    {
+      "slot": "academic_findings_markdown",
+      "description": "Markdown synthesis of academic research findings and citations.",
+      "relative_path": "artifacts/academic-researcher/output.md",
+      "content_type": "text/markdown",
+      "schema_id": "artifact://markdown/academic-research-summary@v1",
+      "required": true,
+      "checksum": {
+        "algorithm": "sha256"
+      }
+    },
+    {
+      "slot": "academic_findings_json",
+      "description": "Structured academic findings used for knowledge graph integration.",
+      "path_pattern": "work/academic-researcher/findings-*.json",
+      "content_type": "application/json",
+      "schema_id": "artifact://research/findings@v1",
+      "required": true,
+      "allow_multiple": true,
+      "checksum": {
+        "algorithm": "sha256"
+      }
+    }
+  ]
+}

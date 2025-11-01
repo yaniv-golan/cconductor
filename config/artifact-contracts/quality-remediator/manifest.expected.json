@@ -1,0 +1,30 @@
+{
+  "schema_version": "1.0.0",
+  "agent": "quality-remediator",
+  "description": "Quality remediator action plan and remediation notes.",
+  "artifacts": [
+    {
+      "slot": "quality_remediation_markdown",
+      "description": "Markdown action plan consolidating remediation tasks.",
+      "relative_path": "artifacts/quality-remediator/output.md",
+      "content_type": "text/markdown",
+      "schema_id": "artifact://markdown/quality-remediation-summary@v1",
+      "required": true,
+      "checksum": {
+        "algorithm": "sha256"
+      }
+    },
+    {
+      "slot": "quality_remediation_json",
+      "description": "Structured remediation record with claim-level follow-up details.",
+      "path_pattern": "work/quality-remediator/quality-remediation*.json",
+      "content_type": "application/json",
+      "schema_id": "artifact://quality/remediation-record@v1",
+      "required": false,
+      "allow_multiple": false,
+      "checksum": {
+        "algorithm": "sha256"
+      }
+    }
+  ]
+}

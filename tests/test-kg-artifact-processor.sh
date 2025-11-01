@@ -33,7 +33,8 @@ echo "Test 1: Valid Artifacts"
 echo "────────────────────────────────────────────────────────"
 
 # Create test KG
-cat > "$TEST_SESSION/knowledge-graph.json" <<'EOF'
+mkdir -p "$TEST_SESSION/knowledge"
+cat > "$TEST_SESSION/knowledge/knowledge-graph.json" <<'EOF'
 {
   "research_question": "Test",
   "entities": [],
@@ -52,8 +53,24 @@ EOF
 
 cat > "$TEST_SESSION/artifacts/test-agent/data.json" <<'EOF'
 {
-  "items_processed": 42,
-  "confidence": 0.85
+  "entities": [
+    {
+      "name": "Test Entity",
+      "type": "concept",
+      "sources": ["https://example.com/test"]
+    }
+  ],
+  "claims": [
+    {
+      "statement": "Sample claim for test agent",
+      "sources": [
+        {
+          "url": "https://example.com/claim",
+          "title": "Example Claim"
+        }
+      ]
+    }
+  ]
 }
 EOF
 
@@ -78,10 +95,8 @@ else
 fi
 
 # Verify merge
-if jq -e '.["test-agent"]' "$TEST_SESSION/knowledge-graph.json" >/dev/null; then
+if jq -e '.entities | length == 1' "$TEST_SESSION/knowledge/knowledge-graph.json" >/dev/null; then
     echo "✓ Artifacts merged into KG"
-    echo "  Merged content:"
-    jq -C '.["test-agent"]' "$TEST_SESSION/knowledge-graph.json" | sed 's/^/    /'
 else
     echo "✗ Artifacts not found in KG"
     exit 1
@@ -197,6 +212,31 @@ fi
 
 echo ""
 
+# Test 6: Fixture session integration
+echo "Test 6: Fixture Session Integration"
+echo "────────────────────────────────────────────────────────"
+
+FIXTURE_SRC="$PROJECT_ROOT/tests/data/artifact-contracts/basic-session"
+FIXTURE_DEST="$TEST_SESSION/fixture"
+cp -R "$FIXTURE_SRC" "$FIXTURE_DEST"
+touch "$FIXTURE_DEST/web-researcher.kg.lock"
+
+if process_kg_artifacts "$FIXTURE_DEST" "web-researcher"; then
+    echo "✓ Fixture artifacts processed"
+else
+    echo "✗ Fixture processing failed"
+    exit 1
+fi
+
+if jq -e '.entities | length == 1' "$FIXTURE_DEST/knowledge/knowledge-graph.json" >/dev/null; then
+    echo "✓ Knowledge graph updated with fixture data"
+else
+    echo "✗ Knowledge graph not updated"
+    exit 1
+fi
+
+echo ""
+
 # Summary
 echo "═══════════════════════════════════════════════════════"
 echo "  ✅ All Tests Passed!"
@@ -208,5 +248,5 @@ echo "  ✓ Invalid JSON handled with error and retry instructions"
 echo "  ✓ Oversized files rejected"
 echo "  ✓ No lockfile case handled gracefully"
 echo "  ✓ Direct validation function works correctly"
+echo "  ✓ Fixture session artifacts integrate into KG"
 echo ""
-

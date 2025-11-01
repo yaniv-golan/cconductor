@@ -1,0 +1,65 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "artifact://synthesis/key-findings@v1",
+  "title": "Synthesis Key Findings",
+  "type": "object",
+  "required": [
+    "well_supported_claims",
+    "partially_supported_claims",
+    "contradicted_claims",
+    "promise_vs_implementation_gaps",
+    "engineering_verdict"
+  ],
+  "properties": {
+    "well_supported_claims": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["claim", "confidence"],
+        "properties": {
+          "claim": {"type": "string"},
+          "confidence": {"type": "number", "minimum": 0, "maximum": 1},
+          "evidence": {"type": "string"},
+          "claim_ids": {
+            "type": "array",
+            "items": {"type": "string"}
+          }
+        },
+        "additionalProperties": true
+      }
+    },
+    "partially_supported_claims": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["claim", "confidence"],
+        "properties": {
+          "claim": {"type": "string"},
+          "confidence": {"type": "number", "minimum": 0, "maximum": 1}
+        },
+        "additionalProperties": true
+      }
+    },
+    "contradicted_claims": {
+      "type": "array"
+    },
+    "promise_vs_implementation_gaps": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["promise", "implementation_reality"],
+        "properties": {
+          "promise": {"type": "string"},
+          "implementation_reality": {"type": "string"},
+          "gap_severity": {"type": "string"}
+        },
+        "additionalProperties": true
+      }
+    },
+    "engineering_verdict": {
+      "type": "object",
+      "minProperties": 1
+    }
+  },
+  "additionalProperties": true
+}

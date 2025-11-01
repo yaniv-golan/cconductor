@@ -1,0 +1,85 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "artifact://system/manifest-expected@v1",
+  "title": "Agent Artifact Contract (Expected)",
+  "type": "object",
+  "required": ["schema_version", "agent", "artifacts"],
+  "properties": {
+    "schema_version": {
+      "type": "string"
+    },
+    "agent": {
+      "type": "string",
+      "minLength": 1
+    },
+    "description": {
+      "type": "string"
+    },
+    "artifacts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "slot",
+          "schema_id",
+          "required",
+          "checksum"
+        ],
+        "properties": {
+          "slot": {
+            "type": "string",
+            "minLength": 1
+          },
+          "description": {
+            "type": "string"
+          },
+          "relative_path": {
+            "type": "string",
+            "minLength": 1
+          },
+          "path_pattern": {
+            "type": "string",
+            "minLength": 1
+          },
+          "content_type": {
+            "type": "string"
+          },
+          "schema_id": {
+            "type": "string",
+            "pattern": "^artifact://[a-z0-9-]+(/[a-z0-9-]+)*@v[0-9]+$"
+          },
+          "required": {
+            "type": "boolean"
+          },
+          "allow_multiple": {
+            "type": "boolean"
+          },
+          "checksum": {
+            "type": "object",
+            "required": ["algorithm"],
+            "properties": {
+              "algorithm": {
+                "type": "string",
+                "enum": ["sha256"]
+              }
+            },
+            "additionalProperties": false
+          },
+          "notes": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": true,
+        "allOf": [
+          {
+            "anyOf": [
+              {"required": ["relative_path"]},
+              {"required": ["path_pattern"]}
+            ]
+          }
+        ]
+      }
+    }
+  },
+  "additionalProperties": false
+}

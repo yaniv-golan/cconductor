@@ -1,0 +1,18 @@
+{
+  "schema_version": "1.0.0",
+  "agent": "mission-orchestrator",
+  "description": "Mission orchestrator decisions captured as structured JSON for deterministic consumption.",
+  "artifacts": [
+    {
+      "slot": "decision_json",
+      "description": "Latest orchestration decision with reasoning and action metadata.",
+      "relative_path": "artifacts/mission-orchestrator/decision.json",
+      "content_type": "application/json",
+      "schema_id": "artifact://orchestrator/decision@v1",
+      "required": true,
+      "checksum": {
+        "algorithm": "sha256"
+      }
+    }
+  ]
+}

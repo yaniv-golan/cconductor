@@ -1,0 +1,11 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "artifact://markdown/academic-research-summary@v1",
+  "title": "Academic Research Summary Markdown",
+  "description": "Academic researcher findings distilled into markdown form.",
+  "allOf": [
+    {
+      "$ref": "artifact://markdown/base@v1"
+    }
+  ]
+}

@@ -1,0 +1,84 @@
+{
+  "schema_version": "1.0.0",
+  "agent": "synthesis-agent",
+  "description": "Canonical synthesis deliverables captured via Write tool outputs.",
+  "artifacts": [
+    {
+      "slot": "mission_report",
+      "description": "Full mission report rendered for stakeholders.",
+      "relative_path": "report/mission-report.md",
+      "content_type": "text/markdown",
+      "schema_id": "artifact://markdown/mission-report@v1",
+      "required": true,
+      "checksum": {
+        "algorithm": "sha256"
+      }
+    },
+    {
+      "slot": "synthesis_output_markdown",
+      "description": "Agent reasoning and synthesis handoff summary.",
+      "relative_path": "artifacts/synthesis-agent/output.md",
+      "content_type": "text/markdown",
+      "schema_id": "artifact://markdown/synthesis-output@v1",
+      "required": true,
+      "checksum": {
+        "algorithm": "sha256"
+      }
+    },
+    {
+      "slot": "key_findings",
+      "description": "Structured list of key claims and supporting evidence.",
+      "relative_path": "artifacts/synthesis-agent/key-findings.json",
+      "content_type": "application/json",
+      "schema_id": "artifact://synthesis/key-findings@v1",
+      "required": true,
+      "checksum": {
+        "algorithm": "sha256"
+      }
+    },
+    {
+      "slot": "confidence_scores",
+      "description": "Confidence distribution across synthesis dimensions.",
+      "relative_path": "artifacts/synthesis-agent/confidence-scores.json",
+      "content_type": "application/json",
+      "schema_id": "artifact://synthesis/confidence-scores@v1",
+      "required": true,
+      "checksum": {
+        "algorithm": "sha256"
+      }
+    },
+    {
+      "slot": "coverage_report",
+      "description": "Coverage accounting for research objectives and gaps.",
+      "relative_path": "artifacts/synthesis-agent/coverage.json",
+      "content_type": "application/json",
+      "schema_id": "artifact://synthesis/coverage@v1",
+      "required": true,
+      "checksum": {
+        "algorithm": "sha256"
+      }
+    },
+    {
+      "slot": "completion_metadata",
+      "description": "Completion metadata referencing downstream assets.",
+      "relative_path": "artifacts/synthesis-agent/completion.json",
+      "content_type": "application/json",
+      "schema_id": "artifact://synthesis/completion@v1",
+      "required": true,
+      "checksum": {
+        "algorithm": "sha256"
+      }
+    },
+    {
+      "slot": "summary_markdown",
+      "description": "Optional executive summary for quick review.",
+      "relative_path": "artifacts/synthesis-agent/summary.md",
+      "content_type": "text/markdown",
+      "schema_id": "artifact://markdown/synthesis-summary@v1",
+      "required": false,
+      "checksum": {
+        "algorithm": "sha256"
+      }
+    }
+  ]
+}

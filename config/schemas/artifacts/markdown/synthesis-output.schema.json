@@ -1,0 +1,11 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "artifact://markdown/synthesis-output@v1",
+  "title": "Synthesis Agent Output Markdown",
+  "description": "Markdown output written by the synthesis agent summarizing actions and deliverables.",
+  "allOf": [
+    {
+      "$ref": "artifact://markdown/base@v1"
+    }
+  ]
+}

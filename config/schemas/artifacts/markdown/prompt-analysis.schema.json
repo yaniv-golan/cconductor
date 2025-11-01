@@ -1,0 +1,11 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "artifact://markdown/prompt-analysis@v1",
+  "title": "Prompt Analysis Markdown",
+  "description": "Markdown summary highlighting prompt constraints, objectives, and questions.",
+  "allOf": [
+    {
+      "$ref": "artifact://markdown/base@v1"
+    }
+  ]
+}

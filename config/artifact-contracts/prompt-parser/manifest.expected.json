@@ -1,0 +1,18 @@
+{
+  "schema_version": "1.0.0",
+  "agent": "prompt-parser",
+  "description": "Prompt parsing notes consumed by downstream agents.",
+  "artifacts": [
+    {
+      "slot": "prompt_analysis_markdown",
+      "description": "Markdown summary of mission prompt analysis and extracted directives.",
+      "relative_path": "artifacts/prompt-parser/output.md",
+      "content_type": "text/markdown",
+      "schema_id": "artifact://markdown/prompt-analysis@v1",
+      "required": true,
+      "checksum": {
+        "algorithm": "sha256"
+      }
+    }
+  ]
+}

@@ -1,0 +1,11 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "artifact://markdown/pdf-analysis-summary@v1",
+  "title": "PDF Analysis Summary Markdown",
+  "description": "PDF analyzer findings summarized in markdown.",
+  "allOf": [
+    {
+      "$ref": "artifact://markdown/base@v1"
+    }
+  ]
+}

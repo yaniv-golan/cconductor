@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "artifact://quality/remediation-record@v1",
+  "title": "Quality Remediation Structured Record",
+  "type": "object",
+  "required": ["metadata", "claims"],
+  "properties": {
+    "metadata": {
+      "type": "object",
+      "required": ["source"],
+      "properties": {
+        "source": {"type": "string"},
+        "quality_gate_run": {"type": "string"}
+      },
+      "additionalProperties": true
+    },
+    "claims": {
+      "type": "array",
+      "items": {"type": "object"}
+    }
+  },
+  "additionalProperties": true
+}

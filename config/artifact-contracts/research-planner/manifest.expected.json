@@ -1,0 +1,18 @@
+{
+  "schema_version": "1.0.0",
+  "agent": "research-planner",
+  "description": "Research planner task outlines and prioritization notes.",
+  "artifacts": [
+    {
+      "slot": "research_plan_markdown",
+      "description": "Markdown plan enumerating research tasks and sequencing.",
+      "relative_path": "artifacts/research-planner/output.md",
+      "content_type": "text/markdown",
+      "schema_id": "artifact://markdown/research-plan@v1",
+      "required": true,
+      "checksum": {
+        "algorithm": "sha256"
+      }
+    }
+  ]
+}

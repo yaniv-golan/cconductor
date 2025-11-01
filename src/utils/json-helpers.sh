@@ -310,6 +310,47 @@ jq_slurp_array() {
     json_slurp_array "$@"
 }
 
+# Validate JSON file against a schema definition stored under config/schemas/artifacts
+# Usage: json_validate_with_schema schema_path data_path
+json_validate_with_schema() {
+    local schema_path="$1"
+    local data_path="$2"
+
+    if [[ -z "$schema_path" || -z "$data_path" ]]; then
+        log_error "json_validate_with_schema requires schema and data paths"
+        return 1
+    fi
+
+    if [[ ! -f "$schema_path" ]]; then
+        log_error "Schema file not found: $schema_path"
+        return 1
+    fi
+
+    if [[ ! -f "$data_path" ]]; then
+        log_error "JSON data file not found: $data_path"
+        return 1
+    fi
+
+    local validator="$PROJECT_ROOT/src/utils/schema-validator.py"
+    if [[ ! -x "$validator" ]]; then
+        log_error "Schema validator missing or not executable: $validator"
+        return 1
+    fi
+
+    if ! python3 "$validator" "$schema_path" "$data_path" >/dev/null 2>&1; then
+        if [[ -n "${CCONDUCTOR_SESSION_DIR:-}" ]] && command -v log_system_error &>/dev/null; then
+            log_system_error "$CCONDUCTOR_SESSION_DIR" "schema_validation_failed" \
+                "Schema validation failed for $data_path" \
+                "schema=$schema_path"
+        else
+            log_error "Schema validation failed for $data_path (schema: $schema_path)"
+        fi
+        return 1
+    fi
+
+    return 0
+}
+
 # Read JSON object from file with fallback
 # Usage: jq_read_object file.json ['{}']
 # Returns: JSON object on success, fallback value on failure (default: '{}')
@@ -432,6 +473,7 @@ export -f json_slurp_array
 export -f jq_validate_json
 export -f jq_escape_string
 export -f jq_build_argjson
+export -f json_validate_with_schema
 export -f jq_slurp_array
 export -f jq_read_object
 export -f safe_jq_from_json

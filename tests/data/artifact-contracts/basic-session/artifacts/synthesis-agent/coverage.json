@@ -1,0 +1,11 @@
+{
+  "aspects_identified": 3,
+  "aspects_well_covered": 2,
+  "aspects_partially_covered": 1,
+  "aspects_not_covered": 0,
+  "well_covered": ["Dual sensor architecture", "Operational validation"],
+  "partially_covered": ["Synthetic AOA timeline"],
+  "research_objectives_met": ["Summarize MCAS fix effectiveness"],
+  "critical_distinction_addressed": true,
+  "missing_watch_topics": []
+}

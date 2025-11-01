@@ -1,0 +1,21 @@
+{
+  "entities": [
+    {
+      "name": "MCAS Dual Sensor Update",
+      "type": "technical_change",
+      "sources": ["https://www.boeing.com/737-max-updates/mcas/"]
+    }
+  ],
+  "claims": [
+    {
+      "statement": "Dual AOA sensors disengage MCAS when disagreement exceeds 5.5°",
+      "confidence": 0.9,
+      "sources": [
+        {
+          "url": "https://www.federalregister.gov/documents/2020/11/20/2020-25844/airworthiness-directives-the-boeing-company-airplanes",
+          "title": "Airworthiness Directive"
+        }
+      ]
+    }
+  ]
+}

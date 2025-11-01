@@ -36,10 +36,14 @@ TESTS=(
     "test-parallel-execution.sh"
     "test-scientific-research.sh"
     "test-market-research.sh"
+    "test-argument-event-graph.sh"
     "test-web-cache.sh"
     "test-web-search-cache.sh"
     "test-pdf-cache-phase1.sh"
     "test-mission-report-paths.sh"
+    "test-write-tool-contracts.sh"
+    "test-artifact-contracts.sh"
+    "test-orchestrator-dual-mode.sh"
     "test-quality-gate-malformed-samples.sh"
 )
 

@@ -1,0 +1,11 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "artifact://markdown/quality-remediation-summary@v1",
+  "title": "Quality Remediation Summary Markdown",
+  "description": "Quality remediation notes summarizing required follow-up work.",
+  "allOf": [
+    {
+      "$ref": "artifact://markdown/base@v1"
+    }
+  ]
+}

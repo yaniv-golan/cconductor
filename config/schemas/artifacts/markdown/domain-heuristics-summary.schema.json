@@ -1,0 +1,11 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "artifact://markdown/domain-heuristics-summary@v1",
+  "title": "Domain Heuristics Summary Markdown",
+  "description": "Domain heuristics notes summarizing domain assumptions and search guidance.",
+  "allOf": [
+    {
+      "$ref": "artifact://markdown/base@v1"
+    }
+  ]
+}

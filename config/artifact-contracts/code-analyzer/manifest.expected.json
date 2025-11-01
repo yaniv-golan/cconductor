@@ -1,0 +1,18 @@
+{
+  "schema_version": "1.0.0",
+  "agent": "code-analyzer",
+  "description": "Code analyzer outputs for repository inspections.",
+  "artifacts": [
+    {
+      "slot": "code_analysis_markdown",
+      "description": "Markdown review outlining code analysis results.",
+      "relative_path": "artifacts/code-analyzer/output.md",
+      "content_type": "text/markdown",
+      "schema_id": "artifact://markdown/code-analysis-summary@v1",
+      "required": true,
+      "checksum": {
+        "algorithm": "sha256"
+      }
+    }
+  ]
+}

@@ -1,0 +1,11 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "artifact://markdown/code-analysis-summary@v1",
+  "title": "Code Analysis Summary Markdown",
+  "description": "Code analyzer review captured in markdown.",
+  "allOf": [
+    {
+      "$ref": "artifact://markdown/base@v1"
+    }
+  ]
+}

@@ -1,0 +1,18 @@
+{
+  "schema_version": "1.0.0",
+  "agent": "stakeholder-classifier",
+  "description": "Stakeholder classifier outputs describing audience segmentation.",
+  "artifacts": [
+    {
+      "slot": "stakeholder_classification_markdown",
+      "description": "Markdown summary of stakeholder clusters, roles, and priorities.",
+      "relative_path": "artifacts/stakeholder-classifier/output.md",
+      "content_type": "text/markdown",
+      "schema_id": "artifact://markdown/stakeholder-classification@v1",
+      "required": true,
+      "checksum": {
+        "algorithm": "sha256"
+      }
+    }
+  ]
+}

@@ -1,0 +1,27 @@
+{
+  "task_id": "basic",
+  "status": "completed",
+  "entities_discovered": [
+    {
+      "name": "FAA Airworthiness Directive 2020-24-02",
+      "type": "regulation",
+      "description": "Directive detailing MCAS software updates and dual AOA monitoring",
+      "confidence": 0.92,
+      "sources": ["https://www.federalregister.gov/documents/2020/11/20/2020-25844/airworthiness-directives-the-boeing-company-airplanes"]
+    }
+  ],
+  "claims": [
+    {
+      "statement": "Dual AOA thresholds disengage MCAS when disagreement exceeds 5.5 degrees",
+      "confidence": 0.9,
+      "sources": [
+        {
+          "url": "https://www.boeing.com/737-max-updates/mcas/",
+          "title": "MCAS Update",
+          "credibility": "official",
+          "date": "2024-02-01"
+        }
+      ]
+    }
+  ]
+}

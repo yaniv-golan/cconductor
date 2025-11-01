@@ -1,0 +1,40 @@
+{
+  "schema_version": "1.0.0",
+  "agent": "domain-heuristics",
+  "description": "Domain heuristics calibration outputs for mission context.",
+  "artifacts": [
+    {
+      "slot": "domain_profile_json",
+      "description": "Structured heuristic profile for the active mission domain.",
+      "relative_path": "artifacts/domain-heuristics/domain-heuristics.json",
+      "content_type": "application/json",
+      "schema_id": "artifact://domain-heuristics/profile@v1",
+      "required": true,
+      "checksum": {
+        "algorithm": "sha256"
+      }
+    },
+    {
+      "slot": "domain_summary_markdown",
+      "description": "Readable summary of domain assumptions and search guidance.",
+      "relative_path": "artifacts/domain-heuristics/output.md",
+      "content_type": "text/markdown",
+      "schema_id": "artifact://markdown/domain-heuristics-summary@v1",
+      "required": true,
+      "checksum": {
+        "algorithm": "sha256"
+      }
+    },
+    {
+      "slot": "knowledge_graph_lock",
+      "description": "Optional lock file signaling knowledge graph ingest completion.",
+      "relative_path": "artifacts/domain-heuristics/domain-heuristics.kg.lock",
+      "content_type": "application/x.lock",
+      "schema_id": "artifact://locks/knowledge-graph@v1",
+      "required": false,
+      "checksum": {
+        "algorithm": "sha256"
+      }
+    }
+  ]
+}

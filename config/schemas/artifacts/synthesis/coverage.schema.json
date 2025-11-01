@@ -1,0 +1,43 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "artifact://synthesis/coverage@v1",
+  "title": "Synthesis Coverage Report",
+  "type": "object",
+  "required": [
+    "aspects_identified",
+    "aspects_well_covered",
+    "aspects_partially_covered",
+    "aspects_not_covered",
+    "missing_watch_topics"
+  ],
+  "properties": {
+    "aspects_identified": {"type": "integer", "minimum": 0},
+    "aspects_well_covered": {"type": "integer", "minimum": 0},
+    "aspects_partially_covered": {"type": "integer", "minimum": 0},
+    "aspects_not_covered": {"type": "integer", "minimum": 0},
+    "well_covered": {
+      "type": "array",
+      "items": {"type": "string"}
+    },
+    "partially_covered": {
+      "type": "array",
+      "items": {"type": "string"}
+    },
+    "not_covered": {
+      "type": "array",
+      "items": {"type": "string"}
+    },
+    "research_objectives_met": {
+      "type": "array",
+      "items": {"type": "string"}
+    },
+    "critical_distinction_addressed": {
+      "type": "boolean"
+    },
+    "missing_watch_topics": {
+      "type": "array",
+      "items": {"type": "string"}
+    }
+  },
+  "additionalProperties": true
+}

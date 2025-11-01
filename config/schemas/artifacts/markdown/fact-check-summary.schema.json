@@ -1,0 +1,11 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "artifact://markdown/fact-check-summary@v1",
+  "title": "Fact Check Summary Markdown",
+  "description": "Fact-checker outcomes recorded in markdown format.",
+  "allOf": [
+    {
+      "$ref": "artifact://markdown/base@v1"
+    }
+  ]
+}
