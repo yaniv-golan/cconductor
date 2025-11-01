@@ -2,55 +2,115 @@
 # Context Management Utilities
 # Prevents context overflow through intelligent pruning and summarization
 
-# Configuration
-MAX_FACTS_PER_SOURCE=10
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# Source helpers following repository conventions
+# shellcheck disable=SC1091
+source "$SCRIPT_DIR/core-helpers.sh"
+# shellcheck disable=SC1091
+source "$SCRIPT_DIR/json-helpers.sh"
+# shellcheck disable=SC1091
+source "$SCRIPT_DIR/file-helpers.sh"
+# shellcheck disable=SC1091
+source "$SCRIPT_DIR/config-loader.sh"
+
+readonly DEFAULT_MAX_FACTS_PER_SOURCE=10
+MAX_FACTS_PER_SOURCE="$DEFAULT_MAX_FACTS_PER_SOURCE"
+
+config_value=$(get_config_value "cconductor-config" ".context_management.max_facts_per_source" "$DEFAULT_MAX_FACTS_PER_SOURCE" 2>/dev/null || echo "$DEFAULT_MAX_FACTS_PER_SOURCE")
+if [[ -n "$config_value" && "$config_value" =~ ^[0-9]+$ ]]; then
+    MAX_FACTS_PER_SOURCE="$config_value"
+else
+    log_warn "context-manager: invalid max_facts_per_source config '$config_value', defaulting to $DEFAULT_MAX_FACTS_PER_SOURCE"
+fi
+
+gather_findings_files() {
+    local raw_dir="$1"
+    local -a files=()
+
+    while IFS= read -r -d '' file; do
+        files+=("$file")
+    done < <(find "$raw_dir" -maxdepth 1 -type f -name "*-findings*.json" -print0 2>/dev/null)
+
+    printf '%s\n' "${files[@]}"
+}
+
+ensure_findings_dir() {
+    local raw_dir="$1"
+    local context="$2"
+
+    if [[ -z "$raw_dir" ]]; then
+        log_error "$context: findings directory not provided"
+        return 1
+    fi
+
+    if [[ ! -d "$raw_dir" ]]; then
+        log_warn "$context: findings directory missing: $raw_dir"
+        return 1
+    fi
+
+    return 0
+}
 
 # Prune raw research findings to essential information
 prune_context() {
     local raw_dir="$1"
 
-    # Extract only essential information from all findings:
-    # - Top N facts per source
-    # - Remove low-credibility sources
-    # - Deduplicate similar facts
-    # - Keep all citations
+    ensure_findings_dir "$raw_dir" "context-manager.prune_context" || {
+        echo "[]"
+        return 1
+    }
 
-    jq -s '
-        # Flatten all findings arrays
+    mapfile -t findings_files < <(gather_findings_files "$raw_dir")
+    if ((${#findings_files[@]} == 0)); then
+        log_warn "context-manager.prune_context: no findings files found in $raw_dir"
+        echo "[]"
+        return 0
+    fi
+
+    if ! jq --argjson max "$MAX_FACTS_PER_SOURCE" -s '
         [.[] | .findings[]?] |
-
-        # Filter by credibility
         [.[] | select(
             .credibility == "academic" or
             .credibility == "official" or
             .credibility == "high" or
             .credibility == "medium"
         )] |
-
-        # Group by source
         group_by(.source_url) |
-
-        # Take top N facts per source (by importance if available)
         [.[] |
             sort_by(.importance // "medium") |
             reverse |
-            .[:'"$MAX_FACTS_PER_SOURCE"']
+            .[:$max]
         ] |
-
-        # Flatten back to array
         flatten |
-
-        # Remove duplicates (same fact from different sources)
         unique_by(.fact)
-    ' "$raw_dir"/*-findings*.json
+    ' "${findings_files[@]}"; then
+        log_error "context-manager.prune_context failed to prune findings in $raw_dir"
+        return 1
+    fi
 }
 
 # Create progressive summaries for synthesis agent
 summarize_for_synthesis() {
     local findings_file="$1"
 
-    # Group by source and create structured summaries
-    # This reduces token count by ~50% while preserving key information
+    if [[ -z "$findings_file" ]]; then
+        log_error "context-manager.summarize_for_synthesis: findings file not provided"
+        return 1
+    fi
+
+    if [[ ! -f "$findings_file" ]]; then
+        log_warn "context-manager.summarize_for_synthesis: findings file missing: $findings_file"
+        echo "[]"
+        return 0
+    fi
+
+    if ! jq empty "$findings_file" >/dev/null 2>&1; then
+        log_error "context-manager.summarize_for_synthesis: invalid JSON $findings_file"
+        return 1
+    fi
 
     jq '
         group_by(.source_url) |
@@ -66,48 +126,60 @@ summarize_for_synthesis() {
     ' "$findings_file"
 }
 
-# Calculate context usage (estimate token count)
-# NOTE: This is a ROUGH ESTIMATE using 1 token ≈ 4 characters
-# Actual tokenization varies 2-6 chars/token depending on:
-# - Language (English, code, JSON)
-# - Special characters and formatting
-# - Unicode vs ASCII
-# For production use, consider tiktoken library for accurate counts
 estimate_tokens() {
     local file="$1"
 
-    # Rough estimate: 1 token ≈ 4 characters
-    local char_count
-    char_count=$(wc -m < "$file")
-    local token_estimate
-    token_estimate=$((char_count / 4))
+    if [[ -z "$file" || ! -f "$file" ]]; then
+        log_warn "context-manager.estimate_tokens: file not found: $file"
+        echo "0"
+        return 1
+    fi
 
+    local char_count
+    if ! char_count=$(wc -m < "$file" 2>/dev/null); then
+        log_error "context-manager.estimate_tokens: failed to measure size of $file"
+        echo "0"
+        return 1
+    fi
+
+    local token_estimate=$((char_count / 4))
     echo "$token_estimate"
 }
 
-# Check if context is within limits
 check_context_limit() {
     local file="$1"
-    local limit="${2:-180000}"  # Default: 180k tokens (safe margin)
+    local limit="${2:-180000}"
 
     local tokens
-    tokens=$(estimate_tokens "$file")
+    tokens=$(estimate_tokens "$file") || tokens=0
 
-    if [ "$tokens" -gt "$limit" ]; then
-        echo "WARNING: Context exceeds limit ($tokens > $limit)"
+    if [[ -z "$tokens" || ! "$tokens" =~ ^[0-9]+$ ]]; then
+        log_warn "context-manager.check_context_limit: unable to determine token count for $file"
         return 1
-    else
-        echo "Context within limit ($tokens / $limit tokens)"
-        return 0
     fi
+
+    if ((tokens > limit)); then
+        log_warn "Context exceeds limit ($tokens > $limit)"
+        return 1
+    fi
+
+    echo "Context within limit ($tokens / $limit tokens)"
+    return 0
 }
 
-# Deduplicate facts across sources
 deduplicate_facts() {
     local findings_file="$1"
 
-    # Remove facts that are semantically similar
-    # (Simple version: exact match. Advanced: use embedding similarity)
+    if [[ -z "$findings_file" || ! -f "$findings_file" ]]; then
+        log_warn "context-manager.deduplicate_facts: findings file missing: $findings_file"
+        echo "[]"
+        return 0
+    fi
+
+    if ! jq empty "$findings_file" >/dev/null 2>&1; then
+        log_error "context-manager.deduplicate_facts: invalid JSON $findings_file"
+        return 1
+    fi
 
     jq '[
         .[] |
@@ -126,7 +198,6 @@ deduplicate_facts() {
     })' "$findings_file"
 }
 
-# Export functions for use in other scripts
 export -f prune_context
 export -f summarize_for_synthesis
 export -f estimate_tokens

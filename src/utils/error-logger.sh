@@ -2,6 +2,8 @@
 # Error Logger - Centralized error and warning logging for observability
 # Captures errors that would otherwise be silenced by 2>/dev/null
 
+set -euo pipefail
+
 # Load shared state for timestamp generation
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=/dev/null
