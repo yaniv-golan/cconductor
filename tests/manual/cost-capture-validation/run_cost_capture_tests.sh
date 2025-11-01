@@ -46,15 +46,29 @@ assert_eq() {
   local actual="$2"
   local message="$3"
 
-  local result
-  result=$(python3 - "$expected" "$actual" <<'PY'
-import sys, math
-expected, actual = map(float, sys.argv[1:])
-print("OK" if math.isclose(expected, actual, rel_tol=1e-9, abs_tol=1e-9) else "FAIL")
-PY
-  )
-
-  if [[ "$result" == "OK" ]]; then
+  if awk -v expected="$expected" -v actual="$actual" '
+BEGIN {
+  diff = expected - actual
+  if (diff < 0) {
+    diff = -diff
+  }
+  abs_tol = 1e-9
+  rel_tol = 1e-9
+  if (diff <= abs_tol) {
+    exit 0
+  }
+  abs_expected = (expected < 0 ? -expected : expected)
+  abs_actual = (actual < 0 ? -actual : actual)
+  max_val = (abs_expected > abs_actual ? abs_expected : abs_actual)
+  if (max_val == 0) {
+    exit (diff <= abs_tol ? 0 : 1)
+  }
+  if (diff <= rel_tol * max_val) {
+    exit 0
+  }
+  exit 1
+}
+'; then
     printf '  ✓ %s\n' "$message"
   else
     echo "❌ $message (expected=$expected actual=$actual)" >&2
@@ -118,11 +132,7 @@ assert_eq "$cost1" "$first_invocation_cost" "invocations[0].cost_usd stored"
 budget_record_invocation "$session_dir" "test-agent" "$cost3" 5
 
 spent_after_second=$(jq -r '.spent.cost_usd' "$session_dir/meta/budget.json")
-expected_total=$(python3 - "$cost1" "$cost3" <<'PY'
-import sys
-print(float(sys.argv[1]) + float(sys.argv[2]))
-PY
-)
+expected_total=$(printf 'scale=12; (%s) + (%s)\n' "$cost1" "$cost3" | bc -l)
 assert_eq "$expected_total" "$spent_after_second" "spent.cost_usd accumulates"
 
 echo
