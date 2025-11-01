@@ -199,7 +199,7 @@ session_utils_emit_row() {
     printf '%s\t%s\t%s\t%s\t%s\n' "$path" "$short_id" "$created" "$status" "$objective"
 }
 
-session_utils_collect_sessions() {
+session_utils_collect_session_entries() {
     declare -A seen_paths=()
     declare -a combined=()
 
@@ -226,10 +226,24 @@ session_utils_collect_sessions() {
         return
     fi
 
-    printf '%s\n' "${combined[@]}" | sort -r | while IFS= read -r entry; do
+    printf '%s\n' "${combined[@]}"
+}
+
+session_utils_list_session_dirs() {
+    local entries
+    entries=$(session_utils_collect_session_entries)
+    [ -n "$entries" ] || return
+
+    printf '%s\n' "$entries" | sort -r | while IFS= read -r entry; do
         [ -n "$entry" ] || continue
-        local path
-        path=${entry#*::}
+        local path=${entry#*::}
+        printf '%s\n' "$path"
+    done
+}
+
+session_utils_collect_sessions() {
+    session_utils_list_session_dirs | while IFS= read -r path; do
+        [ -n "$path" ] || continue
         session_utils_emit_row "$path"
     done
 }

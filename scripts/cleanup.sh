@@ -7,135 +7,212 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
-echo "╔═══════════════════════════════════════════════════════════╗"
-echo "║            CCONDUCTOR - CLEANUP SCRIPT                         ║"
-echo "╚═══════════════════════════════════════════════════════════╝"
-echo ""
+# shellcheck disable=SC1091
+source "$PROJECT_ROOT/src/utils/core-helpers.sh"
 
-# Function to kill processes
+SESSION_UTILS_PATH="$PROJECT_ROOT/src/utils/session-utils.sh"
+if [ -f "$SESSION_UTILS_PATH" ]; then
+    # shellcheck disable=SC1090
+    source "$SESSION_UTILS_PATH"
+fi
+
+readonly PROCESS_GROUPS=(
+    "CConductor CLI|cconductor|"
+    "Claude CLI|claude|claude-runtime"
+    "Mission HTTP server|http.server|"
+)
+
+TERMINATED_COUNT=0
+
+print_header() {
+    cat <<'EOF'
+╔═══════════════════════════════════════════════════════════╗
+║                 CCONDUCTOR - CLEANUP SCRIPT               ║
+╚═══════════════════════════════════════════════════════════╝
+EOF
+    echo ""
+}
+
+collect_pids() {
+    local include="$1"
+    local exclude="${2:-}"
+    local -a found=()
+
+    while IFS= read -r line; do
+        [[ -z "$line" ]] && continue
+        local pid="${line%% *}"
+        local cmd="${line#* }"
+        [[ -z "$pid" || -z "$cmd" ]] && continue
+
+        if [[ "$cmd" != *"$include"* ]]; then
+            continue
+        fi
+
+        if [[ -n "$exclude" && "$cmd" == *"$exclude"* ]]; then
+            continue
+        fi
+
+        if [[ "$pid" != "$$" ]]; then
+            found+=("$pid")
+        fi
+    done < <(ps ax -o pid=,command= 2>/dev/null)
+
+    printf '%s\n' "${found[@]}"
+}
+
+terminate_process_group() {
+    local label="$1"
+    local include="$2"
+    local exclude="${3:-}"
+    TERMINATED_COUNT=0
+
+    mapfile -t pids < <(collect_pids "$include" "$exclude")
+    if ((${#pids[@]} == 0)); then
+        echo "  ✓ No ${label} processes to kill"
+        return 0
+    fi
+
+    echo "  → Terminating ${label} processes: ${pids[*]}"
+    log_warn "Terminating ${label} processes: ${pids[*]}"
+
+    if ! kill "${pids[@]}" 2>/dev/null; then
+        log_warn "SIGTERM failed for ${label}; escalating to SIGKILL"
+    fi
+
+    sleep 0.5
+    mapfile -t remaining < <(collect_pids "$include" "$exclude")
+
+    if ((${#remaining[@]} > 0)); then
+        if ! kill -9 "${remaining[@]}" 2>/dev/null; then
+            log_error "Failed to force terminate ${label} processes: ${remaining[*]}"
+        else
+            log_warn "Force killed ${label} processes: ${remaining[*]}"
+        fi
+    fi
+
+    TERMINATED_COUNT=${#pids[@]}
+    echo "  ✓ Killed ${TERMINATED_COUNT} process(es)"
+}
+
 kill_processes() {
     echo "→ Checking for running processes..."
-    
-    # Find CConductor processes
-    # shellcheck disable=SC2155,SC2009  # Combined declaration+assignment is intentional, ps+grep is portable
-    local cconductor_pids=$(ps aux | grep -E "[d]elve|[D]ELVE" | awk '{print $2}' || true)
-    
-    # Find Claude processes
-    # shellcheck disable=SC2155,SC2009
-    local claude_pids=$(ps aux | grep "[c]laude" | grep -v "claude-runtime" | awk '{print $2}' || true)
-    
-    # Find HTTP server processes (from dashboard)
-    # shellcheck disable=SC2155,SC2009
-    local http_pids=$(ps aux | grep -E "[p]ython.*http.server|[h]ttp-server" | awk '{print $2}' || true)
-    
-    local killed=0
-    
-    if [ -n "$cconductor_pids" ]; then
-        echo "  → Killing CConductor processes: $cconductor_pids"
-        echo "$cconductor_pids" | xargs kill -9 2>/dev/null || true
-        killed=$((killed + $(echo "$cconductor_pids" | wc -w)))
-    fi
-    
-    if [ -n "$claude_pids" ]; then
-        echo "  → Killing Claude processes: $claude_pids"
-        echo "$claude_pids" | xargs kill -9 2>/dev/null || true
-        killed=$((killed + $(echo "$claude_pids" | wc -w)))
-    fi
-    
-    if [ -n "$http_pids" ]; then
-        echo "  → Killing HTTP server processes: $http_pids"
-        echo "$http_pids" | xargs kill -9 2>/dev/null || true
-        killed=$((killed + $(echo "$http_pids" | wc -w)))
-    fi
-    
-    if [ "$killed" -eq 0 ]; then
+
+    local total_killed=0
+    local group
+    for group in "${PROCESS_GROUPS[@]}"; do
+        IFS='|' read -r label include exclude <<< "$group"
+        terminate_process_group "$label" "$include" "$exclude"
+        total_killed=$((total_killed + TERMINATED_COUNT))
+    done
+
+    if ((total_killed == 0)); then
         echo "  ✓ No processes to kill"
-    else
-        echo "  ✓ Killed $killed process(es)"
     fi
     echo ""
 }
 
-# Function to clean research sessions
 clean_sessions() {
     echo "→ Cleaning research sessions..."
-    
-    cd "$PROJECT_ROOT"
-    
-    # Count sessions
-    local session_count=0
-    if [ -d "research-sessions" ]; then
-        session_count=$(find research-sessions -maxdepth 1 -type d -name "mission_*" 2>/dev/null | wc -l | tr -d ' ')
+
+    local session_root="$PROJECT_ROOT/research-sessions"
+    local -a session_dirs=()
+
+    if declare -f session_utils_list_session_dirs >/dev/null 2>&1; then
+        mapfile -t session_dirs < <(session_utils_list_session_dirs)
+    elif [ -d "$session_root" ]; then
+        while IFS= read -r -d '' path; do
+            session_dirs+=("$path")
+        done < <(find "$session_root" -maxdepth 1 -type d -name "mission_*" -print0 2>/dev/null)
     fi
-    
-    # Calculate size
+
+    local session_count=${#session_dirs[@]}
     local session_size="0"
-    if [ "$session_count" -gt 0 ]; then
-        session_size=$(du -sh research-sessions 2>/dev/null | awk '{print $1}')
+
+    if ((session_count > 0)) && [ -d "$session_root" ]; then
+        session_size=$(du -sh "$session_root" 2>/dev/null | awk '{print $1}')
     fi
-    
-    if [ "$session_count" -eq 0 ]; then
+
+    if ((session_count == 0)); then
         echo "  ✓ No sessions to clean"
+        echo ""
+        return
+    fi
+
+    echo "  → Found $session_count session(s) (Total: $session_size)"
+    local response="n"
+    if read -r -p "  → Delete all sessions? [y/N] " response; then
+        :
     else
-        echo "  → Found $session_count session(s) (Total: $session_size)"
-        if ! read -r -p "  → Delete all sessions? [y/N] " response; then
-            response="n"
+        response="n"
+    fi
+
+    if [[ "$response" =~ ^[Yy]$ ]]; then
+        if ((${#session_dirs[@]} > 0)); then
+            rm -rf "${session_dirs[@]}" 2>/dev/null || log_warn "Failed to remove one or more session directories."
         fi
-        if [[ "$response" =~ ^[Yy]$ ]]; then
-            rm -rf research-sessions/mission_* 2>/dev/null || true
-            rm -f research-sessions/.latest 2>/dev/null || true
-            echo "  ✓ Deleted $session_count session(s)"
-        else
-            echo "  ⊘ Skipped session cleanup"
-        fi
+        rm -f "$session_root/.latest" 2>/dev/null || true
+        echo "  ✓ Deleted $session_count session(s)"
+    else
+        echo "  ⊘ Skipped session cleanup"
     fi
     echo ""
 }
 
-# Function to clean temporary files
 clean_temp_files() {
     echo "→ Cleaning temporary files..."
-    
-    cd "$PROJECT_ROOT"
-    
+
     local cleaned=0
-    
-    # Remove .latest symlink
-    if [ -L "research-sessions/.latest" ] || [ -f "research-sessions/.latest" ]; then
-        rm -f research-sessions/.latest
+    local session_root="$PROJECT_ROOT/research-sessions"
+
+    if [ -L "$session_root/.latest" ] || [ -f "$session_root/.latest" ]; then
+        rm -f "$session_root/.latest"
         echo "  ✓ Removed .latest symlink"
         cleaned=$((cleaned + 1))
     fi
-    
-    # Remove temp test directories
+
     if [ -d "/tmp/test-agents" ]; then
-        rm -rf /tmp/test-agents
+        rm -rf "/tmp/test-agents"
         echo "  ✓ Removed /tmp/test-agents"
         cleaned=$((cleaned + 1))
     fi
-    
-    # Remove any backup files
-    # shellcheck disable=SC2155  # Combined declaration is intentional
-    local backup_count=$(find . -name "*.backup" -o -name "*.bak" -o -name "*~" 2>/dev/null | wc -l | tr -d ' ')
-    if [ "$backup_count" -gt 0 ]; then
-        # shellcheck disable=SC2146  # Delete each pattern separately
-        find . -name "*.backup" -delete 2>/dev/null || true
-        find . -name "*.bak" -delete 2>/dev/null || true
-        find . -name "*~" -delete 2>/dev/null || true
+
+    local -a backup_patterns=(
+        "*.backup"
+        "*.bak"
+        "*~"
+    )
+
+    local backup_count=0
+    local pattern
+    for pattern in "${backup_patterns[@]}"; do
+        while IFS= read -r -d '' file; do
+            rm -f "$file" 2>/dev/null || true
+            backup_count=$((backup_count + 1))
+        done < <(find "$PROJECT_ROOT" -name "$pattern" -type f -print0 2>/dev/null)
+    done
+
+    if ((backup_count > 0)); then
         echo "  ✓ Removed $backup_count backup file(s)"
         cleaned=$((cleaned + backup_count))
     fi
-    
-    # Clean old logs (if logs directory exists and has .log files)
-    if [ -d "logs" ]; then
-        # shellcheck disable=SC2155  # Combined declaration is intentional
-        local log_count=$(find logs -name "*.log" 2>/dev/null | wc -l | tr -d ' ')
-        if [ "$log_count" -gt 0 ]; then
-            if ! read -r -p "  → Delete $log_count log file(s)? [y/N] " response; then
+
+    local log_dir="$PROJECT_ROOT/logs"
+    if [ -d "$log_dir" ]; then
+        local log_count=0
+        while IFS= read -r -d '' _; do
+            log_count=$((log_count + 1))
+        done < <(find "$log_dir" -name "*.log" -type f -print0 2>/dev/null)
+
+        if ((log_count > 0)); then
+            local response="n"
+            if read -r -p "  → Delete $log_count log file(s)? [y/N] " response; then
+                :
+            else
                 response="n"
             fi
+
             if [[ "$response" =~ ^[Yy]$ ]]; then
-                rm -f logs/*.log 2>/dev/null || true
+                find "$log_dir" -name "*.log" -type f -exec rm -f {} + 2>/dev/null || true
                 echo "  ✓ Removed $log_count log file(s)"
                 cleaned=$((cleaned + log_count))
             else
@@ -143,50 +220,53 @@ clean_temp_files() {
             fi
         fi
     fi
-    
-    if [ "$cleaned" -eq 0 ]; then
+
+    if ((cleaned == 0)); then
         echo "  ✓ No temporary files to clean"
     fi
     echo ""
 }
 
-# Function to show summary
 show_summary() {
     echo "╔═══════════════════════════════════════════════════════════╗"
     echo "║                   CLEANUP SUMMARY                         ║"
     echo "╚═══════════════════════════════════════════════════════════╝"
     echo ""
-    
-    # Check remaining sessions
+
+    local session_root="$PROJECT_ROOT/research-sessions"
     local remaining_sessions=0
-    if [ -d "$PROJECT_ROOT/research-sessions" ]; then
-        remaining_sessions=$(find "$PROJECT_ROOT/research-sessions" -maxdepth 1 -type d -name "mission_*" 2>/dev/null | wc -l | tr -d ' ')
+
+    if [ -d "$session_root" ]; then
+        while IFS= read -r -d '' _; do
+            remaining_sessions=$((remaining_sessions + 1))
+        done < <(find "$session_root" -maxdepth 1 -type d -name "mission_*" -print0 2>/dev/null)
     fi
-    
-    # Check remaining processes
+
     local remaining_procs=0
-    # shellcheck disable=SC2009,SC2126  # ps+grep is portable, grep -c doesn't work here
-    remaining_procs=$(ps aux | grep -E "[d]elve|[c]laude|[p]ython.*http.server|[h]ttp-server" | wc -l | tr -d ' ')
-    
+    local group
+    for group in "${PROCESS_GROUPS[@]}"; do
+        IFS='|' read -r _ include exclude <<< "$group"
+        mapfile -t group_pids < <(collect_pids "$include" "$exclude")
+        remaining_procs=$((remaining_procs + ${#group_pids[@]}))
+    done
+
     echo "  Sessions remaining: $remaining_sessions"
     echo "  Processes running: $remaining_procs"
-    
-    if [ "$remaining_sessions" -eq 0 ] && [ "$remaining_procs" -eq 0 ]; then
+
+    if ((remaining_sessions == 0 && remaining_procs == 0)); then
         echo ""
         echo "  ✓ System is clean!"
     fi
     echo ""
 }
 
-# Main execution
 main() {
+    print_header
     kill_processes
     clean_sessions
     clean_temp_files
     show_summary
-    
     echo "✓ Cleanup complete"
 }
 
-# Run main
 main
