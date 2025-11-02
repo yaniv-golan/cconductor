@@ -23,6 +23,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Non-interactive installs now auto-provision required dependencies (including ripgrep) when you pass `--yes` and fail fast if tooling can’t be installed.
 - Quality gate hook delegates stakeholder coverage decisions to the new reports, improving uncategorized tracking and failure messaging.
+- Stakeholder classifier now requeues unresolved `needs_review` records within the same pass, upserts ledger entries with `retry_count`, and the orchestrator downgrades fully reviewed residuals to advisory warnings recorded in `meta/stakeholder-classifier-status.json`.
+- Stakeholder resolver globs now treat `*.example.com` as covering both the apex (`example.com`) and subdomains, eliminating duplicate entries while keeping dermatology domains (AAD, JAAD, MDPI, Dermatology Times) classified deterministically.
 - Mission profiles are organized as discoverable bundles so mission loader updates happen transparently.
 - Quality Guide and agent directory explain how the stakeholder classifier, policies, and gate cooperate.
 - Dashboard viewer URLs are now session-prefixed, keeping links stable across concurrent viewers while the server serves the mission root.

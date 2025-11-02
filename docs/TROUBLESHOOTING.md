@@ -900,6 +900,35 @@ Add known good sources to `knowledge-base-custom/`:
 
 ---
 
+### Stakeholder classifier still reports `needs_review`
+
+**Symptoms**:
+
+- Console shows `⚠ Stakeholder classifier left N source(s) as needs_review after LLM attempts; continuing…`
+- `meta/mission_state.json` lists `needs_review.count > 0` but `pending_sources` is `0`
+- `meta/stakeholder-classifier-status.json` exists with entries flagged `llm_attempted: true`
+
+**What's happening (November 2025 update)**:
+
+- The classifier now re-queues any ledger row where `llm_attempted==false` inside the same run, so stale `needs_review` records are retried immediately.
+- If entries remain after the retry, every row will show `llm_attempted: true` (and `retry_count` ≥ 1). Missions proceed, but we surface the residual list for manual follow-up.
+
+**Next steps**:
+
+1. Inspect the unresolved list:
+   ```bash
+   jq '.' meta/stakeholder-classifier-status.json
+   ```
+   Focus on the `needs_review.entries` array to see URLs, retry counts, and resolver hints.
+2. Extend deterministic coverage when possible:
+   - Add aliases or patterns to `config/stakeholder-resolver.default.json` or your override under `~/.config/cconductor/`. Wildcard entries like `*.example.org` now also cover the apex host (`example.org`), so most fixes only require a single pattern.
+   - Commit the change and re-run `./src/utils/stakeholder-classifier.sh <session_dir>`.
+3. If the source truly needs manual review, document the decision in your mission report and keep the warning as evidence. Residual entries will no longer block synthesis, but the quality gate summary references `meta/stakeholder-classifier-status.json` so reviewers can trace the exception.
+
+**Tip**: Every retry increments `retry_count`. If the value keeps climbing for the same domain, prioritize adding a resolver rule to avoid repeated LLM spend.
+
+---
+
 ### Research Doesn't Answer My Question
 
 **Symptoms**:

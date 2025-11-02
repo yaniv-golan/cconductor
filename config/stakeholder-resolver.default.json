@@ -21,6 +21,9 @@
     {"pattern": "*.edu", "category": "academic"},
     {"pattern": "*.ac.*", "category": "academic"},
     {"pattern": "*.doi.org", "category": "academic"},
+    {"pattern": "*.aad.org", "category": "academic"},
+    {"pattern": "*.jaad.org", "category": "academic"},
+    {"pattern": "*.mdpi.com", "category": "academic"},
     {"pattern": "*.rand.org", "category": "independent_analysis"},
     {"pattern": "*.brookings.edu", "category": "independent_analysis"},
     {"pattern": "*.mckinsey.com", "category": "independent_analysis"},
@@ -28,6 +31,7 @@
     {"pattern": "*.ir.*", "category": "company_primary"},
     {"pattern": "*.sec.gov", "category": "company_primary"},
     {"pattern": "*.reuters.com", "category": "media"},
+    {"pattern": "*.dermatologytimes.com", "category": "media"},
     {"pattern": "*.wsj.com", "category": "media"},
     {"pattern": "*.ft.com", "category": "media"}
   ]

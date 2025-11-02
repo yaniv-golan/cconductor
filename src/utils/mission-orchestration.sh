@@ -1939,18 +1939,69 @@ mission_orchestration_check_stakeholder_classifier() {
     classifier_pending=$(safe_jq_from_file "$mission_state_file" '.stakeholder_classifier.pending_sources // 0' '0' "$session_dir" "classifier_check.pending")
     local pending_numeric="${classifier_pending:-0}"
     pending_numeric=$((pending_numeric + 0))
+    local needs_review_count
+    needs_review_count=$(safe_jq_from_file "$mission_state_file" '.stakeholder_classifier.needs_review.count // 0' '0' "$session_dir" "classifier_check.needs_review_count")
+    local needs_review_numeric="${needs_review_count:-0}"
+    needs_review_numeric=$((needs_review_numeric + 0))
+    local needs_review_attempted_count
+    needs_review_attempted_count=$(safe_jq_from_file "$mission_state_file" '.stakeholder_classifier.needs_review.entries | map(select((.llm_attempted // false) == true)) | length' '0' "$session_dir" "classifier_check.needs_review_attempted")
+    local needs_review_attempted_numeric="${needs_review_attempted_count:-0}"
+    needs_review_attempted_numeric=$((needs_review_attempted_numeric + 0))
+    if (( needs_review_attempted_numeric > needs_review_numeric )); then
+        needs_review_attempted_numeric=$needs_review_numeric
+    fi
+    local needs_review_unattempted_numeric=$((needs_review_numeric - needs_review_attempted_numeric))
+    if (( needs_review_unattempted_numeric < 0 )); then
+        needs_review_unattempted_numeric=0
+    fi
 
+    local allow_stale="${CCONDUCTOR_ALLOW_STAKEHOLDER_STALE_SUMMARY:-0}"
     local issues_file="$session_dir/meta/stakeholder-classifier-status.json"
-    if [[ "$classifier_status" != "fresh" ]] || (( pending_numeric > 0 )); then
-        local detail_json
-        detail_json=$(safe_jq_from_file "$mission_state_file" '.stakeholder_classifier // {}' '{}' "$session_dir" "classifier_check.detail" false)
+    local detail_json
+    detail_json=$(safe_jq_from_file "$mission_state_file" '.stakeholder_classifier // {}' '{}' "$session_dir" "classifier_check.detail" false)
+
+    local must_retry=0
+    local residual_after_llm=0
+
+    if [[ "$classifier_status" == "unknown" || "$classifier_status" == "missing" ]]; then
+        must_retry=1
+    fi
+    if [[ "$classifier_status" != "fresh" && "$classifier_status" != "stale" && "$classifier_status" != "unknown" && "$classifier_status" != "missing" ]]; then
+        must_retry=1
+    fi
+    if (( pending_numeric > 0 )); then
+        must_retry=1
+    fi
+    if (( needs_review_unattempted_numeric > 0 )) && [[ "$allow_stale" != "1" ]]; then
+        must_retry=1
+    fi
+    if (( needs_review_numeric > 0 )) && (( needs_review_unattempted_numeric == 0 )); then
+        residual_after_llm=1
+    fi
+
+    if (( must_retry == 1 )); then
         printf '%s\n' "$detail_json" | jq '.' >"$issues_file"
-        log_warn "stakeholder-classifier: status=$classifier_status pending_sources=$pending_numeric"
-        echo "⚠ Stakeholder classifier requires refresh (status: $classifier_status, pending sources: $pending_numeric)." >&2
+        if (( pending_numeric > 0 )); then
+            log_warn "stakeholder-classifier: pending_sources=$pending_numeric status=$classifier_status"
+            echo "⚠ Stakeholder classifier requires refresh ($pending_numeric pending source(s) remain)." >&2
+        elif (( needs_review_unattempted_numeric > 0 )) && [[ "$allow_stale" != "1" ]]; then
+            log_warn "stakeholder-classifier: needs_review_unattempted=$needs_review_unattempted_numeric needs_review_total=$needs_review_numeric status=$classifier_status"
+            echo "⚠ Stakeholder classifier requires refresh (${needs_review_unattempted_numeric} source(s) still need initial classification)." >&2
+        else
+            log_warn "stakeholder-classifier: status=$classifier_status pending_sources=$pending_numeric"
+            echo "⚠ Stakeholder classifier requires refresh (status: $classifier_status)." >&2
+        fi
         return 1
     fi
 
-    rm -f "$issues_file" 2>/dev/null || true
+    if (( residual_after_llm == 1 )); then
+        printf '%s\n' "$detail_json" | jq '.' >"$issues_file"
+        log_warn "stakeholder-classifier: residual_needs_review=$needs_review_numeric (llm_attempted=true) pending_sources=$pending_numeric"
+        echo "⚠ Stakeholder classifier left ${needs_review_numeric} source(s) as needs_review after LLM attempts; continuing with residual list captured at meta/stakeholder-classifier-status.json." >&2
+    else
+        rm -f "$issues_file" 2>/dev/null || true
+    fi
+
     return 0
 }
 

@@ -60,6 +60,9 @@ declare -ga CLASSIFIER_PATTERNS=()
 declare -ga CLASSIFIER_PATTERN_CATEGORIES=()
 
 declare -gA CLASSIFIER_EXISTING_IDS=()
+declare -gA CLASSIFIER_EXISTING_RECORDS=()
+declare -ga CLASSIFIER_STALE_QUEUE=()
+declare -gA CLASSIFIER_STALE_LOOKUP=()
 STAKEHOLDER_PASS_NEW_WRITTEN=0
 STAKEHOLDER_PASS_NEEDS_REVIEW=0
 STAKEHOLDER_PASS_TOTAL_SOURCES=0
@@ -201,6 +204,9 @@ raw_tags_to_json() {
 register_existing_records() {
     local classifications_file="$1"
     CLASSIFIER_EXISTING_IDS=()
+    CLASSIFIER_EXISTING_RECORDS=()
+    CLASSIFIER_STALE_QUEUE=()
+    CLASSIFIER_STALE_LOOKUP=()
     [[ -f "$classifications_file" ]] || return 0
 
     while IFS= read -r line; do
@@ -209,26 +215,61 @@ register_existing_records() {
         local source_id
         source_id=$(jq -r '.source_id // empty' <<<"$line")
         [[ -z "$source_id" ]] && continue
+
+        CLASSIFIER_EXISTING_RECORDS["$source_id"]="$line"
+
+        local resolved_category llm_attempted
+        resolved_category=$(jq -r '.resolved_category // ""' <<<"$line")
+        llm_attempted=$(jq -r '.llm_attempted // false' <<<"$line")
+
+        if [[ "$resolved_category" == "needs_review" && "$llm_attempted" != "true" ]]; then
+            CLASSIFIER_STALE_QUEUE+=("$source_id")
+            CLASSIFIER_STALE_LOOKUP["$source_id"]=1
+            continue
+        fi
+
         CLASSIFIER_EXISTING_IDS["$source_id"]=1
     done < "$classifications_file"
 }
 
-append_classification_record() {
+jsonl_upsert_record() {
     local session_dir="$1"
     local classifications_file="$2"
-    local record_json="$3"
+    local source_id="$3"
+    local record_json="$4"
 
     mkdir -p "$(dirname "$classifications_file")"
     local lock_dir="$session_dir/session/.locks"
     mkdir -p "$lock_dir"
     local lock_path="$lock_dir/stakeholder-classifications.lock"
 
+    local lock_acquired=0
     if simple_lock_acquire "$lock_path" 5; then
-        printf '%s\n' "$record_json" >>"$classifications_file"
-        simple_lock_release "$lock_path"
+        lock_acquired=1
     else
-        log_warn "stakeholder-classifier: lock timeout, appending without lock"
+        log_warn "stakeholder-classifier: lock timeout, attempting upsert without lock"
+    fi
+
+    local tmp_file
+    tmp_file=$(mktemp "stakeholder-classifications.XXXXXX")
+
+    if [[ -f "$classifications_file" && -s "$classifications_file" ]]; then
+        if ! jq -c --arg id "$source_id" 'select(.source_id != $id)' "$classifications_file" >"$tmp_file"; then
+            log_warn "stakeholder-classifier: jq filter failed during upsert; preserving original ordering"
+            cat "$classifications_file" >"$tmp_file"
+        fi
+    fi
+
+    printf '%s\n' "$record_json" >>"$tmp_file"
+
+    if ! mv "$tmp_file" "$classifications_file"; then
+        log_error "stakeholder-classifier: failed to replace ledger; falling back to append"
         printf '%s\n' "$record_json" >>"$classifications_file"
+        rm -f "$tmp_file"
+    fi
+
+    if (( lock_acquired == 1 )); then
+        simple_lock_release "$lock_path"
     fi
 }
 
@@ -246,6 +287,18 @@ pattern_match_category() {
                 return 0
                 ;;
         esac
+
+        if [[ "$pattern" == \*.?* ]]; then
+            local suffix="${pattern#*.}"
+            if [[ -n "$suffix" && "$suffix" != "$pattern" && "$suffix" != "*" ]]; then
+                if [[ "$suffix" != *"*"* && "$suffix" != *"?"* ]]; then
+                    if [[ "$host_lower" == "$suffix" ]]; then
+                        printf '%s\tpattern:%s' "$category" "$pattern"
+                        return 0
+                    fi
+                fi
+            fi
+        fi
     done
     return 1
 }
@@ -362,6 +415,12 @@ create_record_json() {
     local confidence="$7"
     local llm_attempted="$8"
     local suggestion_json="${9:-null}"
+    local retry_value="${10:-}"
+
+    local retry_json="null"
+    if [[ -n "$retry_value" ]]; then
+        retry_json="$retry_value"
+    fi
 
     jq -nc \
         --arg id "$source_id" \
@@ -373,6 +432,7 @@ create_record_json() {
         --argjson tags "$tags_json" \
         --argjson conf "$confidence" \
         --argjson suggestion "$suggestion_json" \
+        --argjson retry "$retry_json" \
         '{
             source_id: $id,
             url: $url,
@@ -382,8 +442,10 @@ create_record_json() {
             confidence: ($conf // 0),
             llm_attempted: ($llm == "true"),
             timestamp: (now | strftime("%Y-%m-%dT%H:%M:%SZ")),
-            suggest_alias: $suggestion
-        } | del(.suggest_alias | select(. == null))'
+            suggest_alias: $suggestion,
+            retry_count: $retry
+        } | del(.suggest_alias | select(. == null))
+          | del(.retry_count | select(. == null))'
 }
 
 append_checkpoint() {
@@ -556,28 +618,42 @@ process_pending_batch() {
 
     for sid in "${queue_ref[@]}"; do
         local entry_json="${map_ref[$sid]}"
-        local url title host tags_json record
+        local url title tags_json record
         url=$(jq -r '.url' <<<"$entry_json")
         title=$(jq -r '.title' <<<"$entry_json")
-        host=$(jq -r '.host' <<<"$entry_json")
         tags_json=$(jq -c '.raw_tags' <<<"$entry_json")
+
+        local previous_entry="${CLASSIFIER_EXISTING_RECORDS[$sid]:-}"
+        local previous_retry=0
+        if [[ -n "$previous_entry" ]]; then
+            previous_retry=$(jq -r '.retry_count // 0' <<<"$previous_entry" 2>/dev/null || echo 0)
+            [[ "$previous_retry" == "null" || -z "$previous_retry" ]] && previous_retry=0
+        fi
 
         local result_row="${resolved_map[$sid]:-}"
         if [[ -n "$result_row" ]]; then
-            local category confidence suggestion_json
+            local category confidence suggestion_json retry_count_value=""
             category=$(jq -r '.category // "needs_review"' <<<"$result_row")
             confidence=$(jq -r '.confidence // 0' <<<"$result_row")
             suggestion_json=$(jq -c '.suggest_alias // null' <<<"$result_row")
-            record=$(create_record_json "$sid" "$url" "$title" "$tags_json" "$category" "llm" "$confidence" "true" "$suggestion_json")
             if [[ "$category" == "needs_review" ]]; then
+                retry_count_value=$((previous_retry + 1))
                 needs_review_ref=$((needs_review_ref + 1))
+            elif (( previous_retry > 0 )); then
+                retry_count_value=$previous_retry
             fi
+            record=$(create_record_json "$sid" "$url" "$title" "$tags_json" "$category" "llm" "$confidence" "true" "$suggestion_json" "$retry_count_value")
         else
-            record=$(create_record_json "$sid" "$url" "$title" "$tags_json" "needs_review" "needs_review" "0" "false")
+            local retry_count_value=""
+            if (( previous_retry > 0 )); then
+                retry_count_value=$previous_retry
+            fi
+            record=$(create_record_json "$sid" "$url" "$title" "$tags_json" "needs_review" "needs_review" "0" "false" null "$retry_count_value")
             needs_review_ref=$((needs_review_ref + 1))
         fi
-        append_classification_record "$session_dir" "$classifications_file" "$record"
+        jsonl_upsert_record "$session_dir" "$classifications_file" "$sid" "$record"
         CLASSIFIER_EXISTING_IDS["$sid"]=1
+        CLASSIFIER_EXISTING_RECORDS["$sid"]="$record"
         written_ref=$((written_ref + 1))
         unset 'map_ref[$sid]'
     done
@@ -616,6 +692,7 @@ stakeholder_classifier_single_pass() {
     local -a pending_queue=()
     # shellcheck disable=SC2034  # referenced via nameref in process_pending_batch
     declare -A pending_map=()
+    declare -A stale_seen=()
     local batch_limit=25
 
     while IFS= read -r source_json; do
@@ -629,6 +706,10 @@ stakeholder_classifier_single_pass() {
         source_id=$(hash_source_id "$url")
         [[ -z "$source_id" ]] && continue
         [[ -n "${CLASSIFIER_EXISTING_IDS[$source_id]:-}" ]] && continue
+
+        if [[ -n "${CLASSIFIER_STALE_LOOKUP[$source_id]:-}" ]]; then
+            stale_seen["$source_id"]=1
+        fi
 
         local host
         host=$(domain_helpers_extract_hostname "$url")
@@ -675,10 +756,86 @@ stakeholder_classifier_single_pass() {
         esac
         local record
         record=$(create_record_json "$source_id" "$url" "$title" "$tags_json" "$category" "$rationale" "$confidence" "false")
-        append_classification_record "$session_dir" "$classifications_file" "$record"
+        jsonl_upsert_record "$session_dir" "$classifications_file" "$source_id" "$record"
         CLASSIFIER_EXISTING_IDS["$source_id"]=1
+        CLASSIFIER_EXISTING_RECORDS["$source_id"]="$record"
         classifications_written=$((classifications_written + 1))
     done < <(jq -c '.[]?' <<<"$sources_json")
+
+    local stale_id
+    for stale_id in "${CLASSIFIER_STALE_QUEUE[@]}"; do
+        if [[ -n "${stale_seen[$stale_id]:-}" ]]; then
+            continue
+        fi
+        local existing_record="${CLASSIFIER_EXISTING_RECORDS[$stale_id]:-}"
+        [[ -z "$existing_record" ]] && continue
+
+        local url title
+        url=$(jq -r '.url // empty' <<<"$existing_record")
+        [[ -z "$url" ]] && continue
+        title=$(jq -r '.title // ""' <<<"$existing_record")
+
+        local host
+        host=$(domain_helpers_extract_hostname "$url")
+        local host_lower="${host,,}"
+
+        # shellcheck disable=SC2178
+        local -a raw_tags=()
+        while IFS= read -r tag; do
+            [[ -z "$tag" || "$tag" == "null" ]] && continue
+            raw_tags+=("$tag")
+        done < <(jq -r '.raw_tags[]?' <<<"$existing_record")
+        if (( ${#raw_tags[@]} == 0 )); then
+            build_raw_tags "$host" "$title" raw_tags
+        fi
+
+        local tags_json
+        tags_json=$(raw_tags_to_json raw_tags)
+
+        local match=""
+        if match=$(pattern_match_category "$host_lower"); then
+            :
+        elif match=$(alias_match_category raw_tags); then
+            :
+        elif match=$(heuristic_match_category "$host_lower" raw_tags); then
+            :
+        else
+            local entry_json
+            entry_json=$(jq -n \
+                --arg id "$stale_id" \
+                --arg url "$url" \
+                --arg title "$title" \
+                --arg host "$host" \
+                --argjson tags "$tags_json" \
+                '{source_id: $id, url: $url, title: $title, host: $host, raw_tags: $tags}')
+            pending_queue+=("$stale_id")
+            # shellcheck disable=SC2034  # stored for batch classification via nameref
+            pending_map["$stale_id"]="$entry_json"
+            stale_seen["$stale_id"]=1
+            if (( ${#pending_queue[@]} >= batch_limit )); then
+                process_pending_batch "$session_dir" "$policy_json" "$classifications_file" pending_queue pending_map classifications_written needs_review
+            fi
+            continue
+        fi
+
+        local category="${match%%$'\t'*}"
+        local rationale="${match#*$'\t'}"
+        local confidence
+        case "$rationale" in
+            pattern:*) confidence=0.98 ;;
+            alias:*) confidence=0.92 ;;
+            heuristic:*) confidence=0.75 ;;
+            *) confidence=0.6 ;;
+        esac
+
+        local record
+        record=$(create_record_json "$stale_id" "$url" "$title" "$tags_json" "$category" "$rationale" "$confidence" "false")
+        jsonl_upsert_record "$session_dir" "$classifications_file" "$stale_id" "$record"
+        CLASSIFIER_EXISTING_IDS["$stale_id"]=1
+        CLASSIFIER_EXISTING_RECORDS["$stale_id"]="$record"
+        classifications_written=$((classifications_written + 1))
+        stale_seen["$stale_id"]=1
+    done
 
     process_pending_batch "$session_dir" "$policy_json" "$classifications_file" pending_queue pending_map classifications_written needs_review
 
