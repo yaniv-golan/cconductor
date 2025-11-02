@@ -13,6 +13,17 @@
       "checksum": {
         "algorithm": "sha256"
       }
+    },
+    {
+      "slot": "prompt_analysis_json",
+      "description": "Machine-readable prompt analysis for orchestrator consumption.",
+      "relative_path": "artifacts/prompt-parser/output.json",
+      "content_type": "application/json",
+      "schema_id": "artifact://json/prompt-analysis@v1",
+      "required": true,
+      "checksum": {
+        "algorithm": "sha256"
+      }
     }
   ]
 }

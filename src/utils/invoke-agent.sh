@@ -104,6 +104,42 @@ _extract_provider_session_limit_message() {
     printf '%s\n' "$line"
 }
 
+_prompt_parser_handle_stream_fallback() {
+    local session_dir="$1"
+    local agent_label="$2"
+
+    if [[ "$agent_label" != "prompt-parser" ]]; then
+        return 1
+    fi
+
+    local prompt_parser_artifact="$session_dir/artifacts/prompt-parser/output.json"
+    if [[ -f "$prompt_parser_artifact" ]]; then
+        if command -v log_warn &>/dev/null; then
+            log_warn "Prompt parser stream missing result; using JSON artifact output"
+        fi
+        if command -v log_event &>/dev/null; then
+            local payload
+            payload=$(jq -n \
+                --arg agent "prompt-parser" \
+                --arg reason "stream_synthesized" \
+                '{agent:$agent, reason:$reason}')
+            log_event "$session_dir" "prompt_parser.artifact_fallbacks" "$payload" || true
+        fi
+        return 0
+    fi
+
+    if command -v log_event &>/dev/null; then
+        local payload
+        payload=$(jq -n \
+            --arg agent "prompt-parser" \
+            --arg reason "stream_synthesized_no_artifact" \
+            '{agent:$agent, reason:$reason}')
+        log_event "$session_dir" "prompt_parser.artifact_fallbacks" "$payload" || true
+    fi
+
+    return 1
+}
+
 # Source core helpers first
 # shellcheck disable=SC1091
 source "$SCRIPT_DIR/core-helpers.sh"
@@ -1131,10 +1167,16 @@ invoke_agent_v2() {
 
         if [[ -n "$synthesized_text" ]]; then
             update_heartbeat
-            if command -v log_system_warning &>/dev/null; then
-                log_system_warning "$session_dir" "claude_stream_missing_result" \
-                    "Claude stream ended without final result event; using synthesized output" \
-                    "agent=$agent_label"
+            local handled_stream_warning=0
+            if _prompt_parser_handle_stream_fallback "$session_dir" "$agent_label"; then
+                handled_stream_warning=1
+            fi
+            if (( handled_stream_warning == 0 )); then
+                if command -v log_system_warning &>/dev/null; then
+                    log_system_warning "$session_dir" "claude_stream_missing_result" \
+                        "Claude stream ended without final result event; using synthesized output" \
+                        "agent=$agent_label"
+                fi
             fi
             local synthetic_result
             synthetic_result=$(jq -n --arg text "$synthesized_text" --arg subtype "stream_synthesized" \

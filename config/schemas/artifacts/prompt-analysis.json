@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "artifact://json/prompt-analysis@v1",
+  "title": "Prompt Analysis JSON",
+  "description": "Structured prompt analysis consumed by the orchestrator.",
+  "type": "object",
+  "required": [
+    "objective",
+    "output_specification",
+    "research_question"
+  ],
+  "properties": {
+    "objective": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Cleaned research goal extracted from the user prompt."
+    },
+    "output_specification": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "description": "Presentation or formatting requirements, or null when none exist."
+    },
+    "research_question": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Full original prompt text provided by the user."
+    }
+  },
+  "additionalProperties": false
+}

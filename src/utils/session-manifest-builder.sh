@@ -277,6 +277,7 @@ build_session_manifest() {
     local -a prompt_parser_paths=(
         "$session_dir/work/prompt-parser/output.json::work"
         "$session_dir/artifacts/prompt-parser/output.md::artifact"
+        "$session_dir/artifacts/prompt-parser/output.json::artifact"
     )
     for spec in "${prompt_parser_paths[@]}"; do
         local file="${spec%%::*}"

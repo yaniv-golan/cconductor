@@ -30,6 +30,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Dashboard viewer URLs are now session-prefixed, keeping links stable across concurrent viewers while the server serves the mission root.
 - User Guide and Troubleshooting guide cover the new viewer URL pattern, preflight card, and recovery tips for blank tabs or 404s.
 - Public docs are streamlined by moving maintainer references to the contributor section, with refreshed internal links.
+- Prompt parser now writes a required JSON artifact (`artifacts/prompt-parser/output.json`), handlers prefer it over legacy `.result` payloads, and resume/tests/documentation were updated to reflect the contract change.
 - Mission state builder emits knowledge-graph and orchestration log paths relative to the session root, keeping prompts and agent reads sandbox-friendly.
 - Streaming handler tolerates missing terminal `result` events by assembling partial deltas and warning instead of stalling.
 - Agent invocation enforces artifact contracts, reports failures clearly in events/dashboards, and documents validation/bypass workflows in the Quick Start, Troubleshooting, and Quality guides.

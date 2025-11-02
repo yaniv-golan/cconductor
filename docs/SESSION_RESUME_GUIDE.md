@@ -54,6 +54,12 @@ The session tracks:
 - **Gaps & contradictions** - Knowledge graph gaps surfaced for follow-up iterations
 - **Engine version** - For compatibility checking
 
+### Prompt Analysis Artifacts
+
+- `artifacts/prompt-parser/output.json` — machine-readable prompt analysis with `objective`, `output_specification`, and `research_question`. The orchestrator and resume flows read this file first; `objective` is the cleaned directive for agents, while `research_question` preserves the original user phrasing.
+- `artifacts/prompt-parser/output.md` — human-readable summary still generated alongside the JSON for parity with older sessions.
+- `work/prompt-parser/output.json` — legacy agent transcript; only used as a fallback if the JSON artifact is missing or invalid.
+
 ## Using Resume
 
 ### Basic Usage

@@ -1,6 +1,6 @@
 # Prompt Parser
 
-Extract the core research objective from user prompts, separating substantive research goals from presentation requirements.
+Extract the core research objective from user prompts, separating substantive research goals from presentation requirements. You must produce both Markdown and JSON artifacts so the orchestrator always has machine-readable results.
 
 ## Task
 
@@ -16,7 +16,8 @@ Use the Read tool to read this file, then parse it to extract:
 
 After reading the prompt file:
 
-1. Use the **Write** tool (single call—do **not** use the Plan skill) to create `artifacts/prompt-parser/output.md` containing exactly:
+1. Call the **Task** tool with `{"command":"exit_plan_mode"}` immediately if it is available—planning mode must stay disabled.
+2. Use the **Write** tool (one call per artifact, never invoke the Plan skill) to create `artifacts/prompt-parser/output.md` containing exactly:
    ```
    ## Objective
    <one-sentence cleaned objective>
@@ -29,7 +30,25 @@ After reading the prompt file:
    <verbatim prompt>
    ```
    ```
-2. Respond with ONLY valid JSON in this exact format:
+3. Use the **Write** tool again to create `artifacts/prompt-parser/output.json` with the same structured payload you will return in your assistant message:
+
+```json
+{
+  "objective": "<clean research goal for agents>",
+  "output_specification": "<format requirements or null>",
+  "research_question": "<full original prompt>"
+}
+```
+
+4. Respond with ONLY the JSON object shown above and end the turn. The final assistant message must exactly match the JSON artifact content for backward compatibility.
+
+If either Write call fails, immediately emit a JSON error payload instead of continuing:
+```json
+{"error": "<short explanation of the failure>"}
+```
+Stop after returning the error.
+
+Repeat runs are idempotent—the Write tool overwrites the same files each time, which is expected behavior.
 
 ```json
 {
@@ -105,9 +124,10 @@ Expected output:
 3. Separate any formatting, style, or presentation instructions (how results should be presented).
 4. If no format instructions exist, set `output_specification` to `null`.
 5. Preserve the complete original prompt exactly in `research_question`.
-6. Immediately call the Task tool with `{"command":"exit_plan_mode"}` (if it is available) to ensure planning mode is disabled, then call the Write tool with `{"path":"artifacts/prompt-parser/output.md","content":"..."}` to populate the Markdown sections described above. The Write call must succeed before you continue.
-7. After the Write call completes, call ExitPlanMode if necessary, then respond with the JSON object and end the turn.
-8. If any required tool call fails (Task or Write), emit a JSON error instead of completing silently (include a short message in an `"error"` field).
+6. After confirming plan mode is disabled, Write the Markdown artifact exactly as described.
+7. Write the JSON artifact with the same values—`objective`, `output_specification`, and `research_question`—mirroring the final response payload. The JSON must set `output_specification` to `null` (not the string `"null"`) when no format instructions exist.
+8. After both artifacts are written successfully, return the JSON object and end the turn.
+9. If any required tool call fails (Task or either Write), emit a JSON error object (with an `"error"` field) and stop immediately so downstream logic can surface the failure.
 
 ## CRITICAL OUTPUT REQUIREMENTS
 
@@ -129,4 +149,4 @@ Example of correct full response:
 }
 ```
 
-The Markdown file is written via the Write tool; the text you return after that must be just the JSON. Never invoke the Plan tool during this task.
+The Markdown and JSON files are written via separate Write tool calls. The text you return after that must be just the JSON. Never invoke the Plan tool during this task.

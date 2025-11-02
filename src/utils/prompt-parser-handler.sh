@@ -7,9 +7,157 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # shellcheck disable=SC1091
+source "$SCRIPT_DIR/core-helpers.sh"
+
+# shellcheck disable=SC1091
 source "$SCRIPT_DIR/json-parser.sh" 2>/dev/null || true
 # shellcheck disable=SC1091
 source "$SCRIPT_DIR/json-helpers.sh"
+# shellcheck disable=SC1091
+if ! declare -F log_event >/dev/null; then
+    source "$SCRIPT_DIR/event-logger.sh" 2>/dev/null || true
+fi
+
+_prompt_parser_record_artifact_fallback() {
+    local session_dir="$1"
+    local reason="$2"
+
+    if command -v log_warn >/dev/null 2>&1; then
+        log_warn "Prompt parser artifact fallback: $reason"
+    else
+        echo "  ⚠ Prompt parser artifact fallback: $reason" >&2
+    fi
+
+    if command -v log_event >/dev/null 2>&1; then
+        local payload
+        payload=$(jq -n \
+            --arg agent "prompt-parser" \
+            --arg reason "$reason" \
+            '{agent: $agent, reason: $reason}')
+        log_event "$session_dir" "prompt_parser.artifact_fallbacks" "$payload" || true
+    fi
+}
+
+_prompt_parser_update_session_state() {
+    local session_dir="$1"
+    local objective="$2"
+    local output_spec="$3"
+
+    local session_file="$session_dir/meta/session.json"
+    local temp_session="${session_file}.tmp"
+
+    jq --arg obj "$objective" \
+       --arg spec "$output_spec" \
+       '.objective = $obj |
+        .output_specification = (
+            if $spec == "__CCONDUCTOR_NULL__" or $spec == "" then null
+            else $spec
+            end
+        ) |
+        .prompt_parsed = true' \
+       "$session_file" > "$temp_session"
+    mv "$temp_session" "$session_file"
+
+    local kg_file="$session_dir/knowledge/knowledge-graph.json"
+    if [[ -f "$kg_file" ]]; then
+        local temp_kg="${kg_file}.tmp"
+        jq --arg obj "$objective" \
+           '.research_objective = $obj' \
+           "$kg_file" > "$temp_kg"
+        mv "$temp_kg" "$kg_file"
+    fi
+}
+
+_prompt_parser_apply_json_artifact() {
+    local session_dir="$1"
+    local artifact_path="$session_dir/artifacts/prompt-parser/output.json"
+
+    if [[ ! -f "$artifact_path" ]]; then
+        return 1
+    fi
+
+    local extracted
+    extracted=$(jq -c '
+        if type != "object" then empty else
+        {
+            objective: (.objective // empty),
+            output_specification: (if has("output_specification") then .output_specification else null end),
+            research_question: (.research_question // empty)
+        }
+    ' "$artifact_path" 2>/dev/null || echo "")
+
+    if [[ -z "$extracted" ]]; then
+        return 1
+    fi
+
+    local objective
+    objective=$(echo "$extracted" | jq -r '.objective // empty')
+    local output_spec_raw
+    output_spec_raw=$(echo "$extracted" | jq -r '
+        if (.output_specification | type) == "null" then "__CCONDUCTOR_NULL__"
+        else (.output_specification // empty)
+        end
+    ')
+    local research_question
+    research_question=$(echo "$extracted" | jq -r '.research_question // empty')
+
+    if [[ -z "$objective" || -z "$research_question" ]]; then
+        return 1
+    fi
+
+    _prompt_parser_update_session_state "$session_dir" "$objective" "$output_spec_raw"
+    return 0
+}
+
+_prompt_parser_apply_legacy_result() {
+    local session_dir="$1"
+    local agent_output="$session_dir/work/prompt-parser/output.json"
+
+    if [[ ! -f "$agent_output" ]]; then
+        return 1
+    fi
+
+    local result
+    if ! result=$(safe_jq_from_file "$agent_output" '.result // empty' "" "$session_dir" "prompt_parser.agent_result" "true"); then
+        result=""
+    fi
+
+    if [[ -z "$result" ]]; then
+        return 1
+    fi
+
+    local parsed_json=""
+    if command -v extract_json_from_text &>/dev/null; then
+        parsed_json=$(extract_json_from_text "$result" 2>/dev/null || echo "")
+    else
+        parsed_json="$result"
+    fi
+
+    if [[ -z "$parsed_json" ]]; then
+        return 1
+    fi
+
+    if ! echo "$parsed_json" | jq empty >/dev/null 2>&1; then
+        return 1
+    fi
+
+    local objective
+    objective=$(echo "$parsed_json" | jq -r '.objective // empty' 2>/dev/null)
+    local output_spec_raw
+    output_spec_raw=$(echo "$parsed_json" | jq -r '
+        if (.output_specification // empty) == "" then "__CCONDUCTOR_NULL__"
+        elif .output_specification == null then "__CCONDUCTOR_NULL__"
+        else .output_specification
+        end
+    ' 2>/dev/null)
+
+    if [[ -z "$objective" ]]; then
+        return 1
+    fi
+
+    _prompt_parser_update_session_state "$session_dir" "$objective" "$output_spec_raw"
+    return 0
+}
 
 # Check if prompt needs parsing
 needs_prompt_parsing() {
@@ -70,92 +218,71 @@ parse_prompt() {
     
     if _invoke_delegated_agent "$session_dir" "prompt-parser" "$task" "Extract clean research objective from user prompt" "[]"; then
         echo "  ✓ Prompt parsed successfully" >&2
-        
-        # Extract parsed results from agent output
-        local agent_output="$session_dir/work/prompt-parser/output.json"
-        if [ -f "$agent_output" ]; then
-            local result
-            if result=$(safe_jq_from_file "$agent_output" '.result // empty' "" "$session_dir" "prompt_parser.agent_result" "true"); then
-                :
-            else
-                result=""
-            fi
-            
-            if [ -n "$result" ]; then
-                # Extract JSON from result (handles markdown code fences)
-                local parsed_json
-                if command -v extract_json_from_text &>/dev/null; then
-                    parsed_json=$(extract_json_from_text "$result" 2>/dev/null || echo "")
-                else
-                    parsed_json="$result"
-                fi
-                
-                if [ -n "$parsed_json" ] && echo "$parsed_json" | jq empty 2>/dev/null; then
-                    # Extract components
-                    local clean_objective
-                    clean_objective=$(echo "$parsed_json" | jq -r '.objective // empty' 2>/dev/null)
-                    local output_spec
-                    output_spec=$(echo "$parsed_json" | jq -r '.output_specification // "null"' 2>/dev/null)
-                    
-                    if [ -n "$clean_objective" ]; then
-                        # Update meta/session.json
-                        local temp_session="${session_file}.tmp"
-                        jq --arg obj "$clean_objective" \
-                           --arg spec "$output_spec" \
-                           '.objective = $obj | 
-                            .output_specification = (if $spec == "null" or $spec == "" then null else $spec end) |
-                            .prompt_parsed = true' \
-                           "$session_file" > "$temp_session"
-                        
-                        mv "$temp_session" "$session_file"
-                        
-                        # Update knowledge graph with clean objective
-                        local kg_file="$session_dir/knowledge/knowledge-graph.json"
-                        if [ -f "$kg_file" ]; then
-                            local temp_kg="${kg_file}.tmp"
-                            jq --arg obj "$clean_objective" \
-                               '.research_objective = $obj' \
-                               "$kg_file" > "$temp_kg"
-                            mv "$temp_kg" "$kg_file"
-                        fi
-                        
-                        echo "  ✓ Session and knowledge graph updated with clean objective" >&2
-                        
-                        # Verbose output - show parsed results
-                        if [[ "${CCONDUCTOR_VERBOSE:-0}" == "1" ]]; then
-                            echo "" >&2
-                            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" >&2
-                            echo "📝 Prompt Parser Results" >&2
-                            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" >&2
-                            echo "" >&2
-                            echo "Core Objective (for research agents):" >&2
-                            echo "  $clean_objective" >&2
-                            echo "" >&2
-                            if [[ -n "$output_spec" && "$output_spec" != "null" ]]; then
-                                echo "Output Format Specification (for synthesis):" >&2
-                                echo "  $output_spec" >&2
-                                echo "" >&2
-                            else
-                                echo "Output Format: Using standard domain format" >&2
-                                echo "" >&2
-                            fi
-                            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" >&2
-                            echo "" >&2
-                        fi
-                        
-                        # Clean up
-                        rm -f "$session_dir/user-prompt.txt"
-                        
-                        return 0
-                    fi
-                fi
+
+        local parsed_success=0
+        if _prompt_parser_apply_json_artifact "$session_dir"; then
+            parsed_success=1
+        else
+            _prompt_parser_record_artifact_fallback "$session_dir" "json_artifact_unavailable"
+            if _prompt_parser_apply_legacy_result "$session_dir"; then
+                parsed_success=1
             fi
         fi
-        
+
+        if (( parsed_success == 1 )); then
+            local clean_objective
+            clean_objective=$(jq -r '.objective // empty' "$session_file" 2>/dev/null)
+            local output_spec
+            output_spec=$(jq -r '
+                if (.output_specification // empty) == "" then "__CCONDUCTOR_NULL__"
+                elif .output_specification == null then "__CCONDUCTOR_NULL__"
+                else .output_specification
+                end
+            ' "$session_file" 2>/dev/null)
+
+            if [[ -n "$clean_objective" ]]; then
+                echo "  ✓ Session and knowledge graph updated with clean objective" >&2
+
+                if [[ "${CCONDUCTOR_VERBOSE:-0}" == "1" ]]; then
+                    echo "" >&2
+                    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" >&2
+                    echo "📝 Prompt Parser Results" >&2
+                    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" >&2
+                    echo "" >&2
+                    echo "Core Objective (for research agents):" >&2
+                    echo "  $clean_objective" >&2
+                    echo "" >&2
+                    if [[ "$output_spec" != "__CCONDUCTOR_NULL__" ]]; then
+                        echo "Output Format Specification (for synthesis):" >&2
+                        echo "  $output_spec" >&2
+                        echo "" >&2
+                    else
+                        echo "Output Format: Using standard domain format" >&2
+                        echo "" >&2
+                    fi
+                    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" >&2
+                    echo "" >&2
+                fi
+
+                rm -f "$session_dir/user-prompt.txt"
+                return 0
+            fi
+        else
+            _prompt_parser_record_artifact_fallback "$session_dir" "legacy_result_missing"
+        fi
+
+        if command -v log_warn >/dev/null 2>&1; then
+            log_warn "Prompt parser results were unavailable; falling back to original prompt"
+        fi
         echo "  ⚠ Warning: Could not extract parsed results, using original prompt" >&2
     else
+        if command -v log_warn >/dev/null 2>&1; then
+            log_warn "Prompt parsing failed, using original prompt"
+        fi
         echo "  ⚠ Warning: Prompt parsing failed, using original prompt" >&2
     fi
+
+    rm -f "$session_dir/user-prompt.txt"
 
     if [[ -f "$sentinel_file" ]]; then
         return 2
