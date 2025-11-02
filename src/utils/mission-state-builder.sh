@@ -14,6 +14,175 @@ source "$SCRIPT_DIR/budget-tracker.sh" 2>/dev/null || true
 
 BASH_RUNTIME="${CCONDUCTOR_BASH_RUNTIME:-$(command -v bash)}"
 
+WATCH_TOPIC_STOPWORDS_REGEX='^(a|an|and|are|as|at|be|by|for|from|in|into|is|it|its|of|on|or|over|the|their|there|to|with|within|without)$'
+
+watch_topic_canonicalize_token() {
+    local token="$1"
+    local base="$token"
+    if [[ ${#base} -gt 4 && "$base" == *ies ]]; then
+        base="${base%ies}y"
+    elif [[ ${#base} -gt 3 && "$base" == *ing ]]; then
+        base="${base%ing}"
+    elif [[ ${#base} -gt 3 && "$base" == *ed ]]; then
+        base="${base%ed}"
+    elif [[ ${#base} -gt 3 && "$base" == *es ]]; then
+        base="${base%es}"
+    elif [[ ${#base} -gt 3 && "$base" == *s ]]; then
+        base="${base%s}"
+    fi
+    if [[ ${#base} -gt 4 && "$base" == *ism ]]; then
+        base="${base%ism}"
+    fi
+    if [[ ${#base} -gt 4 && "$base" == *ic ]]; then
+        base="${base%ic}"
+    fi
+    printf '%s' "$base"
+}
+
+watch_topic_tokenize_text() {
+    local text="$1"
+    local normalized
+    normalized=$(printf '%s' "$text" | tr '[:upper:]' '[:lower:]' | tr -cs '[:alnum:]' '\n')
+    local -a tokens=()
+    while IFS= read -r token; do
+        [[ -z "$token" ]] && continue
+        if [[ "$token" =~ $WATCH_TOPIC_STOPWORDS_REGEX ]]; then
+            continue
+        fi
+        token=$(watch_topic_canonicalize_token "$token")
+        [[ -z "$token" ]] && continue
+        local found=0
+        if (( ${#tokens[@]} > 0 )); then
+            for existing in "${tokens[@]}"; do
+                if [[ "$existing" == "$token" ]]; then
+                    found=1
+                    break
+                fi
+            done
+        fi
+        if (( found == 0 )); then
+            tokens+=("$token")
+        fi
+    done <<< "$normalized"
+    if (( ${#tokens[@]} == 0 )); then
+        printf ''
+    else
+        printf '%s\n' "${tokens[@]}"
+    fi
+}
+
+watch_topic_ratio() {
+    local numerator="$1"
+    local denominator="$2"
+    awk -v num="$numerator" -v den="$denominator" 'BEGIN {
+        if (den <= 0) {
+            printf "0"
+        } else {
+            printf "%.4f", (num / den)
+        }
+    }'
+}
+
+watch_topic_compute_jaccard() {
+    local tokens_a_str="$1"
+    local tokens_b_str="$2"
+    local token
+    local -a tokens_a=()
+    local -a tokens_b=()
+    if [[ -n "$tokens_a_str" ]]; then
+        while IFS= read -r token; do
+            [[ -z "$token" ]] && continue
+            tokens_a+=("$token")
+        done <<< "$tokens_a_str"
+    fi
+    if [[ -n "$tokens_b_str" ]]; then
+        while IFS= read -r token; do
+            [[ -z "$token" ]] && continue
+            tokens_b+=("$token")
+        done <<< "$tokens_b_str"
+    fi
+    local union=${#tokens_b[@]}
+    local intersection=0
+    if (( ${#tokens_a[@]} > 0 )); then
+        for token in "${tokens_a[@]}"; do
+            local found=0
+            for existing in "${tokens_b[@]}"; do
+                if [[ "$existing" == "$token" ]]; then
+                    found=1
+                    break
+                fi
+            done
+            if (( found == 1 )); then
+                ((intersection++))
+            else
+                ((union++))
+            fi
+        done
+    fi
+    if (( union == 0 )); then
+        echo "0"
+        return
+    fi
+    watch_topic_ratio "$intersection" "$union"
+}
+
+watch_topic_compute_coverage() {
+    local canonical_tokens_str="$1"
+    local claim_tokens_str="$2"
+    local token
+    local -a canonical_tokens=()
+    local -a claim_tokens=()
+    if [[ -n "$canonical_tokens_str" ]]; then
+        while IFS= read -r token; do
+            [[ -z "$token" ]] && continue
+            canonical_tokens+=("$token")
+        done <<< "$canonical_tokens_str"
+    fi
+    if [[ -n "$claim_tokens_str" ]]; then
+        while IFS= read -r token; do
+            [[ -z "$token" ]] && continue
+            claim_tokens+=("$token")
+        done <<< "$claim_tokens_str"
+    fi
+    local total=${#canonical_tokens[@]}
+    if (( total == 0 )); then
+        echo "0"
+        return
+    fi
+    local hits=0
+    for token in "${canonical_tokens[@]}"; do
+        local found=0
+        for candidate in "${claim_tokens[@]}"; do
+            if [[ "$candidate" == "$token" ]]; then
+                found=1
+                break
+            fi
+        done
+        if (( found == 1 )); then
+            ((hits++))
+        fi
+    done
+    watch_topic_ratio "$hits" "$total"
+}
+
+watch_topic_score_ge() {
+    local score="${1:-0}"
+    local threshold="${2:-0}"
+    awk -v s="$score" -v t="$threshold" 'BEGIN {
+        if (s+0 >= t+0) { exit 0 } else { exit 1 }
+    }'
+}
+
+watch_topic_sanitize_threshold() {
+    local candidate="$1"
+    local fallback="$2"
+    if [[ "$candidate" =~ ^([0-9]+([.][0-9]+)?|[.][0-9]+)$ ]]; then
+        echo "$candidate"
+    else
+        echo "$fallback"
+    fi
+}
+
 to_session_relative() {
     local path="$1"
     local session_dir="$2"
@@ -102,11 +271,11 @@ build_mission_state() {
     kg_mtime_local=$(stat_mtime "$kg_file")
 
     local waivers_file="$meta_dir/watch-topic-waivers.json"
-    declare -A watch_topic_waivers=()
+    local watch_topic_waivers=""
     if [[ -f "$waivers_file" ]]; then
         while IFS= read -r waiver_id; do
             [[ -z "$waiver_id" || "$waiver_id" == "null" ]] && continue
-            watch_topic_waivers["$waiver_id"]=1
+            watch_topic_waivers+="$waiver_id"$'\n'
         done < <(jq -r '.[]?' "$waivers_file" 2>/dev/null || printf '')
     fi
 
@@ -134,13 +303,19 @@ build_mission_state() {
 
         if [[ -n "$watch_topics_source" && "$watch_topics_source" != "[]" ]]; then
             local -a watch_status_entries=()
+            local base_jaccard_threshold
+            base_jaccard_threshold=$(watch_topic_sanitize_threshold "${WATCH_TOPIC_JACCARD_MIN:-0.4}" "0.4")
+            local base_coverage_threshold
+            base_coverage_threshold=$(watch_topic_sanitize_threshold "${WATCH_TOPIC_COVERAGE_MIN:-0.65}" "0.65")
 
             while IFS= read -r topic_json; do
                 [[ -z "$topic_json" || "$topic_json" == "null" ]] && continue
 
                 local topic_importance
                 topic_importance=$(safe_jq_from_json "$topic_json" '.importance // ""' "" "$session_dir" "mission_state.watch_topic.importance")
-                if [[ "${topic_importance,,}" != "critical" ]]; then
+                local topic_importance_lc
+                topic_importance_lc=$(printf '%s' "$topic_importance" | tr '[:upper:]' '[:lower:]')
+                if [[ "$topic_importance_lc" != "critical" ]]; then
                     continue
                 fi
 
@@ -153,37 +328,68 @@ build_mission_state() {
 
                 local -a variant_terms=()
                 if [[ -n "$canonical" ]]; then
-                    variant_terms+=("${canonical,,}")
+                    variant_terms+=("$(printf '%s' "$canonical" | tr '[:upper:]' '[:lower:]')")
                 fi
                 if [[ -n "$variants_json" && "$variants_json" != "[]" ]]; then
                     while IFS= read -r variant_term; do
                         [[ -z "$variant_term" || "$variant_term" == "null" ]] && continue
-                        variant_terms+=("${variant_term,,}")
+                        variant_terms+=("$(printf '%s' "$variant_term" | tr '[:upper:]' '[:lower:]')")
                     done < <(jq -r '.[]?' <<< "$variants_json")
+                fi
+
+                local jaccard_threshold="$base_jaccard_threshold"
+                local coverage_threshold="$base_coverage_threshold"
+                if [[ "$topic_importance_lc" == "critical" ]]; then
+                    jaccard_threshold=$(watch_topic_sanitize_threshold "${WATCH_TOPIC_JACCARD_CRITICAL_MIN:-0.15}" "$jaccard_threshold")
+                    coverage_threshold=$(watch_topic_sanitize_threshold "${WATCH_TOPIC_COVERAGE_CRITICAL_MIN:-$coverage_threshold}" "$coverage_threshold")
                 fi
 
                 local status="pending"
                 local -a matched_claim_ids=()
-                if [[ -n "$topic_id" && -n "${watch_topic_waivers["$topic_id"]:-}" ]]; then
+                if [[ -n "$topic_id" ]] && printf '%s' "$watch_topic_waivers" | grep -Fxq "$topic_id"; then
                     status="waived"
                 else
+                    local canonical_tokens_str=""
+                    if [[ -n "$canonical" ]]; then
+                        canonical_tokens_str=$(watch_topic_tokenize_text "$canonical")
+                    fi
                     for claim_entry in "${kg_claim_entries[@]}"; do
                         local claim_statement
                         claim_statement=$(safe_jq_from_json "$claim_entry" '.statement // ""' "" "$session_dir" "mission_state.watch_topic.claim_statement")
                         [[ -z "$claim_statement" ]] && continue
-                        local claim_statement_lc="${claim_statement,,}"
+                        local claim_statement_lc
+                        claim_statement_lc=$(printf '%s' "$claim_statement" | tr '[:upper:]' '[:lower:]')
+                        local claim_id
+                        claim_id=$(safe_jq_from_json "$claim_entry" '.id // ""' "" "$session_dir" "mission_state.watch_topic.claim_id")
+                        local claim_tokens
+                        claim_tokens=$(watch_topic_tokenize_text "$claim_statement")
+                        local coverage_score="0"
+                        if [[ -n "$canonical_tokens_str" ]]; then
+                            coverage_score=$(watch_topic_compute_coverage "$canonical_tokens_str" "$claim_tokens")
+                        fi
+                        local matched=0
                         for variant_term in "${variant_terms[@]}"; do
                             [[ -z "$variant_term" ]] && continue
                             if [[ "$claim_statement_lc" == *"$variant_term"* ]]; then
-                                status="covered"
-                                local claim_id
-                                claim_id=$(safe_jq_from_json "$claim_entry" '.id // ""' "" "$session_dir" "mission_state.watch_topic.claim_id")
-                                if [[ -n "$claim_id" ]]; then
-                                    matched_claim_ids+=("$claim_id")
-                                fi
-                                break 2
+                                matched=1
+                                break
+                            fi
+                            local variant_tokens
+                            variant_tokens=$(watch_topic_tokenize_text "$variant_term")
+                            local jaccard_score
+                            jaccard_score=$(watch_topic_compute_jaccard "$variant_tokens" "$claim_tokens")
+                            if watch_topic_score_ge "${jaccard_score:-0}" "$jaccard_threshold" || watch_topic_score_ge "${coverage_score:-0}" "$coverage_threshold"; then
+                                matched=1
+                                break
                             fi
                         done
+                        if (( matched == 1 )); then
+                            status="covered"
+                            if [[ -n "$claim_id" ]]; then
+                                matched_claim_ids+=("$claim_id")
+                            fi
+                            break
+                        fi
                     done
                 fi
 
@@ -231,6 +437,9 @@ build_mission_state() {
     local classifier_total="0"
     local classifier_pending="$sources_total_numeric"
     local classifier_status="stale"
+    local classifier_category_counts='{}'
+    local classifier_needs_review_json='[]'
+    local classifier_needs_review_count="0"
     if (( classifier_exists )); then
         classifier_total=$(jq -s 'map(select(.source_id != null)) | length' "$classifier_file" 2>/dev/null || echo "0")
         classifier_total=$((classifier_total + 0))
@@ -238,7 +447,31 @@ build_mission_state() {
         if (( classifier_pending < 0 )); then
             classifier_pending=0
         fi
-        if (( classifier_pending == 0 )) && [[ -z "$kg_mtime_local" || -z "$classifier_mtime" || "$classifier_mtime" -ge "$kg_mtime_local" ]]; then
+        classifier_category_counts=$(jq -s '
+            reduce .[] as $row ({};
+                ($row.resolved_category // "") as $cat |
+                if ($cat | length) == 0 then .
+                else . + {($cat): ((.[$cat] // 0) + 1)}
+                end
+            )' "$classifier_file" 2>/dev/null || echo '{}')
+        classifier_needs_review_json=$(jq -s '
+            [ .[] 
+              | select((.resolved_category // "") == "needs_review")
+              | {
+                    source_id: (.source_id // ""),
+                    url: (.url // ""),
+                    notes: (.notes // ""),
+                    resolver_path: (.resolver_path // ""),
+                    llm_attempted: (.llm_attempted // false),
+                    retry_count: (.retry_count // 0)
+                }
+            ]' "$classifier_file" 2>/dev/null || echo '[]')
+        classifier_needs_review_count=$(printf '%s\n' "$classifier_needs_review_json" | jq 'length' 2>/dev/null || echo "0")
+        local needs_review_numeric="$classifier_needs_review_count"
+        needs_review_numeric=$((needs_review_numeric + 0))
+        if (( needs_review_numeric > 0 )); then
+            classifier_status="stale"
+        elif (( classifier_pending == 0 )) && [[ -z "$kg_mtime_local" || -z "$classifier_mtime" || "$classifier_mtime" -ge "$kg_mtime_local" ]]; then
             classifier_status="fresh"
         fi
         classifier_updated_iso=$(epoch_to_iso8601 "$classifier_mtime")
@@ -326,6 +559,9 @@ build_mission_state() {
         --arg classifier_updated_epoch "${classifier_mtime:-}" \
         --argjson classifier_total "${classifier_total:-0}" \
         --argjson classifier_pending "${classifier_pending:-0}" \
+        --argjson classifier_counts "$classifier_category_counts" \
+        --argjson classifier_needs_review "$classifier_needs_review_json" \
+        --argjson classifier_needs_review_count "$classifier_needs_review_count" \
         --arg kg_path "$kg_path_rel" \
         --arg kg_path_abs "$kg_file" \
         --arg log_path "$log_path_rel" \
@@ -360,7 +596,12 @@ build_mission_state() {
                 total_classifications: $classifier_total,
                 pending_sources: $classifier_pending,
                 updated_at: (if $classifier_updated_iso == "" then null else $classifier_updated_iso end),
-                updated_epoch: (if $classifier_updated_epoch == "" then null else ($classifier_updated_epoch | tonumber) end)
+                updated_epoch: (if $classifier_updated_epoch == "" then null else ($classifier_updated_epoch | tonumber) end),
+                category_counts: $classifier_counts,
+                needs_review: {
+                    count: $classifier_needs_review_count,
+                    entries: $classifier_needs_review
+                }
             },
             critical_watch_topics: $watch_topics,
             kg_path: $kg_path,
