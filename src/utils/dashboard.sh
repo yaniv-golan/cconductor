@@ -109,15 +109,9 @@ dashboard_generate_metrics() {
         events_available=1
     fi
 
-    local skip_readiness="${CCONDUCTOR_SKIP_DASHBOARD_ON_EMPTY_KG:-0}"
-    local readiness_attempts="${CCONDUCTOR_DASHBOARD_READINESS_ATTEMPTS:-3}"
-    local readiness_backoff="${CCONDUCTOR_DASHBOARD_INITIAL_BACKOFF:-2}"
-    if ! [[ "$readiness_attempts" =~ ^[0-9]+$ ]] || (( readiness_attempts <= 0 )); then
-        readiness_attempts=3
-    fi
-    if ! [[ "$readiness_backoff" =~ ^[0-9]+$ ]] || (( readiness_backoff <= 0 )); then
-        readiness_backoff=2
-    fi
+    local skip_readiness=0
+    local readiness_attempts=3
+    local readiness_backoff=2
 
     local ready=0
     local attempt=1
