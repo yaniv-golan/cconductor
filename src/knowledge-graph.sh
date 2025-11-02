@@ -1397,6 +1397,9 @@ kg_integrate_agent_output() {
                     done
                 fi
                 
+                if (( integrated > 0 )); then
+                    kg_recalculate_source_stats "$session_dir" || true
+                fi
                 kg_merge_evidence_claims "$session_dir" >/dev/null 2>&1 || true
 
                 echo "  ✓ Integrated structured findings into knowledge graph" >&2
@@ -1538,6 +1541,9 @@ kg_integrate_agent_output() {
         
     done <<< "$findings_files"
 
+    if (( integrated > 0 )); then
+        kg_recalculate_source_stats "$session_dir" || true
+    fi
     kg_merge_evidence_claims "$session_dir" >/dev/null 2>&1 || true
 
     # Validate knowledge graph after integration

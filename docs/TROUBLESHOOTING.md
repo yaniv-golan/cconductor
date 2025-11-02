@@ -1577,6 +1577,19 @@ ls -lh research-sessions/mission_*/meta/*.json
 - Don't edit session files manually
 - Let research complete naturally
 
+### Knowledge Graph Source Count Drift
+
+**Symptom**: Quality gate or stakeholder classifier stays `stale` even after research agents finish, and `knowledge/knowledge-graph.json` still reports the original `stats.total_sources`.
+
+**Fix**:
+
+```bash
+. src/knowledge-graph.sh
+kg_recalculate_source_stats research-sessions/mission_<id>
+```
+
+Then rerun `./src/utils/mission-state-builder.sh <session_dir>` so mission metadata reflects the refreshed totals.
+
 ---
 
 ## Dashboard & Observability Issues

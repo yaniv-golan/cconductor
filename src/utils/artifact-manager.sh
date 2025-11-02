@@ -14,6 +14,8 @@ PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 source "$PROJECT_ROOT/src/utils/core-helpers.sh"
 # shellcheck disable=SC1091
 source "$SCRIPT_DIR/json-helpers.sh"
+# shellcheck disable=SC1091
+source "$PROJECT_ROOT/src/knowledge-graph.sh"
 
 # Check for jq dependency using helper
 require_command "jq" "brew install jq" "apt install jq" || exit 1
@@ -149,6 +151,7 @@ PY
   shopt -s nullglob
 
   local entry_json
+  local recalc_after_contract=0
   for entry_json in "${expected_entries[@]}"; do
     local slot
     slot=$(jq -r '.slot' <<<"$entry_json")
@@ -290,6 +293,10 @@ PY
         checksum_failures+=("$slot")
       fi
 
+      local entry_status="present"
+      if [[ "$schema_status" == "failed" || "$checksum_status" == "failed" ]]; then
+        entry_status="invalid"
+      fi
       local entry
       entry=$(jq -n \
         --arg slot "$slot" \
@@ -298,7 +305,7 @@ PY
         --arg content "$content_type" \
         --arg schema "$schema_id" \
         --arg required "$required" \
-        --arg status "$( [[ "$schema_status" == "failed" || "$checksum_status" == "failed" ]] && echo "invalid" || echo "present" )" \
+        --arg status "$entry_status" \
         --arg sha "$sha256" \
         --argjson size "$size" \
         --arg timestamp "$timestamp" \
@@ -337,6 +344,9 @@ PY
         fi
       fi
 
+      if [[ "$schema_id" == "artifact://research/findings@v1" && "$entry_status" == "present" ]]; then
+        recalc_after_contract=1
+      fi
       slot_index=$((slot_index + 1))
     done
 
@@ -350,6 +360,10 @@ PY
   local artifacts_json="[]"
   if [[ ${#artifacts[@]} -gt 0 ]]; then
     artifacts_json=$(printf '%s\n' "${artifacts[@]}" | jq -s '.')
+  fi
+
+  if (( recalc_after_contract == 1 )); then
+    kg_recalculate_source_stats "$session_dir" || true
   fi
 
   local summary

@@ -108,6 +108,79 @@ dashboard_generate_metrics() {
         events_payload=$(json_slurp_array "$events_file" '[]')
         events_available=1
     fi
+
+    local skip_readiness="${CCONDUCTOR_SKIP_DASHBOARD_ON_EMPTY_KG:-0}"
+    local readiness_attempts="${CCONDUCTOR_DASHBOARD_READINESS_ATTEMPTS:-3}"
+    local readiness_backoff="${CCONDUCTOR_DASHBOARD_INITIAL_BACKOFF:-2}"
+    if ! [[ "$readiness_attempts" =~ ^[0-9]+$ ]] || (( readiness_attempts <= 0 )); then
+        readiness_attempts=3
+    fi
+    if ! [[ "$readiness_backoff" =~ ^[0-9]+$ ]] || (( readiness_backoff <= 0 )); then
+        readiness_backoff=2
+    fi
+
+    local ready=0
+    local attempt=1
+    local backoff_seconds="$readiness_backoff"
+    local iteration_probe=""
+    local claims_probe="0"
+
+    while (( attempt <= readiness_attempts )); do
+        iteration_probe=$(dashboard_jq_payload "$session_dir" "$kg" '.iteration' "" "kg.iteration_probe")
+        claims_probe=$(dashboard_jq_payload "$session_dir" "$kg" '(.claims // []) | length' "0" "kg.claims_probe")
+        local iteration_clean="${iteration_probe//[[:space:]]/}"
+        local iteration_ready=0
+        if [[ -n "$iteration_clean" && "${iteration_clean,,}" != "null" ]]; then
+            iteration_ready=1
+        fi
+        local claims_numeric
+        claims_numeric=$(dashboard_sanitize_number "$claims_probe")
+        claims_numeric=${claims_numeric:-0}
+        claims_numeric=$((claims_numeric + 0))
+
+        if [[ "$skip_readiness" == "1" ]] || (( iteration_ready == 1 && claims_numeric > 0 )); then
+            ready=1
+            break
+        fi
+
+        if (( attempt == readiness_attempts )); then
+            break
+        fi
+
+        sleep "$backoff_seconds"
+        backoff_seconds=$((backoff_seconds * 2))
+        ((attempt++))
+        if [ -f "$session_dir/knowledge/knowledge-graph.json" ]; then
+            kg=$(atomic_read "$session_dir/knowledge/knowledge-graph.json" 2>/dev/null || echo '{}')
+        else
+            kg='{}'
+        fi
+    done
+
+    if (( ready == 0 )); then
+        local claims_numeric
+        claims_numeric=$(dashboard_sanitize_number "$claims_probe")
+        claims_numeric=${claims_numeric:-0}
+        claims_numeric=$((claims_numeric + 0))
+        local temp_metrics_file="${metrics_file}.tmp.$$"
+        if jq -n \
+            --arg updated "$(get_timestamp)" \
+            --arg status "initializing" \
+            --arg iteration_val "$iteration_probe" \
+            --argjson claims_ready "$claims_numeric" \
+            '{
+                status: $status,
+                last_updated: $updated,
+                iteration: ( ($iteration_val | tonumber?) // null ),
+                claims_ready: $claims_ready
+            }' > "$temp_metrics_file"; then
+            mv "$temp_metrics_file" "$metrics_file"
+        else
+            rm -f "$temp_metrics_file" 2>/dev/null || true
+            echo '{"status":"initializing","error":"Failed to serialize readiness payload"}' > "$metrics_file"
+        fi
+        return 0
+    fi
     
     # Extract stats
     local iteration

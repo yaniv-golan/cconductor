@@ -104,6 +104,9 @@ test-*.sh
 !tests/test-orchestrator-dual-mode.sh
 !tests/test-security-fixes.sh
 !tests/test-date-helpers.sh
+tests/fixtures/
+tests/manual/
+sandbox/
 obsidian/
 
 # Additional development notes patterns
@@ -143,3 +146,5 @@ tests/citation-readiness-tests/
 docs/internal/*
 !docs/internal/01_bug-report-validation.md
 audit-results.json
+cconductor.code-workspace
+config/artifact-contracts/test-agent/
