@@ -145,18 +145,26 @@ start_agent_session() {
     session_id=$(jq -r '.session_id // empty' "$output_file" 2>/dev/null)
 
     if [ -z "$session_id" ] || [ "$session_id" = "null" ]; then
-        log_system_error "$session_dir" "start_agent_session" "Could not extract session_id from response" "output_file=$output_file"
         if [[ -f "$output_file" ]] && [[ -s "$output_file" ]]; then
-            echo "Response structure:" >&2
-            jq 'keys' "$output_file" 2>&1 | head -20 >&2 || echo "(invalid JSON)" >&2
+            local keys_sample
+            keys_sample=$(jq 'keys' "$output_file" 2>/dev/null | head -20 || true)
+            if [[ "$keys_sample" == *"\"result\""* && "$keys_sample" == *"\"type\""* ]]; then
+                log_system_warning "$session_dir" "start_agent_session" "Streaming session unavailable; continuing stateless" "agent=$agent_name output_file=$output_file"
+                local sentinel="$sessions_dir/${agent_name}.stateless"
+                printf 'stateless\n' > "$sentinel"
+                rm -f "$sessions_dir/${agent_name}.start-input.txt" 2>/dev/null || true
+                return 0
+            fi
+            log_system_error "$session_dir" "start_agent_session" "Could not extract session_id from response" "output_file=$output_file keys=$keys_sample"
         else
-            echo "Output file is missing or empty: $output_file" >&2
+            log_system_error "$session_dir" "start_agent_session" "Could not extract session_id; output missing" "output_file=$output_file"
         fi
         return 1
     fi
 
     # Store session ID
     echo "$session_id" > "$session_file"
+    rm -f "$sessions_dir/${agent_name}.stateless" 2>/dev/null || true
 
     # Store metadata
     local metadata_file="$sessions_dir/${agent_name}.metadata"
@@ -207,6 +215,40 @@ continue_agent_session() {
     # Check if session exists
     local sessions_dir="$session_dir/.agent-sessions"
     local session_file="$sessions_dir/${agent_name}.session"
+
+    local stateless_flag="$sessions_dir/${agent_name}.stateless"
+    if [ -f "$stateless_flag" ]; then
+        echo "⚡ Running $agent_name in stateless mode (streaming session unavailable earlier)" >&2
+
+        if ! "$BASH_RUNTIME" "$SCRIPT_DIR/invoke-agent.sh" invoke-v2 \
+            "$agent_name" \
+            <(echo "$task") \
+            "$output_file" \
+            "$agent_timeout" \
+            "$session_dir"; then
+            log_system_error "$session_dir" "continue_agent_session" "Stateless invocation failed for $agent_name"
+            return 1
+        fi
+
+        if [[ ! -f "$output_file" ]] || [[ ! -s "$output_file" ]]; then
+            echo "✗ Agent $agent_name produced no output file" >&2
+            return 1
+        fi
+
+        if ! jq empty "$output_file" 2>/dev/null; then
+            echo "✗ Agent $agent_name returned invalid JSON" >&2
+            return 1
+        fi
+
+        local result
+        result=$(jq -r '.result // empty' "$output_file" 2>/dev/null)
+        if [ -z "$result" ]; then
+            echo "✗ Agent $agent_name returned empty .result field" >&2
+            return 1
+        fi
+
+        return 0
+    fi
 
     if [ ! -f "$session_file" ]; then
         log_system_error "$session_dir" "continue_agent_session" "No active session for agent $agent_name"

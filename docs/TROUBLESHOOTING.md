@@ -673,6 +673,32 @@ rm -rf research-sessions/mission_*/task-queue.json.lock  # Legacy sessions only
 - Let research complete naturally
 - Use `./cconductor status` before starting new research
 
+### Streaming sessions downgraded to stateless
+
+**Symptoms**
+
+```
+Response structure:
+[
+  "result",
+  "subtype",
+  "type"
+]
+✗ <agent> invocation failed
+```
+
+or `system-errors.log` reports `Could not extract session_id from response`.
+
+**Cause**
+
+With `CCONDUCTOR_ENABLE_STREAMING=1`, the Claude CLI occasionally finishes with a synthesized `stream_synthesized` block instead of a streamed session. No `session_id` is returned. Starting with v0.5 the session manager automatically downgrades that agent to stateless mode so the mission continues.
+
+**What to do**
+
+- No recovery is needed; the run continues without a live session.
+- To avoid the downgrade, disable streaming (`unset CCONDUCTOR_ENABLE_STREAMING`) before launching the mission.
+- If you see quota warnings (“Session limit reached · resets 1am”), wait for the provider reset window or reduce parallel streaming jobs.
+
 ---
 
 ### Can't Resume Session

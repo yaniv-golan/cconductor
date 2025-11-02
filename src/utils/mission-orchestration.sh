@@ -1044,12 +1044,24 @@ EOF
         if [[ -n "$result" ]]; then
             mkdir -p "$session_dir/artifacts/$agent_name"
             artifact_file="$session_dir/artifacts/$agent_name/output.md"
-            echo "$result" > "$artifact_file"
-            
-            # Register artifact (capture ID but don't display it)
-            local artifact_id
-            # shellcheck disable=SC2034
-            artifact_id=$(artifact_register "$session_dir" "$artifact_file" "agent_output" "$agent_name")
+            local fallback_mode="${CCONDUCTOR_ALLOW_ARTIFACT_FALLBACK:-0}"
+            if [[ -f "$artifact_file" && "$fallback_mode" != "1" ]]; then
+                local fallback_dir="$session_dir/work/$agent_name"
+                mkdir -p "$fallback_dir"
+                local fallback_file="$fallback_dir/fallback-output.md"
+                printf '%s\n' "$result" > "$fallback_file"
+                if ! cmp -s "$artifact_file" "$fallback_file"; then
+                    log_system_warning "$session_dir" "agent_fallback_preserved" \
+                        "Preserved fallback .result output without overwriting contract artifact" \
+                        "agent=$agent_name fallback=${fallback_file#"$session_dir"/} artifact=${artifact_file#"$session_dir"/}"
+                fi
+            else
+                printf '%s\n' "$result" > "$artifact_file"
+                # Register artifact (capture ID but don't display it)
+                local artifact_id
+                # shellcheck disable=SC2034
+                artifact_id=$(artifact_register "$session_dir" "$artifact_file" "agent_output" "$agent_name")
+            fi
         fi
         
         # Record budget with real cost
@@ -1168,6 +1180,30 @@ validate_required_synthesis_artifacts() {
     if (( invalid == 1 )); then
         echo "  ⚠ Synthesis artifacts failed validation; inspect logs for details." >&2
         return 1
+    fi
+
+    if [[ "${CCONDUCTOR_ALLOW_EMPTY_ARTIFACT:-0}" != "1" ]]; then
+        local markdown_min_bytes="${CCONDUCTOR_MIN_MARKDOWN_ARTIFACT_BYTES:-100}"
+        if ! [[ "$markdown_min_bytes" =~ ^[0-9]+$ ]]; then
+            markdown_min_bytes=100
+        fi
+        local academic_markdown="$session_dir/artifacts/academic-researcher/output.md"
+        if [[ -f "$academic_markdown" ]]; then
+            local academic_size
+            academic_size=$(stat -f%z "$academic_markdown" 2>/dev/null || stat -c%s "$academic_markdown" 2>/dev/null || wc -c < "$academic_markdown" 2>/dev/null || echo 0)
+            academic_size="${academic_size//[[:space:]]/}"
+            local size_numeric="${academic_size:-0}"
+            size_numeric=$((size_numeric + 0))
+            if (( size_numeric < markdown_min_bytes )); then
+                log_error "synthesis validation: academic-researcher markdown artifact too small (${size_numeric}B < ${markdown_min_bytes}B)"
+                echo "  ⚠ academic-researcher markdown output appears truncated (${size_numeric}B); rerunning research agents." >&2
+                return 1
+            fi
+        else
+            log_error "synthesis validation: academic-researcher markdown artifact missing"
+            echo "  ⚠ academic-researcher markdown artifact missing; rerunning research agents." >&2
+            return 1
+        fi
     fi
 
     return 0

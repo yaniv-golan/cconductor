@@ -12,6 +12,40 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
+_record_provider_session_limit() {
+    local session_dir="$1"
+    local agent_name="${2:-unknown-agent}"
+    local provider_message="${3:-Session limit reached.}"
+    local streaming_flag="${4:-0}"
+
+    local streaming_value
+    streaming_value=$([[ "$streaming_flag" -eq 1 ]] && echo true || echo false)
+
+    if [[ -n "$session_dir" ]] && command -v log_system_error &>/dev/null; then
+        log_system_error "$session_dir" "provider_session_limit" \
+            "Claude session limit reached for agent $agent_name" \
+            "message=$(printf '%s' "$provider_message" | tr $'\n' ' ') streaming=$streaming_value"
+    fi
+
+    if [[ -n "$session_dir" ]] && command -v log_event &>/dev/null; then
+        local provider_event
+        provider_event=$(jq -n \
+            --arg agent "$agent_name" \
+            --arg message "$provider_message" \
+            --argjson streaming "$([[ "$streaming_value" == "true" ]] && echo true || echo false)" \
+            '{agent:$agent, message:$message, streaming:$streaming}')
+        log_event "$session_dir" "provider_session_limit" "$provider_event" || true
+    fi
+
+    if [[ -n "$session_dir" ]]; then
+        local sentinel="$session_dir/meta/provider-session-limit.flag"
+        mkdir -p "$(dirname "$sentinel")"
+        printf '%s\n' "$provider_message" > "$sentinel" 2>/dev/null || true
+    fi
+
+    echo "⚠ ${agent_name} aborted: $provider_message" >&2
+}
+
 _notify_provider_session_limit() {
     local output_file="$1"
     local session_dir="${2:-}"
@@ -30,31 +64,44 @@ _notify_provider_session_limit() {
 
     local provider_message
     provider_message=$(safe_jq_from_file "$output_file" '.result // "Session limit reached."' "Session limit reached." "$session_dir" "invoke_agent.provider.message")
-    local streaming_flag
-    streaming_flag=$([[ "$use_streaming_flag" -eq 1 ]] && echo true || echo false)
-
-    if [[ -n "$session_dir" ]] && command -v log_system_error &>/dev/null; then
-        log_system_error "$session_dir" "provider_session_limit" \
-            "Claude session limit reached for agent $agent_name" \
-            "message=$(printf '%s' "$provider_message" | tr $'\n' ' ') streaming=$streaming_flag"
-    fi
-    if [[ -n "$session_dir" ]] && command -v log_event &>/dev/null; then
-        local provider_event
-        provider_event=$(jq -n \
-            --arg agent "$agent_name" \
-            --arg message "$provider_message" \
-            --argjson streaming "$([[ "$streaming_flag" == "true" ]] && echo true || echo false)" \
-            '{agent:$agent, message:$message, streaming:$streaming}')
-        log_event "$session_dir" "provider_session_limit" "$provider_event" || true
-    fi
-    if [[ -n "$session_dir" ]]; then
-        local sentinel="$session_dir/meta/provider-session-limit.flag"
-        mkdir -p "$(dirname "$sentinel")"
-        printf '%s\n' "$provider_message" > "$sentinel" 2>/dev/null || true
-    fi
-
-    echo "⚠ $agent_name aborted: $provider_message" >&2
+    _record_provider_session_limit "$session_dir" "$agent_name" "$provider_message" "$use_streaming_flag"
     return 0
+}
+
+_detect_provider_session_limit_phrase() {
+    local text="$1"
+    if [[ -z "$text" ]]; then
+        return 1
+    fi
+    local lower_text="${text,,}"
+    if [[ "$lower_text" == *"session limit reached"* ]]; then
+        return 0
+    fi
+    if [[ "$lower_text" == *"wait for the provider reset"* ]]; then
+        return 0
+    fi
+    if [[ "$lower_text" == *"resets 1am"* ]]; then
+        return 0
+    fi
+    return 1
+}
+
+_extract_provider_session_limit_message() {
+    local text="$1"
+    if [[ -z "$text" ]]; then
+        echo "Session limit reached."
+        return
+    fi
+    local line
+    line=$(printf '%s\n' "$text" | grep -i 'session limit reached' | head -n1)
+    if [[ -z "$line" ]]; then
+        line=$(printf '%s\n' "$text" | grep -i 'resets' | head -n1)
+    fi
+    if [[ -z "$line" ]]; then
+        line="Session limit reached."
+    fi
+    line=$(echo "$line" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+    printf '%s\n' "$line"
 }
 
 # Source core helpers first
@@ -929,6 +976,8 @@ invoke_agent_v2() {
         fi
 
         local final_result=""
+        local session_id_cache=""
+        local usage_cache=""
         local line=""
         local aggregated_text=""
         local last_assistant_text=""
@@ -951,6 +1000,14 @@ invoke_agent_v2() {
             event_type=$(safe_jq_from_json "$line" '.type // empty' "" "$session_dir" "invoke_agent.stream.event_type")
 
             dispatch_argument_events "$session_dir" "$agent_label" "$line" || true
+
+            if [[ "$event_type" == "system" ]]; then
+                local sys_session_id
+                sys_session_id=$(printf '%s\n' "$line" | jq -r '.session_id // empty' 2>/dev/null || echo "")
+                if [[ -n "$sys_session_id" ]]; then
+                    session_id_cache="$sys_session_id"
+                fi
+            fi
 
             case "$event_type" in
                 stream_event)
@@ -993,9 +1050,30 @@ invoke_agent_v2() {
                     if [[ -n "$assistant_text" && "$assistant_text" != "null" ]]; then
                         last_assistant_text="$assistant_text"
                     fi
+                    if [[ -z "$session_id_cache" ]]; then
+                        local msg_session_id
+                        msg_session_id=$(printf '%s\n' "$line" | jq -r '.session_id // empty' 2>/dev/null || echo "")
+                        if [[ -n "$msg_session_id" ]]; then
+                            session_id_cache="$msg_session_id"
+                        fi
+                    fi
                     ;;
                 result)
                     final_result="$line"
+                    if [[ -z "$session_id_cache" ]]; then
+                        local result_session_id
+                        result_session_id=$(printf '%s\n' "$line" | jq -r '.session_id // empty' 2>/dev/null || echo "")
+                        if [[ -n "$result_session_id" ]]; then
+                            session_id_cache="$result_session_id"
+                        fi
+                    fi
+                    if [[ -z "$usage_cache" ]]; then
+                        local result_usage
+                        result_usage=$(printf '%s\n' "$line" | jq -c '.usage // empty' 2>/dev/null || echo "")
+                        if [[ -n "$result_usage" && "$result_usage" != "null" ]]; then
+                            usage_cache="$result_usage"
+                        fi
+                    fi
                     if [[ -n "$debug_log" ]]; then
                         printf 'final_result_set\n' >> "$debug_log"
                     fi
@@ -1003,9 +1081,42 @@ invoke_agent_v2() {
                 *)
                     ;;
             esac
+
+            if [[ "$event_type" == "stream_event" ]]; then
+                local usage_candidate
+                usage_candidate=$(printf '%s\n' "$line" | jq -c '(.event.usage // .event.response.usage // empty)' 2>/dev/null || echo "")
+                if [[ -n "$usage_candidate" && "$usage_candidate" != "null" ]]; then
+                    usage_cache="$usage_candidate"
+                fi
+                if [[ -z "$session_id_cache" ]]; then
+                    local stream_session
+                    stream_session=$(printf '%s\n' "$line" | jq -r '.event.session_id // empty' 2>/dev/null || echo "")
+                    if [[ -n "$stream_session" ]]; then
+                        session_id_cache="$stream_session"
+                    fi
+                fi
+            fi
         done < "$pipe_path"
 
         if [[ -n "$final_result" ]]; then
+            if [[ -n "$session_id_cache" ]]; then
+                local patched_result
+                patched_result=$(printf '%s\n' "$final_result" | jq --arg sid "$session_id_cache" '
+                    if (.session_id // "" | length) == 0 then . + {session_id: $sid} else . end
+                ' 2>/dev/null || echo "")
+                if [[ -n "$patched_result" ]]; then
+                    final_result="$patched_result"
+                fi
+            fi
+            if [[ -n "$usage_cache" ]]; then
+                local patched_usage_result
+                patched_usage_result=$(printf '%s\n' "$final_result" | jq --argjson usage "$usage_cache" '
+                    if (.usage // empty) == empty then . + {usage: $usage} else . end
+                ' 2>/dev/null || echo "")
+                if [[ -n "$patched_usage_result" ]]; then
+                    final_result="$patched_usage_result"
+                fi
+            fi
             printf '%s\n' "$final_result" > "$output_target"
             if [[ -n "$debug_log" ]]; then
                 printf 'wrote_final_result\n' >> "$debug_log"
@@ -1028,6 +1139,16 @@ invoke_agent_v2() {
             local synthetic_result
             synthetic_result=$(jq -n --arg text "$synthesized_text" --arg subtype "stream_synthesized" \
                 '{type:"result",subtype:$subtype,result:$text}')
+            if [[ -n "$session_id_cache" ]]; then
+                synthetic_result=$(printf '%s\n' "$synthetic_result" | jq --arg sid "$session_id_cache" '. + {session_id: $sid}')
+            fi
+            local usage_json
+            if [[ -n "$usage_cache" ]]; then
+                usage_json="$usage_cache"
+            else
+                usage_json='{"total_cost_usd":0}'
+            fi
+            synthetic_result=$(printf '%s\n' "$synthetic_result" | jq --argjson usage "$usage_json" '. + {usage: $usage}')
             printf '%s\n' "$synthetic_result" > "$output_target"
             if [[ -n "$debug_log" ]]; then
                 printf 'wrote_synthetic_result\n' >> "$debug_log"
@@ -1313,6 +1434,12 @@ invoke_agent_v2() {
             echo "✗ Agent $agent_name returned empty .result field" >&2
             echo "Response structure:" >&2
             jq 'keys' "$output_file" >&2
+            return 1
+        fi
+        if _detect_provider_session_limit_phrase "$result"; then
+            local limit_message
+            limit_message=$(_extract_provider_session_limit_message "$result")
+            _record_provider_session_limit "$session_dir" "$agent_name" "$limit_message" "$use_streaming"
             return 1
         fi
         if _notify_provider_session_limit "$output_file" "$session_dir" "$agent_name" "$use_streaming"; then
