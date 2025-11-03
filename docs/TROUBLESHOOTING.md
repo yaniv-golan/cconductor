@@ -2049,6 +2049,10 @@ Equivalent CLI flags exist (`--no-cache`, `--no-web-fetch-cache`, `--no-web-sear
 - `CCONDUCTOR_SKIP_EVENT_TAILER=1` — prevent the event tailer from attaching; isolates issues where event streaming interferes with automation output.
 - `CCONDUCTOR_STREAM_DEBUG_LOG=/path/to/log` — capture raw streaming frames for post-mortem analysis. Leave unset during normal operation to avoid large logs.
 
+### Artifact Contract Synchronization
+
+- `CCONDUCTOR_DISABLE_ARTIFACT_READY_WAIT=1` — bypass the ready-marker fast path and fall back to legacy polling. Use only when debugging artifact races; keeping the variable unset ensures agents wait for the validated artifact set before continuing.
+
 Unset these variables after debugging so future runs return to the standard streaming experience.
 
 ---

@@ -84,6 +84,7 @@ _prompt_parser_apply_json_artifact() {
             output_specification: (if has("output_specification") then .output_specification else null end),
             research_question: (.research_question // empty)
         }
+        end
     ' "$artifact_path" 2>/dev/null || echo "")
 
     if [[ -z "$extracted" ]]; then

@@ -4,6 +4,18 @@
   "description": "Market analyzer deliverables for economic research missions.",
   "artifacts": [
     {
+      "slot": "market_analysis_findings",
+      "description": "Structured market findings for aggregated ingestion.",
+      "path_pattern": "work/market-analyzer/findings-*.json",
+      "content_type": "application/json",
+      "schema_id": "artifact://research/findings@v1",
+      "required": true,
+      "allow_multiple": true,
+      "checksum": {
+        "algorithm": "sha256"
+      }
+    },
+    {
       "slot": "market_analysis_markdown",
       "description": "Markdown narrative summarizing market research and quantitative insights.",
       "relative_path": "artifacts/market-analyzer/output.md",

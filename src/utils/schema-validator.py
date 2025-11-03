@@ -59,6 +59,7 @@ def validate(schema: JsonObj, data: Any, path: str = "") -> List[str]:
     # Handle type declaration for the current node
     expected_type = schema.get("type")
     if expected_type:
+        allowed_types = ensure_sequence(expected_type)
         type_matches = {
             "object": isinstance(data, dict),
             "array": isinstance(data, list),
@@ -68,10 +69,19 @@ def validate(schema: JsonObj, data: Any, path: str = "") -> List[str]:
             "integer": isinstance(data, int) and not isinstance(data, bool),
             "null": data is None,
         }
-        if expected_type in type_matches and not type_matches[expected_type]:
+        matches_expected = False
+        for candidate in allowed_types:
+            if candidate in type_matches and type_matches[candidate]:
+                matches_expected = True
+                break
+        if not matches_expected:
+            expected_repr = (
+                "|".join(str(candidate) for candidate in allowed_types)
+                if len(allowed_types) > 1
+                else str(allowed_types[0])
+            )
             actual = type_name(data)
-            errors.append(f"{path or '<root>'}: expected {expected_type}, got {actual}")
-            # Bail early if type mismatch prevents deeper inspection
+            errors.append(f"{path or '<root>'}: expected {expected_repr}, got {actual}")
             return errors
 
     # Required (objects)

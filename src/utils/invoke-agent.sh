@@ -205,6 +205,141 @@ case "${CCONDUCTOR_ALLOW_CONTRACT_BYPASS:-}" in
         ;;
 esac
 
+_finalize_agent_output() {
+    local session_dir="$1"
+    local agent_name="$2"
+    local wait_timeout="${3:-${CCONDUCTOR_ARTIFACT_WAIT_TIMEOUT:-15}}"
+    local poll_interval="${CCONDUCTOR_ARTIFACT_POLL_INTERVAL:-0.25}"
+
+    if [[ -z "$session_dir" || -z "$agent_name" ]]; then
+        log_error "_finalize_agent_output requires session_dir and agent_name"
+        return 2
+    fi
+
+    if ! command -v artifact_finalize_manifest >/dev/null 2>&1; then
+        log_error "artifact_finalize_manifest unavailable; cannot validate artifacts"
+        return 2
+    fi
+
+    if [[ -z "$wait_timeout" || "$wait_timeout" == "null" ]]; then
+        wait_timeout=15
+    fi
+    if [[ -z "$poll_interval" || "$poll_interval" == "null" ]]; then
+        poll_interval=0.25
+    fi
+
+    local start_epoch
+    start_epoch=$(get_epoch)
+
+    local manifest_json="{}"
+    local manifest_status=1
+    local missing_count=-1
+    local schema_count=-1
+    local checksum_count=-1
+    local marker_enabled=1
+    local marker_path="$session_dir/work/$agent_name/artifacts.ready"
+    local manifest_path="$session_dir/work/$agent_name/manifest.actual.json"
+    if [[ "${CCONDUCTOR_DISABLE_ARTIFACT_READY_WAIT:-0}" == "1" ]]; then
+        marker_enabled=0
+    fi
+
+    while true; do
+        if (( marker_enabled == 1 )) && [[ -f "$marker_path" && -f "$manifest_path" ]]; then
+            manifest_json=$(cat "$manifest_path")
+            missing_count=$(safe_jq_from_json "$manifest_json" '.summary.missing_slots | length' "0" "$session_dir" "invoke_agent.finalize.marker_missing" false)
+            schema_count=$(safe_jq_from_json "$manifest_json" '.summary.schema_failures | length' "0" "$session_dir" "invoke_agent.finalize.marker_schema" false)
+            checksum_count=$(safe_jq_from_json "$manifest_json" '.summary.checksum_failures | length' "0" "$session_dir" "invoke_agent.finalize.marker_checksum" false)
+            if [[ "$missing_count" != "-1" && "$schema_count" != "-1" && "$checksum_count" != "-1" ]]; then
+                if [[ "$missing_count" == "0" && "$schema_count" == "0" && "$checksum_count" == "0" ]]; then
+                    if command -v log_event >/dev/null 2>&1; then
+                        local marker_payload
+                        if command -v jq >/dev/null 2>&1; then
+                            marker_payload=$(printf '%s' "$manifest_json" | jq -c --arg agent "$agent_name" '. + {agent: $agent}' 2>/dev/null || echo "$manifest_json")
+                        else
+                            marker_payload="$manifest_json"
+                        fi
+                        log_event "$session_dir" "agent_result.artifact_ready" "$marker_payload" || true
+                    fi
+                    printf '%s\n' "$manifest_json"
+                    return 0
+                fi
+            fi
+        fi
+
+        set +e
+        manifest_json=$(artifact_finalize_manifest "$session_dir" "$agent_name" "$ARTIFACT_VALIDATION_PHASE" "$ARTIFACT_CONTRACT_BYPASS")
+        manifest_status=$?
+        set -e
+
+        missing_count=$(safe_jq_from_json "$manifest_json" '.summary.missing_slots | length' "-1" "$session_dir" "invoke_agent.finalize.missing" false)
+        schema_count=$(safe_jq_from_json "$manifest_json" '.summary.schema_failures | length' "-1" "$session_dir" "invoke_agent.finalize.schema" false)
+        checksum_count=$(safe_jq_from_json "$manifest_json" '.summary.checksum_failures | length' "-1" "$session_dir" "invoke_agent.finalize.checksum" false)
+
+        if [[ "$missing_count" == "-1" || "$schema_count" == "-1" || "$checksum_count" == "-1" ]]; then
+            log_warn "artifact_finalize_manifest returned invalid payload for $agent_name"
+            printf '%s\n' "${manifest_json:-{}}"
+            return 2
+        fi
+
+        if [[ $manifest_status -eq 0 ]]; then
+            if command -v log_event >/dev/null 2>&1; then
+                local event_payload
+                if command -v jq >/dev/null 2>&1; then
+                    event_payload=$(printf '%s' "$manifest_json" | jq -c --arg agent "$agent_name" '. + {agent: $agent}' 2>/dev/null || echo "$manifest_json")
+                else
+                    event_payload="$manifest_json"
+                fi
+                log_event "$session_dir" "agent_result.artifact_ready" "$event_payload" || true
+            fi
+            printf '%s\n' "$manifest_json"
+            return 0
+        fi
+
+        if (( schema_count > 0 || checksum_count > 0 )); then
+            local invalid_slots
+            invalid_slots=$(safe_jq_from_json "$manifest_json" '.summary.schema_failures + .summary.checksum_failures | unique | join(", ")' "" "$session_dir" "invoke_agent.finalize.invalid_slots" false)
+            if [[ -z "$invalid_slots" ]]; then
+                invalid_slots="unknown"
+            fi
+            log_warn "Artifact validation failed for $agent_name (schema/checksum errors: $invalid_slots)"
+            if command -v log_event >/dev/null 2>&1; then
+                local invalid_payload
+                if command -v jq >/dev/null 2>&1; then
+                    invalid_payload=$(printf '%s' "$manifest_json" | jq -c --arg agent "$agent_name" '. + {agent: $agent}' 2>/dev/null || echo "$manifest_json")
+                else
+                    invalid_payload="$manifest_json"
+                fi
+                log_event "$session_dir" "agent_result.artifact_invalid" "$invalid_payload" || true
+            fi
+            printf '%s\n' "$manifest_json"
+            return 2
+        fi
+
+        local elapsed=$(( $(get_epoch) - start_epoch ))
+        if (( elapsed >= wait_timeout )); then
+            local missing_slots
+            missing_slots=$(safe_jq_from_json "$manifest_json" '.summary.missing_slots | join(", ")' "" "$session_dir" "invoke_agent.finalize.missing_slots" false)
+            if [[ -z "$missing_slots" ]]; then
+                missing_slots="unknown"
+            fi
+            log_warn "Timed out waiting for required artifacts for $agent_name (missing: $missing_slots)"
+            if command -v log_event >/dev/null 2>&1; then
+                local missing_payload
+                if command -v jq >/dev/null 2>&1; then
+                    missing_payload=$(printf '%s' "$manifest_json" | jq -c --arg agent "$agent_name" '. + {agent: $agent}' 2>/dev/null || echo "$manifest_json")
+                else
+                    missing_payload="$manifest_json"
+                fi
+                log_event "$session_dir" "agent_result.artifact_missing" "$missing_payload" || true
+            fi
+            printf '%s\n' "$manifest_json"
+            return 1
+        fi
+
+        sleep "$poll_interval"
+    done
+}
+
 
 # Check if Claude CLI is available
 check_claude_cli() {
@@ -1587,21 +1722,15 @@ invoke_agent_v2() {
             metadata=$(safe_jq_from_json "$metadata" '.' '{}' "$session_dir" "invoke_agent.metadata.normalize" false)
         fi
         
-        local manifest_result=""
-        local manifest_status=0
+        local manifest_result="{}"
+        local finalize_status=0
         if [ -n "${session_dir:-}" ] && command -v artifact_finalize_manifest &>/dev/null; then
             set +e
-            manifest_result=$(artifact_finalize_manifest "$session_dir" "$agent_name" "$ARTIFACT_VALIDATION_PHASE" "$ARTIFACT_CONTRACT_BYPASS")
-            manifest_status=$?
+            manifest_result=$(_finalize_agent_output "$session_dir" "$agent_name")
+            finalize_status=$?
             set -e
-            if [[ $manifest_status -eq 0 ]]; then
-                echo "  ✓ Artifact contract validated ($ARTIFACT_VALIDATION_PHASE)" >&2
-            else
-                if [[ "$ARTIFACT_CONTRACT_BYPASS" -eq 1 || "$ARTIFACT_VALIDATION_PHASE" == "phase1" ]]; then
-                    echo "  ⚠ Artifact contract violations bypassed for $agent_name" >&2
-                else
-                    echo "✗ Artifact contract validation failed for $agent_name" >&2
-                fi
+            if [[ -z "$manifest_result" ]]; then
+                manifest_result="{}"
             fi
         fi
 
@@ -1612,11 +1741,24 @@ invoke_agent_v2() {
             bypass_active_flag=false
         fi
 
+        local contract_pass_flag="false"
+        if [[ $finalize_status -eq 0 ]]; then
+            echo "  ✓ Artifact contract validated ($ARTIFACT_VALIDATION_PHASE)" >&2
+            contract_pass_flag="true"
+        else
+            if [[ "$ARTIFACT_CONTRACT_BYPASS" -eq 1 || "$ARTIFACT_VALIDATION_PHASE" == "phase1" ]]; then
+                echo "  ⚠ Artifact contract violations bypassed for $agent_name" >&2
+                contract_pass_flag="true"
+            else
+                echo "✗ Artifact contract validation failed for $agent_name" >&2
+            fi
+        fi
+
         if [[ -n "$manifest_result" ]]; then
             local contract_metrics
             contract_metrics=$(echo "$manifest_result" | jq -c \
                 --arg phase "$ARTIFACT_VALIDATION_PHASE" \
-                --arg pass_flag "$([[ $manifest_status -eq 0 ]] && echo true || echo false)" \
+                --arg pass_flag "$contract_pass_flag" \
                 --arg bypass_active "$bypass_active_flag" \
                 '{
                     artifact_contract: {
@@ -1624,13 +1766,13 @@ invoke_agent_v2() {
                         validation_phase: $phase,
                         bypass_active: ($bypass_active == "true"),
                         validation_duration_ms: (.validation_duration_ms // 0),
-                        required_total: (.summary.required_total // 0),
-                        required_present: (.summary.required_present // 0),
-                        optional_present: (.summary.optional_present // 0),
-                        total_artifacts: (.summary.total_artifacts // 0),
-                        missing_slots: (.summary.missing_slots // []),
-                        checksum_failures: (.summary.checksum_failures // []),
-                        schema_failures: (.summary.schema_failures // [])
+                        required_total: (.summary?.required_total // 0),
+                        required_present: (.summary?.required_present // 0),
+                        optional_present: (.summary?.optional_present // 0),
+                        total_artifacts: (.summary?.total_artifacts // 0),
+                        missing_slots: (.summary?.missing_slots // []),
+                        checksum_failures: (.summary?.checksum_failures // []),
+                        schema_failures: (.summary?.schema_failures // [])
                     }
                 }' 2>/dev/null || echo '{}')
 
@@ -1643,9 +1785,8 @@ invoke_agent_v2() {
         if [ -n "${session_dir:-}" ] && command -v log_agent_result &>/dev/null; then
             log_agent_result "$session_dir" "$agent_name" "$cost" "$duration" "$metadata" "$agent_model" || true
         fi
-
-        if [[ $manifest_status -ne 0 && "$ARTIFACT_VALIDATION_PHASE" != "phase1" && "$ARTIFACT_CONTRACT_BYPASS" -eq 0 ]]; then
-            return 1
+        if [[ $finalize_status -ne 0 && "$ARTIFACT_VALIDATION_PHASE" != "phase1" && "$ARTIFACT_CONTRACT_BYPASS" -eq 0 ]]; then
+            return "$finalize_status"
         fi
 
         # Integrate findings into knowledge graph for research agents

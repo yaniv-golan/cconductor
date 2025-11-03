@@ -21,32 +21,26 @@ You are an academic research specialist in an adaptive research system. Your fin
 
 <output_format>
 
-**To avoid token limits**, do NOT include findings in your JSON response. Instead:
+**Artifact checklist (MANDATORY)**  
+You must satisfy the artifact contract before ending the turn.
 
-1. **For each task**, write findings to a separate file:
-   - Path: `work/academic-researcher/findings-{task_id}.json`
-   - Format: Single finding object with all fields from the template below
-   - Use Write tool: `Write("work/academic-researcher/findings-t0.json", <json_content>)`
+1. **Structured findings (`academic_findings_json`)**  
+   - For each task, write a dedicated finding file at `work/academic-researcher/findings-{task_id}.json`.  
+   - Populate every field from the template below and preserve stable ordering/keys.  
+   - Use the Write tool, e.g., `Write("work/academic-researcher/findings-t0.json", <json_content>)`.
 
-2. **Return only a manifest**:
-```json
-{
-  "status": "completed",
-  "tasks_completed": 3,
-  "findings_files": [
-    "work/academic-researcher/findings-t0.json",
-    "work/academic-researcher/findings-t1.json",
-    "work/academic-researcher/findings-t2.json"
-  ]
-}
-```
+2. **Markdown synthesis (`academic_findings_markdown`)**  
+   - After all tasks are processed, synthesize the overall insights, coverage, and next actions into Markdown.  
+   - Write the summary to `artifacts/academic-researcher/output.md` with sections for Highlights, Evidence Table, Follow-ups, and Coverage Notes.
 
-- **Your final reply MUST be the exact JSON manifest.** Do not include summaries, markdown headings, prose, or code fences before or after the JSON. Any extra text causes downstream parsing to fail.
+3. **Final chat reply**  
+   - Do **not** inline findings or markdown in the chat response.  
+   - Provide a brief completion note summarizing task counts and pointing to the artifact paths that were written.
 
-**For each finding file**:
-- Use the task's `id` field as `task_id` in the finding
-- Complete all fields in the output template below
-- If a task fails, write with `"status": "failed"` and error details
+**Finding file requirements**:
+- Use the task `id` as `task_id`.  
+- If a task fails, set `"status": "failed"` with `error_details`.  
+- Keep deterministic key order and include all required sub-fields so schema validation passes.
 
 </output_format>
 
@@ -58,7 +52,8 @@ You are an academic research specialist in an adaptive research system. Your fin
   1. Research task t0 → `Write("work/academic-researcher/findings-t0.json", {...complete finding...})`
   2. Research task t1 → `Write("work/academic-researcher/findings-t1.json", {...complete finding...})`  
   3. Research task t2 → `Write("work/academic-researcher/findings-t2.json", {...complete finding...})`
-- Return: `{"status": "completed", "tasks_completed": 3, "findings_files": [...]}`
+  4. Aggregate insights → `Write("artifacts/academic-researcher/output.md", "...summary...")`
+- Final chat reply: `Completed 3 tasks. Findings stored under work/academic-researcher/findings-*.json; synthesis written to artifacts/academic-researcher/output.md.`
 
 **Benefits**:
 - ✓ No token limits (can process 100+ tasks)

@@ -567,174 +567,108 @@ EOF
     
     if invoke_agent_v2 "mission-orchestrator" "$input_file" "$output_file" 600 "$session_dir"; then
         local decision_json=""
-        local decision_source="manifest"
-        local decision_source_reason="manifest_artifact"
-        local decision_success=0
         local manifest_present=false
-        local manifest_stale=false
         local manifest_slot_present=false
-        local fallback_error=""
+        local manifest_ready=0
+        local failure_code=""
 
         if _orchestrator_wait_for_manifest "$manifest_path"; then
             manifest_present=true
             if jq empty "$manifest_path" >/dev/null 2>&1; then
-                if jq -e '.artifacts[] | select(.slot == "decision_json")' "$manifest_path" >/dev/null 2>&1; then
+                if jq -e '.artifacts[] | select(.slot == "decision_json" and .status == "present")' "$manifest_path" >/dev/null 2>&1; then
                     manifest_slot_present=true
                     if [[ -f "$decision_artifact_path" ]]; then
-                        local manifest_decision
-                        manifest_decision=$(cat "$decision_artifact_path")
-                        if jq_validate_json "$manifest_decision"; then
-                            decision_json="$manifest_decision"
-                            decision_success=1
+                        decision_json=$(cat "$decision_artifact_path")
+                        if jq_validate_json "$decision_json"; then
+                            manifest_ready=1
                         else
-                            decision_source="result_fallback"
-                            decision_source_reason="artifact_invalid_json"
+                            failure_code="artifact_invalid_json"
                             log_system_warning "$session_dir" "orchestrator_manifest_invalid_decision" \
                                 "Decision artifact is not valid JSON" \
                                 "file=$decision_artifact_rel"
                         fi
                     else
-                        decision_source="result_fallback"
-                        decision_source_reason="artifact_missing"
+                        failure_code="artifact_missing"
                         log_system_warning "$session_dir" "orchestrator_manifest_missing_artifact" \
                             "Decision artifact missing after manifest validation" \
                             "file=$decision_artifact_rel"
                     fi
                 else
-                    decision_source="result_fallback"
-                    decision_source_reason="slot_missing"
+                    failure_code="slot_missing"
                     log_system_warning "$session_dir" "orchestrator_manifest_missing_slot" \
                         "Decision slot not reported in manifest" \
                         "slot=decision_json"
                 fi
             else
-                decision_source="result_fallback"
-                decision_source_reason="manifest_invalid_json"
+                failure_code="manifest_invalid_json"
                 log_system_warning "$session_dir" "orchestrator_manifest_invalid_json" \
                     "Manifest actual JSON invalid for orchestrator" \
                     "file=$manifest_rel_path"
             fi
         else
-            decision_source="result_fallback"
-            decision_source_reason="manifest_timeout"
+            failure_code="manifest_timeout"
             log_system_warning "$session_dir" "orchestrator_manifest_timeout" \
                 "Timed out waiting for manifest.actual.json" \
                 "file=$manifest_rel_path"
         fi
 
-        if [[ "$decision_source" == "result_fallback" ]]; then
-            local result=""
-            if [[ -f "$output_file" ]] && jq empty "$output_file" >/dev/null 2>&1; then
-                result=$(jq -r '.result // empty' "$output_file")
-            else
-                log_system_warning "$session_dir" "jq_file_parse_failure" "mission_orchestrator_output" "file=$output_file"
-            fi
-
-            if [[ -z "$result" ]]; then
-                fallback_error="empty_result"
-                decision_source_reason="result_missing"
-            else
-                local fallback_decision
-                fallback_decision=$(extract_json_from_text "$result")
-                if [[ -z "$fallback_decision" ]]; then
-                    fallback_error="invalid_json"
-                    decision_source_reason="result_invalid_json"
-                else
-                    decision_json="$fallback_decision"
-                    decision_success=1
-                    decision_source_reason="result_parsed"
-                fi
-            fi
-
-            if [[ "$fallback_error" == "" && "$manifest_present" == true ]]; then
-                log_system_warning "$session_dir" "orchestrator_decision_fallback" \
-                    "Falling back to .result decision payload" \
-                    "reason=$decision_source_reason"
-            fi
-        fi
-
         local success_flag
-        success_flag=$( [[ "$decision_success" -eq 1 ]] && echo true || echo false )
+        success_flag=$( [[ $manifest_ready -eq 1 ]] && echo true || echo false )
         local manifest_present_flag
         manifest_present_flag=$( [[ "$manifest_present" == true ]] && echo true || echo false )
-        local manifest_stale_flag
-        manifest_stale_flag=$( [[ "$manifest_stale" == true ]] && echo true || echo false )
+        local manifest_stale_flag=false
         local manifest_slot_flag
         manifest_slot_flag=$( [[ "$manifest_slot_present" == true ]] && echo true || echo false )
 
-        if [[ "$decision_success" -eq 1 ]]; then
-            if [[ -n "$decision_backup_path" && -f "$decision_backup_path" ]]; then
-                if [[ "$decision_source" == "manifest" && -f "$decision_artifact_path" ]]; then
-                    rm -f "$decision_backup_path"
-                else
-                    if [[ ! -f "$decision_artifact_path" ]]; then
-                        mv "$decision_backup_path" "$decision_artifact_path"
-                    else
-                        rm -f "$decision_backup_path"
-                    fi
-                fi
+        _orchestrator_emit_decision_source_event "$session_dir" "manifest" "$success_flag" "$failure_code" "$manifest_present_flag" "$manifest_stale_flag" "$manifest_slot_flag" "$manifest_rel_path" "$artifact_rel_path"
+
+        if [[ $manifest_ready -eq 1 ]]; then
+            if ! artifact_register_from_manifest "$session_dir" "mission-orchestrator" "$manifest_path"; then
+                log_system_warning "$session_dir" "artifact_registration_failed" "mission_orchestrator.register" "agent=mission-orchestrator"
             fi
-        fi
-
-        _orchestrator_emit_decision_source_event "$session_dir" "$decision_source" "$success_flag" "$decision_source_reason" "$manifest_present_flag" "$manifest_stale_flag" "$manifest_slot_flag" "$manifest_rel_path" "$artifact_rel_path"
-
-        if [[ "$decision_success" -eq 1 ]]; then
+            if [[ -n "$decision_backup_path" && -f "$decision_backup_path" ]]; then
+                rm -f "$decision_backup_path"
+            fi
             printf '%s\n' "$decision_json"
             return 0
         fi
 
-        if [[ "$decision_source" == "result_fallback" ]]; then
-            case "$fallback_error" in
-                empty_result)
-                    echo "✗ Error: Orchestrator returned empty result" >&2
-                    echo "  Output file: $output_file" >&2
-                    if [[ -f "$output_file" ]]; then
-                        echo "  Output preview: $(head -c 200 "$output_file")" >&2
-                    fi
-                    if [[ -n "$decision_backup_path" && -f "$decision_backup_path" ]]; then
-                        mv "$decision_backup_path" "$decision_artifact_path"
-                    fi
-                    jq -n '{
-                        "action": "early_exit",
-                        "reason": "Orchestrator returned empty result",
-                        "achieved_outputs": [],
-                        "missing_outputs": [],
-                        "partial_results_useful": false
-                    }'
-                    return 1
-                    ;;
-                invalid_json)
-                    echo "✗ Error: Could not extract valid JSON from orchestrator" >&2
-                    if [[ -n "${result:-}" ]]; then
-                        echo "Result preview: ${result:0:300}" >&2
-                    fi
-                    if [[ -n "$decision_backup_path" && -f "$decision_backup_path" ]]; then
-                        mv "$decision_backup_path" "$decision_artifact_path"
-                    fi
-                    jq -n '{
-                        "action": "early_exit",
-                        "reason": "Orchestrator returned invalid or unparseable JSON",
-                        "achieved_outputs": [],
-                        "missing_outputs": [],
-                        "partial_results_useful": false
-                    }'
-                    return 1
-                    ;;
-            esac
-        fi
-
-        # Manifest path should have provided a decision but did not; surface generic failure.
-        log_system_error "$session_dir" "orchestrator_decision_missing" \
-            "Mission orchestrator did not produce a usable decision artifact or fallback result"
         if [[ -n "$decision_backup_path" && -f "$decision_backup_path" ]]; then
             mv "$decision_backup_path" "$decision_artifact_path"
         fi
-        jq -n '{
-            "action": "early_exit",
-            "reason": "Mission orchestrator decision unavailable",
-            "achieved_outputs": [],
-            "missing_outputs": [],
-            "partial_results_useful": false
+
+        local failure_reason
+        case "$failure_code" in
+            manifest_timeout)
+                failure_reason="Mission orchestrator decision artifact timed out"
+                ;;
+            manifest_invalid_json)
+                failure_reason="Mission orchestrator produced an invalid decision manifest"
+                ;;
+            slot_missing)
+                failure_reason="Mission orchestrator manifest missing decision slot"
+                ;;
+            artifact_missing)
+                failure_reason="Mission orchestrator decision artifact missing"
+                ;;
+            artifact_invalid_json)
+                failure_reason="Mission orchestrator decision artifact invalid JSON"
+                ;;
+            *)
+                failure_reason="Mission orchestrator decision artifact unavailable"
+                ;;
+        esac
+
+        log_system_error "$session_dir" "orchestrator_decision_missing" \
+            "Mission orchestrator did not produce a usable decision artifact" \
+            "failure_code=$failure_code"
+
+        jq -n --arg reason "$failure_reason" '{
+            action: "early_exit",
+            reason: $reason,
+            achieved_outputs: [],
+            missing_outputs: ["decision_json"],
+            partial_results_useful: false
         }'
         return 1
     else
@@ -1031,39 +965,15 @@ EOF
         local cost
         cost=$(extract_cost_from_output "$agent_output_file")
         
-        # Extract result
-        local result=""
-        if [[ -f "$agent_output_file" ]] && jq empty "$agent_output_file" >/dev/null 2>&1; then
-            result=$(jq -r '.result // empty' "$agent_output_file")
-        else
-            log_system_warning "$session_dir" "jq_file_parse_failure" "agent_output.result" "file=$agent_output_file"
-        fi
-        
-        # Register output as artifact
-        local artifact_file=""
-        if [[ -n "$result" ]]; then
-            mkdir -p "$session_dir/artifacts/$agent_name"
-            artifact_file="$session_dir/artifacts/$agent_name/output.md"
-            local fallback_mode="${CCONDUCTOR_ALLOW_ARTIFACT_FALLBACK:-0}"
-            if [[ -f "$artifact_file" && "$fallback_mode" != "1" ]]; then
-                local fallback_dir="$session_dir/work/$agent_name"
-                mkdir -p "$fallback_dir"
-                local fallback_file="$fallback_dir/fallback-output.md"
-                printf '%s\n' "$result" > "$fallback_file"
-                if ! cmp -s "$artifact_file" "$fallback_file"; then
-                    log_system_warning "$session_dir" "agent_fallback_preserved" \
-                        "Preserved fallback .result output without overwriting contract artifact" \
-                        "agent=$agent_name fallback=${fallback_file#"$session_dir"/} artifact=${artifact_file#"$session_dir"/}"
-                fi
-            else
-                printf '%s\n' "$result" > "$artifact_file"
-                # Register artifact (capture ID but don't display it)
-                local artifact_id
-                # shellcheck disable=SC2034
-                artifact_id=$(artifact_register "$session_dir" "$artifact_file" "agent_output" "$agent_name")
+        local manifest_path="$session_dir/work/$agent_name/manifest.actual.json"
+        if [[ -f "$manifest_path" ]]; then
+            if ! artifact_register_from_manifest "$session_dir" "$agent_name" "$manifest_path"; then
+                log_system_warning "$session_dir" "artifact_registration_failed" "mission_orch.register" "agent=$agent_name manifest=${manifest_path#"$session_dir"/}"
             fi
+        else
+            log_system_warning "$session_dir" "agent_manifest_missing" "mission_orch.register" "agent=$agent_name"
         fi
-        
+
         # Record budget with real cost
         budget_record_invocation "$session_dir" "$agent_name" "$cost" "$duration"
         

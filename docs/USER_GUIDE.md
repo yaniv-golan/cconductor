@@ -699,6 +699,18 @@ graph LR
 
 ---
 
+#### Artifact-First Output Pipeline
+
+All agents now publish their deliverables _solely_ through the Write tool. After each invocation the runtime validates the generated files against the agent’s artifact contract (`config/artifact-contracts/<agent>/manifest.expected.json`) and records the results in `work/<agent>/manifest.actual.json` before mirroring them into `artifacts/manifest.json`.
+
+- Treat the manifest entries exposed in `session-manifest.json` as the source of truth—`.result` fields in agent transcripts are retained for human readability only and are no longer authoritative.
+- When coordinating hand-offs or reviewing progress, reference artifact slot names (for example `prompt_analysis_json`, `web_research_findings`, `decision_json`) instead of globbing through `work/`.
+- If a required slot is missing or marked invalid, rerun the responsible agent with explicit instructions to recreate the artifact rather than editing files manually.
+
+The mission orchestrator follows the same rule set: every decision is written to `artifacts/mission-orchestrator/decision.json`, validated, and then surfaced via the session manifest. Dashboards, resume flows, and quality gates all consume these manifest-backed artifacts, so keep them in sync and avoid falling back to legacy `.result` parsing.
+
+---
+
 # Part 2: Core Features
 
 ## Research System

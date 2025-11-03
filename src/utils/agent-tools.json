@@ -17,7 +17,15 @@
         "disallowed": [
             "Edit",
             "NotebookEdit"
-        ]
+        ],
+        "artifact_first": true,
+        "required_artifacts": [
+            "academic_findings_markdown",
+            "academic_findings_json"
+        ],
+        "optional_artifacts": [],
+        "primary_artifact_slot": "academic_findings_json",
+        "legacy_result_parsing": true
     },
     "web-researcher": {
         "allowed": [
@@ -37,7 +45,15 @@
         "disallowed": [
             "Edit",
             "NotebookEdit"
-        ]
+        ],
+        "artifact_first": true,
+        "required_artifacts": [
+            "web_research_notes",
+            "web_research_findings"
+        ],
+        "optional_artifacts": [],
+        "primary_artifact_slot": "web_research_findings",
+        "legacy_result_parsing": true
     },
     "domain-heuristics": {
         "allowed": [
@@ -52,7 +68,17 @@
             "Bash",
             "Edit",
             "NotebookEdit"
-        ]
+        ],
+        "artifact_first": true,
+        "required_artifacts": [
+            "domain_profile_json",
+            "domain_summary_markdown"
+        ],
+        "optional_artifacts": [
+            "knowledge_graph_lock"
+        ],
+        "primary_artifact_slot": "domain_profile_json",
+        "legacy_result_parsing": true
     },
     "synthesis-agent": {
         "allowed": [
@@ -67,7 +93,21 @@
             "Bash",
             "Edit",
             "NotebookEdit"
-        ]
+        ],
+        "artifact_first": true,
+        "required_artifacts": [
+            "mission_report",
+            "synthesis_output_markdown",
+            "key_findings",
+            "confidence_scores",
+            "coverage_report",
+            "completion_metadata"
+        ],
+        "optional_artifacts": [
+            "summary_markdown"
+        ],
+        "primary_artifact_slot": "mission_report",
+        "legacy_result_parsing": true
     },
     "fact-checker": {
         "allowed": [
@@ -83,7 +123,15 @@
         "disallowed": [
             "Edit",
             "NotebookEdit"
-        ]
+        ],
+        "artifact_first": true,
+        "required_artifacts": [
+            "fact_check_markdown",
+            "fact_check_findings_json"
+        ],
+        "optional_artifacts": [],
+        "primary_artifact_slot": "fact_check_findings_json",
+        "legacy_result_parsing": true
     },
     "pdf-analyzer": {
         "allowed": [
@@ -97,7 +145,14 @@
             "WebFetch",
             "Bash",
             "Edit"
-        ]
+        ],
+        "artifact_first": true,
+        "required_artifacts": [
+            "pdf_analysis_markdown"
+        ],
+        "optional_artifacts": [],
+        "primary_artifact_slot": "pdf_analysis_markdown",
+        "legacy_result_parsing": true
     },
     "code-analyzer": {
         "allowed": [
@@ -114,7 +169,14 @@
             "Bash",
             "Edit",
             "NotebookEdit"
-        ]
+        ],
+        "artifact_first": true,
+        "required_artifacts": [
+            "code_analysis_markdown"
+        ],
+        "optional_artifacts": [],
+        "primary_artifact_slot": "code_analysis_markdown",
+        "legacy_result_parsing": true
     },
     "competitor-analyzer": {
         "allowed": [
@@ -129,7 +191,12 @@
             "Bash",
             "Edit",
             "NotebookEdit"
-        ]
+        ],
+        "artifact_first": false,
+        "required_artifacts": [],
+        "optional_artifacts": [],
+        "primary_artifact_slot": null,
+        "legacy_result_parsing": true
     },
     "financial-extractor": {
         "allowed": [
@@ -144,7 +211,12 @@
             "Bash",
             "Edit",
             "NotebookEdit"
-        ]
+        ],
+        "artifact_first": false,
+        "required_artifacts": [],
+        "optional_artifacts": [],
+        "primary_artifact_slot": null,
+        "legacy_result_parsing": true
     },
     "market-analyzer": {
         "allowed": [
@@ -160,7 +232,14 @@
         "disallowed": [
             "Edit",
             "NotebookEdit"
-        ]
+        ],
+        "artifact_first": true,
+        "required_artifacts": [
+            "market_analysis_markdown"
+        ],
+        "optional_artifacts": [],
+        "primary_artifact_slot": "market_analysis_markdown",
+        "legacy_result_parsing": true
     },
     "research-planner": {
         "allowed": [
@@ -174,7 +253,14 @@
             "Bash",
             "Edit",
             "NotebookEdit"
-        ]
+        ],
+        "artifact_first": true,
+        "required_artifacts": [
+            "research_plan_markdown"
+        ],
+        "optional_artifacts": [],
+        "primary_artifact_slot": "research_plan_markdown",
+        "legacy_result_parsing": true
     },
     "mission-orchestrator": {
         "allowed": [
@@ -191,26 +277,41 @@
             "WebFetch",
             "Edit",
             "NotebookEdit"
-        ]
+        ],
+        "artifact_first": true,
+        "required_artifacts": [
+            "decision_json"
+        ],
+        "optional_artifacts": [],
+        "primary_artifact_slot": "decision_json",
+        "legacy_result_parsing": true
     },
-  "prompt-parser": {
-    "allowed": [
-      "Read",
-      "Write",
-      "Task",
-      "ExitPlanMode"
-    ],
-    "disallowed": [
-      "Plan",
-      "WebSearch",
-      "WebFetch",
-      "Bash",
-      "Edit",
-      "Grep",
-      "Glob",
-      "NotebookEdit"
-    ]
-  },
+    "prompt-parser": {
+        "allowed": [
+            "Read",
+            "Write",
+            "Task",
+            "ExitPlanMode"
+        ],
+        "disallowed": [
+            "Plan",
+            "WebSearch",
+            "WebFetch",
+            "Bash",
+            "Edit",
+            "Grep",
+            "Glob",
+            "NotebookEdit"
+        ],
+        "artifact_first": true,
+        "required_artifacts": [
+            "prompt_analysis_markdown",
+            "prompt_analysis_json"
+        ],
+        "optional_artifacts": [],
+        "primary_artifact_slot": "prompt_analysis_json",
+        "legacy_result_parsing": true
+    },
     "quality-remediator": {
         "allowed": [
             "WebSearch",
@@ -224,7 +325,16 @@
             "Bash",
             "Edit",
             "NotebookEdit"
-        ]
+        ],
+        "artifact_first": true,
+        "required_artifacts": [
+            "quality_remediation_markdown"
+        ],
+        "optional_artifacts": [
+            "quality_remediation_json"
+        ],
+        "primary_artifact_slot": "quality_remediation_markdown",
+        "legacy_result_parsing": true
     },
     "stakeholder-classifier": {
         "allowed": [
@@ -239,6 +349,13 @@
             "Bash",
             "Edit",
             "NotebookEdit"
-        ]
+        ],
+        "artifact_first": true,
+        "required_artifacts": [
+            "stakeholder_classification_markdown"
+        ],
+        "optional_artifacts": [],
+        "primary_artifact_slot": "stakeholder_classification_markdown",
+        "legacy_result_parsing": true
     }
 }

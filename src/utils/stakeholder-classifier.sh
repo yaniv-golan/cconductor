@@ -24,6 +24,8 @@ source "$SCRIPT_DIR/json-parser.sh" 2>/dev/null || true
 # shellcheck disable=SC1091
 source "$SCRIPT_DIR/agent-registry.sh"
 # shellcheck disable=SC1091
+source "$SCRIPT_DIR/artifact-manager.sh"
+# shellcheck disable=SC1091
 source "$SCRIPT_DIR/budget-tracker.sh" 2>/dev/null || true
 # shellcheck disable=SC1091
 source "$SCRIPT_DIR/event-logger.sh" 2>/dev/null || true
@@ -552,6 +554,15 @@ llm_classify_batch() {
     if [[ $status -ne 0 ]]; then
         rm -f "$output_file"
         return 1
+    fi
+
+    local manifest_path="$session_dir/work/stakeholder-classifier/manifest.actual.json"
+    if [[ -f "$manifest_path" ]]; then
+        if ! artifact_register_from_manifest "$session_dir" "stakeholder-classifier" "$manifest_path"; then
+            log_warn "stakeholder-classifier: failed to register artifacts (manifest=${manifest_path#"$session_dir"/})"
+        fi
+    else
+        log_warn "stakeholder-classifier: manifest.actual.json missing after invocation"
     fi
 
     local extracted

@@ -58,7 +58,10 @@ The session tracks:
 
 - `artifacts/prompt-parser/output.json` — machine-readable prompt analysis with `objective`, `output_specification`, and `research_question`. The orchestrator and resume flows read this file first; `objective` is the cleaned directive for agents, while `research_question` preserves the original user phrasing.
 - `artifacts/prompt-parser/output.md` — human-readable summary still generated alongside the JSON for parity with older sessions.
-- `work/prompt-parser/output.json` — legacy agent transcript; only used as a fallback if the JSON artifact is missing or invalid.
+- `work/prompt-parser/output.json` — legacy agent transcript; only used as a fallback if the JSON artifact is missing or invalid. New sessions should never rely on this file—the runtime expects the Write-tool artifacts to exist.
+- `work/<agent>/artifacts.ready` — JSON marker written after artifact validation completes for a given agent; a quick way to confirm asynchronous Write-tool output finished before resuming or debugging.
+
+> **Note:** As of the artifact-first rollout, resume logic no longer consults agent `.result` payloads. If a contract slot is missing, regenerate the artifact via the appropriate agent rather than scraping legacy transcripts.
 
 ## Using Resume
 
@@ -177,7 +180,7 @@ Current State:
 If the session manifest flags missing Write-tool outputs while resuming:
 
 1. Identify the failing slot via `jq '.artifact_contract' meta/session-manifest.json`.
-2. Re-run the responsible agent (or craft a refinement) so it regenerates the required file—most commonly `artifacts/<agent>/output.md`.
+2. Re-run the responsible agent (or craft a refinement) so it regenerates the required file—most commonly `artifacts/<agent>/output.md` or the JSON counterpart listed in the contract. The orchestrator’s decision must now live at `artifacts/mission-orchestrator/decision.json`; regenerate it by rerunning the orchestrator if that slot is missing.
 3. After the artifact exists, validate in-place with:
    ```bash
    bash -lc 'source src/utils/artifact-manager.sh; artifact_finalize_manifest <session_dir> <agent>'

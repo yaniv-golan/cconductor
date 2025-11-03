@@ -18,6 +18,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Session manifest pipeline that regenerates a curated `session-manifest.json` before every orchestrator turn so prompts and dashboards share the same source of truth.
 - Write-tool artifact contract system that defines expected outputs per agent, validates them against shared schemas, and ships fixtures plus tests to prevent regressions.
 - Optional independent source enforcement toggle (`CCONDUCTOR_REQUIRE_INDEPENDENT_SOURCES`) that blocks synthesis until claims cite enough distinct domains and logs missing coverage to `meta/independent-source-issues.json`.
+- Telemetry events for artifact lifecycle (`agent_result.artifact_ready`, `agent_result.artifact_missing`, `agent_result.artifact_invalid`) plus orchestrator decision validation (`mission_orchestrator.decision_manifest`), documented alongside event payloads.
 
 ### Changed
 
@@ -31,9 +32,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - User Guide and Troubleshooting guide cover the new viewer URL pattern, preflight card, and recovery tips for blank tabs or 404s.
 - Public docs are streamlined by moving maintainer references to the contributor section, with refreshed internal links.
 - Prompt parser now writes a required JSON artifact (`artifacts/prompt-parser/output.json`), handlers prefer it over legacy `.result` payloads, and resume/tests/documentation were updated to reflect the contract change.
+- Agent finalization now writes an `artifacts.ready` marker when contracts pass and `_finalize_agent_output` waits for it, eliminating prompt-parser races while keeping a `CCONDUCTOR_DISABLE_ARTIFACT_READY_WAIT` escape hatch for legacy debugging.
 - Mission state builder emits knowledge-graph and orchestration log paths relative to the session root, keeping prompts and agent reads sandbox-friendly.
 - Streaming handler tolerates missing terminal `result` events by assembling partial deltas and warning instead of stalling.
 - Agent invocation enforces artifact contracts, reports failures clearly in events/dashboards, and documents validation/bypass workflows in the Quick Start, Troubleshooting, and Quality guides.
+- User Guide and Session Resume Guide now walk through the manifest-first workflow, clarifying that `.result` payloads are legacy-only and that orchestrator decisions must be consumed from `artifacts/mission-orchestrator/decision.json`.
 
 ### Fixed
 

@@ -4,6 +4,18 @@
   "description": "PDF analyzer observations and structured outputs.",
   "artifacts": [
     {
+      "slot": "pdf_analysis_findings",
+      "description": "Structured extraction payloads for analyzed PDFs.",
+      "path_pattern": "work/pdf-analyzer/findings-*.json",
+      "content_type": "application/json",
+      "schema_id": "artifact://research/findings@v1",
+      "required": true,
+      "allow_multiple": true,
+      "checksum": {
+        "algorithm": "sha256"
+      }
+    },
+    {
       "slot": "pdf_analysis_markdown",
       "description": "Markdown notes summarizing extracted PDF findings.",
       "relative_path": "artifacts/pdf-analyzer/output.md",

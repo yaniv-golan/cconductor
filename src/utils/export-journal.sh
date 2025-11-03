@@ -1879,6 +1879,7 @@ export_journal() {
         start_time=$(jq -r '.created_at // ""' "$session_file" 2>/dev/null)
         end_time=$(jq -r '.completed_at // ""' "$session_file" 2>/dev/null)
         
+        local duration_minutes=0
         if [ -n "$start_time" ] && [ -n "$end_time" ] && [ "$end_time" != "" ]; then
             local start_epoch end_epoch duration_seconds
             start_epoch=$(parse_iso_to_epoch "$start_time")

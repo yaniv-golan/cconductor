@@ -4,6 +4,18 @@
   "description": "Code analyzer outputs for repository inspections.",
   "artifacts": [
     {
+      "slot": "code_analysis_findings",
+      "description": "Structured task-level code analysis findings for knowledge graph ingestion.",
+      "path_pattern": "work/code-analyzer/findings-*.json",
+      "content_type": "application/json",
+      "schema_id": "artifact://research/findings@v1",
+      "required": true,
+      "allow_multiple": true,
+      "checksum": {
+        "algorithm": "sha256"
+      }
+    },
+    {
       "slot": "code_analysis_markdown",
       "description": "Markdown review outlining code analysis results.",
       "relative_path": "artifacts/code-analyzer/output.md",

@@ -116,6 +116,71 @@ The error log uses **JSONL format** (JSON Lines): one JSON object per line.
 **Cause**: Orchestrator returned malformed JSON (recoverable)  
 **Action**: Usually auto-recovered, but may indicate orchestrator issues
 
+### Artifact Telemetry Events
+
+The artifact-first rollout introduced structured telemetry in `logs/events.jsonl` to make artifact problems visible without parsing raw manifests.
+
+| Event | When it fires | Payload highlights | Recommended action |
+|-------|---------------|--------------------|--------------------|
+| `agent_result.artifact_ready` | Required artifacts validated successfully | `agent` name, `summary` object from `manifest.actual.json` (slot counts, missing slots = []) | Informational—no action needed. |
+| `agent_result.artifact_missing` | Validation timed out waiting for required slots | `agent`, `summary.missing_slots`, `summary.validation_phase` | Re-run the agent and instruct it to create the missing slot(s). |
+| `agent_result.artifact_invalid` | Schema or checksum failure during validation | `agent`, `summary.schema_failures`, `summary.checksum_failures` | Re-run the agent with guidance to fix the invalid artifact (e.g., regenerate JSON with required fields). |
+
+Example entry (success):
+
+```json
+{
+  "timestamp": "2025-11-02T21:40:11Z",
+  "event": "agent_result.artifact_ready",
+  "payload": {
+    "agent": "web-researcher",
+    "summary": {
+      "required_total": 2,
+      "required_present": 2,
+      "optional_present": 0,
+      "missing_slots": []
+    }
+  }
+}
+```
+
+Example entry (missing artifacts):
+
+```json
+{
+  "timestamp": "2025-11-02T21:41:03Z",
+  "event": "agent_result.artifact_missing",
+  "payload": {
+    "agent": "fact-checker",
+    "summary": {
+      "missing_slots": ["fact_check_findings_json"],
+      "validation_phase": "phase2"
+    }
+  }
+}
+```
+
+### Orchestrator Decision Validation
+
+`mission_orchestrator.decision_manifest` captures whether the orchestrator wrote a valid `artifacts/mission-orchestrator/decision.json`. The `failure_code` field matches the internal reason (`manifest_timeout`, `artifact_missing`, `artifact_invalid_json`, etc.).
+
+Example failure:
+
+```json
+{
+  "timestamp": "2025-11-02T21:43:15Z",
+  "event": "mission_orchestrator.decision_manifest",
+  "payload": {
+    "source": "manifest",
+    "success": false,
+    "failure_code": "artifact_missing",
+    "manifest_path": "work/mission-orchestrator/manifest.actual.json"
+  }
+}
+```
+
+If `success` is `false`, re-run the orchestrator (or fix upstream agents) until the decision artifact validates.
+
 ## Viewing Error Logs
 
 ### View All Errors

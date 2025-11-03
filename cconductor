@@ -66,6 +66,45 @@ setup_error_trap
 # Parse arguments early to check for --verbose and --debug flags
 parse_cli_args "$@"
 
+# Validate CLI flags so typos surface early
+validate_known_flags() {
+    local -a allowed_flags=(
+        "verbose" "debug"
+        "help" "h"
+        "version" "v"
+        "update" "check-update" "no-update-check"
+        "init" "yes" "y" "non-interactive"
+        "no-cache" "no-web-fetch-cache" "no-web-search-cache"
+        "enable-watchdog" "disable-watchdog"
+        "enable-agent-timeouts" "disable-agent-timeouts"
+        "evidence-mode" "evidence-render"
+        "mission" "input-dir" "question-file"
+    )
+
+    local flag known allowed
+    for flag in "${!CLI_FLAGS[@]}"; do
+        known=0
+        for allowed in "${allowed_flags[@]}"; do
+            if [[ "$flag" == "$allowed" ]]; then
+                known=1
+                break
+            fi
+        done
+
+        if [[ $known -eq 0 ]]; then
+            local prefix="--"
+            if [[ "${#flag}" -eq 1 ]]; then
+                prefix="-"
+            fi
+            echo "Error: Unknown flag ${prefix}${flag}" >&2
+            echo "Run ./cconductor --help to see supported options." >&2
+            exit 1
+        fi
+    done
+}
+
+validate_known_flags
+
 # Debug mode support (check both flag and environment variable)
 if has_flag "debug" || [ "${CCONDUCTOR_DEBUG:-0}" = "1" ]; then
     export CCONDUCTOR_DEBUG=1

@@ -7,6 +7,17 @@
 #
 # If session_dir is provided, injects session-specific knowledge context
 
+if [ -z "${BASH_VERSION:-}" ] || [ "${BASH_VERSINFO[0]}" -lt 4 ]; then
+    if command -v /opt/homebrew/bin/bash >/dev/null 2>&1; then
+        exec /opt/homebrew/bin/bash "$0" "$@"
+    elif command -v /usr/local/bin/bash >/dev/null 2>&1; then
+        exec /usr/local/bin/bash "$0" "$@"
+    else
+        echo "Error: Bash 4.0 or higher is required to run build-agents.sh" >&2
+        exit 1
+    fi
+fi
+
 set -euo pipefail
 
 output_dir="${1:-}"
@@ -60,4 +71,3 @@ for agent_dir in "$AGENTS_SOURCE_DIR"/*/; do
 done
 
 echo "✓ All agents built to: $output_dir" >&2
-

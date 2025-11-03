@@ -22,6 +22,43 @@ source "$SCRIPT_DIR/path-resolver.sh" 2>/dev/null || true
 # Registry cache (populated by agent_registry_init)
 declare -A AGENT_REGISTRY_CACHE
 declare -A AGENT_SOURCE_MAP  # tracks if agent is from project or user
+declare -A AGENT_ARTIFACT_FIRST
+declare -A AGENT_REQUIRED_ARTIFACTS
+declare -A AGENT_OPTIONAL_ARTIFACTS
+declare -A AGENT_PRIMARY_ARTIFACT_SLOT
+declare -A AGENT_LEGACY_RESULT_PARSING
+
+AGENT_TOOLS_DATA="{}"
+
+_agent_registry_set_artifact_metadata() {
+  local agent_name="$1"
+
+  if [[ -z "$agent_name" ]]; then
+    return
+  fi
+
+  local artifact_first
+  artifact_first=$(printf '%s\n' "$AGENT_TOOLS_DATA" | jq -r --arg agent "$agent_name" 'if has($agent) then (.[$agent].artifact_first // false) else false end' 2>/dev/null || echo "false")
+
+  local required_list
+  required_list=$(printf '%s\n' "$AGENT_TOOLS_DATA" | jq -c --arg agent "$agent_name" 'if has($agent) then (.[$agent].required_artifacts // []) else [] end' 2>/dev/null || echo "[]")
+
+  local optional_list
+  optional_list=$(printf '%s\n' "$AGENT_TOOLS_DATA" | jq -c --arg agent "$agent_name" 'if has($agent) then (.[$agent].optional_artifacts // []) else [] end' 2>/dev/null || echo "[]")
+
+  local primary_slot
+  primary_slot=$(printf '%s\n' "$AGENT_TOOLS_DATA" | jq -r --arg agent "$agent_name" 'if has($agent) then (.[$agent].primary_artifact_slot // "") else "" end' 2>/dev/null || echo "")
+  [[ "$primary_slot" == "null" ]] && primary_slot=""
+
+  local legacy_result
+  legacy_result=$(printf '%s\n' "$AGENT_TOOLS_DATA" | jq -r --arg agent "$agent_name" 'if has($agent) then (.[$agent].legacy_result_parsing // false) else false end' 2>/dev/null || echo "false")
+
+  AGENT_ARTIFACT_FIRST["$agent_name"]="$artifact_first"
+  AGENT_REQUIRED_ARTIFACTS["$agent_name"]="$required_list"
+  AGENT_OPTIONAL_ARTIFACTS["$agent_name"]="$optional_list"
+  AGENT_PRIMARY_ARTIFACT_SLOT["$agent_name"]="$primary_slot"
+  AGENT_LEGACY_RESULT_PARSING["$agent_name"]="$legacy_result"
+}
 
 # Initialize agent registry
 # Scans project and user directories, builds cache
@@ -39,6 +76,18 @@ agent_registry_init() {
   # Clear cache
   AGENT_REGISTRY_CACHE=()
   AGENT_SOURCE_MAP=()
+  AGENT_ARTIFACT_FIRST=()
+  AGENT_REQUIRED_ARTIFACTS=()
+  AGENT_OPTIONAL_ARTIFACTS=()
+  AGENT_PRIMARY_ARTIFACT_SLOT=()
+  AGENT_LEGACY_RESULT_PARSING=()
+
+  local agent_tools_file="$PROJECT_ROOT/src/utils/agent-tools.json"
+  if [[ -f "$agent_tools_file" ]]; then
+    AGENT_TOOLS_DATA=$(cat "$agent_tools_file")
+  else
+    AGENT_TOOLS_DATA="{}"
+  fi
   
   # Load capabilities, input_types, output_types taxonomy
   local capabilities_file="$PROJECT_ROOT/config/capabilities.json"
@@ -64,6 +113,7 @@ agent_registry_init() {
         if agent_registry_validate_metadata "$metadata_file" "$agent_name"; then
           AGENT_REGISTRY_CACHE["$agent_name"]="$metadata_file"
           AGENT_SOURCE_MAP["$agent_name"]="project"
+          _agent_registry_set_artifact_metadata "$agent_name"
         fi
       fi
     done
@@ -81,6 +131,7 @@ agent_registry_init() {
         if agent_registry_validate_metadata "$metadata_file" "$agent_name"; then
           AGENT_REGISTRY_CACHE["$agent_name"]="$metadata_file"
           AGENT_SOURCE_MAP["$agent_name"]="user"
+          _agent_registry_set_artifact_metadata "$agent_name"
         fi
       fi
     done
@@ -154,6 +205,31 @@ agent_registry_get() {
   fi
   
   echo "${AGENT_REGISTRY_CACHE[$agent_name]}"
+}
+
+agent_registry_is_artifact_first() {
+  local agent_name="$1"
+  echo "${AGENT_ARTIFACT_FIRST[$agent_name]:-false}"
+}
+
+agent_registry_required_artifacts() {
+  local agent_name="$1"
+  echo "${AGENT_REQUIRED_ARTIFACTS[$agent_name]:-[]}"
+}
+
+agent_registry_optional_artifacts() {
+  local agent_name="$1"
+  echo "${AGENT_OPTIONAL_ARTIFACTS[$agent_name]:-[]}"
+}
+
+agent_registry_primary_artifact_slot() {
+  local agent_name="$1"
+  echo "${AGENT_PRIMARY_ARTIFACT_SLOT[$agent_name]:-}"
+}
+
+agent_registry_legacy_result_parsing() {
+  local agent_name="$1"
+  echo "${AGENT_LEGACY_RESULT_PARSING[$agent_name]:-false}"
 }
 
 # List all agents

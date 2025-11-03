@@ -217,8 +217,8 @@ You MUST create files in specific locations:
    
    Field requirements (no omissions):
    - `completion.json` **must** include `synthesized_at`, `report_generated`, `report_path`, `knowledge_graph_path`, and `quality_gate_status`. Also populate `synthesis_iteration`, `total_claims_synthesized`, `total_entities_referenced`, and `total_sources_cited` using the latest knowledge graph stats.
-   - `key-findings.json` **must** include every top-level array (`well_supported_claims`, `partially_supported_claims`, `contradicted_claims`, `promise_vs_implementation_gaps`) plus a non-empty `engineering_verdict` object, even if you only have placeholders such as `"status": "pending synthesis"`.
-   - `coverage.json` **must** include the four aspect counters (`aspects_identified`, `aspects_well_covered`, `aspects_partially_covered`, `aspects_not_covered`) **and** the arrays (`well_covered`, `partially_covered`, `not_covered`, `research_objectives_met`) plus a boolean `critical_distinction_addressed` and a `missing_watch_topics` array identifying any outstanding critical watch items.
+   - `key-findings.json` **must** include every top-level array (`well_supported_claims`, `partially_supported_claims`, `contradicted_claims`, `promise_vs_implementation_gaps`) plus a non-empty `engineering_verdict` object. For each entry inside `promise_vs_implementation_gaps`, use the schema field names `promise` and `implementation_reality` (not custom labels), and include `gap_severity` plus any contextual fields you need.
+   - `coverage.json` **must** include the four aspect counters (`aspects_identified`, `aspects_well_covered`, `aspects_partially_covered`, `aspects_not_covered`) **and** the arrays (`well_covered`, `partially_covered`, `not_covered`, `research_objectives_met`) plus a boolean `critical_distinction_addressed`. The `missing_watch_topics` array **must** list unresolved watch topic identifiers as plain strings (for example `["watch_6"]`), not objects.
    - `confidence-scores.json` **must** include `overall` (0.0–1.0). Use `by_category` to break down confidence by stakeholder or theme, and explicitly note methodology/limitations when confidence is <0.8.
    
    Example structure:
@@ -247,21 +247,35 @@ You MUST create files in specific locations:
      "aspects_partially_covered": 2,
      "aspects_not_covered": 3,
      "well_covered": ["General bonding prevalence", "Mitochondrial dysfunction"],
-     "not_covered": ["ADHD bonding quantification", "Autoimmune bonding quantification"]
+     "partially_covered": ["Sample recruitment detail"],
+     "not_covered": ["ADHD bonding quantification", "Autoimmune bonding quantification"],
+     "research_objectives_met": ["Objective A", "Objective B"],
+     "critical_distinction_addressed": true,
+     "missing_watch_topics": ["watch_2", "watch_6"]
    }
-   
+
    // artifacts/synthesis-agent/key-findings.json
    {
      "well_supported_claims": [
        {"claim": "General bonding prevalence 15-20%", "confidence": 0.85},
        {"claim": "Mitochondrial dysfunction in ADHD", "confidence": 0.85}
      ],
-     "unsupported_claims": [
-       {"claim": "ADHD bonding 30-40%", "reason": "NO PEER-REVIEWED DATA"}
+     "partially_supported_claims": [
+       {"claim": "ADHD bonding 30-40%", "confidence": 0.55}
      ],
      "contradicted_claims": [
        {"claim": "Autism bonding 35-45%", "reason": "CONTRADICTED by evidence"}
-     ]
+     ],
+     "promise_vs_implementation_gaps": [
+       {
+         "promise": "Triangulation framework covers all watch topics",
+         "implementation_reality": "Value-theory method lacks quantitative example",
+         "gap_severity": "medium"
+       }
+     ],
+     "engineering_verdict": {
+       "status": "pending synthesis"
+     }
    }
    ```
    

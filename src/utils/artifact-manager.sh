@@ -440,11 +440,12 @@ PY
       summary: $summary
     }')
 
+  local manifest_path_rel="${manifest_path#"$session_dir"/}"
   artifact_write_json_atomic "$manifest_path" "$manifest"
 
   local output_payload
   output_payload=$(jq -n \
-    --arg manifest_path_rel "${manifest_path#"$session_dir"/}" \
+    --arg manifest_path_rel "$manifest_path_rel" \
     --arg validation_phase "$validation_phase" \
     --argjson validation_duration_ms "$validation_duration_ms" \
     --argjson summary "$summary" \
@@ -467,6 +468,25 @@ PY
 
   if [[ "$bypass_flag" -eq 1 ]]; then
     should_fail=0
+  fi
+
+  local marker_path="$work_dir/artifacts.ready"
+  if [[ "$should_fail" -eq 0 && ${#missing_slots[@]} -eq 0 && ${#schema_failures[@]} -eq 0 && ${#checksum_failures[@]} -eq 0 ]]; then
+    local marker_payload
+    marker_payload=$(jq -n \
+      --arg validated_at "$timestamp" \
+      --arg validation_phase "$validation_phase" \
+      --arg manifest_path "$manifest_path_rel" \
+      --argjson summary "$summary" \
+      '{
+        validated_at: $validated_at,
+        validation_phase: $validation_phase,
+        manifest_path: $manifest_path,
+        summary: $summary
+      }')
+    artifact_write_json_atomic "$marker_path" "$marker_payload"
+  else
+    rm -f "$marker_path"
   fi
 
   return "$should_fail"
@@ -551,6 +571,92 @@ artifact_register() {
     }]'
   
   echo "$artifact_id"
+}
+
+artifact_register_from_manifest() {
+  local session_dir="$1"
+  local agent_name="$2"
+  local manifest_path="${3:-}"
+
+  if [[ -z "$session_dir" || -z "$agent_name" ]]; then
+    log_error "artifact_register_from_manifest requires session_dir and agent_name"
+    return 1
+  fi
+
+  if [[ -z "$manifest_path" ]]; then
+    manifest_path="$session_dir/work/$agent_name/manifest.actual.json"
+  fi
+
+  if [[ ! -f "$manifest_path" ]]; then
+    log_warn "Manifest not found for $agent_name (expected $manifest_path)"
+    return 1
+  fi
+
+  local manifest_file="$session_dir/artifacts/manifest.json"
+  if [[ -f "$manifest_file" ]]; then
+    if ! jq -e '.artifacts | type == "array"' "$manifest_file" >/dev/null 2>&1; then
+      log_warn "Corrupted artifact manifest detected, reinitializing"
+      artifact_init "$session_dir"
+    fi
+  else
+    artifact_init "$session_dir"
+  fi
+
+  local registered=0
+  local skipped_existing=0
+  local skipped_other=0
+
+  while IFS= read -r artifact_entry; do
+    local rel_path
+    rel_path=$(jq -r '.relative_path // empty' <<<"$artifact_entry")
+    if [[ -z "$rel_path" || "$rel_path" == "null" ]]; then
+      log_warn "Manifest entry missing relative_path for $agent_name (entry: $artifact_entry)"
+      skipped_other=$((skipped_other + 1))
+      continue
+    fi
+
+    local absolute_path="$session_dir/$rel_path"
+    if [[ ! -f "$absolute_path" ]]; then
+      log_warn "Manifest path missing on disk for $agent_name: $rel_path"
+      skipped_other=$((skipped_other + 1))
+      continue
+    fi
+
+    if jq -e --arg path "$absolute_path" '.artifacts[]? | select(.path == $path)' "$manifest_file" >/dev/null 2>&1; then
+      skipped_existing=$((skipped_existing + 1))
+      continue
+    fi
+
+    local slot
+    slot=$(jq -r '.slot // ""' <<<"$artifact_entry")
+    local tags=""
+    if [[ -n "$slot" ]]; then
+      tags="slot:$slot"
+    fi
+
+    if artifact_register "$session_dir" "$absolute_path" "agent_output" "$agent_name" "$tags" >/dev/null 2>&1; then
+      registered=$((registered + 1))
+    else
+      log_warn "Failed to register artifact for $agent_name: $rel_path"
+      skipped_other=$((skipped_other + 1))
+    fi
+  done < <(jq -c '.artifacts[]? | select(.status == "present")' "$manifest_path")
+
+  if (( registered == 0 )); then
+    local total_skipped=$((skipped_existing + skipped_other))
+    if (( skipped_other > 0 )); then
+      log_warn "No new artifacts registered for $agent_name (skipped_total: $total_skipped, already_registered: $skipped_existing, skipped_due_to_errors: $skipped_other)"
+      return 1
+    elif (( skipped_existing > 0 )); then
+      log_info "All manifest artifacts already registered for $agent_name (count: $skipped_existing)"
+      return 0
+    else
+      log_warn "Manifest for $agent_name contained no present artifacts"
+      return 1
+    fi
+  fi
+
+  return 0
 }
 
 # Get artifact path by ID
