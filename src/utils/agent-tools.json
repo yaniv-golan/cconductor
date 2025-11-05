@@ -276,7 +276,8 @@
             "WebSearch",
             "WebFetch",
             "Edit",
-            "NotebookEdit"
+            "NotebookEdit",
+            "Task"
         ],
         "artifact_first": true,
         "required_artifacts": [

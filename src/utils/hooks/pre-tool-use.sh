@@ -156,6 +156,11 @@ debug_log "hook_context tool=$tool_name agent=$agent_name"
 # Validate file access and tool usage for orchestrator
 if [[ "$agent_name" == "mission-orchestrator" ]]; then
     case "$tool_name" in
+        Task)
+            echo "ERROR: Orchestrator Task tool usage is unsupported in this runtime" >&2
+            echo "  The mission orchestrator must delegate work via invoke actions instead of Task." >&2
+            exit 1
+            ;;
         Read|Write|Edit|MultiEdit)
             file_path=$(hook_field '.tool_input.file_path // ""' '' 'tool_input.file_path')
             if [[ -n "$file_path" ]]; then

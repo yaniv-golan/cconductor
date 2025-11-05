@@ -604,6 +604,28 @@ kill -9 <PID>
 - As a last resort, disable the watchdog (`--disable-watchdog`) to keep the run alive, but **stay at the terminal**; no automatic recovery will occur.
 - Record any watchdog/timeout overrides in your runbook so teammates know the safeguards were relaxed.
 
+### Mission Orchestrator Times Out After Writing Decision
+
+**Symptoms**:
+
+- Iteration 1 stops right after `artifacts/mission-orchestrator/decision.json` is written
+- `logs/events.jsonl` shows `tool_use_start` for `Task` (agent `mission-orchestrator`) with no matching completion event
+- `logs/system-errors.log` records: `claude_stream_missing_result ... agent=mission-orchestrator`
+- Run ends with `✗ mission-orchestrator timed out after 300s (no activity detected)`
+
+**Root cause**: The orchestrator called Anthropic's **Task** tool to spin up a sub-agent. Our runtime never services Task; hooks only log the attempt, so Claude waits indefinitely until the watchdog fires.
+
+**Fix**:
+
+1. Ensure the repo includes the Task block:
+   - `src/utils/agent-tools.json` must list `"Task"` under `mission-orchestrator.disallowed`.
+   - `src/utils/hooks/pre-tool-use.sh` should exit with an error when `agent==mission-orchestrator` and `tool_name=="Task"`.
+2. Re-run the mission: `./cconductor --verbose --question-file …`
+   The orchestrator will now fail fast if Task is attempted, prompting Claude to pick a supported tool instead of hanging.
+3. If you are replaying an older session, resume after upgrading so the new guard files live under that session’s `.claude/hooks`.
+
+**Prevent recurrence**: Avoid customizing the mission orchestrator metadata or system prompt to re-enable Task unless you also implement a Task handler. Delegations should flow through the existing invoke/reinvoke actions.
+
 ---
 
 ### Session Locked Error
