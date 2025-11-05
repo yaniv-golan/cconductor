@@ -2069,7 +2069,7 @@ export_journal() {
     if [[ -z "$display_output" ]]; then
         display_output="$output_file"
     fi
-    echo "  ✓ Research journal exported to: $display_output" >&2
+    printf '  ✓ Research journal exported to: %q\n' "$display_output" >&2
 }
 
 # Export function for sourcing
