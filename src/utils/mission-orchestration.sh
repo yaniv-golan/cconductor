@@ -2620,6 +2620,7 @@ mission_orchestration_check_stakeholder_classifier() {
 
     local mission_state_file="$session_dir/meta/mission_state.json"
     if [[ ! -f "$mission_state_file" ]]; then
+        mission_orchestration_guard_result "ok"
         return 0
     fi
 
@@ -2650,38 +2651,60 @@ mission_orchestration_check_stakeholder_classifier() {
     local detail_json
     detail_json=$(safe_jq_from_file "$mission_state_file" '.stakeholder_classifier // {}' '{}' "$session_dir" "classifier_check.detail" false)
 
-    local must_retry=0
+    local should_block=0
+    local block_message=""
     local residual_after_llm=0
 
-    if [[ "$classifier_status" == "unknown" || "$classifier_status" == "missing" ]]; then
-        must_retry=1
-    fi
-    if [[ "$classifier_status" != "fresh" && "$classifier_status" != "stale" && "$classifier_status" != "unknown" && "$classifier_status" != "missing" ]]; then
-        must_retry=1
-    fi
     if (( pending_numeric > 0 )); then
-        must_retry=1
+        should_block=1
+        block_message="Stakeholder classifier requires refresh ($pending_numeric pending source(s) remain)."
     fi
     if (( needs_review_unattempted_numeric > 0 )) && [[ "$allow_stale" != "1" ]]; then
-        must_retry=1
+        should_block=1
+        block_message="Stakeholder classifier requires refresh (${needs_review_unattempted_numeric} source(s) still need initial classification)."
     fi
     if (( needs_review_numeric > 0 )) && (( needs_review_unattempted_numeric == 0 )); then
         residual_after_llm=1
     fi
 
-    if (( must_retry == 1 )); then
+    if (( should_block == 0 )); then
+        case "$classifier_status" in
+            fresh|stale)
+                ;;
+            stale_pending)
+                # Allowed when no pending sources or unattempted reviews remain
+                ;;
+            unknown|missing)
+                should_block=1
+                block_message="Stakeholder classifier status $classifier_status requires refresh."
+                ;;
+            *)
+                should_block=1
+                block_message="Stakeholder classifier status $classifier_status not recognized; refresh required."
+                ;;
+        esac
+    fi
+
+    if (( should_block == 1 )); then
         printf '%s\n' "$detail_json" | jq '.' >"$issues_file"
-        if (( pending_numeric > 0 )); then
-            log_warn "stakeholder-classifier: pending_sources=$pending_numeric status=$classifier_status"
-            echo "⚠ Stakeholder classifier requires refresh ($pending_numeric pending source(s) remain)." >&2
-        elif (( needs_review_unattempted_numeric > 0 )) && [[ "$allow_stale" != "1" ]]; then
-            log_warn "stakeholder-classifier: needs_review_unattempted=$needs_review_unattempted_numeric needs_review_total=$needs_review_numeric status=$classifier_status"
-            echo "⚠ Stakeholder classifier requires refresh (${needs_review_unattempted_numeric} source(s) still need initial classification)." >&2
-        else
-            log_warn "stakeholder-classifier: status=$classifier_status pending_sources=$pending_numeric"
-            echo "⚠ Stakeholder classifier requires refresh (status: $classifier_status)." >&2
+        if [[ -z "${block_message:-}" ]]; then
+            block_message="Stakeholder classifier requires refresh (status: $classifier_status)."
         fi
-        return 1
+        log_warn "stakeholder-classifier: status=$classifier_status pending_sources=$pending_numeric needs_review_unattempted=$needs_review_unattempted_numeric"
+        echo "⚠ ${block_message}" >&2
+        local guard_payload
+        guard_payload=$(jq -n \
+            --arg blocker "stakeholder_classifier" \
+            --arg suggested "rerun_stakeholder_classifier" \
+            --arg message "$block_message" \
+            --arg status "$classifier_status" \
+            --argjson detail "$detail_json" \
+            --argjson pending "$pending_numeric" \
+            --argjson needs "$needs_review_numeric" \
+            --argjson unattempted "$needs_review_unattempted_numeric" \
+            '{blocker: $blocker, suggested_action: $suggested, message: $message, classifier_status: $status, pending_sources: $pending, needs_review_total: $needs, needs_review_unattempted: $unattempted, detail: $detail}')
+        mission_orchestration_guard_result "block" "$guard_payload"
+        return 0
     fi
 
     if (( residual_after_llm == 1 )); then
@@ -2692,6 +2715,7 @@ mission_orchestration_check_stakeholder_classifier() {
         rm -f "$issues_file" 2>/dev/null || true
     fi
 
+    mission_orchestration_guard_result "ok"
     return 0
 }
 
