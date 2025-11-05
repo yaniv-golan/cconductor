@@ -153,6 +153,79 @@ tool_name=$(hook_field '.tool_name // "unknown"' 'unknown' 'tool_name')
 agent_name="${CCONDUCTOR_AGENT_NAME:-unknown}"
 debug_log "hook_context tool=$tool_name agent=$agent_name"
 
+WEB_FETCH_POLICY_LOADED=0
+WEB_FETCH_POLICY_AVAILABLE=0
+WEB_FETCH_MAX_USES=0
+declare -a WEB_FETCH_ALLOWED_DOMAINS=()
+declare -a WEB_FETCH_BLOCKED_DOMAINS=()
+
+load_web_fetch_policy() {
+    if [[ "$WEB_FETCH_POLICY_LOADED" -eq 1 ]]; then
+        return 0
+    fi
+    WEB_FETCH_POLICY_LOADED=1
+    local policy_path="${CCONDUCTOR_WEB_FETCH_POLICY_FILE:-}"
+    if [[ -z "$policy_path" || ! -f "$policy_path" ]]; then
+        debug_log "web_fetch_policy unavailable: path=$policy_path"
+        WEB_FETCH_POLICY_AVAILABLE=0
+        return 0
+    fi
+    WEB_FETCH_MAX_USES=$(jq -r '.max_uses_per_turn // 0' "$policy_path" 2>/dev/null || echo 0)
+    readarray -t WEB_FETCH_ALLOWED_DOMAINS < <(jq -r '.allowed_domains[]?' "$policy_path" 2>/dev/null || true)
+    readarray -t WEB_FETCH_BLOCKED_DOMAINS < <(jq -r '.blocked_domains[]?' "$policy_path" 2>/dev/null || true)
+    WEB_FETCH_POLICY_AVAILABLE=1
+    debug_log "web_fetch_policy loaded: max_uses=$WEB_FETCH_MAX_USES allowed=${WEB_FETCH_ALLOWED_DOMAINS[*]:-<none>} blocked=${WEB_FETCH_BLOCKED_DOMAINS[*]:-<none>}"
+}
+
+domain_matches_pattern() {
+    local domain="$1"
+    local pattern="$2"
+    [[ -z "$domain" || -z "$pattern" ]] && return 1
+    if [[ "$pattern" == "*."* ]]; then
+        local suffix="${pattern:2}"
+        [[ "$domain" == "$suffix" || "$domain" == *".${suffix}" ]]
+    else
+        [[ "$domain" == "$pattern" || "$domain" == *".${pattern}" ]]
+    fi
+}
+
+domain_in_list() {
+    local domain="$1"
+    shift
+    local pattern
+    for pattern in "$@"; do
+        if domain_matches_pattern "$domain" "$pattern"; then
+            return 0
+        fi
+    done
+    return 1
+}
+
+extract_domain_from_url() {
+    local url="$1"
+    [[ -z "$url" ]] && return 1
+    local parsed=""
+    if command -v python3 >/dev/null 2>&1; then
+        parsed=$(python3 - <<'PY' "$url" 2>/dev/null || true
+from urllib.parse import urlparse
+import sys
+u = sys.argv[1]
+print((urlparse(u).hostname or ""), end="")
+PY
+)
+    fi
+    if [[ -z "$parsed" ]]; then
+        parsed="${url#*://}"
+        parsed="${parsed%%/*}"
+        parsed="${parsed%%:*}"
+    fi
+    if [[ -n "$parsed" ]]; then
+        printf '%s' "${parsed,,}"
+        return 0
+    fi
+    return 1
+}
+
 # Validate file access and tool usage for orchestrator
 if [[ "$agent_name" == "mission-orchestrator" ]]; then
     case "$tool_name" in
@@ -198,6 +271,51 @@ if [[ "$agent_name" == "mission-orchestrator" ]]; then
             fi
             ;;
     esac
+fi
+
+if [[ "$tool_name" == "WebFetch" && "${CCONDUCTOR_WEB_FETCH_STRICT_MODE:-1}" != "0" ]]; then
+    load_web_fetch_policy
+    if [[ "$WEB_FETCH_POLICY_AVAILABLE" -eq 1 ]]; then
+        url=$(hook_field '.tool_input.url // ""' '' 'tool_input.url')
+        domain=""
+        if [[ -n "$url" ]]; then
+            domain=$(extract_domain_from_url "$url")
+        fi
+        if [[ -n "$domain" ]]; then
+            if [[ "${#WEB_FETCH_BLOCKED_DOMAINS[@]}" -gt 0 ]] && domain_in_list "$domain" "${WEB_FETCH_BLOCKED_DOMAINS[@]}"; then
+                echo "ERROR: WebFetch blocked for domain '$domain' (policy forbids it)" >&2
+                exit 1
+            fi
+            if [[ "${#WEB_FETCH_ALLOWED_DOMAINS[@]}" -gt 0 ]] && ! domain_in_list "$domain" "${WEB_FETCH_ALLOWED_DOMAINS[@]}"; then
+                echo "ERROR: WebFetch domain '$domain' not in allowed list" >&2
+                exit 1
+            fi
+        fi
+
+        if [[ "$WEB_FETCH_MAX_USES" -gt 0 ]]; then
+            usage_file="${CCONDUCTOR_TOOL_USAGE_FILE:-}"
+            if [[ -z "$usage_file" ]]; then
+                usage_file="$session_dir/meta/tool-usage.json"
+            fi
+            mkdir -p "$(dirname "$usage_file")"
+            if [[ ! -f "$usage_file" ]]; then
+                echo '{}' > "$usage_file"
+            fi
+            current_count=0
+            current_count=$(jq -r --arg agent "$agent_name" '.agents[$agent].web_fetch.count // 0' "$usage_file" 2>/dev/null || echo 0)
+            if [[ "$current_count" =~ ^[0-9]+$ ]] && (( current_count >= WEB_FETCH_MAX_USES )); then
+                echo "ERROR: WebFetch limit exceeded for $agent_name (max ${WEB_FETCH_MAX_USES} per turn)" >&2
+                exit 1
+            fi
+            # shellcheck disable=SC2016
+            atomic_json_update "$usage_file" \
+                --arg agent "$agent_name" \
+                '(.agents //= {}) |
+                 (.agents[$agent] //= {}) |
+                 (.agents[$agent].web_fetch //= {"count":0}) |
+                 (.agents[$agent].web_fetch.count += 1)'
+        fi
+    fi
 fi
 
 # Extract tool input (summary only, full data lives in logs/events.jsonl)

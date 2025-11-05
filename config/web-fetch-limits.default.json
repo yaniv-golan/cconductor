@@ -1,0 +1,17 @@
+{
+  "max_uses_per_turn": 2,
+  "max_content_tokens": 60000,
+  "allowed_domains": [
+    "*.gov",
+    "*.edu",
+    "wikipedia.org",
+    "github.com",
+    "stackoverflow.com"
+  ],
+  "blocked_domains": [
+    "canva.com",
+    "figma.com",
+    "medium.com",
+    "pinterest.com"
+  ]
+}

@@ -626,7 +626,19 @@ kill -9 <PID>
 
 **Prevent recurrence**: Avoid customizing the mission orchestrator metadata or system prompt to re-enable Task unless you also implement a Task handler. Delegations should flow through the existing invoke/reinvoke actions.
 
----
+### Web Research Fetch Blocked by Policy
+
+**Symptoms**:
+
+- `ERROR: WebFetch domain 'canva.com' not in allowed list` (or similar) appears during agent run
+- Agent reports that the runtime rejected a fetch even though the URL is valid
+
+**Cause**: Web-fetch strict mode is now enabled by default. The runtime enforces an allow/deny policy and a per-turn budget to prevent stalls caused by JS-heavy or bot-protected sites.
+
+**Resolution**:
+- Adjust your prompt/task so the agent selects text-first domains (gov, edu, established research portals).
+- If you absolutely must reach a blocked site during debugging, set `CCONDUCTOR_WEB_FETCH_STRICT_MODE=0` for the run (not recommended for production).
+- Review `config/web-fetch-limits.default.json` (copy to `config/web-fetch-limits.json` for local overrides) to understand allowed/blocked domains and the fetch limit.
 
 ### Session Locked Error
 

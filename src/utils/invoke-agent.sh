@@ -828,6 +828,19 @@ invoke_agent_v2() {
         fi
     fi
 
+    if [[ -z "${CCONDUCTOR_WEB_FETCH_STRICT_MODE:-}" ]]; then
+        export CCONDUCTOR_WEB_FETCH_STRICT_MODE=1
+    fi
+    if [[ "${CCONDUCTOR_WEB_FETCH_STRICT_MODE:-1}" != "0" && -z "${CCONDUCTOR_WEB_FETCH_POLICY_FILE:-}" ]]; then
+        local primary_policy="$cconductor_root/config/web-fetch-limits.json"
+        local default_policy="$cconductor_root/config/web-fetch-limits.default.json"
+        if [[ -f "$primary_policy" ]]; then
+            export CCONDUCTOR_WEB_FETCH_POLICY_FILE="$primary_policy"
+        elif [[ -f "$default_policy" ]]; then
+            export CCONDUCTOR_WEB_FETCH_POLICY_FILE="$default_policy"
+        fi
+    fi
+
     local agent_runtime_config_json="{}"
     local agent_runtime_config_loaded=0
 
@@ -1045,6 +1058,13 @@ invoke_agent_v2() {
     export CCONDUCTOR_SESSION_DIR="$session_dir"
     export CCONDUCTOR_AGENT_NAME="$agent_name"
     export CCONDUCTOR_VERBOSE="${CCONDUCTOR_VERBOSE:-0}"
+    local tool_usage_file=""
+    if [[ "${CCONDUCTOR_WEB_FETCH_STRICT_MODE:-1}" != "0" ]]; then
+        tool_usage_file="$session_dir/meta/tool-usage.json"
+        mkdir -p "$(dirname "$tool_usage_file")"
+        jq -n '{}' > "$tool_usage_file"
+        export CCONDUCTOR_TOOL_USAGE_FILE="$tool_usage_file"
+    fi
 
     # Reap any orphaned agent processes from previous runs to avoid buildup
     if declare -F cleanup_orphan_agent_processes >/dev/null 2>&1; then
@@ -1086,6 +1106,9 @@ invoke_agent_v2() {
             fi
             if [[ -n "${pid_file:-}" ]]; then
                 rm -f "$pid_file" 2>/dev/null || true
+            fi
+            if [[ -n "${tool_usage_file:-}" ]]; then
+                rm -f "$tool_usage_file" 2>/dev/null || true
             fi
             if [[ -n "${original_dir:-}" ]]; then
                 cd "$original_dir" >/dev/null 2>&1 || true
