@@ -1664,10 +1664,41 @@ invoke_agent_v2() {
                     # Success - validate it's not empty
                     if [[ -n "$extracted_json" ]] && echo "$extracted_json" | jq empty 2>/dev/null; then
                         echo "  ✓ Agent $agent_name output validated as JSON" >&2
-                        
-                        # For web-researcher, verify manifest structure
+                        # For web-researcher, enrich JSON with findings_files if missing
                         if [[ "$agent_name" == "web-researcher" ]]; then
+                            findings_field_present=false
                             if echo "$extracted_json" | jq -e 'has("status") and has("findings_files")' >/dev/null 2>&1; then
+                                findings_field_present=true
+                            fi
+
+                            if [[ "$findings_field_present" != "true" ]]; then
+                                local manifest_file="$session_dir/work/web-researcher/manifest.actual.json"
+                                if [[ -f "$manifest_file" ]]; then
+                                    local findings_paths
+                                    findings_paths=$(jq -r '[.artifacts[] | select(.slot == "web_research_findings") | .relative_path] | unique' "$manifest_file" 2>/dev/null)
+                                    if [[ -n "$findings_paths" && "$findings_paths" != "null" && "$findings_paths" != "[]" ]]; then
+                                        local enriched_json
+                                        enriched_json=$(echo "$extracted_json" | jq --argjson files "$findings_paths" '
+                                            if (has("status") | not) then .status = "completed" else . end |
+                                            .findings_files = $files
+                                        ' 2>/dev/null || echo '')
+                                        if [[ -n "$enriched_json" ]]; then
+                                            local tmp_json
+                                            tmp_json=$(mktemp "${TMPDIR:-/tmp}/web-researcher-result.XXXXXX.json")
+                                            if echo "$enriched_json" | jq . > "$tmp_json" 2>/dev/null; then
+                                                mv "$tmp_json" "$output_file"
+                                                extracted_json="$enriched_json"
+                                                echo "  ✓ Injected findings_files from manifest (web-researcher)" >&2
+                                                findings_field_present=true
+                                            else
+                                                rm -f "$tmp_json"
+                                            fi
+                                        fi
+                                    fi
+                                fi
+                            fi
+
+                            if [[ "$findings_field_present" == "true" ]]; then
                                 echo "  ✓ Manifest structure valid" >&2
                             else
                                 echo "  ⚠️  Warning: Manifest missing required fields (status, findings_files)" >&2

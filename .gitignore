@@ -104,6 +104,7 @@ test-*.sh
 !tests/test-orchestrator-dual-mode.sh
 !tests/test-security-fixes.sh
 !tests/test-date-helpers.sh
+!tests/test-kg-web-researcher-ingest.sh
 tests/fixtures/
 tests/manual/
 sandbox/

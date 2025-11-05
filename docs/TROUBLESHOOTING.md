@@ -640,6 +640,28 @@ kill -9 <PID>
 - If you absolutely must reach a blocked site during debugging, set `CCONDUCTOR_WEB_FETCH_STRICT_MODE=0` for the run (not recommended for production).
 - Review `config/web-fetch-limits.default.json` (copy to `config/web-fetch-limits.json` for local overrides) to understand allowed/blocked domains and the fetch limit.
 
+### Manifest Missing Required Fields (status, findings_files)
+
+**Symptoms**:
+
+- Orchestrator logs warn: `Manifest missing required fields (status, findings_files)` after `web-researcher` completes.
+- Tier-0 JSON validation reports missing `findings_files` array.
+
+**Cause**: The structured JSON emitted by `web-researcher` must include:
+  - `"status"` (usually `"completed"`).
+  - `"findings_files"` listing relative paths for each findings JSON (e.g., `work/web-researcher/findings-t0.json`).
+Older agent instructions omitted this field, and without it, Tier-0 parsing raises a warning (though the artifact contract still passes).
+
+**Resolution**:
+- Upgrade to the latest prompt/runtime (the agent prompt now instructs the model to emit `findings_files`, and the runtime injects it when missing).
+- If you still see the warning, confirm the agent’s JSON references actual findings files:
+  ```bash
+  jq '.findings_files' research-sessions/mission_*/work/web-researcher/output.json
+  ```
+- Ensure `findings_files` aligns with paths listed in `work/web-researcher/manifest.actual.json`.
+
+---
+
 ### Session Locked Error
 
 **Symptoms**:
@@ -1654,6 +1676,15 @@ Error: Cannot read session data
 jq parse error
 ```
 
+### `jq: Cannot iterate over number (10)`
+
+**Symptoms**:
+
+```
+Found 10 entities, 0 claims in agent output
+jq: error (at <stdin>:1): Cannot iterate over number (10)
+```
+
 **Diagnosis**:
 
 ```bash
@@ -1681,6 +1712,24 @@ ls -lh research-sessions/mission_*/meta/*.json
    ```bash
    cat research-sessions/mission_*/report/mission-report.md
    ```
+
+**If you see the `Cannot iterate over number` error**:
+
+1. Update to the latest CConductor build (fixes landed 2025-11-05 in `src/knowledge-graph.sh` and `tests/test-kg-web-researcher-ingest.sh`).
+2. Verify the session still has `work/web-researcher/findings-t*.json` present:
+   ```bash
+   ls research-sessions/<mission_id>/work/web-researcher/findings-*.json
+   ```
+3. Re-run the integrator after updating:
+   ```bash
+   ./src/utils/kg-integrate.sh research-sessions/<mission_id> work/web-researcher/output.json
+   ```
+4. Confirm the knowledge graph now contains the entities/claims:
+   ```bash
+   jq '.entities | length' research-sessions/<mission_id>/knowledge/knowledge-graph.json
+   jq '.claims | length' research-sessions/<mission_id>/knowledge/knowledge-graph.json
+   ```
+5. If the findings file is missing, rerun `web-researcher` for that mission; the loader now falls back to `artifacts_created` in `output.json` but still needs the JSON artifact to ingest.
 
 2. If report is good, you have your results (other files don't matter)
 3. If report is corrupted, research must be restarted

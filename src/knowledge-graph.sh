@@ -1346,6 +1346,11 @@ kg_integrate_agent_output() {
     local agent_data
     agent_data=$(extract_json_from_agent_output "$agent_output_file" false 2>/dev/null || echo "")
     
+    local entities_type="null"
+    local claims_type="null"
+    local entities_reported_count=0
+    local claims_reported_count=0
+
     if [[ -n "$agent_data" ]]; then
         # Check if data has entities_discovered/claims
         local has_structured_data
@@ -1353,28 +1358,36 @@ kg_integrate_agent_output() {
         
         # If we found structured data, integrate it
         if [[ "$has_structured_data" == "true" ]]; then
-            local entity_count=0
-            local claim_count=0
+            local entity_array_count=0
+            local claim_array_count=0
             
             # Extract entities
             local entities
             entities=$(safe_jq_from_json "$agent_data" '.entities_discovered // []' '[]' "$session_dir" "kg_integrate.entities" false)
-            entity_count=$(safe_jq_from_json "$entities" 'length' "0" "$session_dir" "kg_integrate.entities_count")
+            entities_type=$(safe_jq_from_json "$agent_data" '((.entities_discovered? | type) // "null")' "null" "$session_dir" "kg_integrate.entities_type")
+            entities_reported_count=$(safe_jq_from_json "$agent_data" 'if (.entities_discovered? | type) == "number" then (.entities_discovered // 0) else 0 end' "0" "$session_dir" "kg_integrate.entities_reported")
+            if [[ "$entities_type" == "array" ]]; then
+                entity_array_count=$(printf '%s\n' "$entities" | jq 'length' 2>/dev/null || echo "0")
+            fi
 
             # Extract claims
             local claims
             claims=$(safe_jq_from_json "$agent_data" '.claims // []' '[]' "$session_dir" "kg_integrate.claims" false)
-            claim_count=$(safe_jq_from_json "$claims" 'length' "0" "$session_dir" "kg_integrate.claims_count")
+            claims_type=$(safe_jq_from_json "$agent_data" '((.claims? | type) // "null")' "null" "$session_dir" "kg_integrate.claims_type")
+            claims_reported_count=$(safe_jq_from_json "$agent_data" 'if (.claims? | type) == "number" then (.claims // 0) else 0 end' "0" "$session_dir" "kg_integrate.claims_reported")
+            if [[ "$claims_type" == "array" ]]; then
+                claim_array_count=$(printf '%s\n' "$claims" | jq 'length' 2>/dev/null || echo "0")
+            fi
             
             # If we have data, integrate it
-            if [[ "$entity_count" -gt 0 ]] || [[ "$claim_count" -gt 0 ]]; then
-                echo "  Found $entity_count entities, $claim_count claims in agent output" >&2
+            if { [[ "$entities_type" == "array" ]] && [[ "$entity_array_count" -gt 0 ]]; } || { [[ "$claims_type" == "array" ]] && [[ "$claim_array_count" -gt 0 ]]; }; then
+                echo "  Found $entity_array_count entities, $claim_array_count claims in agent output" >&2
                 
                 local integrated=0
                 
                 # Add entities to KG
-                if [[ "$entity_count" -gt 0 ]]; then
-                    echo "$entities" | jq -c '.[]' | while IFS= read -r entity; do
+                if [[ "$entities_type" == "array" ]] && [[ "$entity_array_count" -gt 0 ]]; then
+                    printf '%s\n' "$entities" | jq -c '.[]' | while IFS= read -r entity; do
                         local entity_name
                         entity_name=$(echo "$entity" | jq -r '.name // empty')
                         if [[ -n "$entity_name" ]]; then
@@ -1384,7 +1397,7 @@ kg_integrate_agent_output() {
                 fi
                 
                 # Add claims to KG
-                if [[ "$claim_count" -gt 0 ]]; then
+                if [[ "$claims_type" == "array" ]] && [[ "$claim_array_count" -gt 0 ]]; then
                     printf '%s\n' "$claims" | jq -c '.[]' | while IFS= read -r claim; do
                         local claim_text
                         claim_text=$(echo "$claim" | jq -r '.statement // .claim // empty')
@@ -1404,6 +1417,8 @@ kg_integrate_agent_output() {
 
                 echo "  ✓ Integrated structured findings into knowledge graph" >&2
                 return 0
+            elif [[ "${CCONDUCTOR_VERBOSE:-0}" == "1" ]] && { [[ "$entities_reported_count" -gt 0 ]] || [[ "$claims_reported_count" -gt 0 ]]; }; then
+                echo "  ↪ Inline manifest reported $entities_reported_count entities and $claims_reported_count claims; deferring to findings files" >&2
             fi
         fi
     fi
@@ -1426,6 +1441,28 @@ kg_integrate_agent_output() {
                     echo "  ⚠ Warning: Manifest referenced missing findings file $rel_path" >&2
                 fi
             done <<< "$manifest_findings"
+        fi
+    fi
+
+    if [[ -z "$findings_files" ]]; then
+        local artifact_paths
+        artifact_paths=$(jq -r '.result.artifacts_created[]? // empty' "$agent_output_file" 2>/dev/null)
+        if [[ -z "$artifact_paths" ]]; then
+            artifact_paths=$(jq -r '.artifacts_created[]? // empty' "$agent_output_file" 2>/dev/null)
+        fi
+        if [[ -n "$artifact_paths" ]]; then
+            while IFS= read -r rel_path; do
+                [[ -z "$rel_path" ]] && continue
+                local abs_path="$rel_path"
+                if [[ "$rel_path" != /* ]]; then
+                    abs_path="$session_dir/$rel_path"
+                fi
+                if [[ -f "$abs_path" ]]; then
+                    if ! printf '%s\n' "$findings_files" | grep -Fxq "$abs_path"; then
+                        findings_files+="$abs_path"$'\n'
+                    fi
+                fi
+            done <<< "$artifact_paths"
         fi
     fi
 
@@ -1478,6 +1515,10 @@ kg_integrate_agent_output() {
         findings_files=$(echo "$legacy_files" | grep -v '^$')
     fi
     
+    if [[ -z "$findings_files" ]] && { { [[ "$entities_type" == "number" ]] && [[ "$entities_reported_count" -gt 0 ]]; } || { [[ "$claims_type" == "number" ]] && [[ "$claims_reported_count" -gt 0 ]]; }; }; then
+        log_warn "kg_integrate: manifest reported $entities_reported_count entities and $claims_reported_count claims but no findings artifacts were located"
+    fi
+
     if [ -z "$findings_files" ]; then
         # No findings to integrate - this is OK, not all agents produce findings files
         return 0
