@@ -11,5 +11,6 @@
     "research-planner": 300,
     "mission-orchestrator": 300
   },
+  "min_required_research_minutes": 10,
   "watchdog_check_interval_seconds": 60
 }

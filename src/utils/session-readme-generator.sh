@@ -109,6 +109,9 @@ generate_readme() {
     fi
     event_count=$(sanitize_number "$event_count")
 
+    local blockers_file="$session_dir/meta/synthesis-blockers.json"
+    local blockers_rel="meta/synthesis-blockers.json"
+
     local report_exists=false
     if [ -f "$session_dir/$report_rel/mission-report.md" ]; then
         report_exists=true
@@ -117,9 +120,9 @@ generate_readme() {
     cat > "$session_dir/README.md" <<EOF
 # $session_title
 
-**Mission**: $mission_name  
-**Status**: $status  
-**Created**: $created_at  
+**Mission**: $mission_name
+**Status**: $status
+**Created**: $created_at
 **Objective**: $objective
 
 ## Start Here
@@ -177,10 +180,28 @@ Need a different export? Use <code>src/utils/export-journal.sh</code> or rebuild
 EOF
 
     if [ "$report_exists" = false ]; then
-        cat >> "$session_dir/README.md" <<EOF
+        if [ -f "$blockers_file" ]; then
+            # Check for quality gate blockers specifically
+            local quality_blocker_count
+            quality_blocker_count=$(jq '[.[] | select(.type == "quality_gate")] | length' "$blockers_file" 2>/dev/null || echo "0")
+
+            if (( quality_blocker_count > 0 )); then
+                cat >> "$session_dir/README.md" <<EOF
+
+> ⚠️ Evidence quality remediation in progress or exhausted. Review <code>${blockers_rel}</code> for details or resume the mission.
+EOF
+            else
+                cat >> "$session_dir/README.md" <<EOF
+
+> ⚠️ Final report not found yet. Review <code>${blockers_rel}</code> for active blockers or resume the mission to finish synthesis.
+EOF
+            fi
+        else
+            cat >> "$session_dir/README.md" <<EOF
 
 > ⚠️ Final report not found yet. Check <code>${logs_rel}/</code> for blockers or resume the mission to finish synthesis.
 EOF
+        fi
     fi
 
     echo "Generated session README.md"

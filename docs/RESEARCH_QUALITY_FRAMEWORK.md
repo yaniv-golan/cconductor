@@ -118,6 +118,18 @@ Context elements to emphasize:
 4. **Maintains Transparency:** Limitations are visible, not hidden
 5. **Improves Reproducibility:** Clear documentation of constraints aids replication
 
+## Orchestration Safeguards
+
+The mission orchestrator now enforces evidence quality **before** synthesis:
+
+- Each orchestration loop calls `mission_orchestration_quality_snapshot`, which measures average trust, independent source counts, and single-source ratios using the latest knowledge graph.
+- Results are logged as `quality_status` events in `logs/events.jsonl` (see `config/schemas/events/quality-status.schema.json` for the payload contract).
+- When warnings fire, remediation attempts are tracked in `meta/orchestration-state.json` and summarized in `meta/quality-remediation-status.json`, highlighting low-trust claim IDs, recommended source types, and relevant watch topics.
+- Remediation is attempted twice by default (configurable via `quality-gate.remediation.max_attempts`). After two failures the mission proceeds with advisory status and a system warning.
+- Stakeholder classifier coverage is snapshot to `meta/stakeholder-classifier-state.json` (digest + normalized source list). Manifests expose `coverage_delta.added/removed` so operators can see which URLs changed since the last classifier pass; `stale_digest_mismatch` warnings clear automatically once the classifier reruns.
+
+These safeguards ensure syntheses only occur once evidence meets the same thresholds enforced at the quality gate, reducing late-stage failures and making remediation guidance explicit.
+
 ## Implementation
 
 This framework is implemented through:
@@ -183,4 +195,3 @@ Planned improvements to the framework:
 - Visual indicators for scope boundaries in reports
 - Cross-domain consistency validation
 - Machine-readable metadata for automated analysis
-

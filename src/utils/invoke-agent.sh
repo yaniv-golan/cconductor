@@ -277,7 +277,11 @@ _finalize_agent_output() {
 
         if [[ "$missing_count" == "-1" || "$schema_count" == "-1" || "$checksum_count" == "-1" ]]; then
             log_warn "artifact_finalize_manifest returned invalid payload for $agent_name"
-            printf '%s\n' "${manifest_json:-{}}"
+            if [[ -z "$manifest_json" ]]; then
+                printf '{}\n'
+            else
+                printf '%s\n' "$manifest_json"
+            fi
             return 2
         fi
 

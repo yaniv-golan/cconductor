@@ -564,6 +564,20 @@ Complete list of sources with URLs/references.
 
 ---
 
+## Automatic Quality Remediation
+
+When evidence quality falls below configured thresholds, CConductor automatically triggers remediation:
+
+1. The quality guard detects low-trust evidence (avg trust < 0.6, single-source claims)
+2. The `quality-remediator` agent is invoked to gather additional independent sources
+3. Remediation attempts up to `max_attempts` (default: 2) before synthesis proceeds
+4. If remediation exhausts attempts, synthesis proceeds with an advisory warning
+5. Residual risk is surfaced in `meta/synthesis-blockers.json` and session README
+
+Configure thresholds in `~/.config/cconductor/quality-gate.json` or override `max_attempts` per mission.
+
+---
+
 ## Understanding Sessions
 
 ### What is a Session?
@@ -1424,6 +1438,24 @@ Breakdown:
 - Improves coverage
 
 **Expected improvement**: +10-20 points per iteration
+
+### Evidence Trust Safeguards
+
+CConductor now reviews evidence quality **before** synthesis:
+
+- The orchestrator measures average trust, source independence, and single-source ratios each iteration.
+- If evidence is weak, the mission is redirected to a **quality remediation pass** (max two attempts) instead of building the report prematurely.
+- A brief is written to `meta/quality-remediation-status.json` listing low-trust claim IDs, source gaps, and watch-topic hints so the next research cycle knows what to fix.
+- Once trust thresholds are met, remediation counters reset and synthesis resumes automatically.
+- The stakeholder classifier writes coverage state to `meta/stakeholder-classifier-state.json`; manifests surface `coverage_delta.added/removed` so you can spot new URLs that still need classification. Re-run the classifier to clear `stale_digest_mismatch` warnings.
+
+You will see CLI messages such as:
+
+```
+↺ Evidence quality below thresholds (avg trust 0.18; warnings: average_trust_below_min). Scheduling remediation attempt 1/2.
+```
+
+Review the remediation brief (and the session dashboard) to understand which claims still need higher-trust evidence.
 
 ---
 

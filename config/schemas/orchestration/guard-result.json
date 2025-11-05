@@ -1,0 +1,47 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Guard Result",
+  "type": "object",
+  "required": ["status"],
+  "properties": {
+    "status": {
+      "type": "string",
+      "enum": ["ok", "block", "error"]
+    },
+    "blocker": {
+      "type": "string",
+      "description": "Required when status is 'block'",
+      "enum": ["watch_topics", "quality_gate", "stakeholders"]
+    },
+    "details": {
+      "type": "object",
+      "description": "Guard-specific payload providing structured context"
+    },
+    "topics": {
+      "type": "array",
+      "description": "Optional list of watch topic entries for diagnostics",
+      "items": {}
+    },
+    "suggested_action": {
+      "type": "string",
+      "enum": ["delegate_web_researcher", "trigger_remediator", "none"]
+    },
+    "message": {
+      "type": "string"
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "const": "block"
+          }
+        }
+      },
+      "then": {
+        "required": ["blocker"]
+      }
+    }
+  ]
+}

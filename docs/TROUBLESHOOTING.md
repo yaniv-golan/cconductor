@@ -2,7 +2,7 @@
 
 **Solve common issues and get research back on track**
 
-**Last Updated**: October 2025  
+**Last Updated**: October 2025
 **For**: All users
 
 ---
@@ -142,7 +142,7 @@ claude whoami
    ```bash
    # Set API key environment variable
    export ANTHROPIC_API_KEY="your-api-key"
-   
+
    # Or add to your shell profile (~/.zshrc or ~/.bashrc)
    echo 'export ANTHROPIC_API_KEY="your-api-key"' >> ~/.zshrc
    ```
@@ -813,8 +813,89 @@ cp your-papers/*.pdf pdfs/
 
 - Don't interrupt early
 - First 10 min: ~65 score
-- 20 min: ~75 score  
+- 20 min: ~75 score
 - 30+ min: ~85+ score
+
+---
+
+### Mission Redirected to Evidence Remediation
+
+**Symptoms**:
+
+- CLI prints: `↺ Evidence quality below thresholds ... Scheduling remediation attempt 1/2`
+- Synthesis is skipped and the mission asks for more research
+- `logs/events.jsonl` shows `quality_status` events with `action: "trigger_remediation"`
+
+**Cause**: The orchestrator found that current claims rely on low-trust or single-source evidence before synthesis started.
+
+**What to do**:
+
+1. **Review the remediation brief**
+   Open `meta/quality-remediation-status.json` for the session. It lists:
+   - Claim IDs that failed trust/independence checks
+   - Suggested source types (analyst, government, peer-reviewed)
+   - Related watch topics that still need coverage
+
+2. **Gather higher-trust sources**
+   Use the brief to target analyst reports, government datasets, SEC filings, or peer-reviewed material. You can add PDFs to the session or let web-researcher hunt for them.
+
+3. **Resume the mission**
+   ```
+   ./cconductor resume mission_id
+   ```
+   The orchestrator will rerun remediation (max two attempts) and resume synthesis once thresholds are satisfied.
+
+4. **Exhausted attempts?**
+   If you see `⚠ Evidence quality remains below thresholds after X remediation attempt(s)` the mission will continue with advisory status. Review the briefing and manually supplement evidence before relying on the report.
+
+---
+
+### Quality Guard Blocking Synthesis
+
+**Symptom**: Mission defers synthesis with message "Evidence quality below thresholds"
+
+**Diagnosis**:
+
+1. Check `meta/synthesis-blockers.json` for quality_gate entries
+2. Review `meta/quality-remediation-status.json` for low-trust claims
+3. Inspect `logs/orchestration.jsonl` for remediation attempts
+
+**Resolution**:
+
+- **Automatic**: Wait for remediation loop to complete (up to 2 attempts by default)
+- **Manual**: Review low-trust claims and gather independent sources manually
+- **Override**: Adjust `~/.config/cconductor/quality-gate.json`:
+  ```json
+  {
+    "remediation": {
+      "max_attempts": 3,
+      "enabled": false
+    }
+  }
+  ```
+- **Resume**: Run `./cconductor resume <session_id>` after adding evidence manually
+
+---
+
+### Stakeholder Classifier Appears Stale
+
+**Symptoms**:
+
+- `session-manifest: stakeholder classifications stale_digest_mismatch; pending_sources=0 (added=2, removed=0)`
+- Dashboard shows `stakeholder_classifier.status = "stale_digest_mismatch"`
+- `meta/stakeholder-classifier-state.json` exists but predates the latest research pass
+
+**Cause**: The knowledge graph's normalized source list differs from the digest stored in `meta/stakeholder-classifier-state.json`. The warning reports how many URLs were added or removed since the classifier last wrote state.
+
+**What to do**:
+
+1. Re-run the classifier:
+   `./src/utils/stakeholder-classifier.sh <session_dir>`
+2. Verify the state file updates (`kg_iteration`, `kg_source_count`, and `sources` array match the current KG).
+3. Rebuild the manifest/state snapshots:
+   `./src/utils/session-manifest-builder.sh <session_dir>` and `./src/utils/mission-state-builder.sh <session_dir>`
+
+If the warning persists, inspect `coverage_delta.added/removed` in `meta/session-manifest.json` to see which URLs still need classification.
 
 ---
 

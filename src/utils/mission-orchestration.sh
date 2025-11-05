@@ -252,7 +252,7 @@ prepare_orchestrator_context() {
     local mission_profile="$2"
     local iteration="$3"
     trace_function "$@"
-    
+
     # Ensure agent registry is initialized before exporting
     if declare -F agent_registry_init >/dev/null; then
         local registry_count=0
@@ -284,7 +284,7 @@ prepare_orchestrator_context() {
             agents_json="$fallback_agents"
         fi
     fi
-    
+
     local bash_runtime="${CCONDUCTOR_BASH_RUNTIME:-$(command -v bash)}"
     if ! "$bash_runtime" "$PROJECT_ROOT/src/utils/mission-state-builder.sh" "$session_dir"; then
         echo "✗ Error: Failed to build mission state summary" >&2
@@ -382,11 +382,11 @@ invoke_mission_orchestrator() {
             "payload_snippet=${context_json:0:200}"
         return 1
     fi
-    
+
     # Write context to temp file
     local context_file="$session_dir/meta/orchestrator-context.json"
     echo "$context_json" > "$context_file"
-    
+
     # Build domain compliance block for orchestrator context
     local domain_compliance_section
     domain_compliance_section=$(
@@ -508,27 +508,27 @@ For early_exit:
 Log your decision and explain your reasoning.
 EOF
 )
-    
+
     # Write user message to input file
     local input_file="$session_dir/meta/orchestrator-input.txt"
     echo "$user_message" > "$input_file"
-    
+
     # Setup orchestrator agent in session if not already there
     local orchestrator_agent_file="$session_dir/.claude/agents/mission-orchestrator.json"
     if [[ ! -f "$orchestrator_agent_file" ]]; then
         mkdir -p "$session_dir/.claude/agents"
-        
+
         # Calculate orchestrator directory relative to this script
         # This script is in src/utils/, orchestrator is in src/claude-runtime/agents/mission-orchestrator
         local orchestrator_dir
         orchestrator_dir="$(cd "$UTILS_DIR/../claude-runtime/agents/mission-orchestrator" && pwd)"
         local system_prompt
         system_prompt=$(cat "$orchestrator_dir/system-prompt.md")
-        
+
             # Get model from metadata or use default
             local model
             model=$(safe_jq_from_file "$orchestrator_dir/metadata.json" '.model // "claude-sonnet-4-5"' "claude-sonnet-4-5" "$session_dir" "orchestrator.metadata.model")
-            
+
             # Create agent definition
             jq -n \
                 --arg prompt "$system_prompt" \
@@ -538,16 +538,16 @@ EOF
                     "model": $model
                 }' > "$orchestrator_agent_file"
     fi
-    
+
     # Invoke agent
     local output_file="$session_dir/meta/orchestrator-output.json"
-    
+
     # Source invoke-agent utility unless test harness has already provided a stub
     if ! declare -F invoke_agent_v2 >/dev/null 2>&1; then
         # shellcheck disable=SC1091
         source "$UTILS_DIR/invoke-agent.sh"
     fi
-    
+
     local work_dir="$session_dir/work/mission-orchestrator"
     local manifest_path="$work_dir/manifest.actual.json"
     local decision_artifact_rel="artifacts/mission-orchestrator/decision.json"
@@ -564,7 +564,7 @@ EOF
         rm -f "$decision_backup_path"
         mv "$decision_artifact_path" "$decision_backup_path"
     fi
-    
+
     if invoke_agent_v2 "mission-orchestrator" "$input_file" "$output_file" 600 "$session_dir"; then
         local decision_json=""
         local manifest_present=false
@@ -712,13 +712,13 @@ _invoke_delegated_agent() {
     local task="$3"
     local context="$4"
     local input_artifacts="$5"  # JSON array
-    
+
     # Validate inputs
     if [[ -z "$session_dir" || -z "$agent_name" || -z "$task" ]]; then
         echo "  ✗ Invalid arguments to _invoke_delegated_agent" >&2
         return 1
     fi
-    
+
     if [[ ! -d "$session_dir" ]]; then
         echo "  ✗ Session directory does not exist: $session_dir" >&2
         return 1
@@ -765,7 +765,7 @@ _invoke_delegated_agent() {
     local task_display
     task_display=$(printf '%s' "$task" | tr '\n' ' ' | cut -c1-150 | sed 's/[`$"\\]/\\&/g')
     export CCONDUCTOR_TASK_DESC="$task_display"
-    
+
     # Normalize artifact paths (convert absolute session paths to relative)
     if [[ -n "$input_artifacts" && "$input_artifacts" != "[]" ]] && jq_validate_json "$input_artifacts"; then
         local normalized_artifacts
@@ -819,7 +819,7 @@ _invoke_delegated_agent() {
             artifacts_section="$input_artifacts (format error - expected JSON array)"
         fi
     fi
-    
+
     # Add output specification for synthesis-agent
     local output_spec_section=""
     if [[ "$agent_name" == "synthesis-agent" ]]; then
@@ -834,7 +834,7 @@ SPEC_EOF
 )
         fi
     fi
-    
+
     local context_section=""
     if [[ -n "$context" && "$context" != "null" ]]; then
         context_section=$'\n''## Context\n'"$context"$'\n'
@@ -877,12 +877,12 @@ $task${context_section}
 $artifacts_section${output_spec_section}${cache_section}
 EOF
 )
-    
+
     # Write input to agent-specific work directory
     mkdir -p "$session_dir/work/$agent_name"
     local agent_input_file="$session_dir/work/$agent_name/input.txt"
     echo "$agent_input" > "$agent_input_file"
-    
+
     # Setup agent in session if not already there
     local agent_file="$session_dir/.claude/agents/${agent_name}.json"
     if [[ ! -f "$agent_file" ]]; then
@@ -890,18 +890,18 @@ EOF
         if agent_registry_exists "$agent_name"; then
             local agent_metadata
             agent_metadata=$(agent_registry_get "$agent_name")
-            
+
             # Load system prompt
             local agent_dir
             agent_dir=$(dirname "$agent_metadata")
             local system_prompt
             system_prompt=$(cat "$agent_dir/system-prompt.md" 2>/dev/null || echo "")
-            
+
             if [[ -n "$system_prompt" ]]; then
                 # Get model from agent metadata or use default
                 local agent_model
                 agent_model=$(safe_jq_from_file "$agent_metadata" '.model // "claude-sonnet-4-5"' "claude-sonnet-4-5" "$session_dir" "agent_registry.model")
-                
+
                 # Create agent definition
                 mkdir -p "$session_dir/.claude/agents"
                 jq -n \
@@ -920,17 +920,17 @@ EOF
             return 1
         fi
     fi
-    
+
     # Invoke agent - output to agent-specific work directory
     local agent_output_file="$session_dir/work/$agent_name/output.json"
-    
+
     # Source invoke-agent utility
     # shellcheck disable=SC1091
     source "$UTILS_DIR/invoke-agent.sh"
-    
+
     local start_time
     start_time=$(get_epoch)
-    
+
     local invocation_status=0
     if [[ "$supports_sessions" == "true" ]]; then
         if has_agent_session "$agent_name" "$session_dir"; then
@@ -958,13 +958,13 @@ EOF
         local end_time
         end_time=$(get_epoch)
         local duration=$((end_time - start_time))
-        
+
         echo "  ✓ $agent_name completed ($duration seconds)"
-        
+
         # Extract cost from agent output
         local cost
         cost=$(extract_cost_from_output "$agent_output_file")
-        
+
         local manifest_path="$session_dir/work/$agent_name/manifest.actual.json"
         if [[ -f "$manifest_path" ]]; then
             if ! artifact_register_from_manifest "$session_dir" "$agent_name" "$manifest_path"; then
@@ -976,7 +976,7 @@ EOF
 
         # Record budget with real cost
         budget_record_invocation "$session_dir" "$agent_name" "$cost" "$duration"
-        
+
         return 0
     else
         local exit_code=$invocation_status
@@ -993,16 +993,16 @@ EOF
 process_agent_kg_artifacts() {
     local session_dir="$1"
     local agent="$2"
-    
+
     # Check if agent created a KG lock file
     local lock_file="$session_dir/${agent}.kg.lock"
     if [ ! -f "$lock_file" ]; then
         # No artifacts to process
         return 0
     fi
-    
+
     verbose "Processing knowledge graph artifacts from $agent..."
-    
+
     # Process artifacts using kg-artifact-processor
     if process_kg_artifacts "$session_dir" "$agent"; then
         verbose "  ✓ Successfully processed $agent artifacts"
@@ -1042,6 +1042,34 @@ emit_academic_researcher_argument_events() {
     return 0
 }
 
+normalize_synthesis_key_findings() {
+    local session_dir="$1"
+    local key_file="$session_dir/artifacts/synthesis-agent/key-findings.json"
+
+    if [[ ! -f "$key_file" ]]; then
+        return 0
+    fi
+
+    local tmp_file
+    tmp_file=$(mktemp "${key_file}.tmp.XXXXXX") || return 1
+
+    if ! jq '
+        def normalize_conf:
+          if type == "number" then .
+          else
+            (try (tonumber) catch (try (capture("(?<num>[0-9]*\\.?[0-9]+)") | .num | tonumber) catch .))
+          end;
+        (.well_supported_claims[]?.confidence |= normalize_conf) |
+        (.partially_supported_claims[]?.confidence |= normalize_conf)
+    ' "$key_file" >"$tmp_file"; then
+        rm -f "$tmp_file"
+        return 1
+    fi
+
+    mv "$tmp_file" "$key_file"
+    return 0
+}
+
 validate_synthesis_artifact() {
     local session_dir="$1"
     local artifact="$2"
@@ -1056,6 +1084,13 @@ validate_synthesis_artifact() {
     if [[ ! -f "$schema_path" ]]; then
         log_error "synthesis validation: schema not found for ${artifact} (expected $schema_path)"
         return 1
+    fi
+
+    if [[ "$artifact" == "key-findings" ]]; then
+        if ! normalize_synthesis_key_findings "$session_dir"; then
+            log_error "synthesis validation: failed to normalize key-findings.json prior to validation"
+            return 1
+        fi
     fi
 
     if ! CCONDUCTOR_SESSION_DIR="$session_dir" json_validate_with_schema "$schema_path" "$artifact_path"; then
@@ -1124,28 +1159,28 @@ validate_required_synthesis_artifacts() {
 validate_synthesis_outputs() {
     local session_dir="$1"
     local agent="$2"
-    
+
     # Only validate for synthesis-agent
     if [ "$agent" != "synthesis-agent" ]; then
         return 0
     fi
-    
+
     local mission_report="$session_dir/report/mission-report.md"
-    
+
     # Check mission report exists
     if [ ! -f "$mission_report" ]; then
         echo "  ⚠️  Warning: synthesis-agent did not create report/mission-report.md" >&2
         return 1
     fi
-    
+
     # Check if incremental sections were created (indicates tool calls were made)
     local sections_dir="$session_dir/report/sections"
     local section_plan="$session_dir/work/synthesis-agent/section-plan.json"
-    
+
     if [[ -f "$section_plan" ]]; then
         echo "  ✓ Synthesis used incremental workflow (section plan found)" >&2
     fi
-    
+
     if [[ -d "$sections_dir" ]]; then
         local section_count
         section_count=$(find "$sections_dir" -name "*.md" -type f 2>/dev/null | wc -l | tr -d ' ')
@@ -1157,14 +1192,14 @@ validate_synthesis_outputs() {
     else
         echo "  ✓ Synthesis outputs validated (report/mission-report.md)" >&2
     fi
-    
+
     return 0
 }
 
 # Extract JSON decision from orchestrator output (may include text + JSON)
 extract_orchestrator_decision() {
     local orchestrator_output="$1"
-    
+
     # Use the battle-tested json-parser utilities
     local extracted_json
     if extracted_json=$(extract_json_from_text "$orchestrator_output" 2>/dev/null); then
@@ -1176,7 +1211,7 @@ extract_orchestrator_decision() {
             return 0
         fi
     fi
-    
+
     # Could not extract valid decision JSON with action field
     return 1
 }
@@ -1265,19 +1300,19 @@ get_agent_display_name() {
     local agent_name="$1"
     local session_dir="${2:-}"
     local friendly_name=""
-    
+
     if [[ -n "$session_dir" ]]; then
         local metadata_file="$session_dir/.claude/agents/${agent_name}/metadata.json"
         if [[ -f "$metadata_file" ]]; then
             friendly_name=$(safe_jq_from_file "$metadata_file" '.display_name // empty' "" "$session_dir" "agent_metadata.display_name")
         fi
     fi
-    
+
     if [[ -z "$friendly_name" ]]; then
         # Fallback: convert hyphens to spaces
         friendly_name="${agent_name//-/ }"
     fi
-    
+
     echo "$friendly_name"
 }
 
@@ -1286,7 +1321,7 @@ process_orchestrator_decisions() {
     local session_dir="$1"
     local orchestrator_output="$2"
     local stream_file="${3:-}"
-    
+
     # Extract decision JSON from output (may include prose)
     local decision_json
     if ! decision_json=$(resolve_orchestrator_decision "$session_dir" "$orchestrator_output" "$stream_file"); then
@@ -1298,11 +1333,11 @@ process_orchestrator_decisions() {
         log_decision "$session_dir" "invalid_output" "$(echo "$orchestrator_output" | head -c 500)"
         return 1
     fi
-    
+
     # Parse decision from extracted JSON
     local decision_action
     decision_action=$(safe_jq_from_json "$decision_json" '.action // ""' "" "$session_dir" "orchestrator.decision.action")
-    
+
     # Verbose: Show what the orchestrator decided
     if [[ "${CCONDUCTOR_VERBOSE:-0}" == "1" ]]; then
         case "$decision_action" in
@@ -1322,7 +1357,7 @@ process_orchestrator_decisions() {
                 ;;
         esac
     fi
-    
+
     case "$decision_action" in
         invoke)
             local agent_name
@@ -1342,7 +1377,7 @@ process_orchestrator_decisions() {
             fi
             debug "Invoking agent $agent_name (attempt $attempt_num)"
             debug "Synthesis evaluation: needs_synthesis=$needs_synthesis"
-            
+
             # Log the decision with proper format for journal export
             local rationale
             rationale=$(safe_jq_from_json "$decision_json" '.rationale // ""' "" "$session_dir" "orchestrator.decision.rationale")
@@ -1350,7 +1385,7 @@ process_orchestrator_decisions() {
             alternatives=$(safe_jq_from_json "$decision_json" '.alternatives_considered // []' '[]' "$session_dir" "orchestrator.decision.alternatives" false)
             local expected_impact
             expected_impact=$(safe_jq_from_json "$decision_json" '.expected_impact // ""' "" "$session_dir" "orchestrator.decision.expected_impact")
-            
+
             local decision_log_entry
             decision_log_entry=$(jq -n \
                 --arg agent "$agent_name" \
@@ -1371,12 +1406,24 @@ process_orchestrator_decisions() {
                     }
                 }')
             log_decision "$session_dir" "agent_invocation" "$decision_log_entry"
-            
+
             # For synthesis-agent, run quality gate first
             if [[ "$agent_name" == "synthesis-agent" ]]; then
-                if ! mission_orchestration_check_watch_topics "$session_dir"; then
-                    echo "↺ Re-queuing research tasks to satisfy critical watch topics." >&2
+                local watch_guard_output
+                if ! watch_guard_output=$(mission_orchestration_check_watch_topics "$session_dir"); then
+                    log_error "watch-topic guard failed to execute for synthesis"
+                    echo "⚠ Watch-topic guard failed; aborting synthesis invocation." >&2
+                    return 1
+                fi
+                local guard_rc
+                mission_orchestration_handle_guard_result "$session_dir" "watch_topics" "$watch_guard_output"
+                guard_rc=$?
+                if (( guard_rc == 2 )); then
                     return 0
+                elif (( guard_rc != 0 )); then
+                    log_error "watch-topic guard produced invalid status for synthesis"
+                    echo "⚠ Watch-topic guard reported an unrecoverable error; aborting synthesis invocation." >&2
+                    return 1
                 fi
                 if ! mission_orchestration_check_stakeholder_classifier "$session_dir"; then
                     echo "↺ Re-running stakeholder classification before synthesis." >&2
@@ -1386,6 +1433,29 @@ process_orchestrator_decisions() {
                     echo "↺ Re-queuing research tasks to satisfy independent domain requirement." >&2
                     return 0
                 fi
+
+                # Check quality gate using guard contract
+                if ! quality_guard_output=$(mission_orchestration_quality_guard "$session_dir"); then
+                    log_error "quality guard failed to execute for synthesis"
+                    echo "⚠ Quality guard failed; aborting synthesis invocation." >&2
+                    return 1
+                fi
+
+                # Delegate to guard handler (validates, records blockers, returns exit codes)
+                local guard_rc
+                mission_orchestration_handle_guard_result "$session_dir" "quality_gate" "$quality_guard_output"
+                guard_rc=$?
+
+                if (( guard_rc == 2 )); then
+                    # Guard blocked synthesis - defer and continue research loop
+                    return 0
+                elif (( guard_rc != 0 )); then
+                    log_error "quality guard produced invalid status for synthesis"
+                    echo "⚠ Quality guard reported an unrecoverable error; aborting synthesis invocation." >&2
+                    return 1
+                fi
+
+                # Quality guard passed - proceed to quality assurance cycle
                 local gate_iteration="${iteration:-unknown}"
                 debug "Checking quality gate: iteration=$gate_iteration"
                 echo "→ Running quality gate before synthesis..."
@@ -1399,7 +1469,7 @@ process_orchestrator_decisions() {
                     else
                         gate_mode="advisory"
                     fi
-                    
+
                     if [[ "$gate_mode" == "advisory" ]]; then
                         echo "⚠ Quality gate flagged claims (advisory mode - proceeding with synthesis)" >&2
                         # Log but don't block
@@ -1417,15 +1487,24 @@ process_orchestrator_decisions() {
                     echo "  ✓ Quality gate passed, proceeding with synthesis"
                 fi
             fi
-            
+
             # Actually invoke the agent - handle failures gracefully
-            if _invoke_delegated_agent "$session_dir" "$agent_name" "$task" "$context" "$input_artifacts"; then
+            local invoke_status=0
+            if ! _invoke_delegated_agent "$session_dir" "$agent_name" "$task" "$context" "$input_artifacts"; then
+                invoke_status=$?
+            fi
+
+            if [[ "$agent_name" == "synthesis-agent" ]]; then
+                mission_orchestration_increment_synthesis_attempts "$session_dir" || true
+            fi
+
+            if [[ "$invoke_status" -eq 0 ]]; then
                 # Process KG artifacts if agent produced any
                 process_agent_kg_artifacts "$session_dir" "$agent_name"
                 if [[ "$agent_name" == "academic-researcher" ]]; then
                     emit_academic_researcher_argument_events "$session_dir" || true
                 fi
-                
+
                 # Validate synthesis outputs if applicable
                 local synthesis_artifacts_valid=1
                 if [[ "$agent_name" == "synthesis-agent" ]]; then
@@ -1442,8 +1521,8 @@ process_orchestrator_decisions() {
                         "$(echo "$orchestrator_output" | jq --arg reason "Outputs incomplete" '. + {failure_reason: $reason}')"
                 fi
             else
-                local exit_code=$?
-                
+                local exit_code="$invoke_status"
+
                 # Check for timeout (exit code 124)
                 if [[ $exit_code -eq 124 ]]; then
                     echo "  ⚠ Agent $agent_name timed out (no activity) - orchestrator will adapt" >&2
@@ -1459,7 +1538,7 @@ process_orchestrator_decisions() {
                 fi
             fi
             ;;
-            
+
         reinvoke)
             local agent_name
             agent_name=$(echo "$decision_json" | jq -r '.agent')
@@ -1467,7 +1546,7 @@ process_orchestrator_decisions() {
             reason=$(echo "$decision_json" | jq -r '.reason')
             local refinements
             refinements=$(echo "$decision_json" | jq -r '.refinements // "Please provide more detail"')
-            
+
             # Validate refinements don't contain file-writing instructions
             # These confuse research agents since they're designed to return JSON, not write files
             if echo "$refinements" | grep -Eqi "write.*(knowledge-graph|file|findings)|write tool|create.*file|save to"; then
@@ -1477,15 +1556,15 @@ process_orchestrator_decisions() {
                 log_warn "Refinements: ${refinements:0:200}..."
                 # Continue anyway - let orchestrator learn from the response
             fi
-            
+
             log_decision "$session_dir" "agent_reinvocation" "$orchestrator_output"
             debug "Agent reinvocation: agent=$agent_name, reason=$reason"
-            
+
             # Re-invoke with refinements - handle failures
             if _invoke_delegated_agent "$session_dir" "$agent_name" "$refinements" "$reason" "[]"; then
                 # Process KG artifacts if agent produced any
                 process_agent_kg_artifacts "$session_dir" "$agent_name"
-                
+
                 log_decision "$session_dir" "agent_reinvocation_success" "$orchestrator_output"
             else
                 echo "  ⚠ Agent $agent_name re-invocation failed" >&2
@@ -1493,7 +1572,7 @@ process_orchestrator_decisions() {
                     "$(echo "$orchestrator_output" | jq --arg reason "Re-invocation failed" '. + {failure_reason: $reason}')"
             fi
             ;;
-            
+
         handoff)
             local from_agent
             from_agent=$(safe_jq_from_json "$decision_json" '.from_agent // ""' "" "$session_dir" "orchestrator.decision.from_agent")
@@ -1505,15 +1584,15 @@ process_orchestrator_decisions() {
             input_artifacts=$(safe_jq_from_json "$decision_json" '.input_artifacts // []' '[]' "$session_dir" "orchestrator.decision.handoff_artifacts" false)
             local rationale
             rationale=$(safe_jq_from_json "$decision_json" '.rationale // "Handoff requested"' "Handoff requested" "$session_dir" "orchestrator.decision.handoff_rationale")
-            
+
             # Log handoff decision (tracking is done via orchestration log)
             log_agent_handoff "$session_dir" "$from_agent" "$to_agent" "$orchestrator_output"
-            
+
             # Invoke receiving agent - handle failures
             if _invoke_delegated_agent "$session_dir" "$to_agent" "$task" "$rationale" "$input_artifacts"; then
                 # Process KG artifacts if agent produced any
                 process_agent_kg_artifacts "$session_dir" "$to_agent"
-                
+
                 log_decision "$session_dir" "handoff_success" "$orchestrator_output"
             else
                 echo "  ⚠ Handoff failed - agent $to_agent did not complete" >&2
@@ -1521,23 +1600,23 @@ process_orchestrator_decisions() {
                     "$(echo "$orchestrator_output" | jq --arg reason "Handoff target failed" '. + {failure_reason: $reason}')"
             fi
             ;;
-            
+
         early_exit)
             local reason
             reason=$(safe_jq_from_json "$decision_json" '.reason // ""' "" "$session_dir" "orchestrator.decision.early_exit_reason")
-            
+
             mkdir -p "$session_dir/meta"
             touch "$session_dir/meta/mission-early-exit.flag" 2>/dev/null || true
             log_decision "$session_dir" "early_exit" "$orchestrator_output"
             return 2  # Signal early exit
             ;;
-            
+
         *)
             echo "⚠️  Warning: Unknown decision action: $decision_action" >&2
             log_decision "$session_dir" "unknown_action" "$orchestrator_output"
             ;;
     esac
-    
+
     return 0
 }
 
@@ -1621,17 +1700,17 @@ update_aeg_quality_summary() {
 # Run quality gate on knowledge graph and argument graph
 run_quality_gate() {
     local session_dir="$1"
-    
+
     # Check if quality gate script exists
     if [[ ! -f "$PROJECT_ROOT/src/claude-runtime/hooks/quality-gate.sh" ]]; then
         log_warn "Quality gate script not found, skipping quality check"
         return 0  # Don't block if gate doesn't exist
     fi
-    
+
     # Run quality gate (always succeeds in advisory mode, so check JSON output)
     local bash_runtime="${CCONDUCTOR_BASH_RUNTIME:-$(command -v bash)}"
     "$bash_runtime" "$PROJECT_ROOT/src/claude-runtime/hooks/quality-gate.sh" "$session_dir" > /dev/null 2>&1
-    
+
     # Check actual status from the summary file
     local summary_file="$session_dir/artifacts/quality-gate-summary.json"
     local status="unknown"
@@ -1786,6 +1865,651 @@ mission_orchestration_check_independent_sources() {
     return 1
 }
 
+mission_orchestration_quality_snapshot() {
+    local session_dir="$1"
+
+    if [[ -z "$session_dir" ]]; then
+        jq -n '{status: "error", metrics: {}, message: "session_dir required"}'
+        return 1
+    fi
+
+    local kg_file
+    kg_file=$(kg_get_path "$session_dir")
+    if [[ -z "$kg_file" || ! -f "$kg_file" ]]; then
+        jq -n '{status: "no_kg", metrics: {}}'
+        return 0
+    fi
+
+    local quality_config="{}"
+    if command -v load_config >/dev/null 2>&1; then
+        quality_config=$(load_config "quality-gate" 2>/dev/null || echo '{}')
+    fi
+
+    local min_trust
+    min_trust=$(printf '%s\n' "$quality_config" | jq -r '.thresholds.min_trust_score // empty')
+    if [[ -z "$min_trust" || "$min_trust" == "null" ]]; then
+        min_trust="0.7"
+    fi
+
+    local min_sources
+    min_sources=$(printf '%s\n' "$quality_config" | jq -r '.thresholds.min_sources_per_claim // empty')
+    if [[ -z "$min_sources" || "$min_sources" == "null" ]]; then
+        min_sources="2"
+    fi
+
+    local min_independent
+    min_independent=$(printf '%s\n' "$quality_config" | jq -r '.thresholds.min_independent_sources // empty')
+    if [[ -z "$min_independent" || "$min_independent" == "null" ]]; then
+        min_independent="$min_sources"
+    fi
+
+    local max_single_ratio
+    max_single_ratio=$(printf '%s\n' "$quality_config" | jq -r '.thresholds.max_single_source_ratio // empty')
+    if [[ -z "$max_single_ratio" || "$max_single_ratio" == "null" ]]; then
+        max_single_ratio="0.3"
+    fi
+
+    python3 - "$session_dir" "$kg_file" "$min_trust" "$min_sources" "$min_independent" "$max_single_ratio" <<'PY'
+import json
+import sys
+
+session_dir, kg_path, min_trust, min_sources, min_independent, max_single_ratio = sys.argv[1:7]
+
+try:
+    with open(kg_path, "r", encoding="utf-8") as handle:
+        kg = json.load(handle)
+except FileNotFoundError:
+    json.dump({"status": "no_kg", "metrics": {}}, sys.stdout)
+    sys.exit(0)
+
+claims = kg.get("claims", [])
+total_claims = len(claims)
+
+trust_values = []
+compliant_count = 0
+single_source_count = 0
+
+min_trust = float(min_trust)
+min_sources = int(float(min_sources))
+min_independent = int(float(min_independent))
+max_single_ratio = float(max_single_ratio)
+
+for claim in claims:
+    gate = claim.get("quality_gate_assessment") or {}
+    trust_score = gate.get("trust_score")
+    independent_sources = gate.get("independent_source_count")
+
+    if trust_score is not None:
+        trust_values.append(float(trust_score))
+    trust = float(trust_score or 0)
+    independent = int(independent_sources or 0)
+    sources = claim.get("sources") or []
+    total_sources = len(sources)
+
+    if trust >= min_trust:
+        compliant_count += 1
+    if independent < min_independent or total_sources < min_sources:
+        single_source_count += 1
+
+claims_with_trust = len(trust_values)
+average_trust = sum(trust_values) / claims_with_trust if claims_with_trust else 0.0
+single_source_ratio = (single_source_count / total_claims) if total_claims else 0.0
+
+warnings = []
+if total_claims == 0:
+    warnings.append("no_claims")
+if total_claims > 0 and average_trust < min_trust:
+    warnings.append("average_trust_below_min")
+if total_claims > 0 and compliant_count < total_claims:
+    warnings.append("insufficient_compliant_claims")
+if total_claims > 0 and single_source_ratio > max_single_ratio:
+    warnings.append("single_source_ratio_high")
+
+if "no_claims" in warnings:
+    status = "no_claims"
+elif warnings:
+    status = "warn"
+else:
+    status = "ok"
+
+output = {
+    "status": status,
+    "metrics": {
+        "total_claims": total_claims,
+        "claims_with_trust": claims_with_trust,
+        "compliant_claims": compliant_count,
+        "single_source_claims": single_source_count,
+        "average_trust": round(average_trust, 4),
+        "single_source_ratio": round(single_source_ratio, 4),
+        "thresholds": {
+            "min_trust_score": min_trust,
+            "min_sources_per_claim": min_sources,
+            "min_independent_sources": min_independent,
+            "max_single_source_ratio": max_single_ratio,
+        },
+        "warnings": warnings,
+    },
+}
+
+json.dump(output, sys.stdout)
+sys.stdout.write("\n")
+PY
+}
+
+mission_orchestration_state_file() {
+    local session_dir="$1"
+    echo "$session_dir/meta/orchestration-state.json"
+}
+
+mission_orchestration_get_quality_remediation_attempts() {
+    local session_dir="$1"
+    local state_file
+    state_file=$(mission_orchestration_state_file "$session_dir")
+
+    if [[ -f "$state_file" ]]; then
+        local attempts
+        attempts=$(safe_jq_from_file "$state_file" '.quality_remediation_attempts // 0' "0" "$session_dir" "quality_state.remediation_attempts")
+        attempts=${attempts:-0}
+        if [[ -z "$attempts" || "$attempts" == "null" ]]; then
+            attempts=0
+        fi
+        echo "$attempts"
+    else
+        echo "0"
+    fi
+}
+
+mission_orchestration_set_quality_remediation_attempts() {
+    local session_dir="$1"
+    local attempts_value="$2"
+
+    if [[ -z "$attempts_value" ]]; then
+        attempts_value=0
+    fi
+
+    local state_file
+    state_file=$(mission_orchestration_state_file "$session_dir")
+    mkdir -p "$session_dir/meta"
+    if [[ ! -f "$state_file" ]]; then
+        echo '{}' >"$state_file"
+    fi
+
+# shellcheck disable=SC2016
+    atomic_json_update "$state_file" \
+        --argjson attempts "$attempts_value" \
+        '.quality_remediation_attempts = $attempts' >/dev/null 2>&1 || return 1
+
+    return 0
+}
+
+mission_orchestration_guard_schema_path() {
+    echo "$PROJECT_ROOT/config/schemas/orchestration/guard-result.json"
+}
+
+mission_orchestration_guard_result() {
+    local status="$1"
+    shift || true
+
+    if [[ -z "$status" ]]; then
+        log_error "guard result requires status"
+        return 1
+    fi
+
+    local extra_json='{}'
+    if (( $# > 0 )); then
+        extra_json="$1"
+    fi
+
+    if [[ -z "$extra_json" ]]; then
+        extra_json='{}'
+    fi
+
+    jq -n --arg status "$status" --argjson extra "$extra_json" '
+        ({status: $status}) + ($extra // {})
+    '
+}
+
+mission_orchestration_get_synthesis_attempts() {
+    local session_dir="$1"
+    local state_file
+    state_file=$(mission_orchestration_state_file "$session_dir")
+
+    if [[ ! -f "$state_file" ]]; then
+        echo "0"
+        return 0
+    fi
+
+    local attempts
+    attempts=$(safe_jq_from_file "$state_file" '.synthesis_attempts // 0' "0" "$session_dir" "synthesis_state.attempts")
+    attempts=${attempts:-0}
+    if [[ -z "$attempts" || "$attempts" == "null" ]]; then
+        attempts=0
+    fi
+    echo "$attempts"
+}
+
+mission_orchestration_set_synthesis_attempts() {
+    local session_dir="$1"
+    local attempts_value="${2:-0}"
+
+    local state_file
+    state_file=$(mission_orchestration_state_file "$session_dir")
+    mkdir -p "$session_dir/meta"
+    if [[ ! -f "$state_file" ]]; then
+        echo '{}' >"$state_file"
+    fi
+
+# shellcheck disable=SC2016
+    atomic_json_update "$state_file" \
+        --argjson attempts "$attempts_value" \
+        '.synthesis_attempts = (($attempts | tonumber?) // 0)' >/dev/null 2>&1 || return 1
+
+    return 0
+}
+
+mission_orchestration_increment_synthesis_attempts() {
+    local session_dir="$1"
+    local current
+    current=$(mission_orchestration_get_synthesis_attempts "$session_dir")
+    current=$((current + 1))
+    mission_orchestration_set_synthesis_attempts "$session_dir" "$current"
+}
+
+mission_orchestration_get_blockers() {
+    local session_dir="$1"
+    local state_file
+    state_file=$(mission_orchestration_state_file "$session_dir")
+
+    if [[ ! -f "$state_file" ]]; then
+        echo '[]'
+        return 0
+    fi
+
+    local blockers
+    blockers=$(safe_jq_from_file "$state_file" '.synthesis_blockers // []' '[]' "$session_dir" "synthesis_state.blockers" false)
+    if [[ -z "$blockers" || "$blockers" == "null" ]]; then
+        blockers='[]'
+    fi
+    printf '%s\n' "$blockers"
+}
+
+mission_orchestration_has_blockers() {
+    local session_dir="$1"
+    local blockers
+    blockers=$(mission_orchestration_get_blockers "$session_dir")
+    if [[ -z "$blockers" ]]; then
+        return 1
+    fi
+    if jq -e 'length > 0' >/dev/null 2>&1 <<<"$blockers"; then
+        return 0
+    fi
+    return 1
+}
+
+mission_orchestration_write_blocker_summary() {
+    local session_dir="$1"
+    local blockers_json="${2:-}"
+    local summary_file="$session_dir/meta/synthesis-blockers.json"
+
+    if [[ -z "$blockers_json" ]]; then
+        blockers_json=$(mission_orchestration_get_blockers "$session_dir")
+    fi
+
+    if [[ -z "$blockers_json" || "$blockers_json" == "null" ]]; then
+        blockers_json='[]'
+    fi
+
+    if ! jq -e 'length > 0' >/dev/null 2>&1 <<<"$blockers_json"; then
+        rm -f "$summary_file" 2>/dev/null || true
+        return 0
+    fi
+
+    local payload
+    payload=$(jq -n \
+        --arg generated "$(get_timestamp)" \
+        --argjson blockers "$blockers_json" \
+        '{generated_at: $generated, blockers: $blockers}')
+
+    local tmp
+    tmp=$(mktemp "${summary_file}.tmp.XXXXXX")
+    printf '%s\n' "$payload" | jq '.' >"$tmp"
+    mv "$tmp" "$summary_file"
+}
+
+mission_orchestration_update_blockers() {
+    local session_dir="$1"
+    local updated_blockers="$2"
+    local state_file
+    state_file=$(mission_orchestration_state_file "$session_dir")
+    mkdir -p "$session_dir/meta"
+    if [[ ! -f "$state_file" ]]; then
+        echo '{}' >"$state_file"
+    fi
+
+# shellcheck disable=SC2016
+    if ! atomic_json_update "$state_file" \
+        --argjson blockers "$updated_blockers" \
+        '.synthesis_blockers = ($blockers // [])' >/dev/null 2>&1; then
+        return 1
+    fi
+
+    mission_orchestration_write_blocker_summary "$session_dir" "$updated_blockers"
+}
+
+mission_orchestration_add_blocker() {
+    local session_dir="$1"
+    local blocker_type="$2"
+    local guard_json="$3"
+
+    if [[ -z "$session_dir" || -z "$blocker_type" ]]; then
+        return 1
+    fi
+
+    local existing
+    existing=$(mission_orchestration_get_blockers "$session_dir")
+    if [[ -z "$existing" || "$existing" == "null" ]]; then
+        existing='[]'
+    fi
+
+    local detected
+    detected=$(get_timestamp)
+
+    local fallback_action="none"
+    local fallback_message=""
+    case "$blocker_type" in
+        watch_topics)
+            fallback_action="delegate_web_researcher"
+            fallback_message="Critical watch topics pending coverage."
+            ;;
+    esac
+
+    local updated
+    updated=$(jq -n \
+        --arg type "$blocker_type" \
+        --arg detected "$detected" \
+        --arg fallback_action "$fallback_action" \
+        --arg fallback_message "$fallback_message" \
+        --argjson guard "$guard_json" \
+        --argjson existing "$existing" '
+            def build_details($g):
+                if $g.details? then $g.details
+                elif $g.topics? then {pending: $g.topics}
+                else {}
+                end;
+            def pick_action($g; $fallback):
+                if ($g.suggested_action? // "") | length > 0 then $g.suggested_action
+                elif $fallback != "" then $fallback
+                else "none"
+                end;
+            def pick_message($g; $fallback):
+                if ($g.message? // "") | length > 0 then $g.message
+                elif $fallback != "" then $fallback
+                else null
+                end;
+            ($existing // [])
+            | map(select(.type != $type))
+            | . + [{
+                type: $type,
+                detected_at: $detected,
+                details: build_details($guard),
+                suggested_action: pick_action($guard; $fallback_action),
+                message: pick_message($guard; $fallback_message)
+            }]
+        ')
+
+    mission_orchestration_update_blockers "$session_dir" "$updated"
+}
+
+mission_orchestration_clear_blocker() {
+    local session_dir="$1"
+    local blocker_type="$2"
+
+    local existing
+    existing=$(mission_orchestration_get_blockers "$session_dir")
+    if [[ -z "$existing" || "$existing" == "null" ]]; then
+        existing='[]'
+    fi
+
+    local updated
+    updated=$(jq -n \
+        --argjson existing "$existing" \
+        --arg type "$blocker_type" '
+            ($existing // []) | map(select(.type != $type))
+        ')
+
+    mission_orchestration_update_blockers "$session_dir" "$updated"
+}
+
+mission_orchestration_handle_guard_result() {
+    local session_dir="$1"
+    local guard_type="$2"
+    local guard_output="$3"
+
+    if [[ -z "$guard_output" ]]; then
+        log_error "guard $guard_type produced empty output"
+        return 1
+    fi
+
+    local schema
+    schema=$(mission_orchestration_guard_schema_path)
+    local tmp
+    tmp=$(mktemp "${session_dir}/guard.${guard_type}.XXXXXX.json")
+    printf '%s\n' "$guard_output" >"$tmp"
+    if ! CCONDUCTOR_SESSION_DIR="$session_dir" json_validate_with_schema "$schema" "$tmp"; then
+        rm -f "$tmp"
+        log_error "guard $guard_type produced invalid payload"
+        return 1
+    fi
+    rm -f "$tmp"
+
+    local status
+    status=$(safe_jq_from_json "$guard_output" '.status // ""' "" "$session_dir" "guard.${guard_type}.status")
+    if [[ -z "$status" || "$status" == "null" ]]; then
+        log_error "guard $guard_type missing status"
+        return 1
+    fi
+
+    case "$status" in
+        ok)
+            mission_orchestration_clear_blocker "$session_dir" "$guard_type" || true
+            return 0
+            ;;
+        block)
+            mission_orchestration_add_blocker "$session_dir" "$guard_type" "$guard_output" || return 1
+            local message
+            message=$(safe_jq_from_json "$guard_output" '.message // ""' "" "$session_dir" "guard.${guard_type}.message")
+            if [[ -z "$message" || "$message" == "null" ]]; then
+                case "$guard_type" in
+                    watch_topics)
+                        local topic_summary
+                        topic_summary=$(printf '%s\n' "$guard_output" | jq -r '
+                            (.topics // [])
+                            | map(.canonical // .id // .name // "unknown")
+                            | join(", ")
+                        ' 2>/dev/null)
+                        if [[ -z "$topic_summary" ]]; then
+                            topic_summary="critical watch topics remain unresolved"
+                        else
+                            topic_summary="critical watch topics pending: ${topic_summary}"
+                        fi
+                        message="Synthesis deferred - ${topic_summary}."
+                        ;;
+                    *)
+                        message="Synthesis deferred - guard ${guard_type} reported blocks."
+                        ;;
+                esac
+            fi
+            echo "↺ ${message}" >&2
+            return 2
+            ;;
+        error)
+            log_error "guard $guard_type reported error state"
+            return 1
+            ;;
+        *)
+            log_error "guard $guard_type returned unknown status: $status"
+            return 1
+            ;;
+    esac
+}
+
+mission_orchestration_write_quality_remediation_brief() {
+    local session_dir="$1"
+    local metrics_json="$2"
+    local warnings_json="$3"
+    local min_trust="$4"
+    local min_sources="$5"
+    local min_independent="$6"
+
+    local kg_file
+    kg_file=$(kg_get_path "$session_dir")
+    local claims_focus="[]"
+
+    if [[ -n "$kg_file" && -f "$kg_file" ]]; then
+        claims_focus=$(python3 - "$kg_file" "${min_trust:-0}" "${min_sources:-0}" "${min_independent:-0}" <<'PY'
+import json
+import re
+import sys
+
+kg_path, min_trust, min_sources, min_independent = sys.argv[1:5]
+min_trust = float(min_trust)
+min_sources = int(float(min_sources))
+min_independent = int(float(min_independent))
+
+with open(kg_path, "r", encoding="utf-8") as handle:
+    kg = json.load(handle)
+
+claims = []
+for claim in kg.get("claims", []):
+    qa = claim.get("quality_gate_assessment") or {}
+    trust = float(qa.get("trust_score") or 0)
+    independent_sources = int(qa.get("independent_source_count") or 0)
+    sources = claim.get("sources") or []
+    total_sources = len(sources)
+
+    if (
+        trust >= min_trust
+        and independent_sources >= min_independent
+        and total_sources >= min_sources
+    ):
+        continue
+
+    statement = claim.get("statement") or ""
+    if len(statement) > 200:
+        statement = statement[:197] + "..."
+
+    domains = []
+    for source in sources:
+        url = source.get("url")
+        if not url:
+            continue
+        domain = re.sub(r"^https?://", "", url)
+        domain = re.sub(r"^www\.", "", domain)
+        domain = domain.split("/", 1)[0]
+        domains.append(domain)
+
+    claims.append({
+        "id": claim.get("id"),
+        "statement_snippet": statement,
+        "trust_score": trust,
+        "independent_source_count": independent_sources,
+        "total_sources": total_sources,
+        "source_domains": sorted(set(domains)),
+    })
+
+json.dump(claims, sys.stdout)
+PY
+        )
+    fi
+
+    local heuristics_file="$session_dir/artifacts/domain-heuristics/domain-heuristics.json"
+    local watch_topics_json="[]"
+    if [[ -f "$heuristics_file" ]]; then
+        watch_topics_json=$(jq -c '
+            (.watch_topics // [])
+            | map(
+                .importance as $imp
+                | ($imp // "medium" | ascii_downcase) as $importance
+                | select($importance == "critical" or $importance == "high")
+                | {
+                    id: .id,
+                    canonical: .canonical,
+                    importance: .importance,
+                    source_hints: (.source_hints // []),
+                    topic_keywords: (.topic_keywords // [])
+                }
+            )
+        ' "$heuristics_file" 2>/dev/null)
+    fi
+
+    local generated_at
+    generated_at=$(get_timestamp)
+    local brief_file="$session_dir/meta/quality-remediation-status.json"
+    mkdir -p "$session_dir/meta"
+
+    local metrics_payload warnings_payload claims_payload watch_payload
+    metrics_payload="$metrics_json"
+    warnings_payload="$warnings_json"
+    claims_payload="$claims_focus"
+    watch_payload="$watch_topics_json"
+
+    if [[ -z "$metrics_payload" || "$metrics_payload" == "null" ]]; then
+        metrics_payload="{}"
+    fi
+    if [[ -z "$warnings_payload" || "$warnings_payload" == "null" ]]; then
+        warnings_payload="[]"
+    fi
+    if [[ -z "$claims_payload" || "$claims_payload" == "null" ]]; then
+        claims_payload="[]"
+    fi
+    if [[ -z "$watch_payload" || "$watch_payload" == "null" ]]; then
+        watch_payload="[]"
+    fi
+
+    local tmp_path
+    tmp_path=$(mktemp "${brief_file}.tmp.XXXXXX")
+
+    if ! METRICS_JSON="$metrics_payload" \
+        WARNINGS_JSON="$warnings_payload" \
+        CLAIMS_JSON="$claims_payload" \
+        WATCH_JSON="$watch_payload" \
+        python3 - "$generated_at" "$tmp_path" <<'PY'
+import json
+import os
+import sys
+
+generated_at, destination = sys.argv[1:3]
+
+def load_json_from_env(name, fallback):
+    raw = os.environ.get(name)
+    if not raw:
+        return json.loads(fallback)
+    try:
+        return json.loads(raw)
+    except json.JSONDecodeError:
+        return json.loads(fallback)
+
+payload = {
+    "generated_at": generated_at,
+    "metrics": load_json_from_env("METRICS_JSON", "{}"),
+    "warnings": load_json_from_env("WARNINGS_JSON", "[]"),
+    "claims": load_json_from_env("CLAIMS_JSON", "[]"),
+    "watch_topics": load_json_from_env("WATCH_JSON", "[]"),
+}
+
+with open(destination, "w", encoding="utf-8") as handle:
+    json.dump(payload, handle)
+    handle.write("\n")
+PY
+    then
+        rm -f "$tmp_path"
+        log_warn "quality remediation brief: failed to render payload via python writer"
+        return 1
+    fi
+
+    mv "$tmp_path" "$brief_file"
+}
+
 mission_orchestration_check_watch_topics() {
     local session_dir="$1"
     local bash_runtime="${CCONDUCTOR_BASH_RUNTIME:-$(command -v bash)}"
@@ -1797,6 +2521,7 @@ mission_orchestration_check_watch_topics() {
 
     local mission_state_file="$session_dir/meta/mission_state.json"
     if [[ ! -f "$mission_state_file" ]]; then
+        mission_orchestration_guard_result "ok"
         return 0
     fi
 
@@ -1811,7 +2536,7 @@ JQ
     pending_json=$(safe_jq_from_file "$mission_state_file" "$pending_filter" '[]' "$session_dir" "watch_topics.pending" false)
 
     local pending_count
-    pending_count=$(printf '%s\n' "$pending_json" | jq 'length')
+    pending_count=$(printf '%s\n' "$pending_json" | jq 'length' 2>/dev/null || echo "0")
     local issues_file="$session_dir/meta/watch-topics-pending.json"
 
     if (( pending_count > 0 )); then
@@ -1821,12 +2546,67 @@ JQ
         mv "$tmp" "$issues_file"
         local pending_list
         pending_list=$(printf '%s\n' "$pending_json" | jq -r '[.[] | .canonical // .id // "unknown"] | join(", ")')
+        local warning_message="Critical watch topics still pending: ${pending_list:-unknown}."
         log_warn "critical watch topics pending: ${pending_list:-unknown}; synthesis blocked until coverage or waiver"
-        echo "⚠ Critical watch topics still pending: ${pending_list:-unknown}. Re-queueing research." >&2
-        return 1
+        echo "⚠ ${warning_message} Re-queue pending research tasks." >&2
+        local guard_payload
+        guard_payload=$(jq -n \
+            --arg blocker "watch_topics" \
+            --arg suggested "delegate_web_researcher" \
+            --arg message "$warning_message" \
+            --argjson topics "$pending_json" \
+            '{blocker: $blocker, suggested_action: $suggested, message: $message, topics: $topics}')
+        mission_orchestration_guard_result "block" "$guard_payload"
+        return 0
     fi
 
     rm -f "$issues_file" 2>/dev/null || true
+    mission_orchestration_guard_result "ok"
+    return 0
+}
+
+mission_orchestration_quality_guard() {
+    local session_dir="$1"
+
+    # Get quality snapshot using existing function
+    local quality_snapshot
+    quality_snapshot=$(mission_orchestration_quality_snapshot "$session_dir")
+
+    # Extract status and metrics using existing safe_jq_from_json helper
+    local quality_status
+    quality_status=$(safe_jq_from_json "$quality_snapshot" '.status // "ok"' "ok" "$session_dir" "quality_guard.status")
+
+    local quality_metrics_json
+    quality_metrics_json=$(safe_jq_from_json "$quality_snapshot" '.metrics // {}' '{}' "$session_dir" "quality_guard.metrics")
+
+    # If quality is below thresholds, emit block guard result
+    if [[ "$quality_status" == "warn" || "$quality_status" == "no_claims" ]]; then
+        local average_trust
+        average_trust=$(printf '%s\n' "$quality_metrics_json" | jq '.average_trust // 0' 2>/dev/null)
+        local warnings_json
+        warnings_json=$(printf '%s\n' "$quality_metrics_json" | jq -c '.warnings // []' 2>/dev/null)
+        local warning_summary
+        warning_summary=$(printf '%s\n' "$warnings_json" | jq -r 'join(", ")' 2>/dev/null)
+
+        local message="Evidence quality below thresholds (avg trust: ${average_trust})"
+        if [[ -n "$warning_summary" && "$warning_summary" != "null" ]]; then
+            message="${message}. Issues: ${warning_summary}"
+        fi
+
+        local guard_payload
+        guard_payload=$(jq -n \
+            --arg blocker "quality_gate" \
+            --arg suggested "trigger_remediator" \
+            --arg message "$message" \
+            --argjson details "$quality_metrics_json" \
+            '{blocker: $blocker, suggested_action: $suggested, message: $message, details: $details}')
+
+        mission_orchestration_guard_result "block" "$guard_payload"
+        return 0
+    fi
+
+    # Quality OK
+    mission_orchestration_guard_result "ok"
     return 0
 }
 
@@ -1968,28 +2748,28 @@ log_quality_gate_event() {
 # Run quality assurance cycle (gate + remediation if needed)
 run_quality_assurance_cycle() {
     local session_dir="$1"
-    
+
     # Load quality gate config
     local quality_config
     if ! quality_config=$(load_config "quality-gate" 2>/dev/null); then
         log_warn "Quality gate config not found, skipping quality assurance"
         return 0
     fi
-    
+
     # Check if remediation is enabled
     local remediation_enabled
     remediation_enabled=$(echo "$quality_config" | jq -r '.remediation.enabled // false')
     local remediation_config
     remediation_config=$(echo "$quality_config" | jq '.remediation // {}')
-    
+
     local gate_mode
     gate_mode=$(echo "$quality_config" | jq -r '.mode // "advisory"')
-    
+
     local max_attempts
     max_attempts=$(echo "$quality_config" | jq -r '.remediation.max_attempts // 2')
-    
+
     local attempt=1
-    
+
     while [[ $attempt -le $max_attempts ]]; do
         log_quality_gate_event "$session_dir" "quality_gate_started" "$attempt" "$gate_mode" "running"
         # Run quality gate
@@ -1997,7 +2777,7 @@ run_quality_assurance_cycle() {
             announce_uncategorized_sources "$session_dir"
             verbose "✓ Quality gate passed"
             log_quality_gate_event "$session_dir" "quality_gate_completed" "$attempt" "$gate_mode" "passed" "artifacts/quality-gate-summary.json" "artifacts/quality-gate.json"
-            
+
             # Sync gate results to KG (optional, fails gracefully)
             if command -v sync_quality_surfaces_to_kg &>/dev/null; then
                 local kg_file="$session_dir/knowledge/knowledge-graph.json"
@@ -2008,12 +2788,12 @@ run_quality_assurance_cycle() {
                 sync_quality_surfaces_to_kg "$session_dir" "artifacts/quality-gate.json" || true
                 record_quality_gate_run "$session_dir" "$(get_timestamp)" "$claims_count" "artifacts/quality-gate.json" || true
             fi
-            
+
             return 0
         fi
         announce_uncategorized_sources "$session_dir"
         log_quality_gate_event "$session_dir" "quality_gate_completed" "$attempt" "$gate_mode" "failed" "artifacts/quality-gate-summary.json" "artifacts/quality-gate.json"
-        
+
         # Sync gate results to KG even on failure (partial results useful)
         if command -v sync_quality_surfaces_to_kg &>/dev/null; then
             local kg_file="$session_dir/knowledge/knowledge-graph.json"
@@ -2028,7 +2808,7 @@ run_quality_assurance_cycle() {
         # Gate failed
         if [[ "$remediation_enabled" != "true" ]] || [[ $attempt -eq $max_attempts ]]; then
             verbose "Quality gate still flagging claims after remediation attempts"
-            
+
             # Check mode before deciding to block
             if [[ "$gate_mode" == "advisory" ]]; then
                 # Advisory mode: log issues but don't block
@@ -2094,10 +2874,10 @@ run_quality_assurance_cycle() {
             log_warn "Quality remediator agent not found, cannot auto-remediate"
             return 1
         fi
-        
+
         # Invoke quality remediator
         echo "→ Invoking quality remediator (attempt $attempt/$max_attempts)..."
-        
+
         # Create remediation task
         local gate_summary
         if [[ -f "$session_dir/artifacts/quality-gate-summary.json" ]]; then
@@ -2105,10 +2885,10 @@ run_quality_assurance_cycle() {
         else
             gate_summary="{}"
         fi
-        
+
         local remediation_task="Review the quality gate flagged claims and gather additional evidence to address the identified issues."
         local remediation_context="Quality gate summary: $gate_summary"
-        
+
         # Invoke remediator
         if _invoke_delegated_agent "$session_dir" "quality-remediator" "$remediation_task" "$remediation_context" "[]"; then
             # Process any KG artifacts from remediation
@@ -2116,7 +2896,7 @@ run_quality_assurance_cycle() {
             verbose "  ✓ Remediation attempt $attempt completed"
         else
             local remediator_exit_code=$?
-            
+
             # Distinguish timeout from other failures
             if [[ $remediator_exit_code -eq 124 ]]; then
                 log_warn "Quality remediator timed out (no activity detected) - continuing to next attempt"
@@ -2126,7 +2906,7 @@ run_quality_assurance_cycle() {
                 return 1
             fi
         fi
-        
+
         attempt=$((attempt + 1))
     done
 
@@ -2153,7 +2933,7 @@ check_mission_complete() {
     local quality_gate_passed=false
     local high_priority_gaps_resolved=false
     local required_outputs_present=false
-    
+
     # 1. Check planning done (if research plan exists)
     if [[ -f "$session_dir/artifacts/research-plan.json" ]]; then
         planning_done=true
@@ -2161,29 +2941,29 @@ check_mission_complete() {
         # Planning is optional - not all missions need explicit planning
         planning_done=true
     fi
-    
+
     # 2. Check quality gate with mode awareness
     if [[ -f "$session_dir/artifacts/quality-gate-summary.json" ]]; then
         local gate_status gate_mode
         gate_status=$(safe_jq_from_file "$session_dir/artifacts/quality-gate-summary.json" '.status // "unknown"' "unknown" "$session_dir" "quality_gate.summary_status")
         gate_mode=$(safe_jq_from_file "$session_dir/artifacts/quality-gate-summary.json" '.mode // "advisory"' "advisory" "$session_dir" "quality_gate.summary_mode")
-        
+
         if [[ "$gate_status" == "passed" ]]; then
             quality_gate_passed=true
         fi
     fi
-    
+
     # 3. Check high-priority gaps (≥8)
     local unresolved_gaps
     unresolved_gaps=$(safe_jq_from_file "$session_dir/knowledge/knowledge-graph.json" '[.gaps[]? | select(.priority >= 8 and (.status // "unresolved") != "resolved")] | length' "0" "$session_dir" "mission_completion.unresolved_gaps")
     if [[ "$unresolved_gaps" -eq 0 ]]; then
         high_priority_gaps_resolved=true
     fi
-    
+
     # 4. Check required outputs exist in artifacts
     local required_outputs
     required_outputs=$(safe_jq_from_json "$mission_profile" '.success_criteria.required_outputs[]?' "" "$session_dir" "mission_completion.required_outputs")
-    
+
     if [[ -z "$required_outputs" ]]; then
         # No required outputs specified
         required_outputs_present=true
@@ -2191,32 +2971,52 @@ check_mission_complete() {
         # Get all artifacts
         local artifacts
         artifacts=$(artifact_list_all "$session_dir" 2>/dev/null || echo "[]")
-        
+
         # Check each required output
         local all_found=true
         while IFS= read -r required_output; do
             [[ -z "$required_output" ]] && continue
-            
+
             # Check if any artifact has this output type
             local found
             found=$(echo "$artifacts" | jq -r --arg type "$required_output" '.[]? | select(.type == $type) | .type' | head -1)
-            
+
             if [[ -z "$found" ]]; then
                 all_found=false
                 break
             fi
         done <<< "$required_outputs"
-        
+
         if [[ "$all_found" == "true" ]]; then
             required_outputs_present=true
         fi
     fi
-    
+
     # 5. Check for orchestrator early_exit decision
     local decision_action
     decision_action=$(echo "$decision_json" | jq -r '.action // ""')
-    
+
     if [[ "$decision_action" == "early_exit" ]]; then
+        local synthesis_attempts
+        synthesis_attempts=$(mission_orchestration_get_synthesis_attempts "$session_dir")
+        synthesis_attempts=$((synthesis_attempts + 0))
+        local blockers_present=0
+        if mission_orchestration_has_blockers "$session_dir"; then
+            blockers_present=1
+        fi
+        if (( synthesis_attempts == 0 )) && (( blockers_present == 1 )); then
+            local blockers_json
+            blockers_json=$(mission_orchestration_get_blockers "$session_dir")
+            if [[ -z "$blockers_json" || "$blockers_json" == "null" ]]; then
+                blockers_json='[]'
+            fi
+            log_warn "early-exit requested before synthesis attempted; blockers remain active"
+            log_decision "$session_dir" "early_exit_blocked" "$(jq -n \
+                --arg reason "synthesis_not_attempted" \
+                --argjson blockers "$blockers_json" \
+                '{reason: $reason, synthesis_attempts: 0, blockers: $blockers}')"
+            return 1
+        fi
         # Orchestrator explicitly requested early exit
         # Log completion verification with current checklist state
         log_decision "$session_dir" "completion_verification" "$(jq -n \
@@ -2234,7 +3034,7 @@ check_mission_complete() {
             }')"
         return 0  # Complete (early exit)
     fi
-    
+
     # Log completion verification
     log_decision "$session_dir" "completion_verification" "$(jq -n \
         --arg planning "$planning_done" \
@@ -2247,7 +3047,7 @@ check_mission_complete() {
             gaps_resolved: ($gaps == "true"),
             outputs_present: ($outputs == "true")
         }')"
-    
+
     # Mission complete only if all checks pass
     if [[ "$planning_done" == "true" ]] && \
        [[ "$quality_gate_passed" == "true" ]] && \
@@ -2255,7 +3055,7 @@ check_mission_complete() {
        [[ "$required_outputs_present" == "true" ]]; then
         return 0
     fi
-    
+
     return 1
 }
 
@@ -2310,15 +3110,15 @@ mission_orchestration_maybe_launch_dashboard() {
 run_mission_orchestration() {
     local mission_profile="$1"
     local session_dir="$2"
-    
+
     local mission_name
     mission_name=$(echo "$mission_profile" | jq -r '.name')
-    
+
     echo "════════════════════════════════════════════════════════════"
     echo "Mission: $mission_name"
     echo "════════════════════════════════════════════════════════════"
     echo ""
-    
+
     # Initialize mission state
     echo "→ Initializing mission state..."
     init_orchestration_log "$session_dir"
@@ -2326,7 +3126,7 @@ run_mission_orchestration() {
     mission_orchestration_maybe_launch_dashboard "$session_dir" "startup" || true
     artifact_init "$session_dir"
     budget_init "$session_dir" "$mission_profile"
-    
+
     # Initialize agent registry
     echo "→ Loading agent registry..."
     agent_registry_init
@@ -2393,7 +3193,7 @@ EOF
         echo "  ⚠ Domain heuristics agent not found, using defaults"
     fi
     echo ""
-    
+
     # Log mission start event for journal
     log_event "$session_dir" "mission_started" "$(jq -n \
         --arg mission "$mission_name" \
@@ -2403,14 +3203,14 @@ EOF
             objective: $objective,
             started_at: (now | strftime("%Y-%m-%dT%H:%M:%SZ"))
         }')"
-    
+
     echo ""
-    
+
     # Mission orchestration loop
     local iteration=1
     local max_iterations
     max_iterations=$(echo "$mission_profile" | jq -r '.constraints.max_iterations')
-    
+
     while [[ $iteration -le $max_iterations ]]; do
         # Sync KG iteration with mission iteration FIRST (before any work)
         # This ensures dashboard always shows the current iteration number
@@ -2423,10 +3223,10 @@ EOF
                 dashboard_update_metrics "$session_dir" || true
             fi
         fi
-        
+
         echo "═══ Mission Iteration $iteration/$max_iterations ═══"
         echo ""
-        
+
         # Prompt parsing is handled during mission initialization; fall back here only if required
         if [[ $iteration -eq 1 ]] && command -v needs_prompt_parsing &>/dev/null && needs_prompt_parsing "$session_dir"; then
             if command -v parse_prompt &>/dev/null; then
@@ -2469,12 +3269,12 @@ EOF
             break
         fi
         debug "Budget check passed for iteration $iteration"
-        
+
         # Prepare orchestrator context
         echo "→ Preparing orchestrator context..."
         local context_json
         context_json=$(prepare_orchestrator_context "$session_dir" "$mission_profile" "$iteration")
-        
+
         # Invoke mission orchestrator
         # (invoke_agent.sh handles the invocation message)
         local orchestrator_output
@@ -2487,18 +3287,18 @@ EOF
         if [[ -f "$session_dir/meta/provider-session-limit.flag" ]]; then
             mission_abort_due_to_provider_limit "$session_dir"
         fi
-        
+
         # Record orchestrator cost in budget
         local orchestrator_cost
         orchestrator_cost=$(extract_cost_from_output "$session_dir/meta/orchestrator-output.json")
         local orch_duration
         orch_duration=$(($(get_epoch) - orch_start_time))
         budget_record_invocation "$session_dir" "mission-orchestrator" "$orchestrator_cost" "$orch_duration"
-        
+
         rm -f "$orchestrator_output_file"
-        
+
         echo ""
-        
+
         local orchestrator_stream_file="$session_dir/meta/orchestrator-output.json.stream.jsonl"
 
         # Process orchestrator decisions
@@ -2511,9 +3311,9 @@ EOF
                 break
             fi
         fi
-        
+
         echo ""
-        
+
         # Refresh stakeholder classifications for the session
         if command -v classify_stakeholders &>/dev/null || {
             # shellcheck source=src/utils/stakeholder-classifier.sh
@@ -2526,22 +3326,22 @@ EOF
         else
             log_warn "stakeholder-classifier.sh unavailable; skipping stakeholder refresh"
         fi
-        
+
         # Check mission completion
         if check_mission_complete "$session_dir" "$mission_profile" "$orchestrator_output" "$orchestrator_stream_file"; then
             echo "✓ Mission complete - all success criteria met"
             break
         fi
-        
+
         iteration=$((iteration + 1))
     done
-    
+
     echo ""
     echo "════════════════════════════════════════════════════════════"
     echo "Mission Completed"
     echo "════════════════════════════════════════════════════════════"
     echo ""
-    
+
     # Mark session status
     local completed_at
     completed_at=$(get_timestamp)
@@ -2571,7 +3371,7 @@ EOF
         log_warn "quality gate not passed; session status left active (see artifacts/quality-gate-summary.json)"
     fi
     rm -f "$early_exit_flag" 2>/dev/null || true
-    
+
     # Announce final report status from synthesis agent
     local final_report="$session_dir/report/mission-report.md"
     echo "→ Final report status..."
@@ -2584,14 +3384,14 @@ EOF
         final_report_missing_display=$(rel_path_for_display "$final_report" "$session_dir" "$MISSION_ORCH_BASE_DIR")
         verbose "  (Final report not generated - synthesis may not have completed: $final_report_missing_display)"
     fi
-    
+
     # Export research journal as markdown
     # shellcheck source=/dev/null
     if command -v export_journal &>/dev/null || source "$UTILS_DIR/export-journal.sh" 2>/dev/null; then
         echo "→ Generating research journal..."
         export_journal "$session_dir" "$session_dir/report/research-journal.md" >/dev/null || echo "  ⚠️  Warning: Could not generate research journal"
     fi
-    
+
     # Log mission completion event for journal
     local report_relative=""
     if [ -f "$final_report" ]; then
@@ -2605,7 +3405,7 @@ EOF
             report_file: $report,
             status: "success"
         }')"
-    
+
     # Generate mission metrics file for easy analysis
     local started_at
     started_at=$(jq -r '.created_at' "$session_dir/meta/session.json")
@@ -2620,7 +3420,7 @@ EOF
     else
         total_cost="0"
     fi
-    
+
     jq -n \
         --arg status "completed" \
         --arg start "$started_at" \
@@ -2639,7 +3439,7 @@ EOF
         "$UTILS_DIR/digital-librarian.sh" "$session_dir" 2>/dev/null || \
             echo "  ⚠️  Warning: Digital librarian update failed" >&2
     fi
-    
+
     # Generate session manifests and user README
     if [ -x "$UTILS_DIR/meta-manifest-generator.sh" ]; then
         "$UTILS_DIR/meta-manifest-generator.sh" "$session_dir" >/dev/null 2>&1 || \
@@ -2675,17 +3475,17 @@ run_mission_orchestration_resume() {
     local refinement="${3:-}"
     local extend_iterations="${4:-}"
     local extend_time="${5:-}"
-    
+
     local mission_name
     mission_name=$(echo "$mission_profile" | jq -r '.name')
-    
+
     echo "════════════════════════════════════════════════════════════"
     echo "Mission: $mission_name (Resume)"
     echo "════════════════════════════════════════════════════════════"
     echo ""
-    
+
     echo "→ Resuming orchestration..."
-    
+
     # Get current iteration from orchestration log (robust method)
     local current_iteration=0
     if [ -f "$session_dir/logs/orchestration.jsonl" ]; then
@@ -2701,19 +3501,19 @@ run_mission_orchestration_resume() {
                 current_iteration=""
             fi
         fi
-        
+
         # Fallback to line count if no iteration found
         if [ -z "$current_iteration" ] || [ "$current_iteration" = "null" ]; then
             current_iteration=$(wc -l < "$session_dir/logs/orchestration.jsonl" | tr -d ' ')
         fi
     fi
-    
+
     local max_iterations
     max_iterations=$(echo "$mission_profile" | jq -r '.constraints.max_iterations')
-    
+
     local max_time_minutes
     max_time_minutes=$(echo "$mission_profile" | jq -r '.constraints.max_time_minutes')
-    
+
     # Apply extensions if provided
     local extensions_applied=false
     if [ -n "$extend_iterations" ] && [ "$extend_iterations" -gt 0 ]; then
@@ -2721,31 +3521,31 @@ run_mission_orchestration_resume() {
         echo "  Extended max iterations to $max_iterations (added $extend_iterations)"
         extensions_applied=true
     fi
-    
+
     if [ -n "$extend_time" ] && [ "$extend_time" -gt 0 ]; then
         max_time_minutes=$((max_time_minutes + extend_time))
         echo "  Extended max time to $max_time_minutes minutes (added $extend_time)"
         extensions_applied=true
     fi
-    
+
     # Update mission profile with extended constraints for budget_check
     if [ "$extensions_applied" = true ]; then
         mission_profile=$(echo "$mission_profile" | jq \
             --argjson max_iter "$max_iterations" \
             --argjson max_time "$max_time_minutes" \
             '.constraints.max_iterations = $max_iter | .constraints.max_time_minutes = $max_time')
-        
+
         # Update budget limits in the persisted budget file
         if command -v budget_extend_limits &>/dev/null; then
             budget_extend_limits "$session_dir" "$extend_iterations" "$extend_time" || \
                 log_warn "Failed to update budget limits - budget checks may be incorrect"
         fi
     fi
-    
+
     local iteration=$((current_iteration + 1))
-    
+
     echo "  Continuing from iteration $iteration/$max_iterations"
-    
+
     # Check if iterations already exhausted
     if [[ $iteration -gt $max_iterations ]]; then
         echo ""
@@ -2768,10 +3568,10 @@ run_mission_orchestration_resume() {
         echo ""
         return 0
     fi
-    
+
     mission_orchestration_maybe_launch_dashboard "$session_dir" "resume" || true
     echo ""
-    
+
     # Continue orchestration loop
     while [[ $iteration -le $max_iterations ]]; do
         # Sync KG iteration with mission iteration FIRST (before any work)
@@ -2785,10 +3585,10 @@ run_mission_orchestration_resume() {
                 dashboard_update_metrics "$session_dir" || true
             fi
         fi
-        
+
         echo "═══ Mission Iteration $iteration/$max_iterations (Resume) ═══"
         echo ""
-        
+
         # Check budget
         if ! budget_check "$session_dir"; then
             log_system_warning "$session_dir" "budget_limit" "Budget limit reached at iteration $iteration (resume)"
@@ -2797,13 +3597,13 @@ run_mission_orchestration_resume() {
             break
         fi
         debug "Budget check passed for iteration $iteration"
-        
+
         # Prepare context with resume flag and refinement
         echo "→ Preparing orchestrator context..."
         local context_json
         context_json=$(prepare_orchestrator_context_resume \
             "$session_dir" "$mission_profile" "$iteration" "$refinement")
-        
+
         # Invoke orchestrator
         # (invoke_agent.sh handles the invocation message)
         local orchestrator_output
@@ -2812,18 +3612,18 @@ run_mission_orchestration_resume() {
         orch_start_time=$(get_epoch)
         invoke_mission_orchestrator "$session_dir" "$context_json" > "$orchestrator_output_file"
         orchestrator_output=$(cat "$orchestrator_output_file")
-        
+
         # Record orchestrator cost in budget
         local orchestrator_cost
         orchestrator_cost=$(extract_cost_from_output "$session_dir/meta/orchestrator-output.json")
         local orch_duration
         orch_duration=$(($(get_epoch) - orch_start_time))
         budget_record_invocation "$session_dir" "mission-orchestrator" "$orchestrator_cost" "$orch_duration"
-        
+
         rm -f "$orchestrator_output_file"
-        
+
         echo ""
-        
+
         local orchestrator_stream_file="$session_dir/meta/orchestrator-output.json.stream.jsonl"
 
         # Process decisions
@@ -2835,24 +3635,24 @@ run_mission_orchestration_resume() {
                 break
             fi
         fi
-        
+
         echo ""
-        
+
         # Check completion
         if check_mission_complete "$session_dir" "$mission_profile" "$orchestrator_output" "$orchestrator_stream_file"; then
             echo "✓ Mission complete - all success criteria met"
             break
         fi
-        
+
         iteration=$((iteration + 1))
     done
-    
+
     echo ""
     echo "════════════════════════════════════════════════════════════"
     echo "Mission Completed"
     echo "════════════════════════════════════════════════════════════"
     echo ""
-    
+
     # Mark session status
     local completed_at
     completed_at=$(get_timestamp)
@@ -2882,7 +3682,7 @@ run_mission_orchestration_resume() {
         log_warn "quality gate not passed; session status left active (see artifacts/quality-gate-summary.json)"
     fi
     rm -f "$early_exit_flag" 2>/dev/null || true
-    
+
     # Announce final report status from synthesis agent
     local final_report="$session_dir/report/mission-report.md"
     echo "→ Final report status..."
@@ -2895,14 +3695,14 @@ run_mission_orchestration_resume() {
         final_report_missing_display=$(rel_path_for_display "$final_report" "$session_dir" "$MISSION_ORCH_BASE_DIR")
         verbose "  (Final report not generated - synthesis may not have completed: $final_report_missing_display)"
     fi
-    
+
     # Export research journal as markdown
     # shellcheck source=/dev/null
     if command -v export_journal &>/dev/null || source "$UTILS_DIR/export-journal.sh" 2>/dev/null; then
         echo "→ Generating research journal..."
         export_journal "$session_dir" "$session_dir/report/research-journal.md" >/dev/null || echo "  ⚠️  Warning: Could not generate research journal"
     fi
-    
+
     # Log mission completion event for journal
     local report_relative=""
     if [ -f "$final_report" ]; then
@@ -2916,7 +3716,7 @@ run_mission_orchestration_resume() {
             report_file: $report,
             status: "success"
         }')"
-    
+
     # Generate mission metrics file for easy analysis
     local started_at
     started_at=$(jq -r '.created_at' "$session_dir/meta/session.json")
@@ -2931,7 +3731,7 @@ run_mission_orchestration_resume() {
     else
         total_cost="0"
     fi
-    
+
     jq -n \
         --arg status "completed" \
         --arg start "$started_at" \
@@ -2944,7 +3744,7 @@ run_mission_orchestration_resume() {
             duration_seconds: (($end | fromdateiso8601) - ($start | fromdateiso8601)),
             total_cost_usd: ($cost | tonumber)
         }' > "$session_dir/meta/mission-metrics.json"
-    
+
     # Generate session manifests and user README
     if [ -x "$UTILS_DIR/meta-manifest-generator.sh" ]; then
         "$UTILS_DIR/meta-manifest-generator.sh" "$session_dir" >/dev/null 2>&1 || \
@@ -2954,7 +3754,7 @@ run_mission_orchestration_resume() {
         "$UTILS_DIR/session-readme-generator.sh" "$session_dir" >/dev/null 2>&1 || \
             echo "  ⚠️  Warning: Session README generation failed" >&2
     fi
-    
+
     # Stop event tailer if running
     # shellcheck disable=SC1091
     if command -v stop_event_tailer &>/dev/null || source "$UTILS_DIR/event-tailer.sh" 2>/dev/null; then
@@ -2980,14 +3780,14 @@ prepare_orchestrator_context_resume() {
     local iteration="$3"
     local refinement="${4:-}"
     trace_function "$@"
-    
+
     # Get existing state
     local agents_json
     if ! agents_json=$(agent_registry_export_json); then
         echo "✗ Error: Failed to export agent registry" >&2
         return 1
     fi
-    
+
     local kg_json
     if ! kg_json=$(kg_read "$session_dir"); then
         echo "✗ Error: Could not read knowledge graph" >&2
@@ -2997,7 +3797,7 @@ prepare_orchestrator_context_resume() {
         log_system_warning "$session_dir" "jq_json_parse_failure" "dashboard.kg_read" "payload_snippet=${kg_json:0:200}"
         kg_json='{}'
     fi
-    
+
     local budget_json
     if ! budget_json=$(budget_status "$session_dir"); then
         echo "✗ Error: Could not read budget status" >&2
@@ -3020,13 +3820,13 @@ prepare_orchestrator_context_resume() {
     local manifest_path_rel
     manifest_path_rel=$(rel_path_for_display "$session_dir/meta/session-manifest.json" "$session_dir" "$MISSION_ORCH_BASE_DIR")
     [[ -z "$manifest_path_rel" ]] && manifest_path_rel="meta/session-manifest.json"
-    
+
     local decisions_json
     if ! decisions_json=$(get_orchestration_log "$session_dir"); then
         echo "✗ Error: Could not read orchestration log" >&2
         return 1
     fi
-    
+
     # Extract coverage summary from knowledge graph
     local coverage_summary
     coverage_summary=$(safe_jq_from_json "$kg_json" '
@@ -3042,11 +3842,11 @@ prepare_orchestrator_context_resume() {
             )
         })
     ' '[]' "$session_dir" "dashboard.kg.coverage" false)
-    
+
     # Extract high-priority gaps (≥8)
     local high_priority_gaps_count
     high_priority_gaps_count=$(safe_jq_from_json "$kg_json" '[.gaps[]? | select(.priority >= 8)] | length' "0" "$session_dir" "dashboard.kg.high_priority_gaps")
-    
+
     # Get list of high-priority gaps for context
     local high_priority_gaps_list
     high_priority_gaps_list=$(safe_jq_from_json "$kg_json" '
@@ -3056,7 +3856,7 @@ prepare_orchestrator_context_resume() {
             status: (.status // "unresolved")
         }]
     ' '[]' "$session_dir" "dashboard.kg.high_priority_gaps_list" false)
-    
+
     # Check if quality gate has run
     local quality_gate_status="not_run"
     local quality_gate_summary="{}"
@@ -3076,7 +3876,7 @@ prepare_orchestrator_context_resume() {
         gate_config_json=$(load_config "quality-gate" 2>/dev/null || echo '{}')
         quality_gate_mode=$(safe_jq_from_json "$gate_config_json" '.mode // "advisory"' "advisory" "$session_dir" "dashboard.quality_gate_mode")
     fi
-    
+
     # Check if research plan exists
     local research_plan_exists="false"
     local research_plan="{}"
@@ -3084,7 +3884,7 @@ prepare_orchestrator_context_resume() {
         research_plan_exists="true"
         research_plan=$(cat "$session_dir/artifacts/research-plan.json" 2>/dev/null || echo "{}")
     fi
-    
+
     # Build context with resume metadata and enhanced diagnostics
     jq -n \
         --argjson mission "$mission_profile" \

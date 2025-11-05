@@ -46,6 +46,7 @@ TESTS=(
     "test-orchestrator-dual-mode.sh"
     "test-quality-gate-malformed-samples.sh"
     "test-stakeholder-classifier-state.sh"
+    "test-synthesis-guard.sh"
 )
 
 PASSED=0

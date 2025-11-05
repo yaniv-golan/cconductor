@@ -1,0 +1,62 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "event://quality-status@v1",
+  "title": "Quality Status Event",
+  "type": "object",
+  "required": [
+    "event",
+    "timestamp",
+    "average_trust",
+    "total_claims",
+    "compliant_claims",
+    "action"
+  ],
+  "properties": {
+    "event": {
+      "const": "quality_status"
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "average_trust": {
+      "type": "number",
+      "minimum": 0
+    },
+    "total_claims": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "compliant_claims": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "single_source_ratio": {
+      "type": "number",
+      "minimum": 0
+    },
+    "warnings": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "action": {
+      "type": "string",
+      "enum": [
+        "proceed_to_synthesis",
+        "trigger_remediation",
+        "remediation_exhausted"
+      ]
+    },
+    "thresholds": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "metrics": {
+      "type": "object",
+      "additionalProperties": true
+    }
+  },
+  "additionalProperties": true
+}
