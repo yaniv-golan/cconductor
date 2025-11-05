@@ -9,6 +9,8 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/core-helpers.sh"
 # shellcheck disable=SC1091
 source "$SCRIPT_DIR/json-helpers.sh"
+# shellcheck disable=SC1091
+source "$SCRIPT_DIR/stakeholder-classifier-state.sh"
 
 to_session_relative() {
     local path="$1"
@@ -167,6 +169,7 @@ build_session_manifest() {
         return 1
     fi
 
+
     local meta_dir="$session_dir/meta"
     mkdir -p "$meta_dir"
 
@@ -223,6 +226,9 @@ build_session_manifest() {
     local classifier_total="0"
     local classifier_pending="$sources_total_numeric"
     local classifier_status="stale"
+    local classifier_category_counts='{}'
+    local classifier_needs_review_json='[]'
+    local classifier_needs_review_count="0"
     if [[ -n "$classifier_mtime" ]]; then
         classifier_total=$(jq -s 'map(select(.source_id != null)) | length' "$classifier_file" 2>/dev/null || echo "0")
         classifier_total=$((classifier_total + 0))
@@ -230,15 +236,87 @@ build_session_manifest() {
         if (( classifier_pending < 0 )); then
             classifier_pending=0
         fi
-        if [[ -z "$kg_mtime" || "$classifier_mtime" -ge "$kg_mtime" ]]; then
-            classifier_status="fresh"
-        fi
+        classifier_category_counts=$(jq -s '
+            reduce .[]? as $row ({};
+                if ($row.source_id == null or $row.resolved_category == null) then .
+                else .[$row.resolved_category] = ((.[($row.resolved_category)] // 0) + 1)
+                end
+            )' "$classifier_file" 2>/dev/null || echo '{}')
+        classifier_needs_review_json=$(jq -s '
+            [ .[]?
+              | select((.needs_review // false) == true or (.llm_attempted // false) == true)
+              | {
+                    source_id: (.source_id // null),
+                    url: (.url // null),
+                    resolved_category: (.resolved_category // null),
+                    llm_attempted: (.llm_attempted // false),
+                    confidence: (.confidence // null),
+                    timestamp: (.timestamp // null)
+                }
+            ]' "$classifier_file" 2>/dev/null || echo '[]')
+        classifier_needs_review_count=$(printf '%s\n' "$classifier_needs_review_json" | jq 'length' 2>/dev/null || echo "0")
         classifier_updated_iso=$(epoch_to_iso8601 "$classifier_mtime")
     fi
-    if (( classifier_pending > 0 )); then
-        log_warn "session-manifest: stakeholder classifications ${classifier_status}; pending_sources=${classifier_pending}"
-    elif [[ "$classifier_status" != "fresh" ]] && (( classifier_total > 0 )); then
-        log_warn "session-manifest: stakeholder classifications ${classifier_status}; pending_sources=${classifier_pending}"
+
+    local state_file="$session_dir/meta/stakeholder-classifier-state.json"
+    local stored_digest=""
+    local stored_sources_json='[]'
+    local stored_count=0
+    if [[ -s "$state_file" ]]; then
+        stored_digest=$(jq -r '.kg_source_digest // ""' "$state_file" 2>/dev/null || echo "")
+        stored_sources_json=$(jq -c '.sources // []' "$state_file" 2>/dev/null || echo '[]')
+        stored_count=$(jq -r '.kg_source_count // 0' "$state_file" 2>/dev/null || echo "0")
+    fi
+
+    local sources_summary
+    local current_sources_json='[]'
+    local classifier_digest=""
+    local diff_added=0
+    local diff_removed=0
+
+    if sources_summary=$(stakeholder_classifier_collect_sources "$session_dir"); then
+        classifier_digest=$(printf '%s\n' "$sources_summary" | jq -r '.digest // ""' 2>/dev/null || echo "")
+        current_sources_json=$(printf '%s\n' "$sources_summary" | jq -c '.sources // []' 2>/dev/null || echo '[]')
+        if (( stored_count > 0 )) && (( stored_count == sources_total_numeric )); then
+            stored_sources_json="$current_sources_json"
+            if [[ -z "$stored_digest" ]]; then
+                stored_digest="$classifier_digest"
+            fi
+        fi
+        local diff_json
+        diff_json=$(stakeholder_classifier_sources_diff "$stored_sources_json" "$current_sources_json")
+        diff_added=$(printf '%s\n' "$diff_json" | jq '.added // 0' 2>/dev/null || echo "0")
+        diff_removed=$(printf '%s\n' "$diff_json" | jq '.removed // 0' 2>/dev/null || echo "0")
+        if [[ -s "$state_file" ]] && (( classifier_pending == 0 )) && (( classifier_needs_review_count == 0 )) && (( stored_count == sources_total_numeric )); then
+            diff_added=0
+            diff_removed=0
+            stored_sources_json="$current_sources_json"
+            if [[ -z "$stored_digest" ]]; then
+                stored_digest="$classifier_digest"
+            fi
+        fi
+    else
+        log_warn "session-manifest: failed to compute normalized source digest; falling back to stale status"
+    fi
+
+    if (( classifier_needs_review_count > 0 )); then
+        classifier_status="stale_pending"
+    elif (( classifier_pending > 0 )); then
+        classifier_status="stale_pending"
+    elif (( sources_total_numeric == 0 )); then
+        classifier_status="fresh"
+    elif [[ -n "$classifier_digest" && -n "$stored_digest" && "$classifier_digest" == "$stored_digest" ]]; then
+        classifier_status="fresh"
+    elif [[ -n "$classifier_digest" ]]; then
+        classifier_status="stale_digest_mismatch"
+    else
+        classifier_status="stale"
+    fi
+
+    if [[ "$classifier_status" == "stale_pending" ]]; then
+        log_warn "session-manifest: stakeholder classifications stale_pending; pending_sources=${classifier_pending}"
+    elif [[ "$classifier_status" == "stale_digest_mismatch" ]]; then
+        log_warn "session-manifest: stakeholder classifications stale_digest_mismatch; pending_sources=${classifier_pending} (added=${diff_added}, removed=${diff_removed})"
     fi
 
     local quality_gate_summary_path="$session_dir/artifacts/quality-gate-summary.json"
@@ -291,6 +369,58 @@ build_session_manifest() {
     local recent_agent_outputs
     recent_agent_outputs=$(collect_recent_agent_outputs "$session_dir" 5)
 
+    local orchestration_state_file="$session_dir/meta/orchestration-state.json"
+    local synthesis_blockers_raw='[]'
+    local synthesis_blocker_tags='[]'
+    local synthesis_ready_bool="true"
+    local synthesis_attempts_value="0"
+    if [[ -f "$orchestration_state_file" ]]; then
+        synthesis_blockers_raw=$(safe_jq_from_file "$orchestration_state_file" '.synthesis_blockers // []' '[]' "$session_dir" "session_manifest.synthesis_blockers" false)
+        synthesis_attempts_value=$(safe_jq_from_file "$orchestration_state_file" '.synthesis_attempts // 0' '0' "$session_dir" "session_manifest.synthesis_attempts")
+    fi
+    if [[ -z "$synthesis_blockers_raw" || "$synthesis_blockers_raw" == "null" ]]; then
+        synthesis_blockers_raw='[]'
+    fi
+    if [[ -z "$synthesis_attempts_value" || "$synthesis_attempts_value" == "null" ]]; then
+        synthesis_attempts_value="0"
+    fi
+    synthesis_attempts_value=$((synthesis_attempts_value + 0))
+
+    local blockers_length
+    blockers_length=$(printf '%s\n' "$synthesis_blockers_raw" | jq 'length' 2>/dev/null || echo "0")
+    if (( blockers_length > 0 )); then
+        synthesis_ready_bool="false"
+        synthesis_blocker_tags=$(printf '%s\n' "$synthesis_blockers_raw" | jq -c '
+            def topic_label($topic):
+                if $topic == null then
+                    "unknown"
+                elif ($topic | type) == "object" then
+                    ($topic.canonical // $topic.id // ($topic | tostring))
+                else
+                    ($topic | tostring)
+                end;
+            (reduce .[] as $b ([];
+                ($b.type // "") as $type
+                | if $type == "watch_topics" then
+                    if (($b.details.pending // []) | length) > 0 then
+                        reduce ($b.details.pending // [])[] as $topic (.;
+                            . + ["watch_topics:" + topic_label($topic)]
+                        )
+                    else
+                        . + ["watch_topics"]
+                    end
+                else
+                    . + [(if $type == "" then "unknown" else $type end)]
+                end
+            )) | unique
+        ' 2>/dev/null || echo '[]')
+        if [[ -z "$synthesis_blocker_tags" || "$synthesis_blocker_tags" == "null" ]]; then
+            synthesis_blocker_tags='[]'
+        fi
+    else
+        synthesis_blocker_tags='[]'
+    fi
+
     local manifest_rel
     manifest_rel=$(to_session_relative "$meta_dir/session-manifest.json" "$session_dir")
 
@@ -315,10 +445,16 @@ build_session_manifest() {
         --arg manifest_path "$manifest_rel" \
         --arg classifier_path "$classifier_path_rel" \
         --arg classifier_status "$classifier_status" \
+        --arg classifier_digest "$classifier_digest" \
         --arg classifier_updated_iso "${classifier_updated_iso:-}" \
         --arg classifier_updated_epoch "${classifier_mtime:-}" \
         --argjson classifier_total "$classifier_total" \
         --argjson classifier_pending "$classifier_pending" \
+        --argjson classifier_counts "$classifier_category_counts" \
+        --argjson classifier_needs_review "$classifier_needs_review_json" \
+        --argjson classifier_needs_review_count "$classifier_needs_review_count" \
+        --argjson classifier_diff_added "$diff_added" \
+        --argjson classifier_diff_removed "$diff_removed" \
         --argjson domain_heuristics "$domain_heuristics_entries" \
         --argjson prompt_parser "$prompt_parser_entries" \
         --argjson recent_outputs "$recent_agent_outputs" \
@@ -333,6 +469,10 @@ build_session_manifest() {
         --arg manifest_file "$(to_session_relative "$meta_dir/session-manifest.json" "$session_dir")" \
         --argjson quality_summary "$quality_gate_summary" \
         --argjson gaps "$kg_high_priority_gaps" \
+        --argjson synthesis_ready "$synthesis_ready_bool" \
+        --argjson synthesis_blockers "$synthesis_blocker_tags" \
+        --argjson synthesis_blockers_detail "$synthesis_blockers_raw" \
+        --argjson synthesis_attempts "$synthesis_attempts_value" \
         '{
             version: ($version | tonumber),
             generated_at: $generated,
@@ -367,13 +507,29 @@ build_session_manifest() {
                 summary: $quality_summary,
                 high_priority_gaps: $gaps
             },
+            synthesis: {
+                ready: $synthesis_ready,
+                attempts: ($synthesis_attempts | tonumber),
+                blockers: $synthesis_blockers,
+                blockers_detail: $synthesis_blockers_detail
+            },
             stakeholder_classifier: {
                 status: $classifier_status,
                 classifications_file: (if $classifier_path == "" then null else $classifier_path end),
                 total_classifications: $classifier_total,
                 pending_sources: $classifier_pending,
                 updated_at: (if $classifier_updated_iso == "" then null else $classifier_updated_iso end),
-                updated_epoch: (if $classifier_updated_epoch == "" then null else ($classifier_updated_epoch | tonumber) end)
+                updated_epoch: (if $classifier_updated_epoch == "" then null else ($classifier_updated_epoch | tonumber) end),
+                source_digest: (if $classifier_digest == "" then null else $classifier_digest end),
+                category_counts: $classifier_counts,
+                needs_review: {
+                    count: $classifier_needs_review_count,
+                    entries: $classifier_needs_review
+                },
+                coverage_delta: {
+                    added: $classifier_diff_added,
+                    removed: $classifier_diff_removed
+                }
             },
             artifacts: {
                 domain_heuristics: $domain_heuristics,
@@ -387,7 +543,7 @@ build_session_manifest() {
     mv "$meta_dir/session-manifest.json.tmp" "$meta_dir/session-manifest.json"
 }
 
-if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
+if [[ "${BASH_SOURCE[0]:-}" == "${0}" || -z "${BASH_SOURCE[0]:-}" ]]; then
     if [[ $# -ne 1 ]]; then
         echo "Usage: $0 <session_dir>" >&2
         exit 1

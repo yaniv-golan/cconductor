@@ -11,6 +11,8 @@ source "$SCRIPT_DIR/core-helpers.sh"
 source "$SCRIPT_DIR/json-helpers.sh"
 # shellcheck disable=SC1091
 source "$SCRIPT_DIR/budget-tracker.sh" 2>/dev/null || true
+# shellcheck disable=SC1091
+source "$SCRIPT_DIR/stakeholder-classifier-state.sh"
 
 BASH_RUNTIME="${CCONDUCTOR_BASH_RUNTIME:-$(command -v bash)}"
 
@@ -267,8 +269,6 @@ build_mission_state() {
     fi
     local sources_total_numeric="${sources_count:-0}"
     sources_total_numeric=$((sources_total_numeric + 0))
-    local kg_mtime_local
-    kg_mtime_local=$(stat_mtime "$kg_file")
 
     local waivers_file="$meta_dir/watch-topic-waivers.json"
     local watch_topic_waivers=""
@@ -440,6 +440,9 @@ build_mission_state() {
     local classifier_category_counts='{}'
     local classifier_needs_review_json='[]'
     local classifier_needs_review_count="0"
+    local classifier_digest=""
+    local classifier_diff_added=0
+    local classifier_diff_removed=0
     if (( classifier_exists )); then
         classifier_total=$(jq -s 'map(select(.source_id != null)) | length' "$classifier_file" 2>/dev/null || echo "0")
         classifier_total=$((classifier_total + 0))
@@ -467,14 +470,56 @@ build_mission_state() {
                 }
             ]' "$classifier_file" 2>/dev/null || echo '[]')
         classifier_needs_review_count=$(printf '%s\n' "$classifier_needs_review_json" | jq 'length' 2>/dev/null || echo "0")
-        local needs_review_numeric="$classifier_needs_review_count"
-        needs_review_numeric=$((needs_review_numeric + 0))
-        if (( needs_review_numeric > 0 )); then
-            classifier_status="stale"
-        elif (( classifier_pending == 0 )) && [[ -z "$kg_mtime_local" || -z "$classifier_mtime" || "$classifier_mtime" -ge "$kg_mtime_local" ]]; then
-            classifier_status="fresh"
-        fi
         classifier_updated_iso=$(epoch_to_iso8601 "$classifier_mtime")
+    fi
+
+    local state_file="$session_dir/meta/stakeholder-classifier-state.json"
+    local stored_digest=""
+    local stored_sources_json='[]'
+    local stored_count=0
+    if [[ -s "$state_file" ]]; then
+        stored_digest=$(jq -r '.kg_source_digest // ""' "$state_file" 2>/dev/null || echo "")
+        stored_sources_json=$(jq -c '.sources // []' "$state_file" 2>/dev/null || echo '[]')
+        stored_count=$(jq -r '.kg_source_count // 0' "$state_file" 2>/dev/null || echo "0")
+    fi
+
+    local sources_summary
+    if sources_summary=$(stakeholder_classifier_collect_sources "$session_dir"); then
+        classifier_digest=$(printf '%s\n' "$sources_summary" | jq -r '.digest // ""' 2>/dev/null || echo "")
+        local current_sources_json
+        current_sources_json=$(printf '%s\n' "$sources_summary" | jq -c '.sources // []' 2>/dev/null || echo '[]')
+        if (( stored_count > 0 )) && (( stored_count == sources_total_numeric )); then
+            stored_sources_json="$current_sources_json"
+            if [[ -z "$stored_digest" ]]; then
+                stored_digest="$classifier_digest"
+            fi
+        fi
+        local diff_json
+        diff_json=$(stakeholder_classifier_sources_diff "$stored_sources_json" "$current_sources_json")
+        classifier_diff_added=$(printf '%s\n' "$diff_json" | jq '.added // 0' 2>/dev/null || echo "0")
+        classifier_diff_removed=$(printf '%s\n' "$diff_json" | jq '.removed // 0' 2>/dev/null || echo "0")
+        if [[ -s "$state_file" ]] && (( classifier_pending == 0 )) && (( classifier_needs_review_count == 0 )) && (( stored_count == sources_total_numeric )); then
+            classifier_diff_added=0
+            classifier_diff_removed=0
+            stored_sources_json="$current_sources_json"
+            if [[ -z "$stored_digest" ]]; then
+                stored_digest="$classifier_digest"
+            fi
+        fi
+    fi
+
+    if (( classifier_needs_review_count > 0 )); then
+        classifier_status="stale_pending"
+    elif (( classifier_pending > 0 )); then
+        classifier_status="stale_pending"
+    elif (( sources_total_numeric == 0 )); then
+        classifier_status="fresh"
+    elif [[ -n "$classifier_digest" && -n "$stored_digest" && "$classifier_digest" == "$stored_digest" ]]; then
+        classifier_status="fresh"
+    elif [[ -n "$classifier_digest" ]]; then
+        classifier_status="stale_digest_mismatch"
+    else
+        classifier_status="stale"
     fi
 
     local spent_usd="0"
@@ -531,6 +576,58 @@ build_mission_state() {
         fi
     fi
 
+    local orchestration_state_file="$session_dir/meta/orchestration-state.json"
+    local synthesis_blockers_raw='[]'
+    local synthesis_blocker_tags='[]'
+    local synthesis_ready_bool="true"
+    local synthesis_attempts_value="0"
+    if [[ -f "$orchestration_state_file" ]]; then
+        synthesis_blockers_raw=$(safe_jq_from_file "$orchestration_state_file" '.synthesis_blockers // []' '[]' "$session_dir" "mission_state.synthesis_blockers" false)
+        synthesis_attempts_value=$(safe_jq_from_file "$orchestration_state_file" '.synthesis_attempts // 0' '0' "$session_dir" "mission_state.synthesis_attempts")
+    fi
+    if [[ -z "$synthesis_blockers_raw" || "$synthesis_blockers_raw" == "null" ]]; then
+        synthesis_blockers_raw='[]'
+    fi
+    if [[ -z "$synthesis_attempts_value" || "$synthesis_attempts_value" == "null" ]]; then
+        synthesis_attempts_value="0"
+    fi
+    synthesis_attempts_value=$((synthesis_attempts_value + 0))
+
+    local synthesis_blocker_count
+    synthesis_blocker_count=$(printf '%s\n' "$synthesis_blockers_raw" | jq 'length' 2>/dev/null || echo "0")
+    if (( synthesis_blocker_count > 0 )); then
+        synthesis_ready_bool="false"
+        synthesis_blocker_tags=$(printf '%s\n' "$synthesis_blockers_raw" | jq -c '
+            def topic_label($topic):
+                if $topic == null then
+                    "unknown"
+                elif ($topic | type) == "object" then
+                    ($topic.canonical // $topic.id // ($topic | tostring))
+                else
+                    ($topic | tostring)
+                end;
+            (reduce .[] as $b ([];
+                ($b.type // "") as $type
+                | if $type == "watch_topics" then
+                    if (($b.details.pending // []) | length) > 0 then
+                        reduce ($b.details.pending // [])[] as $topic (.;
+                            . + ["watch_topics:" + topic_label($topic)]
+                        )
+                    else
+                        . + ["watch_topics"]
+                    end
+                else
+                    . + [(if $type == "" then "unknown" else $type end)]
+                end
+            )) | unique
+        ' 2>/dev/null || echo '[]')
+        if [[ -z "$synthesis_blocker_tags" || "$synthesis_blocker_tags" == "null" ]]; then
+            synthesis_blocker_tags='[]'
+        fi
+    else
+        synthesis_blocker_tags='[]'
+    fi
+
     local tmp_file="$meta_dir/mission_state.json.tmp"
     local kg_path_rel
     kg_path_rel=$(to_session_relative "$kg_file" "$session_dir")
@@ -555,6 +652,7 @@ build_mission_state() {
         --argjson watch_topics "$watch_status_json" \
         --arg classifier_path "${classifier_path_rel:-}" \
         --arg classifier_status "${classifier_status:-stale}" \
+        --arg classifier_digest "${classifier_digest:-}" \
         --arg classifier_updated_iso "${classifier_updated_iso:-}" \
         --arg classifier_updated_epoch "${classifier_mtime:-}" \
         --argjson classifier_total "${classifier_total:-0}" \
@@ -562,10 +660,16 @@ build_mission_state() {
         --argjson classifier_counts "$classifier_category_counts" \
         --argjson classifier_needs_review "$classifier_needs_review_json" \
         --argjson classifier_needs_review_count "$classifier_needs_review_count" \
+        --argjson classifier_diff_added "$classifier_diff_added" \
+        --argjson classifier_diff_removed "$classifier_diff_removed" \
         --arg kg_path "$kg_path_rel" \
         --arg kg_path_abs "$kg_file" \
         --arg log_path "$log_path_rel" \
         --arg log_path_abs "$orch_log" \
+        --argjson synthesis_ready "$synthesis_ready_bool" \
+        --argjson synthesis_blockers "$synthesis_blocker_tags" \
+        --argjson synthesis_blockers_detail "$synthesis_blockers_raw" \
+        --argjson synthesis_attempts "$synthesis_attempts_value" \
         '{
             coverage: {
                 claims: ($claims | tonumber),
@@ -590,6 +694,12 @@ build_mission_state() {
                     by_category: $confidence_by_category
                 }
             },
+            synthesis: {
+                ready: $synthesis_ready,
+                attempts: ($synthesis_attempts | tonumber),
+                blockers: $synthesis_blockers,
+                blockers_detail: $synthesis_blockers_detail
+            },
             stakeholder_classifier: {
                 status: $classifier_status,
                 classifications_file: (if $classifier_path == "" then null else $classifier_path end),
@@ -597,10 +707,15 @@ build_mission_state() {
                 pending_sources: $classifier_pending,
                 updated_at: (if $classifier_updated_iso == "" then null else $classifier_updated_iso end),
                 updated_epoch: (if $classifier_updated_epoch == "" then null else ($classifier_updated_epoch | tonumber) end),
+                source_digest: (if $classifier_digest == "" then null else $classifier_digest end),
                 category_counts: $classifier_counts,
                 needs_review: {
                     count: $classifier_needs_review_count,
                     entries: $classifier_needs_review
+                },
+                coverage_delta: {
+                    added: $classifier_diff_added,
+                    removed: $classifier_diff_removed
                 }
             },
             critical_watch_topics: $watch_topics,
@@ -613,7 +728,7 @@ build_mission_state() {
     mv "$tmp_file" "$meta_dir/mission_state.json"
 }
 
-if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
+if [[ "${BASH_SOURCE[0]:-}" == "${0}" || -z "${BASH_SOURCE[0]:-}" ]]; then
     if [[ $# -ne 1 ]]; then
         echo "Usage: $0 <session_dir>" >&2
         exit 1

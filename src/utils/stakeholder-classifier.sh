@@ -31,6 +31,8 @@ source "$SCRIPT_DIR/budget-tracker.sh" 2>/dev/null || true
 source "$SCRIPT_DIR/event-logger.sh" 2>/dev/null || true
 # shellcheck disable=SC1091
 source "$PROJECT_ROOT/src/shared-state.sh"
+# shellcheck disable=SC1091
+source "$SCRIPT_DIR/stakeholder-classifier-state.sh"
 
 # Optional agent invocation helper (loaded lazily)
 INVOKE_AGENT_LOADED=0
@@ -923,6 +925,19 @@ stakeholder_classifier_run_loop() {
             --arg completed "$completed_at" \
             --argjson pending "$pending" \
             '{mission: $mission, total_sources: $sources, total_classifications: $total_classifications, new_classifications: $new_classifications, needs_review: $needs, started_at: $started, completed_at: $completed, pending_sources: $pending}')"
+    fi
+
+    local sources_summary
+    if sources_summary=$(stakeholder_classifier_collect_sources "$session_dir"); then
+        local sources_digest
+        local sources_array_json
+        sources_digest=$(printf '%s\n' "$sources_summary" | jq -r '.digest // ""' 2>/dev/null || echo "")
+        sources_array_json=$(printf '%s\n' "$sources_summary" | jq -c '.sources // []' 2>/dev/null || echo '[]')
+        if ! stakeholder_classifier_write_state "$session_dir" "$sources_array_json" "$sources_digest" "$total_classified" "$pending"; then
+            log_warn "stakeholder-classifier: failed to persist coverage state"
+        fi
+    else
+        log_warn "stakeholder-classifier: unable to compute source digest for coverage state"
     fi
 
     echo "Stakeholder classifier complete: total classifications $total_classified, pending $pending."

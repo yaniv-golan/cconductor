@@ -45,6 +45,7 @@ TESTS=(
     "test-artifact-contracts.sh"
     "test-orchestrator-dual-mode.sh"
     "test-quality-gate-malformed-samples.sh"
+    "test-stakeholder-classifier-state.sh"
 )
 
 PASSED=0
