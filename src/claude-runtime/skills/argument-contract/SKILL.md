@@ -1,3 +1,12 @@
+---
+name: argument-contract
+description: "Ensure consistent argument event emission across all argument-capable agents. Invoke before emitting any argument_event payloads. Packages the full Argument Event Emission Contract so every agent can stream claims, evidence, contradictions, and retractions consistently."
+allowed-tools:
+  - Read
+  - Grep
+  - Bash(scripts/argument-events.sh:*)
+---
+
 # Argument Contract Skill
 
 > **Invoke this skill before you emit any `argument_event` payloads.**

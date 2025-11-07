@@ -1,0 +1,2 @@
+Transcript snippet with supporting detail.
+Additional transcript context for matching.

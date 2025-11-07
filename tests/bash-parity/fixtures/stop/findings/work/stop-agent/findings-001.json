@@ -1,0 +1,17 @@
+{
+  "claims": [
+    {
+      "statement": "Sample claim from findings",
+      "why_supported": "Source excerpt supports the claim.",
+      "confidence": 0.7,
+      "sources": [
+        {
+          "url": "https://example.com/article",
+          "title": "Example Article",
+          "relevant_quote": "Example snippet from article.",
+          "date": "2025-10-01"
+        }
+      ]
+    }
+  ]
+}

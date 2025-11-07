@@ -758,7 +758,6 @@ cconductor/
 ├── src/
 │   ├── cconductor-mission.sh      # Mission-based research engine
 │   ├── knowledge-graph.sh         # Knowledge state tracking
-│   ├── task-queue.sh             # Dynamic task management
 │   ├── shared-state.sh           # Concurrent access control
 │   ├── utils/                    # Utility scripts (17 files)
 │   │   ├── knowledge-loader.sh   # Custom knowledge injection

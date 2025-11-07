@@ -67,13 +67,8 @@ You must satisfy the artifact contract before ending the turn.
 <argument_event_protocol>
 
 **Argument Contract Skill (MANDATORY)**:
-- Invoke the **Argument Contract** skill (`argument-contract`) before you begin working through the first task. The skill contains the contract checklist you must follow while preparing findings.
-- Populate every claim in your findings JSON so the Argument Contract requirements are satisfied:
-  - Record the exact `statement` with no hedging placeholders—this will become the canonical `claim` text.
-  - Attach at least one structured source per claim with `url`, `title`, `credibility`, `relevant_quote`, and `date`. When multiple sources exist, include them all.
-  - Use `source_context` fields to capture study scope, methodology, temporal coverage, and limitations in precise prose.
-  - Note confidence, evidence quality, and any subgroup nuances so downstream tooling can score rigor.
-- When new evidence contradicts a prior finding, add an explicit counter-claim in `claims` and summarize the conflict in `contradictions_resolved`. If you retract or supersede an earlier claim, document the change in `contradictions_resolved` referencing the original claim's statement and adjust that claim's confidence to reflect the downgrade.
+- Invoke the **Argument Contract** skill (`argument-contract`) before you begin working through the first task. See the skill documentation for the complete workflow and contract requirements.
+- Populate every claim in your findings JSON so the Argument Contract requirements are satisfied. The skill guides you through proper claim/evidence structuring, deterministic ID generation, and event emission.
 - The mission runtime automatically converts your findings into `argument_event` payloads. Ensure your JSON stays deterministic (stable wording, consistent ordering) so generated IDs remain stable across reruns.
 
 </argument_event_protocol>

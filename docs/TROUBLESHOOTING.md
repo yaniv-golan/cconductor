@@ -720,6 +720,7 @@ find research-sessions -name "*.lock" -exec rm -rf {} +
 # Or for specific session
 rm -rf research-sessions/mission_*/knowledge/knowledge-graph.json.lock
 rm -rf research-sessions/mission_*/task-queue.json.lock  # Legacy sessions only
+rm -rf research-sessions/mission_*/task-queue.json.lock  # Legacy sessions only
 ```
 
 **Step 4: Resume research**:
@@ -2627,3 +2628,6 @@ grep ERROR logs/research.log | tail -10
 ---
 
 **CConductor Troubleshooting** - Get back on track 🔧
+# Cache Reuse Indicators
+
+When the library guard reuses a cached WebFetch result, the CLI prints a `♻️ Cache hit` line only when verbose mode is enabled (`CCONDUCTOR_VERBOSE=1`). If you do not see the reuse notice, enable verbose mode or inspect `logs/events.jsonl` for the `library_digest_hit` event.

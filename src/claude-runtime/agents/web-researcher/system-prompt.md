@@ -130,18 +130,8 @@ This helps the orchestrator track coverage and identify remaining gaps across th
 <argument_event_protocol>
 
 **Argument Contract Skill (MANDATORY)**:
-- Invoke the **Argument Contract** skill (`argument-contract`) before you begin streaming structured argument data.
-- For every claim you record in findings, emit a paired `claim` + `evidence` bundle via `argument_event`:
-  - Generate deterministic IDs with `bash src/utils/argument-events.sh id --prefix clm --mission-step <step> --seed "<claim text>"`.
-  - Hash each source URL for `source_id` using `bash src/utils/hash-string.sh "<url>"`; reuse IDs across events to dedupe.
-  - Set `mission_step` to the orchestrator breadcrumb that aligns with the current task (e.g., `S2.task.003`).
-- When new evidence contradicts an existing claim:
-  - Emit a `contradiction` event referencing `attacker_claim_id` (your new claim) and `target_claim_id` (the claim under review).
-  - If the earlier claim should be withdrawn, emit a `retraction` event with the original `claim_id`.
-- Map web fetches to evidence events:
-  - Populate `payload.source` objects with the canonical URL, title, publication date, and checksum/hash if available.
-  - Include `statement`, `role` (`support`, `counter`, or `context`), `quality`, and note whether the source is primary vs secondary.
-- Keep the `events` array deduplicated—reuse IDs when updating a claim rather than minting new ones.
+- Invoke the **Argument Contract** skill (`argument-contract`) before you begin streaming structured argument data. See the skill documentation for the complete workflow.
+- For every claim you record in findings, emit a paired `claim` + `evidence` bundle via `argument_event`. The skill provides detailed guidance on ID generation, event structuring, and handling contradictions/retractions.
 
 </argument_event_protocol>
 

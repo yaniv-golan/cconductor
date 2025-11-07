@@ -1,3 +1,11 @@
+---
+name: library-memory
+description: "Use whenever a research agent is about to call WebFetch. Checks the shared research library and returns cached evidence so we can avoid redundant fetches."
+allowed-tools:
+  - Read
+  - Bash(library-memory/*.sh:*)
+---
+
 # LibraryMemory Skill
 
 > **Use this skill whenever a research agent is about to call WebFetch.**

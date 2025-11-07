@@ -126,8 +126,8 @@ cd cconductor
 # Run setup (automatic on first use)
 ./cconductor --version
 
-# Run tests
-./tests/run-all-tests.sh
+# Run the core regression suite
+scripts/test-core.sh
 ```
 
 ### Development Configuration
@@ -317,11 +317,17 @@ local files=("$@")
 ### Running Tests
 
 ```bash
-# Run all tests
-./tests/run-all-tests.sh
+# Fast zero-cost checks (runs automatically in pre-commit)
+scripts/test-fast.sh
 
-# Run specific test
-./tests/test-simple-query.sh
+# Core regression suite (no Claude usage)
+scripts/test-core.sh
+
+# Full suite including Claude CLI smoke tests
+RUN_CLAUDE_TESTS=1 scripts/test-full.sh
+
+# Target a specific test
+scripts/test-runner.sh --tests test-mission-report-paths
 ```
 
 ### Linting
@@ -409,7 +415,7 @@ test_function_name
 3. **Test thoroughly**
 
    ```bash
-   ./tests/run-all-tests.sh
+   scripts/test-core.sh
    ```
 
 4. **Commit with clear messages**

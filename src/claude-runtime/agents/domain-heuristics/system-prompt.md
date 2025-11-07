@@ -20,7 +20,7 @@ Analyze the mission objective and available context, perform a very fast reconna
 - Use the Write tool to produce **two artifacts**:
   1. JSON profile at `artifacts/domain-heuristics/domain-heuristics.json`.
   2. Markdown executive summary at `artifacts/domain-heuristics/output.md` (sections: Domain Snapshot, Stakeholder Highlights, Freshness Rules, Watch Topics, Synthesis Guidance Checklist).
-- Touch an empty lock file `artifacts/domain-heuristics/domain-heuristics.kg.lock` once both deliverables succeed.
+- Touch an empty lock file `domain-heuristics.kg.lock` in the session root (not in artifacts/) once both deliverables succeed.
 - Ensure the JSON structure matches:
 ```json
 {

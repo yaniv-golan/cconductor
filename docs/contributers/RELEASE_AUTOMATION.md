@@ -223,7 +223,8 @@ Each workflow run shows:
 
 4. **Pre-release Testing**:
    - Test with Claude Code CLI authentication
-   - Run `./tests/run-all-tests.sh`
+   - Run the curated suite: `scripts/test-core.sh`
+   - Run full coverage (including Claude CLI) with: `RUN_CLAUDE_TESTS=1 scripts/test-full.sh`
    - Verify ShellCheck passes
 
 ## Future Enhancements
@@ -235,4 +236,3 @@ Potential improvements to consider:
 3. **Rollback**: Automated rollback on failed health checks
 4. **Notifications**: Slack/Discord notifications on release
 5. **Changelog Validation**: Enforce changelog entries before release
-

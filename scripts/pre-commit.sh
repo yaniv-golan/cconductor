@@ -59,4 +59,11 @@ audit_output="${TMPDIR:-/tmp}/jq-audit-precommit.json"
 bash "$PROJECT_ROOT/scripts/audit-jq-usage.sh" "$audit_output" >/dev/null
 rm -f "$audit_output"
 
+if [[ "${SKIP_PRECOMMIT_TESTS:-0}" == "1" ]]; then
+    log_info "pre-commit" "Skipping unit tests (SKIP_PRECOMMIT_TESTS=1)"
+else
+    log_info "pre-commit" "Running fast unit tests (scripts/test-fast.sh)"
+    bash "$PROJECT_ROOT/scripts/test-fast.sh"
+fi
+
 log_info "pre-commit" "All pre-commit checks passed"

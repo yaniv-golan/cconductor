@@ -1,3 +1,13 @@
+---
+name: cache-aware-web-research
+description: "Use before any WebSearch or WebFetch invocation. Guides agents through cache-aware querying so we reuse existing results, fall back to LibraryMemory digests, and only request fresh data when necessary."
+allowed-tools:
+  - Read
+  - Grep
+  - Bash(scripts/cache-query-similar.sh:*)
+  - Bash(library-memory/*.sh:*)
+---
+
 # Cache-Aware Web Research Skill
 
 > **Use this skill before any WebSearch or WebFetch invocation.**

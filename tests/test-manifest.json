@@ -1,0 +1,548 @@
+[
+  {
+    "name": "test-render-mission-report",
+    "path": "tests/bash-parity/test-render-mission-report.sh",
+    "category": "integration",
+    "description": "",
+    "cost": "zero"
+  },
+  {
+    "name": "test-stop-build-evidence",
+    "path": "tests/bash-parity/test-stop-build-evidence.sh",
+    "category": "integration",
+    "description": "",
+    "cost": "zero"
+  },
+  {
+    "name": "test_kg_ingest_evidence",
+    "path": "tests/citation-readiness-tests/test_kg_ingest_evidence.sh",
+    "category": "integration",
+    "description": "",
+    "cost": "zero"
+  },
+  {
+    "name": "test_knowledge_graph_citations",
+    "path": "tests/citation-readiness-tests/test_knowledge_graph_citations.sh",
+    "category": "integration",
+    "description": "",
+    "cost": "zero"
+  },
+  {
+    "name": "test_prompt_instructions",
+    "path": "tests/citation-readiness-tests/test_prompt_instructions.sh",
+    "category": "integration",
+    "description": "",
+    "cost": "zero"
+  },
+  {
+    "name": "test_renderer_fallback",
+    "path": "tests/citation-readiness-tests/test_renderer_fallback.sh",
+    "category": "integration",
+    "description": "",
+    "cost": "zero"
+  },
+  {
+    "name": "test_renderer_footnotes",
+    "path": "tests/citation-readiness-tests/test_renderer_footnotes.sh",
+    "category": "integration",
+    "description": "",
+    "cost": "zero"
+  },
+  {
+    "name": "test_stop_hook_evidence",
+    "path": "tests/citation-readiness-tests/test_stop_hook_evidence.sh",
+    "category": "integration",
+    "description": "",
+    "cost": "zero"
+  },
+  {
+    "name": "test_transcript_capture",
+    "path": "tests/citation-readiness-tests/test_transcript_capture.sh",
+    "category": "integration",
+    "description": "",
+    "cost": "zero"
+  },
+  {
+    "name": "test_webfetch_beta_header",
+    "path": "tests/citation-readiness-tests/test_webfetch_beta_header.sh",
+    "category": "claude",
+    "description": "Smoke-tests WebFetch beta header using live Claude CLI.",
+    "cost": "claude"
+  },
+  {
+    "name": "test_webfetch_cached_bodies",
+    "path": "tests/citation-readiness-tests/test_webfetch_cached_bodies.sh",
+    "category": "integration",
+    "description": "",
+    "cost": "zero"
+  },
+  {
+    "name": "cost-extraction-test",
+    "path": "tests/cost-extraction-test.sh",
+    "category": "unit",
+    "description": "Validates extract_cost_from_output helper logic.",
+    "cost": "zero"
+  },
+  {
+    "name": "run-streaming-heartbeat-tests",
+    "path": "tests/streaming-heartbeat-sandbox/run-streaming-heartbeat-tests.sh",
+    "category": "integration",
+    "description": "",
+    "cost": "zero"
+  },
+  {
+    "name": "test-agent-fallback",
+    "path": "tests/test-agent-fallback.sh",
+    "category": "integration",
+    "description": "",
+    "cost": "zero"
+  },
+  {
+    "name": "test-agent-invocation",
+    "path": "tests/test-agent-invocation.sh",
+    "category": "claude",
+    "description": "Invokes research-planner through invoke-agent.sh to verify Claude CLI wiring.",
+    "cost": "claude"
+  },
+  {
+    "name": "test-agent-timeout",
+    "path": "tests/test-agent-timeout.sh",
+    "category": "integration",
+    "description": "",
+    "cost": "zero"
+  },
+  {
+    "name": "test-argument-event-graph",
+    "path": "tests/test-argument-event-graph.sh",
+    "category": "integration",
+    "description": "",
+    "cost": "zero"
+  },
+  {
+    "name": "test-artifact-contracts",
+    "path": "tests/test-artifact-contracts.sh",
+    "category": "integration",
+    "description": "",
+    "cost": "zero"
+  },
+  {
+    "name": "test-artifact-ready-wait",
+    "path": "tests/test-artifact-ready-wait.sh",
+    "category": "integration",
+    "description": "",
+    "cost": "zero"
+  },
+  {
+    "name": "test-calculate",
+    "path": "tests/test-calculate.sh",
+    "category": "unit",
+    "description": "",
+    "cost": "zero"
+  },
+  {
+    "name": "test-cli-parser",
+    "path": "tests/test-cli-parser.sh",
+    "category": "integration",
+    "description": "",
+    "cost": "zero"
+  },
+  {
+    "name": "test-dashboard-metrics",
+    "path": "tests/test-dashboard-metrics.sh",
+    "category": "integration",
+    "description": "",
+    "cost": "zero"
+  },
+  {
+    "name": "test-dashboard-partial-session",
+    "path": "tests/test-dashboard-partial-session.sh",
+    "category": "integration",
+    "description": "",
+    "cost": "zero"
+  },
+  {
+    "name": "test-dashboard-preflight",
+    "path": "tests/test-dashboard-preflight.sh",
+    "category": "integration",
+    "description": "",
+    "cost": "zero"
+  },
+  {
+    "name": "test-data-utils",
+    "path": "tests/test-data-utils.sh",
+    "category": "integration",
+    "description": "",
+    "cost": "zero"
+  },
+  {
+    "name": "test-date-helpers",
+    "path": "tests/test-date-helpers.sh",
+    "category": "unit",
+    "description": "",
+    "cost": "zero"
+  },
+  {
+    "name": "test-event-tailer-library-memory",
+    "path": "tests/test-event-tailer-library-memory.sh",
+    "category": "integration",
+    "description": "",
+    "cost": "zero"
+  },
+  {
+    "name": "test-event-tailer-library",
+    "path": "tests/test-event-tailer-library.sh",
+    "category": "integration",
+    "description": "",
+    "cost": "zero"
+  },
+  {
+    "name": "test-heartbeat-compliance",
+    "path": "tests/test-heartbeat-compliance.sh",
+    "category": "claude",
+    "description": "Runs a long-lived streaming agent to confirm heartbeat guardrails (Claude required).",
+    "cost": "claude"
+  },
+  {
+    "name": "test-hook-security",
+    "path": "tests/test-hook-security.sh",
+    "category": "integration",
+    "description": "",
+    "cost": "zero"
+  },
+  {
+    "name": "test-id-uniqueness",
+    "path": "tests/test-id-uniqueness.sh",
+    "category": "integration",
+    "description": "",
+    "cost": "zero"
+  },
+  {
+    "name": "test-input-dir-integration",
+    "path": "tests/test-input-dir-integration.sh",
+    "category": "integration",
+    "description": "",
+    "cost": "zero"
+  },
+  {
+    "name": "test-interactive-planning",
+    "path": "tests/test-interactive-planning.sh",
+    "category": "integration",
+    "description": "",
+    "cost": "zero"
+  },
+  {
+    "name": "test-json-helpers-jq",
+    "path": "tests/test-json-helpers-jq.sh",
+    "category": "unit",
+    "description": "",
+    "cost": "zero"
+  },
+  {
+    "name": "test-kg-artifact-processor",
+    "path": "tests/test-kg-artifact-processor.sh",
+    "category": "integration",
+    "description": "",
+    "cost": "zero"
+  },
+  {
+    "name": "test-kg-source-stats",
+    "path": "tests/test-kg-source-stats.sh",
+    "category": "integration",
+    "description": "",
+    "cost": "zero"
+  },
+  {
+    "name": "test-kg-utils",
+    "path": "tests/test-kg-utils.sh",
+    "category": "integration",
+    "description": "",
+    "cost": "zero"
+  },
+  {
+    "name": "test-kg-web-researcher-ingest",
+    "path": "tests/test-kg-web-researcher-ingest.sh",
+    "category": "integration",
+    "description": "",
+    "cost": "zero"
+  },
+  {
+    "name": "test-library-memory-hook",
+    "path": "tests/test-library-memory-hook.sh",
+    "category": "integration",
+    "description": "",
+    "cost": "zero"
+  },
+  {
+    "name": "test-lock-timeout",
+    "path": "tests/test-lock-timeout.sh",
+    "category": "integration",
+    "description": "",
+    "cost": "zero"
+  },
+  {
+    "name": "test-mission-report-paths",
+    "path": "tests/test-mission-report-paths.sh",
+    "category": "integration",
+    "description": "",
+    "cost": "zero"
+  },
+  {
+    "name": "test-mission-watch-topic-integration",
+    "path": "tests/test-mission-watch-topic-integration.sh",
+    "category": "claude",
+    "description": "Runs mission-state builder with LLM-based watch topic matching.",
+    "cost": "claude"
+  },
+  {
+    "name": "test-orchestrator-dual-mode",
+    "path": "tests/test-orchestrator-dual-mode.sh",
+    "category": "integration",
+    "description": "",
+    "cost": "zero"
+  },
+  {
+    "name": "test-orchestrator-utils-usage",
+    "path": "tests/test-orchestrator-utils-usage.sh",
+    "category": "integration",
+    "description": "",
+    "cost": "zero"
+  },
+  {
+    "name": "test-parallel-logic",
+    "path": "tests/test-parallel-logic.sh",
+    "category": "integration",
+    "description": "",
+    "cost": "zero"
+  },
+  {
+    "name": "test-pdf-cache-phase1",
+    "path": "tests/test-pdf-cache-phase1.sh",
+    "category": "integration",
+    "description": "",
+    "cost": "zero"
+  },
+  {
+    "name": "test-pdf-content-hash",
+    "path": "tests/test-pdf-content-hash.sh",
+    "category": "integration",
+    "description": "",
+    "cost": "zero"
+  },
+  {
+    "name": "test-phase1-integration",
+    "path": "tests/test-phase1-integration.sh",
+    "category": "claude",
+    "description": "Exercises session continuity with real research-coordinator iterations.",
+    "cost": "claude"
+  },
+  {
+    "name": "test-phase1-session-continuity",
+    "path": "tests/test-phase1-session-continuity.sh",
+    "category": "claude",
+    "description": "Validates session-manager resume flow via live Claude session.",
+    "cost": "claude"
+  },
+  {
+    "name": "test-platform-compatibility",
+    "path": "tests/test-platform-compatibility.sh",
+    "category": "integration",
+    "description": "",
+    "cost": "zero"
+  },
+  {
+    "name": "test-quality-aware-orchestration",
+    "path": "tests/test-quality-aware-orchestration.sh",
+    "category": "integration",
+    "description": "",
+    "cost": "zero"
+  },
+  {
+    "name": "test-quality-gate-malformed-samples",
+    "path": "tests/test-quality-gate-malformed-samples.sh",
+    "category": "integration",
+    "description": "",
+    "cost": "zero"
+  },
+  {
+    "name": "test-quality-gate",
+    "path": "tests/test-quality-gate.sh",
+    "category": "integration",
+    "description": "",
+    "cost": "zero"
+  },
+  {
+    "name": "test-quality-guard",
+    "path": "tests/test-quality-guard.sh",
+    "category": "integration",
+    "description": "",
+    "cost": "zero"
+  },
+  {
+    "name": "test-runtime-utils-usage",
+    "path": "tests/test-runtime-utils-usage.sh",
+    "category": "integration",
+    "description": "",
+    "cost": "zero"
+  },
+  {
+    "name": "test-security-fixes",
+    "path": "tests/test-security-fixes.sh",
+    "category": "integration",
+    "description": "",
+    "cost": "zero"
+  },
+  {
+    "name": "test-session-collision",
+    "path": "tests/test-session-collision.sh",
+    "category": "integration",
+    "description": "",
+    "cost": "zero"
+  },
+  {
+    "name": "test-session-layout",
+    "path": "tests/test-session-layout.sh",
+    "category": "integration",
+    "description": "",
+    "cost": "zero"
+  },
+  {
+    "name": "test-session-manifest",
+    "path": "tests/test-session-manifest.sh",
+    "category": "integration",
+    "description": "",
+    "cost": "zero"
+  },
+  {
+    "name": "test-skill-metadata",
+    "path": "tests/test-skill-metadata.sh",
+    "category": "integration",
+    "description": "",
+    "cost": "zero"
+  },
+  {
+    "name": "test-stakeholder-classifier-guard",
+    "path": "tests/test-stakeholder-classifier-guard.sh",
+    "category": "integration",
+    "description": "",
+    "cost": "zero"
+  },
+  {
+    "name": "test-stakeholder-classifier-state",
+    "path": "tests/test-stakeholder-classifier-state.sh",
+    "category": "integration",
+    "description": "",
+    "cost": "zero"
+  },
+  {
+    "name": "test-stakeholder-classifier-streaming",
+    "path": "tests/test-stakeholder-classifier-streaming.sh",
+    "category": "integration",
+    "description": "",
+    "cost": "zero"
+  },
+  {
+    "name": "test-stakeholder-classifier",
+    "path": "tests/test-stakeholder-classifier.sh",
+    "category": "integration",
+    "description": "",
+    "cost": "zero"
+  },
+  {
+    "name": "test-stakeholder-gate",
+    "path": "tests/test-stakeholder-gate.sh",
+    "category": "integration",
+    "description": "",
+    "cost": "zero"
+  },
+  {
+    "name": "test-stakeholder-resolver-patterns",
+    "path": "tests/test-stakeholder-resolver-patterns.sh",
+    "category": "integration",
+    "description": "",
+    "cost": "zero"
+  },
+  {
+    "name": "test-streaming-session-continuity",
+    "path": "tests/test-streaming-session-continuity.sh",
+    "category": "integration",
+    "description": "",
+    "cost": "zero"
+  },
+  {
+    "name": "test-synthesis-guard",
+    "path": "tests/test-synthesis-guard.sh",
+    "category": "integration",
+    "description": "",
+    "cost": "zero"
+  },
+  {
+    "name": "test-termination-validation",
+    "path": "tests/test-termination-validation.sh",
+    "category": "integration",
+    "description": "",
+    "cost": "zero"
+  },
+  {
+    "name": "test-watch-topic-llm-matching",
+    "path": "tests/test-watch-topic-llm-matching.sh",
+    "category": "integration",
+    "description": "",
+    "cost": "zero"
+  },
+  {
+    "name": "test-watch-topic-matcher",
+    "path": "tests/test-watch-topic-matcher.sh",
+    "category": "integration",
+    "description": "",
+    "cost": "zero"
+  },
+  {
+    "name": "test-web-cache-locking",
+    "path": "tests/test-web-cache-locking.sh",
+    "category": "unit",
+    "description": "",
+    "cost": "zero"
+  },
+  {
+    "name": "test-web-cache-portability",
+    "path": "tests/test-web-cache-portability.sh",
+    "category": "unit",
+    "description": "",
+    "cost": "zero"
+  },
+  {
+    "name": "test-web-cache-ttl",
+    "path": "tests/test-web-cache-ttl.sh",
+    "category": "unit",
+    "description": "",
+    "cost": "zero"
+  },
+  {
+    "name": "test-web-cache",
+    "path": "tests/test-web-cache.sh",
+    "category": "unit",
+    "description": "",
+    "cost": "zero"
+  },
+  {
+    "name": "test-web-fetch-permissive-default",
+    "path": "tests/test-web-fetch-permissive-default.sh",
+    "category": "unit",
+    "description": "",
+    "cost": "zero"
+  },
+  {
+    "name": "test-web-search-cache",
+    "path": "tests/test-web-search-cache.sh",
+    "category": "unit",
+    "description": "",
+    "cost": "zero"
+  },
+  {
+    "name": "test-write-tool-contracts",
+    "path": "tests/test-write-tool-contracts.sh",
+    "category": "integration",
+    "description": "",
+    "cost": "zero"
+  }
+]

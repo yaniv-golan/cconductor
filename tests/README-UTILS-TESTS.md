@@ -71,28 +71,19 @@ Tests for security configuration and whitelist enforcement.
 
 ## Running Tests
 
-### Run All Tests
+Run each suite directly (they complete in seconds) or loop through them with:
 
 ```bash
-# Run complete test suite
-./tests/test-all-utils.sh
+for test in \
+  ./tests/test-kg-utils.sh \
+  ./tests/test-data-utils.sh \
+  ./tests/test-calculate.sh \
+  ./tests/test-hook-security.sh; do
+  bash "$test"
+done
 ```
 
-### Run Individual Test Suites
-
-```bash
-# Run kg-utils tests only
-./tests/test-kg-utils.sh
-
-# Run data-utils tests only
-./tests/test-data-utils.sh
-
-# Run calculate tests only
-./tests/test-calculate.sh
-
-# Run security tests only
-./tests/test-hook-security.sh
-```
+These unit tests are also included in `scripts/test-fast.sh`, so running the fast suite will automatically cover them.
 
 ## Test Output
 
@@ -194,7 +185,7 @@ When adding a new utility function:
 When adding a new utility script:
 
 1. Create new test file: `tests/test-your-util.sh`
-2. Add to `test-all-utils.sh` runner
+2. Mention it in the loop under **Running Tests** so contributors know how to exercise it
 3. Add to whitelist in `pre-tool-use.sh`
 4. Document in `docs/contributers/ORCHESTRATOR_UTILITIES.md`
 5. Update system prompt for mission-orchestrator

@@ -457,8 +457,11 @@ cat research-sessions/.latest
 ### Testing
 
 ```bash
-# Run all tests
-./tests/run-all-tests.sh
+# Run fast zero-cost tests
+scripts/test-fast.sh
+
+# Run core regression suite (no Claude)
+scripts/test-core.sh
 
 # Lint specific file
 shellcheck path/to/script.sh
@@ -477,7 +480,7 @@ Repository includes pre-commit hook that runs ShellCheck automatically.
 
 1. Create branch from main: `git checkout -b feature/name`
 2. Follow coding standards and add tests
-3. Run tests: `./tests/run-all-tests.sh`
+3. Run tests with `scripts/test-core.sh` (and `RUN_CLAUDE_TESTS=1 scripts/test-full.sh` when touching Claude-facing flows)
 4. Update documentation and CHANGELOG.md
 5. Ensure ShellCheck passes
 6. Commit with clear messages (feat/fix/docs/refactor/test/chore)
