@@ -1,0 +1,8 @@
+{
+  "schema_version": "1.0.0",
+  "agent": "watch-topic-evaluator",
+  "description": "Watch topic semantic evaluation results returned as JSON in result field.",
+  "artifacts": []
+}
+
+

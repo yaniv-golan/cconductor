@@ -911,6 +911,101 @@ cp your-papers/*.pdf pdfs/
 
 ---
 
+### Watch Topics Remain Pending Despite Relevant Claims
+
+**Symptoms**:
+
+- Mission stalls at synthesis with message about critical watch topics pending
+- Guard reports "critical watch topics pending"
+- `meta/mission_state.json` shows watch topics with `status: "pending"`
+- Knowledge graph appears to have relevant claims
+
+**Root Cause**: Lexical matching (Jaccard/coverage) failed to recognize semantic equivalence between watch topics and claims
+
+**Resolution**: LLM semantic matching is enabled by default (v0.5.0+). Check logs:
+
+1. **Open events.jsonl**:
+   ```bash
+   less "$(./src/utils/path-resolver.sh resolve session_dir)/mission_xxx/logs/events.jsonl"
+   ```
+
+2. **Search for LLM evaluation events**:
+   ```bash
+   jq 'select(.type == "watch_topic_llm_eval")' logs/events.jsonl
+   ```
+
+3. **Review matched claims and confidence scores**:
+   ```bash
+   jq 'select(.type == "watch_topic_llm_eval") | {topic_id, matches_found, best_confidence}' logs/events.jsonl
+   ```
+
+**If LLM disabled or failed**:
+
+- **Enable LLM matching**:
+  ```bash
+  export WATCH_TOPIC_LLM_ENABLED=1
+  ./src/utils/mission-state-builder.sh <session_dir>
+  ```
+
+- **Check budget**:
+  ```bash
+  ./src/utils/budget-tracker.sh inspect <session_dir>
+  ```
+  
+- **Review authentication**:
+  ```bash
+  claude whoami
+  ```
+  If not authenticated: `claude login`
+
+- **Check model availability**:
+  ```bash
+  claude --model claude-haiku-4 --help
+  ```
+
+**Debugging LLM decisions**:
+
+- **View full LLM evaluation**:
+  ```bash
+  jq 'select(.type == "watch_topic_llm_eval")' logs/events.jsonl | jq .
+  ```
+
+- **Check LLM costs**:
+  ```bash
+  jq '.agent_costs.llm_matching' meta/budget.json
+  ```
+
+- **Adjust confidence threshold** (if too strict):
+  ```bash
+  export WATCH_TOPIC_LLM_CONFIDENCE_MIN=0.6  # Default 0.7
+  ```
+
+- **Adjust coverage threshold** (for candidate filtering):
+  ```bash
+  export WATCH_TOPIC_LLM_CANDIDATE_MIN=0.2  # Default 0.25
+  ```
+
+**After adjustments**, rebuild mission state:
+```bash
+./src/utils/mission-state-builder.sh <session_dir>
+```
+
+**Still pending after LLM matching?**
+
+This may indicate a genuine gap (evidence doesn't exist). Options:
+
+1. **Manual review**: Check if the knowledge graph truly has relevant claims
+2. **Add evidence**: Resume mission with more specific research instructions
+3. **Adjust topic importance**: If not truly critical, lower importance in domain heuristics
+
+**Diagnostics command**:
+```bash
+./src/utils/watch-topic-diagnostics.sh <session_dir>
+```
+Shows lexical scores and LLM matching summary.
+
+---
+
 ### Stakeholder Classifier Appears Stale
 
 **Symptoms**:

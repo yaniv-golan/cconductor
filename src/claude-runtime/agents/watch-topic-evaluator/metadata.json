@@ -1,0 +1,16 @@
+{
+  "name": "watch-topic-evaluator",
+  "display_name": "Watch Topic Semantic Evaluator",
+  "description": "Evaluates semantic relevance of research claims to watch topics using LLM understanding",
+  "tools": [],
+  "model": "claude-haiku-4",
+  "version": "1.0.0",
+  "capabilities": ["semantic_matching", "confidence_scoring"],
+  "input_types": ["watch_topic_evaluation_request"],
+  "output_types": ["watch_topic_evaluation_result"],
+  "timeout_seconds": 30,
+  "cost_category": "micro",
+  "tags": ["watch-topics", "semantic-matching", "quality-gate"]
+}
+
+

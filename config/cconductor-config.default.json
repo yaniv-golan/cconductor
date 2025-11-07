@@ -106,5 +106,19 @@
     "enable_hooks": true,
     "cache_search_results": true,
     "cache_ttl_hours": 24
+  },
+  "watch_topics": {
+    "jaccard_full_threshold": 0.15,
+    "coverage_full_threshold": 0.65,
+    "llm": {
+      "enabled": true,
+      "model": "claude-haiku-4",
+      "candidate_min_coverage": 0.25,
+      "confidence_threshold": 0.7,
+      "budget_per_mission": 0.10,
+      "parallel_enabled": false,
+      "cache_enabled": true,
+      "cache_ttl_hours": 24
+    }
   }
 }

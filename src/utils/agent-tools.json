@@ -358,5 +358,24 @@
         "optional_artifacts": [],
         "primary_artifact_slot": "stakeholder_classification_markdown",
         "legacy_result_parsing": true
+    },
+    "watch-topic-evaluator": {
+        "allowed": [],
+        "disallowed": [
+            "WebSearch",
+            "WebFetch",
+            "Read",
+            "Write",
+            "Grep",
+            "Glob",
+            "Bash",
+            "Edit",
+            "NotebookEdit"
+        ],
+        "artifact_first": false,
+        "required_artifacts": [],
+        "optional_artifacts": [],
+        "primary_artifact_slot": null,
+        "legacy_result_parsing": false
     }
 }

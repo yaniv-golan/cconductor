@@ -102,6 +102,26 @@ budget_record_invocation() {
     '
 }
 
+# Record LLM matching cost
+budget_record_llm_match() {
+    local session_dir="$1"
+    local cost_usd="$2"
+    
+    local budget_file="$session_dir/meta/budget.json"
+    
+    if [[ ! -f "$budget_file" ]]; then
+        log_warn "Budget file not found for LLM match recording"
+        return 1
+    fi
+    
+    # Use atomic update to safely modify budget file
+    # shellcheck disable=SC2016
+    atomic_json_update "$budget_file" \
+        --argjson cost "$cost_usd" \
+        '.spent.cost_usd += $cost |
+         .agent_costs.llm_matching = ((.agent_costs.llm_matching // 0) + $cost)'
+}
+
 # Check if budget allows operation
 budget_check() {
   local session_dir="$1"

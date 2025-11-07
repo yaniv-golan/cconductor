@@ -115,3 +115,52 @@ while IFS= read -r topic_json; do
 
     printf "%-12s %-12s %-10.2f %-10.2f %s\n" "$topic_id" "${best_claim_id:-n/a}" "${best_coverage:-0}" "${best_jaccard:-0}" "${best_statement:-n/a}"
 done < <(jq -c '.watch_topics[]?' "$heuristics_file")
+
+# Display LLM semantic matching summary
+watch_topic_llm_summary() {
+    local session_dir="$1"
+    
+    if [[ ! -f "$session_dir/logs/events.jsonl" ]]; then
+        return 0
+    fi
+    
+    # Parse watch_topic_llm_eval events
+    local topics_evaluated
+    topics_evaluated=$(jq -s '[.[] | select(.type == "watch_topic_llm_eval")] | length' \
+        "$session_dir/logs/events.jsonl" 2>/dev/null || echo "0")
+    
+    if (( topics_evaluated == 0 )); then
+        return 0
+    fi
+    
+    local total_cost
+    total_cost=$(jq -s '[.[] | select(.type == "watch_topic_llm_eval") | .cost_usd] | add' \
+        "$session_dir/logs/events.jsonl" 2>/dev/null || echo "0")
+    
+    local avg_confidence
+    avg_confidence=$(jq -s '
+        [.[] | select(.type == "watch_topic_llm_eval") | .best_confidence] |
+        if length > 0 then (add / length) else 0 end
+    ' "$session_dir/logs/events.jsonl" 2>/dev/null || echo "0")
+    
+    local total_claims_evaluated
+    total_claims_evaluated=$(jq -s '
+        [.[] | select(.type == "watch_topic_llm_eval") | .claims_evaluated] | add
+    ' "$session_dir/logs/events.jsonl" 2>/dev/null || echo "0")
+    
+    local total_matches
+    total_matches=$(jq -s '
+        [.[] | select(.type == "watch_topic_llm_eval") | .matches_found] | add
+    ' "$session_dir/logs/events.jsonl" 2>/dev/null || echo "0")
+    
+    printf "\n"
+    printf "LLM Semantic Matching Summary:\n"
+    printf "  Topics evaluated: %s\n" "$topics_evaluated"
+    printf "  Claims evaluated: %s\n" "$total_claims_evaluated"
+    printf "  Matches found: %s\n" "$total_matches"
+    printf "  Total LLM cost: \$%s\n" "$total_cost"
+    printf "  Avg confidence: %.2f\n" "$avg_confidence"
+}
+
+# Call LLM summary function
+watch_topic_llm_summary "$session_dir"

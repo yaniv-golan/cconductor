@@ -9,7 +9,8 @@
     "quality-remediator": 900,
     "fact-checker": 720,
     "research-planner": 300,
-    "mission-orchestrator": 300
+    "mission-orchestrator": 300,
+    "watch-topic-evaluator": 30
   },
   "min_required_research_minutes": 10,
   "watchdog_check_interval_seconds": 60

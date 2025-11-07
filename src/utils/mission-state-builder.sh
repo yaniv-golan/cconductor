@@ -13,6 +13,15 @@ source "$SCRIPT_DIR/json-helpers.sh"
 source "$SCRIPT_DIR/budget-tracker.sh" 2>/dev/null || true
 # shellcheck disable=SC1091
 source "$SCRIPT_DIR/stakeholder-classifier-state.sh"
+# shellcheck disable=SC1091
+source "$SCRIPT_DIR/invoke-agent.sh"
+# shellcheck disable=SC1091
+source "$SCRIPT_DIR/agent-registry.sh" 2>/dev/null || true
+
+# Initialize agent registry if available (needed for watch-topic-evaluator setup)
+if declare -F agent_registry_init >/dev/null 2>&1; then
+    agent_registry_init
+fi
 
 BASH_RUNTIME="${CCONDUCTOR_BASH_RUNTIME:-$(command -v bash)}"
 
@@ -239,6 +248,288 @@ epoch_to_iso8601() {
     fi
 }
 
+# Filter candidate claims for LLM evaluation
+# Returns claims with coverage >= threshold but < full threshold
+watch_topic_filter_candidate_claims() {
+    local topic_json="$1"
+    local claims_json="$2"
+    local session_dir="$3"
+    
+    # Extract watch topic canonical text
+    local canonical
+    canonical=$(safe_jq_from_json "$topic_json" '.canonical // .text // ""' "" "$session_dir" "watch_topic_llm.canonical")
+    
+    if [[ -z "$canonical" ]]; then
+        echo '[]'
+        return 0
+    fi
+    
+    # Tokenize watch topic
+    local watch_tokens
+    watch_tokens=$(watch_topic_tokenize_text "$canonical")
+    
+    # Filter claims with coverage >= 0.25 (configurable)
+    local min_coverage="${WATCH_TOPIC_LLM_CANDIDATE_MIN:-0.25}"
+    local full_coverage="${WATCH_TOPIC_COVERAGE_CRITICAL_MIN:-0.65}"
+    local full_jaccard="${WATCH_TOPIC_JACCARD_CRITICAL_MIN:-0.15}"
+    local -a candidates=()
+    
+    # Parse claims array and filter
+    while IFS= read -r claim_json; do
+        [[ -z "$claim_json" || "$claim_json" == "null" ]] && continue
+        
+        # Extract claim text
+        local claim_text
+        claim_text=$(safe_jq_from_json "$claim_json" '.statement // .text // ""' "" "$session_dir" "watch_topic_llm.claim_text")
+        [[ -z "$claim_text" ]] && continue
+        
+        # Compute lexical scores
+        local claim_tokens
+        claim_tokens=$(watch_topic_tokenize_text "$claim_text")
+        
+        local coverage
+        coverage=$(watch_topic_compute_coverage "$watch_tokens" "$claim_tokens")
+        
+        local jaccard
+        jaccard=$(watch_topic_compute_jaccard "$watch_tokens" "$claim_tokens")
+        
+        # Skip if already meets full thresholds (will be caught by lexical matching)
+        if watch_topic_score_ge "$jaccard" "$full_jaccard" || watch_topic_score_ge "$coverage" "$full_coverage"; then
+            continue
+        fi
+        
+        # Include if meets minimum coverage threshold
+        if watch_topic_score_ge "$coverage" "$min_coverage"; then
+            # Enrich with lexical scores for LLM context
+            local enriched
+            enriched=$(safe_jq_from_json "$claim_json" '.' '{}' "$session_dir" "watch_topic_llm.enriched_claim" false)
+            enriched=$(echo "$enriched" | jq \
+                --argjson cov "$coverage" \
+                --argjson jac "$jaccard" \
+                '. + {lexical_coverage: $cov, lexical_jaccard: $jac}')
+            candidates+=("$enriched")
+        fi
+        
+    done < <(echo "$claims_json" | jq -c '.[]')
+    
+    # Return filtered array as JSON
+    if (( ${#candidates[@]} == 0 )); then
+        echo '[]'
+    else
+        printf '%s\n' "${candidates[@]}" | jq -s '.'
+    fi
+}
+
+# Evaluate a single watch topic against candidate claims using LLM
+watch_topic_llm_evaluate_single() {
+    local session_dir="$1"
+    local topic_json="$2"
+    local candidate_claims_json="$3"
+    
+    # Extract topic details
+    local topic_id
+    topic_id=$(safe_jq_from_json "$topic_json" '.id // ""' "" "$session_dir" "watch_topic_llm.topic_id")
+    local topic_text
+    topic_text=$(safe_jq_from_json "$topic_json" '.canonical // .text // ""' "" "$session_dir" "watch_topic_llm.topic_text")
+    local topic_variants
+    topic_variants=$(safe_jq_from_json "$topic_json" '.variants // [] | join(", ")' "" "$session_dir" "watch_topic_llm.topic_variants")
+    
+    # Check Claude CLI availability
+    if ! check_claude_cli; then
+        log_warn "Claude CLI not available for LLM semantic matching"
+        echo "{\"watch_topic_id\":\"$topic_id\",\"status\":\"pending\",\"matched_claims\":[],\"error\":\"LLM unavailable\"}"
+        return 1
+    fi
+    
+    # Count candidates
+    local candidate_count
+    candidate_count=$(echo "$candidate_claims_json" | jq 'length')
+    
+    # Format claims list
+    local claims_list
+    claims_list=$(echo "$candidate_claims_json" | jq -r 'to_entries | map("- [\(.key + 1)] (ID: \(.value.id // "unknown")): \(.value.statement // .value.text // "")") | join("\n")')
+    
+    # Build task input for agent
+    local input_file
+    input_file=$(mktemp "$session_dir/.watch-topic-input.XXXXXX")
+    
+    cat > "$input_file" <<EOF
+**Watch Topic:** ${topic_text}
+**Variants:** ${topic_variants:-none}
+
+**Claims to evaluate:**
+${claims_list}
+EOF
+    
+    # Invoke agent using invoke_agent_v2
+    local output_file
+    output_file=$(mktemp "$session_dir/.watch-topic-output.XXXXXX")
+    
+    local start_time
+    start_time=$(get_epoch)
+    
+    # Setup agent in session if not already there
+    local agent_file="$session_dir/.claude/agents/watch-topic-evaluator.json"
+    if [[ ! -f "$agent_file" ]]; then
+        # Check if agent exists in registry
+        if command -v agent_registry_exists >/dev/null 2>&1 && agent_registry_exists "watch-topic-evaluator"; then
+            local agent_metadata
+            agent_metadata=$(agent_registry_get "watch-topic-evaluator")
+            
+            # Load system prompt
+            local agent_dir
+            agent_dir=$(dirname "$agent_metadata")
+            local system_prompt
+            system_prompt=$(cat "$agent_dir/system-prompt.md" 2>/dev/null || echo "")
+            
+            if [[ -n "$system_prompt" ]]; then
+                # Get model from agent metadata or use default
+                local agent_model
+                agent_model=$(safe_jq_from_file "$agent_metadata" '.model // "claude-haiku-4"' "claude-haiku-4" "$session_dir" "watch_topic_llm.agent_model")
+                
+                # Create agent definition
+                mkdir -p "$session_dir/.claude/agents"
+                jq -n \
+                    --arg prompt "$system_prompt" \
+                    --arg model "$agent_model" \
+                    '{
+                        "systemPrompt": $prompt,
+                        "model": $model
+                    }' > "$agent_file"
+            else
+                log_warn "Watch topic evaluator system prompt not found"
+                rm -f "$input_file" "$output_file"
+                echo "{\"watch_topic_id\":\"$topic_id\",\"status\":\"pending\",\"matched_claims\":[],\"error\":\"Agent setup failed: system prompt not found\"}"
+                return 1
+            fi
+        else
+            log_warn "Watch topic evaluator not found in registry"
+            rm -f "$input_file" "$output_file"
+            echo "{\"watch_topic_id\":\"$topic_id\",\"status\":\"pending\",\"matched_claims\":[],\"error\":\"Agent setup failed: not found in registry\"}"
+            return 1
+        fi
+    fi
+    
+    # Use invoke_agent_v2 with watch-topic-evaluator agent
+    if ! invoke_agent_v2 "watch-topic-evaluator" "$input_file" "$output_file" 30 "$session_dir" ""; then
+        local error_msg="Agent invocation failed"
+        log_warn "LLM evaluation failed for watch topic $topic_id: ${error_msg}"
+        rm -f "$input_file" "$output_file"
+        echo "{\"watch_topic_id\":\"$topic_id\",\"status\":\"pending\",\"matched_claims\":[],\"error\":\"${error_msg}\"}"
+        return 1
+    fi
+    
+    local end_time
+    end_time=$(get_epoch)
+    local duration=$((end_time - start_time))
+    local duration_ms=$((duration * 1000))
+    
+    # Extract cost using existing helper
+    local cost_usd
+    cost_usd=$(extract_cost_from_output "$output_file")
+    
+    # Parse result using existing JSON extraction helper
+    local result
+    result=$(extract_json_from_agent_output "$output_file" true 2>/dev/null || echo '{}')
+    
+    # Validate result structure
+    if [[ -z "$result" || "$result" == "{}" ]]; then
+        log_warn "LLM returned empty result for watch topic $topic_id"
+        rm -f "$input_file" "$output_file"
+        echo "{\"watch_topic_id\":\"$topic_id\",\"status\":\"pending\",\"matched_claims\":[],\"error\":\"Empty LLM response\"}"
+        return 1
+    fi
+    
+    # Extract metrics for logging
+    local matches_found
+    matches_found=$(echo "$result" | jq '.matched_claims | length' 2>/dev/null || echo "0")
+    local best_confidence
+    best_confidence=$(echo "$result" | jq '.matched_claims | map(.confidence) | max // 0' 2>/dev/null || echo "0")
+    
+    # Record cost to budget
+    if command -v budget_record_llm_match >/dev/null 2>&1; then
+        budget_record_llm_match "$session_dir" "$cost_usd" || true
+    fi
+    
+    # Log to events.jsonl
+    if [[ -d "$session_dir/logs" ]]; then
+        mkdir -p "$session_dir/logs"
+        local model="${WATCH_TOPIC_LLM_MODEL:-claude-haiku-4}"
+        local event_json
+        event_json=$(jq -nc \
+            --arg type "watch_topic_llm_eval" \
+            --arg topic_id "$topic_id" \
+            --argjson claims_evaluated "$candidate_count" \
+            --argjson matches_found "$matches_found" \
+            --argjson best_confidence "$best_confidence" \
+            --argjson duration_ms "$duration_ms" \
+            --arg model "$model" \
+            --argjson cost_usd "$cost_usd" \
+            --arg timestamp "$(get_timestamp)" \
+            '{
+                type: $type,
+                topic_id: $topic_id,
+                claims_evaluated: $claims_evaluated,
+                matches_found: $matches_found,
+                best_confidence: $best_confidence,
+                duration_ms: $duration_ms,
+                model: $model,
+                cost_usd: $cost_usd,
+                timestamp: $timestamp
+            }' 2>/dev/null || echo '{}')
+        if [[ -n "$event_json" && "$event_json" != "{}" ]]; then
+            echo "$event_json" >> "$session_dir/logs/events.jsonl" 2>/dev/null || true
+        fi
+    fi
+    
+    # Cleanup temp files
+    rm -f "$input_file" "$output_file"
+    
+    # Return structured JSON
+    echo "$result"
+}
+
+# Batch evaluate multiple watch topics using LLM semantic matching
+watch_topic_llm_batch_evaluate() {
+    local session_dir="$1"
+    local watch_topics_json="$2"
+    local claims_json="$3"
+    
+    # Iterate over watch topics
+    local -a results=()
+    
+    while IFS= read -r topic_json; do
+        [[ -z "$topic_json" || "$topic_json" == "null" ]] && continue
+        
+        # Filter candidate claims for this topic
+        local candidate_claims
+        candidate_claims=$(watch_topic_filter_candidate_claims "$topic_json" "$claims_json" "$session_dir")
+        
+        # Skip if no candidates
+        local candidate_count
+        candidate_count=$(echo "$candidate_claims" | jq 'length' 2>/dev/null || echo "0")
+        if (( candidate_count == 0 )); then
+            continue
+        fi
+        
+        log_info "Evaluating watch topic with $candidate_count LLM candidates"
+        
+        # Evaluate with LLM
+        local llm_result
+        if llm_result=$(watch_topic_llm_evaluate_single "$session_dir" "$topic_json" "$candidate_claims"); then
+            results+=("$llm_result")
+        fi
+        
+    done < <(echo "$watch_topics_json" | jq -c '.[]')
+    
+    # Combine results
+    if (( ${#results[@]} == 0 )); then
+        echo '[]'
+    else
+        printf '%s\n' "${results[@]}" | jq -s '.'
+    fi
+}
+
 build_mission_state() {
     local session_dir="$1"
 
@@ -418,6 +709,139 @@ build_mission_state() {
             if (( ${#watch_status_entries[@]} > 0 )); then
                 watch_status_json=$(printf '%s\n' "${watch_status_entries[@]}" | jq -s '.')
             fi
+            
+            # LLM semantic matching for pending topics (Phase 1)
+            if [[ "${WATCH_TOPIC_LLM_ENABLED:-1}" == "1" ]]; then
+                # Collect topics still pending after lexical pass
+                local pending_topics_json='[]'
+                if (( ${#watch_status_entries[@]} > 0 )); then
+                    pending_topics_json=$(printf '%s\n' "${watch_status_entries[@]}" | \
+                        jq -s '[.[] | select(.status == "pending")]')
+                fi
+                
+                local pending_count
+                pending_count=$(echo "$pending_topics_json" | jq 'length' 2>/dev/null || echo "0")
+                
+                if (( pending_count > 0 )) && (( ${#kg_claim_entries[@]} > 0 )); then
+                    log_info "Running LLM semantic matching for $pending_count pending watch topics"
+                    
+                    # Build claims JSON from kg_claim_entries
+                    local claims_json
+                    claims_json=$(printf '%s\n' "${kg_claim_entries[@]}" | jq -s '.')
+                    
+                    # Invoke LLM batch evaluation
+                    local llm_results
+                    if llm_results=$(watch_topic_llm_batch_evaluate "$session_dir" "$pending_topics_json" "$claims_json"); then
+                        # Merge LLM results back into watch_status_entries
+                        # Update status from pending to covered where LLM matched
+                        local llm_count
+                        llm_count=$(echo "$llm_results" | jq 'length' 2>/dev/null || echo "0")
+                        
+                        if (( llm_count > 0 )); then
+                            # Process each LLM result
+                            while IFS= read -r llm_result; do
+                                [[ -z "$llm_result" || "$llm_result" == "null" ]] && continue
+                                
+                                local topic_id
+                                topic_id=$(echo "$llm_result" | jq -r '.watch_topic_id // ""')
+                                local llm_status
+                                llm_status=$(echo "$llm_result" | jq -r '.status // "pending"')
+                                
+                                if [[ -n "$topic_id" && "$llm_status" == "covered" ]]; then
+                                    # Extract matched claim IDs
+                                    local matched_claim_ids
+                                    matched_claim_ids=$(echo "$llm_result" | jq -c '[.matched_claims[].claim_id] // []')
+                                    
+                                    # Update the corresponding entry in watch_status_entries
+                                    local -a updated_entries=()
+                                    local matched=0
+                                    
+                                    for entry in "${watch_status_entries[@]}"; do
+                                        local entry_id
+                                        entry_id=$(echo "$entry" | jq -r '.id // ""')
+                                        
+                                        if [[ "$entry_id" == "$topic_id" ]]; then
+                                            # Update this entry with LLM results
+                                            local updated_entry
+                                            updated_entry=$(echo "$entry" | jq \
+                                                --arg status "$llm_status" \
+                                                --argjson claim_ids "$matched_claim_ids" \
+                                                '.status = $status | .matched_claim_ids = $claim_ids | .matched_by = "llm_semantic"')
+                                            updated_entries+=("$updated_entry")
+                                            matched=1
+                                            log_info "Watch topic '$topic_id' matched via LLM semantic evaluation"
+                                            
+                                            # Log status change event
+                                            if [[ -d "$session_dir/logs" ]]; then
+                                                local status_change_event
+                                                status_change_event=$(jq -nc \
+                                                    --arg type "watch_topic_status_change" \
+                                                    --arg topic_id "$topic_id" \
+                                                    --arg old_status "pending" \
+                                                    --arg new_status "covered" \
+                                                    --arg method "llm_semantic" \
+                                                    --arg timestamp "$(get_timestamp)" \
+                                                    '{
+                                                        type: $type,
+                                                        topic_id: $topic_id,
+                                                        old_status: $old_status,
+                                                        new_status: $new_status,
+                                                        method: $method,
+                                                        timestamp: $timestamp
+                                                    }' 2>/dev/null || echo '{}')
+                                                if [[ -n "$status_change_event" && "$status_change_event" != "{}" ]]; then
+                                                    echo "$status_change_event" >> "$session_dir/logs/events.jsonl" 2>/dev/null || true
+                                                fi
+                                            fi
+                                        else
+                                            updated_entries+=("$entry")
+                                        fi
+                                    done
+                                    
+                                    if (( matched == 1 )); then
+                                        watch_status_entries=("${updated_entries[@]}")
+                                    fi
+                                fi
+                            done < <(echo "$llm_results" | jq -c '.[]')
+                            
+                            # Rebuild watch_status_json with updated entries
+                            if (( ${#watch_status_entries[@]} > 0 )); then
+                                watch_status_json=$(printf '%s\n' "${watch_status_entries[@]}" | jq -s '.')
+                            fi
+                        fi
+                    fi
+                fi
+            fi
+            
+            # Log final status for all watch topics
+            if [[ -d "$session_dir/logs" ]] && (( ${#watch_status_entries[@]} > 0 )); then
+                for entry in "${watch_status_entries[@]}"; do
+                    local final_topic_id
+                    final_topic_id=$(echo "$entry" | jq -r '.id // ""')
+                    local final_status
+                    final_status=$(echo "$entry" | jq -r '.status // "unknown"')
+                    local final_method
+                    final_method=$(echo "$entry" | jq -r '.matched_by // "lexical"')
+                    
+                    local final_status_event
+                    final_status_event=$(jq -nc \
+                        --arg type "watch_topic_final_status" \
+                        --arg topic_id "$final_topic_id" \
+                        --arg status "$final_status" \
+                        --arg method "$final_method" \
+                        --arg timestamp "$(get_timestamp)" \
+                        '{
+                            type: $type,
+                            topic_id: $topic_id,
+                            status: $status,
+                            evaluation_path: [$method],
+                            timestamp: $timestamp
+                        }' 2>/dev/null || echo '{}')
+                    if [[ -n "$final_status_event" && "$final_status_event" != "{}" ]]; then
+                        echo "$final_status_event" >> "$session_dir/logs/events.jsonl" 2>/dev/null || true
+                    fi
+                done
+            fi
         fi
     fi
 
@@ -440,6 +864,10 @@ build_mission_state() {
     local classifier_category_counts='{}'
     local classifier_needs_review_json='[]'
     local classifier_needs_review_count="0"
+    local classifier_needs_review_pending_json='[]'
+    local classifier_needs_review_pending_count="0"
+    local classifier_needs_review_manual_json='[]'
+    local classifier_needs_review_manual_count="0"
     local classifier_digest=""
     local classifier_diff_added=0
     local classifier_diff_removed=0
@@ -470,6 +898,11 @@ build_mission_state() {
                 }
             ]' "$classifier_file" 2>/dev/null || echo '[]')
         classifier_needs_review_count=$(printf '%s\n' "$classifier_needs_review_json" | jq 'length' 2>/dev/null || echo "0")
+        # Split needs_review into pending (llm_attempted != true) and manual (llm_attempted == true)
+        classifier_needs_review_pending_json=$(printf '%s\n' "$classifier_needs_review_json" | jq '[.[] | select((.llm_attempted // false) != true)]' 2>/dev/null || echo '[]')
+        classifier_needs_review_pending_count=$(printf '%s\n' "$classifier_needs_review_pending_json" | jq 'length' 2>/dev/null || echo "0")
+        classifier_needs_review_manual_json=$(printf '%s\n' "$classifier_needs_review_json" | jq '[.[] | select((.llm_attempted // false) == true)]' 2>/dev/null || echo '[]')
+        classifier_needs_review_manual_count=$(printf '%s\n' "$classifier_needs_review_manual_json" | jq 'length' 2>/dev/null || echo "0")
         classifier_updated_iso=$(epoch_to_iso8601 "$classifier_mtime")
     fi
 
@@ -498,7 +931,7 @@ build_mission_state() {
         diff_json=$(stakeholder_classifier_sources_diff "$stored_sources_json" "$current_sources_json")
         classifier_diff_added=$(printf '%s\n' "$diff_json" | jq '.added // 0' 2>/dev/null || echo "0")
         classifier_diff_removed=$(printf '%s\n' "$diff_json" | jq '.removed // 0' 2>/dev/null || echo "0")
-        if [[ -s "$state_file" ]] && (( classifier_pending == 0 )) && (( classifier_needs_review_count == 0 )) && (( stored_count == sources_total_numeric )); then
+        if [[ -s "$state_file" ]] && (( classifier_pending == 0 )) && (( classifier_needs_review_pending_count == 0 )) && (( stored_count == sources_total_numeric )); then
             classifier_diff_added=0
             classifier_diff_removed=0
             stored_sources_json="$current_sources_json"
@@ -508,7 +941,7 @@ build_mission_state() {
         fi
     fi
 
-    if (( classifier_needs_review_count > 0 )); then
+    if (( classifier_needs_review_pending_count > 0 )); then
         classifier_status="stale_pending"
     elif (( classifier_pending > 0 )); then
         classifier_status="stale_pending"
@@ -660,6 +1093,10 @@ build_mission_state() {
         --argjson classifier_counts "$classifier_category_counts" \
         --argjson classifier_needs_review "$classifier_needs_review_json" \
         --argjson classifier_needs_review_count "$classifier_needs_review_count" \
+        --argjson classifier_needs_review_pending "$classifier_needs_review_pending_json" \
+        --argjson classifier_needs_review_pending_count "$classifier_needs_review_pending_count" \
+        --argjson classifier_needs_review_manual "$classifier_needs_review_manual_json" \
+        --argjson classifier_needs_review_manual_count "$classifier_needs_review_manual_count" \
         --argjson classifier_diff_added "$classifier_diff_added" \
         --argjson classifier_diff_removed "$classifier_diff_removed" \
         --arg kg_path "$kg_path_rel" \
@@ -711,7 +1148,15 @@ build_mission_state() {
                 category_counts: $classifier_counts,
                 needs_review: {
                     count: $classifier_needs_review_count,
-                    entries: $classifier_needs_review
+                    entries: $classifier_needs_review,
+                    pending: {
+                        count: $classifier_needs_review_pending_count,
+                        entries: $classifier_needs_review_pending
+                    },
+                    manual: {
+                        count: $classifier_needs_review_manual_count,
+                        entries: $classifier_needs_review_manual
+                    }
                 },
                 coverage_delta: {
                     added: $classifier_diff_added,
