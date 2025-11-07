@@ -1,0 +1,6 @@
+{
+  "schema_version": "1.0.0",
+  "agent": "stream-test-agent",
+  "description": "Stub contract used by streaming heartbeat sandbox tests to validate invoke-agent streaming flows.",
+  "artifacts": []
+}

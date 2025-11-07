@@ -753,12 +753,82 @@ or `system-errors.log` reports `Could not extract session_id from response`.
 **Cause**
 
 With `CCONDUCTOR_ENABLE_STREAMING=1`, the Claude CLI occasionally finishes with a synthesized `stream_synthesized` block instead of a streamed session. No `session_id` is returned. Starting with v0.5 the session manager automatically downgrades that agent to stateless mode so the mission continues.
-
 **What to do**
 
 - No recovery is needed; the run continues without a live session.
 - To avoid the downgrade, disable streaming (`unset CCONDUCTOR_ENABLE_STREAMING`) before launching the mission.
-- If you see quota warnings (“Session limit reached · resets 1am”), wait for the provider reset window or reduce parallel streaming jobs.
+- If you see quota warnings ("Claude CLI session limit reached — provider response: resets 1am"), that's coming from the Claude CLI quota guard; wait for the provider reset window or reduce parallel streaming jobs.
+
+---
+
+### Cost Warning: "No cost field found"
+
+**Symptoms**
+
+- Console shows: `⚠ No cost field found in meta/orchestrator-output.json (checked output.json, stream.jsonl, and events.jsonl)`
+- Warning appears during agent invocation
+- Final file may actually contain cost data
+
+**Cause**
+
+This warning can appear during **stream fallback scenarios** when:
+1. Claude stream ends without a final result event
+2. Fallback path synthesizes output from stream deltas
+3. Cost extraction temporarily fails during the fallback state
+4. Warning fires before final cost is written to the file
+
+**Understanding Fallback Behavior**
+
+When streaming fails to complete normally:
+- The system creates a synthetic result with `subtype: "stream_synthesized"`
+- Cost is extracted from stream events if available
+- If extraction fails, cost defaults to 0 temporarily
+- A structured warning is logged via `log_system_warning` (check `logs/events.jsonl` for `cost_extraction_failed` events)
+- The final file may be updated later with actual cost data
+
+**What to do**
+
+1. **Check if fallback occurred**:
+   ```bash
+   # Look for fallback events
+   jq 'select(.type == "artifact_fallback.stream_synthesized")' logs/events.jsonl
+   
+   # Check for cost extraction events
+   jq 'select(.type == "cost_extraction_success" or .type == "cost_extraction_failed")' logs/events.jsonl
+   ```
+
+2. **Verify final file state**:
+   ```bash
+   # Check if final file has cost (may be at top level or in .usage)
+   jq '.total_cost_usd // .usage.total_cost_usd' meta/orchestrator-output.json
+   
+   # Check file modification time vs event timestamps
+   stat -f "%Sm" meta/orchestrator-output.json
+   ```
+
+3. **Check agent_result entries**:
+   ```bash
+   # Fallback invocations may skip agent_result logging
+   jq 'select(.type == "agent_result")' logs/events.jsonl | grep "<agent_name>"
+   ```
+**Important Notes**
+
+- **Warning timing**: Warnings fire during intermediate fallback states, not just final states. The warning is suppressed for files with `subtype: "stream_synthesized"` since the fallback path already logs structured warnings.
+- **Cost location**: Cost may appear at the top level (`.total_cost_usd`) or in the usage block (`.usage.total_cost_usd`). Both locations are checked.
+- **File state**: The final file state may differ from the intermediate fallback state. The file may be updated after the warning is emitted.
+- **Agent_result logging**: Fallback invocations may skip `agent_result` logging to avoid double-logging. Check `logs/events.jsonl` for `artifact_fallback` events instead.
+
+**If warning persists after mission completes**:
+
+- Check `logs/events.jsonl` for `cost_extraction_success` or `cost_extraction_failed` events
+- Verify the final file contains cost data
+- If cost is missing in final file, this may indicate a genuine issue with cost tracking
+**Related Events**
+
+- `artifact_fallback.stream_synthesized` - Indicates fallback path was used
+- `cost_extraction_success` - Cost was successfully extracted from stream
+- `cost_extraction_failed` - Cost extraction failed (structured warning logged)
+- `agent_result` - May be absent for fallback invocations
 
 ---
 

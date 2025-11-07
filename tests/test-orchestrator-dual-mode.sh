@@ -223,15 +223,33 @@ cleanup_session_dir "$session_dir"
 echo "→ Scenario 2: fallback to result stream"
 session_dir="$(setup_session_dir)"
 TEST_ORCH_MODE="fallback_result"
+set +e
 fallback_output="$(invoke_mission_orchestrator "$session_dir" "$context_payload")"
+fallback_status=$?
+set -e
+if [[ $fallback_status -eq 0 ]]; then
+    echo "Expected manifest failure path to exit with error status" >&2
+    cleanup_session_dir "$session_dir"
+    exit 1
+fi
 echo "$fallback_output" | jq '.action' >/dev/null
 if [[ "$(echo "$fallback_output" | jq -r '.action')" != "early_exit" ]]; then
-    echo "Expected fallback decision to request early_exit" >&2
+    echo "Expected manifest failure path to request early_exit" >&2
     cleanup_session_dir "$session_dir"
     exit 1
 fi
 fallback_event="$(tail -n 1 "$session_dir/logs/events.jsonl")"
-echo "$fallback_event" | jq -e '.type == "orchestrator_decision_source" and .data.source == "result_fallback" and (.data.success == true)' >/dev/null
+echo "$fallback_event" | jq -e '
+    .type == "orchestrator_decision_source"
+    and .data.source == "manifest"
+    and (.data.success == false)
+    and (.data.reason == "slot_missing")
+' >/dev/null
+if [[ "$(echo "$fallback_output" | jq -r '.missing_outputs[0] // empty')" != "decision_json" ]]; then
+    echo "Expected early_exit to report decision_json as missing output" >&2
+    cleanup_session_dir "$session_dir"
+    exit 1
+fi
 cleanup_session_dir "$session_dir"
 
 echo "→ Scenario 3: provider session limit abort"

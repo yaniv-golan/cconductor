@@ -20,6 +20,7 @@ _record_provider_session_limit() {
 
     local streaming_value
     streaming_value=$([[ "$streaming_flag" -eq 1 ]] && echo true || echo false)
+    local display_message="Claude CLI session limit reached — provider response: ${provider_message}"
 
     if [[ -n "$session_dir" ]] && command -v log_system_error &>/dev/null; then
         log_system_error "$session_dir" "provider_session_limit" \
@@ -40,10 +41,10 @@ _record_provider_session_limit() {
     if [[ -n "$session_dir" ]]; then
         local sentinel="$session_dir/meta/provider-session-limit.flag"
         mkdir -p "$(dirname "$sentinel")"
-        printf '%s\n' "$provider_message" > "$sentinel" 2>/dev/null || true
+        printf '%s\n' "$display_message" > "$sentinel" 2>/dev/null || true
     fi
 
-    echo "⚠ ${agent_name} aborted: $provider_message" >&2
+    echo "⚠ ${agent_name} aborted: $display_message" >&2
 }
 
 _notify_provider_session_limit() {
@@ -104,45 +105,58 @@ _extract_provider_session_limit_message() {
     printf '%s\n' "$line"
 }
 
-_prompt_parser_handle_stream_fallback() {
+_artifact_first_handle_stream_fallback() {
     local session_dir="$1"
     local agent_label="$2"
-
-    if [[ "$agent_label" != "prompt-parser" ]]; then
-        return 1
+    
+    # Use existing artifact_contract_path helper (from artifact-manager.sh)
+    local contract_path
+    if ! contract_path=$(artifact_contract_path "$agent_label" 2>/dev/null); then
+        return 1  # No contract, allow warning
     fi
-
-    local prompt_parser_artifact="$session_dir/artifacts/prompt-parser/output.json"
-    if [[ -f "$prompt_parser_artifact" ]]; then
-        if command -v log_warn &>/dev/null; then
-            log_warn "Prompt parser stream missing result; using JSON artifact output"
+    
+    # Check if ANY required artifact exists
+    local required_paths
+    required_paths=$(jq -r '.artifacts[] | select(.required == true) | .relative_path // empty' \
+        "$contract_path" 2>/dev/null || echo "")
+    
+    if [[ -z "$required_paths" ]]; then
+        return 1  # No required artifacts in contract
+    fi
+    
+    # Check if at least one required artifact is present
+    local found_artifact=0
+    while IFS= read -r rel_path; do
+        [[ -z "$rel_path" ]] && continue
+        if [[ -f "$session_dir/$rel_path" ]]; then
+            found_artifact=1
+            break
         fi
+    done <<<"$required_paths"
+    
+    if [[ "$found_artifact" -eq 1 ]]; then
+        # Artifact exists - suppress warning, emit telemetry
         if command -v log_event &>/dev/null; then
             local payload
             payload=$(jq -n \
-                --arg agent "prompt-parser" \
+                --arg agent "$agent_label" \
                 --arg reason "stream_synthesized" \
                 '{agent:$agent, reason:$reason}')
-            log_event "$session_dir" "prompt_parser.artifact_fallbacks" "$payload" || true
+            log_event "$session_dir" "artifact_fallback.stream_synthesized" "$payload" || true
         fi
-        return 0
+        return 0  # Suppress warning
     fi
-
-    if command -v log_event &>/dev/null; then
-        local payload
-        payload=$(jq -n \
-            --arg agent "prompt-parser" \
-            --arg reason "stream_synthesized_no_artifact" \
-            '{agent:$agent, reason:$reason}')
-        log_event "$session_dir" "prompt_parser.artifact_fallbacks" "$payload" || true
-    fi
-
-    return 1
+    
+    return 1  # No artifacts found, allow warning
 }
 
 # Source core helpers first
 # shellcheck disable=SC1091
 source "$SCRIPT_DIR/core-helpers.sh"
+# shellcheck disable=SC1091
+if [[ -f "$SCRIPT_DIR/provider-helpers.sh" ]]; then
+    source "$SCRIPT_DIR/provider-helpers.sh"
+fi
 # shellcheck disable=SC1091
 source "$SCRIPT_DIR/error-messages.sh"
 # shellcheck disable=SC1091
@@ -648,11 +662,65 @@ extract_agent_metadata() {
     fi
 }
 
+# Extract cost from events.jsonl for a specific agent
+# Returns numeric cost or 0 if missing
+# Usage: extract_cost_from_events "$session_dir" "$agent_name"
+extract_cost_from_events() {
+    local session_dir="$1"
+    local agent_name="$2"
+    
+    if [[ -z "$session_dir" || -z "$agent_name" ]]; then
+        echo "0"
+        return 0
+    fi
+    
+    local events_file="$session_dir/logs/events.jsonl"
+    
+    # Handle missing or empty events.jsonl file (first agent invocation)
+    if [[ ! -f "$events_file" ]] || [[ ! -s "$events_file" ]]; then
+        echo "0"
+        return 0
+    fi
+    
+    # Read events.jsonl using existing helper pattern
+    local events_payload
+    events_payload=$(json_slurp_array "$events_file" '[]')
+    
+    if [[ -z "$events_payload" || "$events_payload" == "[]" ]]; then
+        echo "0"
+        return 0
+    fi
+    
+    # Query most recent agent_result entry for this agent
+    # Events structure: {type: "agent_result", data: {agent: "...", cost_usd: X}}
+    local cost
+    # shellcheck disable=SC2016
+    cost=$(safe_jq_from_json "$events_payload" \
+        'map(select(.type == "agent_result" and .data.agent == $agent)) | last? // empty | .data.cost_usd // 0' \
+        "0" "$session_dir" "invoke_agent.events_cost" false false \
+        --arg agent "$agent_name")
+    
+    [[ -z "$cost" || "$cost" == "null" ]] && cost="0"
+    echo "$cost"
+}
+
 # Extract cost from Claude CLI output.json
 # Returns numeric cost or 0 if missing
-# Usage: extract_cost_from_output "$output_file"
+# Priority order:
+#   1. output.json → .total_cost_usd (root level, preferred)
+#   2. output.json → .usage.total_cost_usd (legacy path)
+#   3. .stream.jsonl → result type with total_cost_usd (streaming fallback)
+#   4. events.jsonl → agent_result entries (validation/audit only, checked after log_agent_result writes)
+#
+# Note: events.jsonl is written AFTER extraction, so it cannot be used for real-time extraction
+# of the current invocation. It's used for validation and historical lookups.
+#
+# Usage: extract_cost_from_output "$output_file" [agent_name] [session_dir]
 extract_cost_from_output() {
     local output_file="$1"
+    local agent_name="${2:-}"
+    local session_dir="${3:-${session_dir:-}}"
+    local session_ref="$session_dir"
     
     if [[ ! -f "$output_file" ]]; then
         echo "0"
@@ -661,7 +729,13 @@ extract_cost_from_output() {
     
     # Try common paths: .usage.total_cost_usd, .total_cost_usd
     local cost
-    cost=$(safe_jq_from_file "$output_file" '.usage.total_cost_usd // .total_cost_usd // 0 | tonumber? // 0' "0" "$session_dir" "invoke_agent.cost")
+    cost=$(safe_jq_from_file "$output_file" '.usage.total_cost_usd // .total_cost_usd // 0 | tonumber? // 0' "0" "$session_ref" "invoke_agent.cost")
+    
+    # Short-circuit: if cost is already present and non-zero, return immediately
+    if [[ -n "$cost" && "$cost" != "0" && "$cost" != "0.0" ]]; then
+        echo "$cost"
+        return 0
+    fi
     
     if [[ "$cost" == "0" || "$cost" == "0.0" ]]; then
         local stream_log="${output_file}.stream.jsonl"
@@ -680,7 +754,7 @@ extract_cost_from_output() {
                         .event.usage.cost.usd? //
                         empty
                     )
-                ] | last? // 0' "0" "$session_dir" "invoke_agent.stream_cost")
+                ] | last? // 0' "0" "$session_ref" "invoke_agent.stream_cost")
                 if [[ -n "$stream_cost" && "$stream_cost" != "null" ]]; then
                     cost="$stream_cost"
                 fi
@@ -688,10 +762,73 @@ extract_cost_from_output() {
         fi
     fi
     
-    # Optional: Log warning if file exists but has no cost field (verbose mode only)
+    # Improved warning logic: Only warn when ALL sources show 0
+    # This reduces false positives for legitimately zero-cost operations
     if is_verbose_enabled 2>/dev/null && [[ "$cost" == "0" ]] && [[ -s "$output_file" ]]; then
-        if ! jq -e '.usage.total_cost_usd // .total_cost_usd' "$output_file" >/dev/null 2>&1; then
-            echo "  ⚠ No cost field found in $output_file" >&2
+        # Check if output.json has cost field
+        local has_output_cost=0
+        if jq -e '.usage.total_cost_usd // .total_cost_usd' "$output_file" >/dev/null 2>&1; then
+            has_output_cost=1
+        fi
+        
+        # Check stream.jsonl if cost is still 0
+        local has_stream_cost=0
+        if [[ "$has_output_cost" -eq 0 ]]; then
+            local stream_log="${output_file}.stream.jsonl"
+            if [[ -f "$stream_log" ]]; then
+                local stream_payload
+                stream_payload=$(json_slurp_array "$stream_log" '[]')
+                if [[ -n "$stream_payload" && "$stream_payload" != "[]" ]]; then
+                    local stream_cost_check
+                    stream_cost_check=$(safe_jq_from_json "$stream_payload" '[
+                        .[] |
+                        select(.type == "result") |
+                        (.total_cost_usd // .usage.total_cost_usd // 0)
+                    ] | last? // 0' "0" "$session_ref" "invoke_agent.warning_check.stream" "false")
+                    if [[ -n "$stream_cost_check" && "$stream_cost_check" != "null" && "$stream_cost_check" != "0" ]]; then
+                        has_stream_cost=1
+                    fi
+                fi
+            fi
+        fi
+        
+        # Check events.jsonl if agent_name and session_dir provided
+        local has_events_cost=0
+        if [[ "$has_output_cost" -eq 0 && "$has_stream_cost" -eq 0 ]] && [[ -n "$agent_name" && -n "$session_dir" ]]; then
+            local events_cost_check
+            events_cost_check=$(extract_cost_from_events "$session_dir" "$agent_name")
+            if [[ -n "$events_cost_check" && "$events_cost_check" != "0" ]]; then
+                has_events_cost=1
+            fi
+        fi
+        
+        local skip_warning=0
+        if [[ "$agent_name" == "prompt-parser" && "${PROMPT_PARSER_STREAM_FALLBACK:-0}" == "1" ]]; then
+            skip_warning=1
+        fi
+        
+        # Check if this is a fallback invocation (file has stream_synthesized subtype)
+        # Fallback path already logs structured warning, so skip duplicate console warning
+        if [[ "$skip_warning" -eq 0 ]]; then
+            if jq -e '.subtype == "stream_synthesized"' "$output_file" >/dev/null 2>&1; then
+                skip_warning=1
+            fi
+        fi
+
+        # Only warn if ALL sources show 0 and we are not in a known prompt-parser fallback or stream_synthesized fallback
+        if [[ "$skip_warning" -eq 0 && "$has_output_cost" -eq 0 && "$has_stream_cost" -eq 0 && "$has_events_cost" -eq 0 ]]; then
+            local display_path="$output_file"
+            if [[ -n "$session_ref" ]]; then
+                local session_abs
+                if session_abs=$(cd "$session_ref" 2>/dev/null && pwd); then
+                    if [[ "$display_path" == "$session_abs" ]]; then
+                        display_path="."
+                    elif [[ "$display_path" == "$session_abs/"* ]]; then
+                        display_path="${display_path#"$session_abs"/}"
+                    fi
+                fi
+            fi
+            echo "  ⚠ No cost field found in $display_path (checked output.json, stream.jsonl, and events.jsonl)" >&2
         fi
     fi
     
@@ -759,6 +896,69 @@ cleanup_stale_invoke_pid() {
 #     "usage": {...}
 #   }
 #
+# Wrapper for invoke_agent_v2 with retry logic for transient errors
+invoke_agent_with_retry() {
+    local agent_name="$1"
+    local input_file="$2"
+    local output_file="$3"
+    local timeout="${4:-600}"
+    local session_dir="${5:-}"
+    local resume_session_id="${6:-}"
+    
+    local max_attempts=3
+    local base_delay=2
+    local attempt=1
+    
+    while (( attempt <= max_attempts )); do
+        # Check budget before retry (skip for first attempt)
+        if (( attempt > 1 )); then
+            if [[ -n "$session_dir" ]] && [[ -f "$SCRIPT_DIR/budget-tracker.sh" ]]; then
+                local remaining_budget
+                remaining_budget=$("$SCRIPT_DIR/budget-tracker.sh" remaining "$session_dir" 2>/dev/null || echo "0")
+                if [[ "$remaining_budget" == "0" || "$remaining_budget" == "0.0" ]]; then
+                    log_warn "Budget exhausted, cannot retry agent invocation for $agent_name"
+                    return 1
+                fi
+            fi
+        fi
+        
+        # Attempt invocation
+        if invoke_agent_v2 "$agent_name" "$input_file" "$output_file" "$timeout" "$session_dir" "$resume_session_id"; then
+            return 0
+        fi
+        
+        # Check if error is retryable
+        local error_output="$session_dir/meta/orchestrator-output.json"
+        if [[ -f "$error_output" ]] && command -v provider_is_retryable_error &>/dev/null; then
+            local error_json
+            error_json=$(jq -c '.' "$error_output" 2>/dev/null || echo "{}")
+            if provider_is_retryable_error "$error_json"; then
+                if (( attempt < max_attempts )); then
+                    local delay=$((base_delay ** attempt + RANDOM % 2))
+                    if command -v log_event &>/dev/null; then
+                        log_event "$session_dir" "agent_retry" \
+                            "$(jq -n --arg agent "$agent_name" --argjson attempt "$attempt" --argjson delay "$delay" \
+                                '{agent: $agent, attempt: $attempt, delay: $delay}')" || true
+                    fi
+                    log_warn "Retryable error detected for $agent_name, attempt $attempt failed, retrying in ${delay}s..."
+                    sleep "$delay"
+                fi
+            else
+                # Non-retryable error, fail immediately
+                return 1
+            fi
+        else
+            # Cannot determine retryability, fail immediately
+            return 1
+        fi
+        
+        ((attempt++))
+    done
+    
+    log_error "Agent invocation for $agent_name failed after $max_attempts attempts"
+    return 1
+}
+
 invoke_agent_v2() {
     local agent_name="$1"
     local input_file="$2"
@@ -829,9 +1029,9 @@ invoke_agent_v2() {
     fi
 
     if [[ -z "${CCONDUCTOR_WEB_FETCH_STRICT_MODE:-}" ]]; then
-        export CCONDUCTOR_WEB_FETCH_STRICT_MODE=1
+        export CCONDUCTOR_WEB_FETCH_STRICT_MODE=0
     fi
-    if [[ "${CCONDUCTOR_WEB_FETCH_STRICT_MODE:-1}" != "0" && -z "${CCONDUCTOR_WEB_FETCH_POLICY_FILE:-}" ]]; then
+    if [[ "${CCONDUCTOR_WEB_FETCH_STRICT_MODE:-0}" != "0" && -z "${CCONDUCTOR_WEB_FETCH_POLICY_FILE:-}" ]]; then
         local primary_policy="$cconductor_root/config/web-fetch-limits.json"
         local default_policy="$cconductor_root/config/web-fetch-limits.default.json"
         if [[ -f "$primary_policy" ]]; then
@@ -948,6 +1148,10 @@ invoke_agent_v2() {
         agent_timeouts_enabled=1
     fi
 
+    # Track if fallback path already logged to avoid double-logging (use file since process_stream_events runs in background)
+    local fallback_logged_flag="$session_dir/.agent-fallback-logged.${agent_name}.flag"
+    rm -f "$fallback_logged_flag" 2>/dev/null || true
+
     export CCONDUCTOR_WATCHDOG_MODE="$watchdog_mode"
     export CCONDUCTOR_AGENT_TIMEOUT_MODE="$agent_timeouts_mode"
     export CCONDUCTOR_WATCHDOG_ENABLED="$watchdog_enabled"
@@ -1012,6 +1216,13 @@ invoke_agent_v2() {
         fi
     fi
 
+    if [[ "$agent_name" == "prompt-parser" && "$use_streaming" -eq 1 ]]; then
+        # Streaming occasionally fails to emit a final result frame on claude-sonnet-4-20250514,
+        # which drops both the structured payload and cost metadata. Run prompt-parser in legacy
+        # JSON mode so we always capture complete output until the upstream issue is resolved.
+        use_streaming=0
+    fi
+
     # Build Claude command with validated flags
     local claude_cmd=(
         claude
@@ -1059,7 +1270,7 @@ invoke_agent_v2() {
     export CCONDUCTOR_AGENT_NAME="$agent_name"
     export CCONDUCTOR_VERBOSE="${CCONDUCTOR_VERBOSE:-0}"
     local tool_usage_file=""
-    if [[ "${CCONDUCTOR_WEB_FETCH_STRICT_MODE:-1}" != "0" ]]; then
+    if [[ "${CCONDUCTOR_WEB_FETCH_STRICT_MODE:-0}" != "0" ]]; then
         tool_usage_file="$session_dir/meta/tool-usage.json"
         mkdir -p "$(dirname "$tool_usage_file")"
         jq -n '{}' > "$tool_usage_file"
@@ -1166,6 +1377,7 @@ invoke_agent_v2() {
         local output_target="$3"
         local heartbeat_path="$4"
         local agent_label="$5"
+        local session_dir_param="${6:-}"
         local debug_log="${CCONDUCTOR_STREAM_DEBUG_LOG:-}"
 
         : > "$log_file"
@@ -1330,7 +1542,7 @@ invoke_agent_v2() {
         if [[ -n "$synthesized_text" ]]; then
             update_heartbeat
             local handled_stream_warning=0
-            if _prompt_parser_handle_stream_fallback "$session_dir" "$agent_label"; then
+            if _artifact_first_handle_stream_fallback "$session_dir" "$agent_label"; then
                 handled_stream_warning=1
             fi
             if (( handled_stream_warning == 0 )); then
@@ -1350,12 +1562,54 @@ invoke_agent_v2() {
             if [[ -n "$usage_cache" ]]; then
                 usage_json="$usage_cache"
             else
-                usage_json='{"total_cost_usd":0}'
+                # Attempt to extract cost from stream.jsonl file before defaulting to zero
+                local stream_cost="0"
+                if [[ -f "$log_file" ]] && [[ -s "$log_file" ]]; then
+                    local stream_payload
+                    stream_payload=$(json_slurp_array "$log_file" '[]')
+                    if [[ -n "$stream_payload" && "$stream_payload" != "[]" ]]; then
+                        local extracted_cost
+                        extracted_cost=$(safe_jq_from_json "$stream_payload" '[
+                            .[] |
+                            select(.type == "stream_event") |
+                            (
+                                .event.usage.total_cost_usd? //
+                                .event.response.usage.total_cost_usd? //
+                                .event.usage.cost.usd? //
+                                empty
+                            )
+                        ] | last? // 0' "0" "$session_dir" "invoke_agent.stream_fallback_cost")
+                        if [[ -n "$extracted_cost" && "$extracted_cost" != "null" && "$extracted_cost" != "0" ]]; then
+                            stream_cost="$extracted_cost"
+                            # Log successful cost extraction for diagnosis
+                            if command -v log_event &>/dev/null && [[ -n "$session_dir" ]]; then
+                                log_event "$session_dir" "cost_extraction_success" \
+                                    "{\"agent\":\"$agent_label\",\"cost\":$stream_cost,\"source\":\"stream.jsonl\"}"
+                            fi
+                        fi
+                    fi
+                fi
+                # Create usage JSON with extracted cost or zero
+                usage_json=$(jq -n --argjson cost "$stream_cost" '{total_cost_usd: $cost}')
+                
+                # Add structured warning if cost extraction failed
+                if [[ "$stream_cost" == "0" ]]; then
+                    if command -v log_system_warning &>/dev/null; then
+                        log_system_warning "$session_dir" "cost_extraction_failed" \
+                            "Could not extract cost from stream.jsonl" \
+                            "agent=$agent_label"
+                    fi
+                fi
             fi
             synthetic_result=$(printf '%s\n' "$synthetic_result" | jq --argjson usage "$usage_json" '. + {usage: $usage}')
             printf '%s\n' "$synthetic_result" > "$output_target"
             if [[ -n "$debug_log" ]]; then
                 printf 'wrote_synthetic_result\n' >> "$debug_log"
+            fi
+            # Mark that fallback path was used (metrics will be logged later, but we need to skip duplicate logging)
+            if [[ -n "$session_dir_param" ]]; then
+                local fallback_flag="$session_dir_param/.agent-fallback-logged.${agent_label}.flag"
+                touch "$fallback_flag" 2>/dev/null || true
             fi
             return 0
         fi
@@ -1505,7 +1759,7 @@ invoke_agent_v2() {
         stream_pipe=$(mktemp "$session_dir/.agent-stream.XXXXXX")
         rm -f "$stream_pipe"
         if mkfifo "$stream_pipe"; then
-            process_stream_events "$stream_pipe" "$stream_log" "$output_file" "$heartbeat_file" "$agent_name" &
+            process_stream_events "$stream_pipe" "$stream_log" "$output_file" "$heartbeat_file" "$agent_name" "$session_dir" &
             stream_processor_pid=$!
             printf '%s\n' "$task" | CLAUDE_PROJECT_DIR="$session_dir" "${claude_cmd[@]}" > "$stream_pipe" 2> "$stderr_file" &
         else
@@ -1766,8 +2020,9 @@ invoke_agent_v2() {
         local duration=$((end_time - start_time))
         
         # Extract cost from Claude's response using shared helper
+        # Pass agent_name and session_dir for improved warning logic
         local cost
-        cost=$(extract_cost_from_output "$output_file")
+        cost=$(extract_cost_from_output "$output_file" "$agent_name" "$session_dir")
         
         # Extract agent-specific metadata for research journal view
         local metadata
@@ -1840,8 +2095,33 @@ invoke_agent_v2() {
         fi
 
         # Log agent result with metrics, metadata, and model
-        if [ -n "${session_dir:-}" ] && command -v log_agent_result &>/dev/null; then
+        # Skip if fallback path already handled logging (to avoid double-logging)
+        if [ -n "${session_dir:-}" ] && command -v log_agent_result &>/dev/null && [ ! -f "$fallback_logged_flag" ]; then
             log_agent_result "$session_dir" "$agent_name" "$cost" "$duration" "$metadata" "$agent_model" || true
+        fi
+        
+        # Clean up fallback flag
+        rm -f "$fallback_logged_flag" 2>/dev/null || true
+        
+        # Validate extracted cost matches logged cost (cost extraction bug detection)
+        # events.jsonl is written AFTER extraction, so we can now verify they match
+        if [[ -n "${session_dir:-}" ]]; then
+            local logged_cost
+            logged_cost=$(extract_cost_from_events "$session_dir" "$agent_name")
+            
+            # Compare extracted cost vs logged cost (with small tolerance for floating point)
+            # Use bc for floating point arithmetic (required by AGENTS.md)
+            local cost_diff
+            cost_diff=$(echo "scale=10; if ($cost > $logged_cost) then ($cost - $logged_cost) else ($logged_cost - $cost) fi" | bc 2>/dev/null || echo "0")
+            
+            # Flag discrepancies > 0.0001 (detect real bugs, ignore floating point noise)
+            if (( $(echo "$cost_diff > 0.0001" | bc -l 2>/dev/null || echo 0) )); then
+                if command -v log_system_warning &>/dev/null; then
+                    log_system_warning "$session_dir" "cost_extraction_mismatch" \
+                        "Cost extraction mismatch for $agent_name" \
+                        "extracted=$cost logged=$logged_cost diff=$cost_diff"
+                fi
+            fi
         fi
         if [[ $finalize_status -ne 0 && "$ARTIFACT_VALIDATION_PHASE" != "phase1" && "$ARTIFACT_CONTRACT_BYPASS" -eq 0 ]]; then
             return "$finalize_status"
@@ -1970,6 +2250,7 @@ invoke_agent_v2() {
 # Export functions
 export -f check_claude_cli
 export -f extract_agent_metadata
+export -f extract_cost_from_events
 export -f extract_cost_from_output
 export -f invoke_agent_v2
 

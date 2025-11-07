@@ -39,6 +39,17 @@ source "$UTILS_DIR/json-parser.sh"
 source "$UTILS_DIR/json-helpers.sh"
 # shellcheck disable=SC1091
 source "$UTILS_DIR/domain-helpers.sh"
+
+source_invoke_agent_util() {
+    local override="${CCONDUCTOR_INVOKE_AGENT_SH_OVERRIDE:-}"
+    if [[ -n "$override" && -f "$override" ]]; then
+        # shellcheck disable=SC1090
+        source "$override"
+    else
+        # shellcheck disable=SC1091
+        source_invoke_agent_util
+    fi
+}
 # shellcheck disable=SC1091
 if ! source "$UTILS_DIR/argument-writer.sh" 2>/dev/null; then
     if [[ -z "${MISSION_ORCH_ARGUMENT_WARNED:-}" ]]; then
@@ -89,7 +100,7 @@ MISSION_ORCH_BASE_DIR="$(pwd)"
 mission_abort_due_to_provider_limit() {
     local session_dir="$1"
     local sentinel="$session_dir/meta/provider-session-limit.flag"
-    local provider_message="Session limit reached. Wait for the provider reset window before resuming."
+    local provider_message="Claude CLI session limit reached — wait for Anthropic to reset the quota before resuming."
 
     if [[ -f "$sentinel" ]]; then
         provider_message=$(<"$sentinel")
@@ -98,6 +109,7 @@ mission_abort_due_to_provider_limit() {
 
     echo ""
     echo "⚠ Mission paused: $provider_message" >&2
+    echo "   (Reported by Claude, not CConductor.)" >&2
     echo "   Resume after the reset with: ./cconductor resume \"$session_dir\"" >&2
     exit 1
 }
@@ -545,7 +557,7 @@ EOF
     # Source invoke-agent utility unless test harness has already provided a stub
     if ! declare -F invoke_agent_v2 >/dev/null 2>&1; then
         # shellcheck disable=SC1091
-        source "$UTILS_DIR/invoke-agent.sh"
+        source_invoke_agent_util
     fi
 
     local work_dir="$session_dir/work/mission-orchestrator"
@@ -565,7 +577,19 @@ EOF
         mv "$decision_artifact_path" "$decision_backup_path"
     fi
 
-    if invoke_agent_v2 "mission-orchestrator" "$input_file" "$output_file" 600 "$session_dir"; then
+    # Use retry wrapper for orchestrator (critical agent)
+    if command -v invoke_agent_with_retry &>/dev/null; then
+        if invoke_agent_with_retry "mission-orchestrator" "$input_file" "$output_file" 600 "$session_dir"; then
+            invocation_success=1
+        fi
+    else
+        # Fallback to direct invocation if retry wrapper not available
+        if invoke_agent_v2 "mission-orchestrator" "$input_file" "$output_file" 600 "$session_dir"; then
+            invocation_success=1
+        fi
+    fi
+    
+    if [[ "${invocation_success:-0}" -eq 1 ]]; then
         local decision_json=""
         local manifest_present=false
         local manifest_slot_present=false
@@ -926,7 +950,7 @@ EOF
 
     # Source invoke-agent utility
     # shellcheck disable=SC1091
-    source "$UTILS_DIR/invoke-agent.sh"
+    source_invoke_agent_util
 
     local start_time
     start_time=$(get_epoch)
@@ -947,10 +971,24 @@ EOF
             fi
         fi
     else
-        if invoke_agent_v2 "$agent_name" "$agent_input_file" "$agent_output_file" 600 "$session_dir"; then
-            invocation_status=0
+        # Use retry wrapper for critical agents (orchestrator, synthesis)
+        local use_retry=0
+        if [[ "$agent_name" == "mission-orchestrator" || "$agent_name" == "synthesis-agent" ]]; then
+            use_retry=1
+        fi
+        
+        if [[ "$use_retry" -eq 1 ]] && command -v invoke_agent_with_retry &>/dev/null; then
+            if invoke_agent_with_retry "$agent_name" "$agent_input_file" "$agent_output_file" 600 "$session_dir"; then
+                invocation_status=0
+            else
+                invocation_status=$?
+            fi
         else
-            invocation_status=$?
+            if invoke_agent_v2 "$agent_name" "$agent_input_file" "$agent_output_file" 600 "$session_dir"; then
+                invocation_status=0
+            else
+                invocation_status=$?
+            fi
         fi
     fi
 
@@ -997,6 +1035,10 @@ process_agent_kg_artifacts() {
     # Check if agent created a KG lock file
     local lock_file="$session_dir/${agent}.kg.lock"
     if [ ! -f "$lock_file" ]; then
+        # Warn if lock found in wrong location (artifacts subdirectory)
+        if [[ -f "$session_dir/artifacts/$agent/$agent.kg.lock" ]]; then
+            log_warn "Agent $agent created lock in artifacts/ instead of session root; this will be ignored"
+        fi
         # No artifacts to process
         return 0
     fi
@@ -1434,28 +1476,7 @@ process_orchestrator_decisions() {
                     return 0
                 fi
 
-                # Check quality gate using guard contract
-                if ! quality_guard_output=$(mission_orchestration_quality_guard "$session_dir"); then
-                    log_error "quality guard failed to execute for synthesis"
-                    echo "⚠ Quality guard failed; aborting synthesis invocation." >&2
-                    return 1
-                fi
-
-                # Delegate to guard handler (validates, records blockers, returns exit codes)
-                local guard_rc
-                mission_orchestration_handle_guard_result "$session_dir" "quality_gate" "$quality_guard_output"
-                guard_rc=$?
-
-                if (( guard_rc == 2 )); then
-                    # Guard blocked synthesis - defer and continue research loop
-                    return 0
-                elif (( guard_rc != 0 )); then
-                    log_error "quality guard produced invalid status for synthesis"
-                    echo "⚠ Quality guard reported an unrecoverable error; aborting synthesis invocation." >&2
-                    return 1
-                fi
-
-                # Quality guard passed - proceed to quality assurance cycle
+                # Run quality assurance cycle to annotate claims with trust scores
                 local gate_iteration="${iteration:-unknown}"
                 debug "Checking quality gate: iteration=$gate_iteration"
                 echo "→ Running quality gate before synthesis..."
@@ -1485,6 +1506,27 @@ process_orchestrator_decisions() {
                     fi
                 else
                     echo "  ✓ Quality gate passed, proceeding with synthesis"
+                fi
+
+                # Check quality gate using guard contract (validates annotated trust scores)
+                if ! quality_guard_output=$(mission_orchestration_quality_guard "$session_dir"); then
+                    log_error "quality guard failed to execute for synthesis"
+                    echo "⚠ Quality guard failed; aborting synthesis invocation." >&2
+                    return 1
+                fi
+
+                # Delegate to guard handler (validates, records blockers, returns exit codes)
+                local guard_rc
+                mission_orchestration_handle_guard_result "$session_dir" "quality_gate" "$quality_guard_output"
+                guard_rc=$?
+
+                if (( guard_rc == 2 )); then
+                    # Guard blocked synthesis - defer and continue research loop
+                    return 0
+                elif (( guard_rc != 0 )); then
+                    log_error "quality guard produced invalid status for synthesis"
+                    echo "⚠ Quality guard reported an unrecoverable error; aborting synthesis invocation." >&2
+                    return 1
                 fi
             fi
 
@@ -2314,6 +2356,13 @@ mission_orchestration_handle_guard_result() {
             mission_orchestration_clear_blocker "$session_dir" "$guard_type" || true
             return 0
             ;;
+        warn)
+            # Log warning but don't block synthesis
+            # Clear any existing blocker since we're no longer blocking
+            mission_orchestration_clear_blocker "$session_dir" "$guard_type" || true
+            log_warn "guard $guard_type: $(safe_jq_from_json "$guard_output" '.message // ""' "" "$session_dir" "guard.${guard_type}.warn_message")"
+            return 0
+            ;;
         block)
             mission_orchestration_add_blocker "$session_dir" "$guard_type" "$guard_output" || return 1
             local message
@@ -2521,7 +2570,6 @@ mission_orchestration_check_watch_topics() {
 
     local mission_state_file="$session_dir/meta/mission_state.json"
     if [[ ! -f "$mission_state_file" ]]; then
-        mission_orchestration_guard_result "ok"
         return 0
     fi
 
@@ -2556,12 +2604,12 @@ JQ
             --arg message "$warning_message" \
             --argjson topics "$pending_json" \
             '{blocker: $blocker, suggested_action: $suggested, message: $message, topics: $topics}')
-        mission_orchestration_guard_result "block" "$guard_payload"
+        mission_orchestration_guard_result "block" "$guard_payload" || true
         return 0
     fi
 
     rm -f "$issues_file" 2>/dev/null || true
-    mission_orchestration_guard_result "ok"
+    mission_orchestration_guard_result "ok" || true
     return 0
 }
 
@@ -2620,7 +2668,7 @@ mission_orchestration_check_stakeholder_classifier() {
 
     local mission_state_file="$session_dir/meta/mission_state.json"
     if [[ ! -f "$mission_state_file" ]]; then
-        mission_orchestration_guard_result "ok"
+        mission_orchestration_guard_result "ok" >/dev/null 2>&1 || true
         return 0
     fi
 
@@ -2703,19 +2751,38 @@ mission_orchestration_check_stakeholder_classifier() {
             --argjson needs "$needs_review_numeric" \
             --argjson unattempted "$needs_review_unattempted_numeric" \
             '{blocker: $blocker, suggested_action: $suggested, message: $message, classifier_status: $status, pending_sources: $pending, needs_review_total: $needs, needs_review_unattempted: $unattempted, detail: $detail}')
-        mission_orchestration_guard_result "block" "$guard_payload"
+        mission_orchestration_guard_result "block" "$guard_payload" >/dev/null 2>&1 || true
         return 0
     fi
 
     if (( residual_after_llm == 1 )); then
         printf '%s\n' "$detail_json" | jq '.' >"$issues_file"
         log_warn "stakeholder-classifier: residual_needs_review=$needs_review_numeric (llm_attempted=true) pending_sources=$pending_numeric"
-        echo "⚠ Stakeholder classifier left ${needs_review_numeric} source(s) as needs_review after LLM attempts; continuing with residual list captured at meta/stakeholder-classifier-status.json." >&2
+        
+        # Only emit once per session using flag file
+        if [[ ! -f "$session_dir/meta/residual-logged.flag" ]]; then
+            if command -v log_event &>/dev/null; then
+                log_event "$session_dir" "stakeholder_residual" "$detail_json"
+            fi
+            touch "$session_dir/meta/residual-logged.flag"
+            echo "⚠ Stakeholder classifier left ${needs_review_numeric} source(s) as needs_review after LLM attempts; continuing with residual list captured at meta/stakeholder-classifier-status.json." >&2
+        fi
     else
+        # Clean up flag and issues file when resolved
+        rm -f "$session_dir/meta/residual-logged.flag" 2>/dev/null || true
         rm -f "$issues_file" 2>/dev/null || true
     fi
 
-    mission_orchestration_guard_result "ok"
+    # Return "warn" status when residual items exist after LLM attempts
+    # This allows synthesis to proceed while still logging the issue
+    if (( residual_after_llm == 1 )); then
+        mission_orchestration_guard_result "warn" "$(jq -n \
+            --arg message "Stakeholder classifier has ${needs_review_numeric} source(s) marked as needs_review after LLM attempts; manual review may be required" \
+            --argjson detail "$detail_json" \
+            '{message: $message, detail: $detail}')" >/dev/null 2>&1 || true
+    else
+        mission_orchestration_guard_result "ok" >/dev/null 2>&1 || true
+    fi
     return 0
 }
 

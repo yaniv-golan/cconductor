@@ -475,22 +475,65 @@ jq_read_object() {
 }
 
 # Safely evaluate jq against a JSON string with validation and logging
-# Usage: safe_jq_from_json "$json" '<jq_filter>' '<fallback>' [session_dir] [context] [raw_output=true] [strict=false]
+# Usage: safe_jq_from_json "$json" '<jq_filter>' '<fallback>' [session_dir] [context] [raw_output=true] [strict=false] [-- <jq_args...>]
 safe_jq_from_json() {
     local json_payload="$1"
     local jq_filter="$2"
     local fallback="$3"
-    local session_dir="${4:-}"
-    local context="${5:-jq_safe_json}"
-    local raw_output="${6:-true}"
-    local strict_mode="${7:-false}"
-    local -a jq_args=()
+    shift 3
 
+    local session_dir=""
+    local context="jq_safe_json"
+    local raw_output="true"
+    local strict_mode="false"
+    local -a extra_args=()
+    local parsing_state=0
+
+    while (($# > 0)); do
+        case "$1" in
+            --)
+                shift
+                extra_args=("$@")
+                break
+                ;;
+            *)
+                case "$parsing_state" in
+                    0)
+                        session_dir="$1"
+                        ;;
+                    1)
+                        context="$1"
+                        ;;
+                    2)
+                        raw_output="$1"
+                        ;;
+                    3)
+                        strict_mode="$1"
+                        ;;
+                    *)
+                        extra_args+=("$1")
+                        ;;
+                esac
+                ((parsing_state++))
+                shift
+                ;;
+        esac
+    done
+
+    local -a jq_args=()
     [[ "$raw_output" == "true" ]] && jq_args+=(-r)
 
+    local -a final_args=()
+    if ((${#jq_args[@]} > 0)); then
+        final_args+=("${jq_args[@]}")
+    fi
+    if ((${#extra_args[@]} > 0)); then
+        final_args+=("${extra_args[@]}")
+    fi
+
     if jq_validate_json "$json_payload"; then
-        if [[ "${#jq_args[@]}" -gt 0 ]]; then
-            printf '%s' "$json_payload" | jq "${jq_args[@]}" "$jq_filter"
+        if ((${#final_args[@]} > 0)); then
+            printf '%s' "$json_payload" | jq "${final_args[@]}" "$jq_filter"
         else
             printf '%s' "$json_payload" | jq "$jq_filter"
         fi
@@ -510,22 +553,65 @@ safe_jq_from_json() {
 }
 
 # Safely evaluate jq against a JSON file (ensures file exists + valid JSON)
-# Usage: safe_jq_from_file path '<jq_filter>' '<fallback>' [session_dir] [context] [raw_output=true] [strict=false]
+# Usage: safe_jq_from_file path '<jq_filter>' '<fallback>' [session_dir] [context] [raw_output=true] [strict=false] [-- <jq_args...>]
 safe_jq_from_file() {
     local file_path="$1"
     local jq_filter="$2"
     local fallback="$3"
-    local session_dir="${4:-}"
-    local context="${5:-jq_safe_file}"
-    local raw_output="${6:-true}"
-    local strict_mode="${7:-false}"
-    local -a jq_args=()
+    shift 3
 
+    local session_dir=""
+    local context="jq_safe_file"
+    local raw_output="true"
+    local strict_mode="false"
+    local -a extra_args=()
+    local parsing_state=0
+
+    while (($# > 0)); do
+        case "$1" in
+            --)
+                shift
+                extra_args=("$@")
+                break
+                ;;
+            *)
+                case "$parsing_state" in
+                    0)
+                        session_dir="$1"
+                        ;;
+                    1)
+                        context="$1"
+                        ;;
+                    2)
+                        raw_output="$1"
+                        ;;
+                    3)
+                        strict_mode="$1"
+                        ;;
+                    *)
+                        extra_args+=("$1")
+                        ;;
+                esac
+                ((parsing_state++))
+                shift
+                ;;
+        esac
+    done
+
+    local -a jq_args=()
     [[ "$raw_output" == "true" ]] && jq_args+=(-r)
 
+    local -a final_args=()
+    if ((${#jq_args[@]} > 0)); then
+        final_args+=("${jq_args[@]}")
+    fi
+    if ((${#extra_args[@]} > 0)); then
+        final_args+=("${extra_args[@]}")
+    fi
+
     if [[ -f "$file_path" ]] && jq empty "$file_path" >/dev/null 2>&1; then
-        if [[ "${#jq_args[@]}" -gt 0 ]]; then
-            jq "${jq_args[@]}" "$jq_filter" "$file_path"
+        if ((${#final_args[@]} > 0)); then
+            jq "${final_args[@]}" "$jq_filter" "$file_path"
         else
             jq "$jq_filter" "$file_path"
         fi
