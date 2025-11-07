@@ -84,6 +84,7 @@ OPTIONS:
   --max-time <minutes>          Time limit in minutes (overrides mission default)
   --max-invocations <n>         Max agent invocations (overrides mission default)
   --strict                      Enforce all validations (fail if unmet)
+  --strict-web-fetch            Enable WebFetch domain restrictions (strict mode)
   --yes                         Non-interactive mode (skip confirmations)
   --open                        Open dashboard/viewer after completion
   --no-dashboard                Don't launch dashboard
@@ -410,6 +411,10 @@ main() {
                         ;;
                     --non-interactive|-y)
                         non_interactive=true
+                        shift
+                        ;;
+                    --strict-web-fetch)
+                        export CCONDUCTOR_WEB_FETCH_STRICT_MODE=1
                         shift
                         ;;
                     --output)

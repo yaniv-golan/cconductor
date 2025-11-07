@@ -2,6 +2,8 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+HOOK_SCRIPT_DIR="$SCRIPT_DIR"
+EVIDENCE_FRAGMENT_SCRIPT="$HOOK_SCRIPT_DIR/evidence_fragment.pl"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
 
 # Source core helpers with fallback (hooks must never fail)
@@ -94,7 +96,7 @@ build_text_fragment() {
         printf '%s' "$url"
         return
     fi
-    if [[ ! -f "$SCRIPT_DIR/evidence_fragment.pl" ]] || ! command -v perl >/dev/null 2>&1; then
+    if [[ ! -f "$EVIDENCE_FRAGMENT_SCRIPT" ]] || ! command -v perl >/dev/null 2>&1; then
         printf '%s' "$url"
         return
     fi
@@ -102,7 +104,7 @@ build_text_fragment() {
     local payload
     payload=$(jq -n --arg snippet "$snippet" --arg context "$context" '{snippet: $snippet, context: $context}')
     local result
-    result=$(printf '%s' "$payload" | perl "$SCRIPT_DIR/evidence_fragment.pl" "$url" 2>/dev/null || true)
+    result=$(printf '%s' "$payload" | perl "$EVIDENCE_FRAGMENT_SCRIPT" "$url" 2>/dev/null || true)
     result=${result//$'\r'/}
     result=${result//$'\n'/}
     if [[ -n "$result" ]]; then

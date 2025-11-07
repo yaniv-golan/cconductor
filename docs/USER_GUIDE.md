@@ -1182,9 +1182,47 @@ rm ~/.config/cconductor/cconductor-config.json
 
 ## Security Settings
 
-Control which domains CConductor can access.
+### WebFetch Domain Restrictions
+
+CConductor's WebFetch tool operates in **permissive mode by default**, allowing access to all domains (except those explicitly blocked). This ensures the system is "useful out of the box" for general research tasks.
+
+**Default Behavior (Permissive Mode)**:
+- All domains are allowed
+- Only domains in `blocked_domains` list are restricted
+- No configuration needed for most research tasks
+
+**Enabling Strict Mode** (for compliance or security-sensitive environments):
+
+1. **Copy a policy template**:
+   ```bash
+   cp config/policies/web-fetch-restricted.json config/web-fetch-limits.json
+   ```
+
+2. **Enable strict mode** using one of these methods:
+   - **Environment variable**: `export CCONDUCTOR_WEB_FETCH_STRICT_MODE=1`
+   - **CLI flag**: `./cconductor --strict-web-fetch "your research question"`
+   - **Per-session**: Set the env var before running a mission
+
+3. **Customize the policy** (optional):
+   - Edit `config/web-fetch-limits.json` to add/remove domains from `allowed_domains` or `blocked_domains` arrays
+
+**When to Use Strict Mode**:
+- Compliance requirements (e.g., only academic sources)
+- Shared/production environments where you want explicit domain controls
+- Security-sensitive research where you need to limit external access
+
+**Policy Templates**:
+- See `config/policies/README.md` for available templates and usage instructions
+- Templates include: `web-fetch-restricted.json` (academic/developer domains only)
+
+**Troubleshooting**:
+- If WebFetch is blocked unexpectedly, check `logs/system-errors.log` for details
+- Blocked domains are logged on first occurrence
+- See [Troubleshooting Guide](TROUBLESHOOTING.md) for more help
 
 ### Security Profiles
+
+Control which domains CConductor can access.
 
 **Edit**: `~/.config/cconductor/security-config.json` (create with `./src/utils/config-loader.sh init security-config`)
 

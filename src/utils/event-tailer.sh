@@ -25,6 +25,7 @@ TAILER_TOTAL_FORCE_REFRESH=0
 declare -A TAILER_CACHE_HIT_COUNTS=()
 TAILER_LAST_LIBRARY_EVENT_TIME=0
 TAILER_LAST_LIBRARY_URL=""
+TAILER_LIBRARY_HIT_PENDING=0
 TAILER_SESSION_DIR=""
 TAILER_PROJECT_ROOT=""
 
@@ -109,6 +110,7 @@ tailer_reset_agent_state() {
     TAILER_TOTAL_FETCHES=0
     TAILER_TOTAL_FORCE_REFRESH=0
     TAILER_CACHE_HIT_COUNTS=()
+    TAILER_LIBRARY_HIT_PENDING=0
 }
 
 tailer_pluralize() {
@@ -190,6 +192,10 @@ tailer_process_library_hit() {
     TAILER_CACHE_ACTIVITY=1
     TAILER_TOTAL_HITS=$((TAILER_TOTAL_HITS + 1))
 
+    TAILER_LAST_LIBRARY_EVENT_TIME=$(date +%s)
+    TAILER_LAST_LIBRARY_URL="$url"
+    TAILER_LIBRARY_HIT_PENDING=1
+
     local current_count=0
     if [[ -n "${TAILER_CACHE_HIT_COUNTS[$url]+_}" ]]; then
         current_count="${TAILER_CACHE_HIT_COUNTS[$url]}"
@@ -270,8 +276,10 @@ tailer_process_tool_start() {
         
         # If library event was recent AND URL matches, skip duplicate message
         if [[ $time_diff -lt 2 && "$input_summary" == "$TAILER_LAST_LIBRARY_URL" ]]; then
+            TAILER_LIBRARY_HIT_PENDING=0
             return 0
         fi
+        TAILER_LIBRARY_HIT_PENDING=0
     fi
 
     local lock_dir="$session_dir/.output.lock"
@@ -337,6 +345,27 @@ tailer_process_tool_start() {
     fi
 
     rmdir "$lock_dir" 2>/dev/null || true
+}
+
+tailer_process_tool_complete() {
+    local line="$1"
+
+    local tool_name
+    tool_name=$(tailer_json_field "$line" '.data.tool // empty' "" "tool_complete.tool")
+    [[ "$tool_name" == "WebFetch" ]] || return 0
+
+    if [[ "$TAILER_LIBRARY_HIT_PENDING" -eq 1 ]]; then
+        if is_verbose_enabled; then
+            local now
+            now=$(date +%s)
+            local last_event_time="${TAILER_LAST_LIBRARY_EVENT_TIME:-0}"
+            local time_diff=$((now - last_event_time))
+            if [[ $time_diff -lt 3 && -n "$TAILER_LAST_LIBRARY_URL" ]]; then
+                echo "♻️ Cache hit: Reused digest for $TAILER_LAST_LIBRARY_URL" >&2
+            fi
+        fi
+        TAILER_LIBRARY_HIT_PENDING=0
+    fi
 }
 
 tailer_process_web_search_cache_hit() {
@@ -461,7 +490,7 @@ start_event_tailer() {
                     tailer_process_tool_start "$line" "$session_dir"
                     ;;
                 tool_use_complete)
-                    continue
+                    tailer_process_tool_complete "$line"
                     ;;
                 web_search_cache_hit)
                     tailer_process_web_search_cache_hit "$line"

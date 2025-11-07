@@ -20,7 +20,7 @@ fi
 
 PROJECT_ROOT="$resolved_repo"
 SESSION_DIR="$resolved_session"
-session_dir="${SESSION_DIR:-${CCONDUCTOR_SESSION_DIR:-}}"
+session_dir="${SESSION_DIR:-${HOOK_SESSION_DIR:-${CCONDUCTOR_SESSION_DIR:-}}}"
 
 # Source core helpers with fallback (hooks must never fail)
 # shellcheck disable=SC1091
@@ -112,16 +112,16 @@ else
 fi
 
 # Get session directory from environment or derive it
-if [ -z "$session_dir" ]; then
-    session_dir="${CCONDUCTOR_SESSION_DIR:-}"
-fi
-if [ -z "$session_dir" ]; then
-    if [ -f "logs/events.jsonl" ]; then
-        session_dir=$(pwd)
+if [[ -z "$session_dir" ]] || ! hook_is_session_dir "$session_dir"; then
+    resolved_session_dir=""
+    if resolved_session_dir="$(hook_resolve_session_dir "${BASH_SOURCE[0]}")"; then
+        session_dir="$resolved_session_dir"
     else
         session_dir=""
     fi
 fi
+unset resolved_session_dir
+SESSION_DIR="$session_dir"
 
 # Create event for logging
 timestamp=$(get_timestamp)
@@ -187,8 +187,7 @@ if [[ "$exit_code" = "0" ]]; then
 fi
 
 # Cache successful WebFetch results
-if [ "$tool_name" = "WebFetch" ] && [ "$exit_code" = "0" ]; then
-    # Persist bodies for evidence pipeline
+if [ "$tool_name" = "WebFetch" ]; then
     if [ -n "$session_dir" ]; then
         cache_root="$session_dir/cache/webfetch"
         mkdir -p "$cache_root"
@@ -202,70 +201,94 @@ if [ "$tool_name" = "WebFetch" ] && [ "$exit_code" = "0" ]; then
             url_hash=$("$PROJECT_ROOT/src/utils/hash-string.sh" "$url")
             body_path="$cache_root/${url_hash}.txt"
             metadata_path="$cache_root/${url_hash}.json"
+            reuse_marker="$session_dir/.claude/library-reuse/${url_hash}.json"
+            from_library_flag="false"
+            if [[ -f "$reuse_marker" ]]; then
+                from_library_flag="true"
+            fi
 
-            body_file=$(echo "$hook_data" | jq -r '.tool_output.body_file // empty')
-            if [[ -n "$body_file" && -f "$body_file" ]]; then
-                cp "$body_file" "$body_path"
-            else
-                body_content=$(echo "$hook_data" | jq -r '.tool_output.body // empty')
-                if [[ -n "$body_content" ]]; then
-                    printf '%s' "$body_content" > "$body_path"
+            if [[ "$exit_code" = "0" || "$from_library_flag" == "true" ]]; then
+                body_file=$(echo "$hook_data" | jq -r '.tool_output.body_file // empty')
+                body_file_basename=""
+                if [[ -n "$body_file" && -f "$body_file" ]]; then
+                    cp "$body_file" "$body_path"
+                    body_file_basename="$(basename "$body_path")"
                 else
-                    rm -f "$body_path"
+                    body_content=$(echo "$hook_data" | jq -r '.tool_output.body // empty')
+                    if [[ -n "$body_content" ]]; then
+                        printf '%s' "$body_content" > "$body_path"
+                        body_file_basename="$(basename "$body_path")"
+                    else
+                        rm -f "$body_path"
+                    fi
                 fi
-            fi
 
-            jq -n \
-                --arg url "$url" \
-                --arg fetched_at "${fetch_timestamp:-$(get_timestamp)}" \
-                --arg content_type "${content_type:-}" \
-                --arg status_code "${status_code:-}" \
-                --arg body_path "$(basename "$body_path")" \
-                '{
-                    url: $url,
-                    fetched_at: $fetched_at,
-                    content_type: (if $content_type == "" then null else $content_type end),
-                    status_code: (if $status_code == "" then null else ($status_code | tonumber) end),
-                    body_file: $body_path
-                }' > "$metadata_path"
-
-            manifest="$cache_root/index.json"
-            tmp_manifest="${manifest}.tmp"
-            if [ -f "$manifest" ]; then
-                jq --arg hash "$url_hash" --arg url "$url" --arg body "$(basename "$body_path")" \
-                   --arg meta "$(basename "$metadata_path")" \
-                   --arg fetched "${fetch_timestamp:-$(get_timestamp)}" '
-                    .entries = (
-                        [.entries[]? | select(.hash != $hash)] +
-                        [{
-                            hash: $hash,
-                            url: $url,
-                            body_file: $body,
-                            metadata_file: $meta,
-                            fetched_at: $fetched
-                        }]
-                    )
-                ' "$manifest" > "$tmp_manifest"
-            else
-                mkdir -p "$cache_root"
                 jq -n \
-                    --arg hash "$url_hash" \
                     --arg url "$url" \
-                    --arg body "$(basename "$body_path")" \
-                    --arg meta "$(basename "$metadata_path")" \
-                    --arg fetched "${fetch_timestamp:-$(get_timestamp)}" \
+                    --arg fetched_at "${fetch_timestamp:-$(get_timestamp)}" \
+                    --arg content_type "${content_type:-}" \
+                    --arg status_code "${status_code:-}" \
+                    --arg body_file "$body_file_basename" \
+                    --argjson from_library "$from_library_flag" \
                     '{
-                        hash_algo: "sha256",
-                        entries: [{
-                            hash: $hash,
-                            url: $url,
-                            body_file: $body,
-                            metadata_file: $meta,
-                            fetched_at: $fetched
-                        }]
-                    }' > "$tmp_manifest"
+                        url: $url,
+                        fetched_at: $fetched_at,
+                        content_type: (if $content_type == "" then null else $content_type end),
+                        status_code: (if $status_code == "" then null else ($status_code | tonumber) end),
+                        body_file: (if $body_file == "" then null else $body_file end),
+                        from_library: $from_library
+                    }' > "$metadata_path"
+
+                manifest="$cache_root/index.json"
+                tmp_manifest="${manifest}.tmp"
+                if [ -f "$manifest" ]; then
+                    jq \
+                        --arg hash "$url_hash" \
+                        --arg url "$url" \
+                        --arg body "$body_file_basename" \
+                        --arg meta "$(basename "$metadata_path")" \
+                        --arg fetched "${fetch_timestamp:-$(get_timestamp)}" \
+                        --argjson from_library "$from_library_flag" \
+                        '
+                        .entries = (
+                            [.entries[]? | select(.hash != $hash)] +
+                            [{
+                                hash: $hash,
+                                url: $url,
+                                body_file: (if $body == "" then null else $body end),
+                                metadata_file: $meta,
+                                fetched_at: $fetched,
+                                from_library: $from_library
+                            }]
+                        )
+                    ' "$manifest" > "$tmp_manifest"
+                else
+                    mkdir -p "$cache_root"
+                    jq -n \
+                        --arg hash "$url_hash" \
+                        --arg url "$url" \
+                        --arg body "$body_file_basename" \
+                        --arg meta "$(basename "$metadata_path")" \
+                        --arg fetched "${fetch_timestamp:-$(get_timestamp)}" \
+                        --argjson from_library "$from_library_flag" \
+                        '{
+                            hash_algo: "sha256",
+                            entries: [{
+                                hash: $hash,
+                                url: $url,
+                                body_file: (if $body == "" then null else $body end),
+                                metadata_file: $meta,
+                                fetched_at: $fetched,
+                                from_library: $from_library
+                            }]
+                        }' > "$tmp_manifest"
+                fi
+                mv "$tmp_manifest" "$manifest"
             fi
-            mv "$tmp_manifest" "$manifest"
+
+            if [[ -f "$reuse_marker" ]]; then
+                rm -f "$reuse_marker"
+            fi
         fi
     fi
 

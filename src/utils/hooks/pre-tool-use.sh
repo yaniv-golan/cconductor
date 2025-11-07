@@ -20,7 +20,7 @@ fi
 
 PROJECT_ROOT="$resolved_repo"
 SESSION_DIR="$resolved_session"
-session_dir="$SESSION_DIR"
+session_dir="${SESSION_DIR:-${HOOK_SESSION_DIR:-${CCONDUCTOR_SESSION_DIR:-}}}"
 ROOT="$PROJECT_ROOT"
 
 # Source core helpers with fallback (hooks must never fail)
@@ -171,8 +171,17 @@ load_web_fetch_policy() {
         return 0
     fi
     WEB_FETCH_MAX_USES=$(jq -r '.max_uses_per_turn // 0' "$policy_path" 2>/dev/null || echo 0)
-    readarray -t WEB_FETCH_ALLOWED_DOMAINS < <(jq -r '.allowed_domains[]?' "$policy_path" 2>/dev/null || true)
-    readarray -t WEB_FETCH_BLOCKED_DOMAINS < <(jq -r '.blocked_domains[]?' "$policy_path" 2>/dev/null || true)
+    WEB_FETCH_ALLOWED_DOMAINS=()
+    while IFS= read -r allowed_domain; do
+        [[ -z "$allowed_domain" ]] && continue
+        WEB_FETCH_ALLOWED_DOMAINS+=("$allowed_domain")
+    done < <(jq -r '.allowed_domains[]?' "$policy_path" 2>/dev/null || true)
+
+    WEB_FETCH_BLOCKED_DOMAINS=()
+    while IFS= read -r blocked_domain; do
+        [[ -z "$blocked_domain" ]] && continue
+        WEB_FETCH_BLOCKED_DOMAINS+=("$blocked_domain")
+    done < <(jq -r '.blocked_domains[]?' "$policy_path" 2>/dev/null || true)
     WEB_FETCH_POLICY_AVAILABLE=1
     debug_log "web_fetch_policy loaded: max_uses=$WEB_FETCH_MAX_USES allowed=${WEB_FETCH_ALLOWED_DOMAINS[*]:-<none>} blocked=${WEB_FETCH_BLOCKED_DOMAINS[*]:-<none>}"
 }
@@ -220,7 +229,8 @@ PY
         parsed="${parsed%%:*}"
     fi
     if [[ -n "$parsed" ]]; then
-        printf '%s' "${parsed,,}"
+        # Bash 3.x lacks ${var,,}; use tr for lowercase conversion
+        printf '%s' "$(printf '%s' "$parsed" | tr '[:upper:]' '[:lower:]')"
         return 0
     fi
     return 1
@@ -273,7 +283,7 @@ if [[ "$agent_name" == "mission-orchestrator" ]]; then
     esac
 fi
 
-if [[ "$tool_name" == "WebFetch" && "${CCONDUCTOR_WEB_FETCH_STRICT_MODE:-1}" != "0" ]]; then
+if [[ "$tool_name" == "WebFetch" && "${CCONDUCTOR_WEB_FETCH_STRICT_MODE:-0}" != "0" ]]; then
     load_web_fetch_policy
     if [[ "$WEB_FETCH_POLICY_AVAILABLE" -eq 1 ]]; then
         url=$(hook_field '.tool_input.url // ""' '' 'tool_input.url')
@@ -283,11 +293,46 @@ if [[ "$tool_name" == "WebFetch" && "${CCONDUCTOR_WEB_FETCH_STRICT_MODE:-1}" != 
         fi
         if [[ -n "$domain" ]]; then
             if [[ "${#WEB_FETCH_BLOCKED_DOMAINS[@]}" -gt 0 ]] && domain_in_list "$domain" "${WEB_FETCH_BLOCKED_DOMAINS[@]}"; then
-                echo "ERROR: WebFetch blocked for domain '$domain' (policy forbids it)" >&2
+                echo "ERROR: WebFetch blocked for domain '$domain' (policy forbids it). To allow this domain, set CCONDUCTOR_WEB_FETCH_STRICT_MODE=0 or add it to config/web-fetch-limits.json" >&2
+                # Log to system-errors.log if session_dir is available
+                if [[ -n "${session_dir:-}" ]] && command -v log_system_warning >/dev/null 2>&1; then
+                    log_system_warning "$session_dir" "web_fetch_blocked" "Domain '$domain' blocked by policy (blocked_domains list)" "strict_mode=1, policy_file=${CCONDUCTOR_WEB_FETCH_POLICY_FILE:-default}"
+                fi
                 exit 1
             fi
             if [[ "${#WEB_FETCH_ALLOWED_DOMAINS[@]}" -gt 0 ]] && ! domain_in_list "$domain" "${WEB_FETCH_ALLOWED_DOMAINS[@]}"; then
-                echo "ERROR: WebFetch domain '$domain' not in allowed list" >&2
+                echo "ERROR: WebFetch domain '$domain' not in allowed list. To allow this domain, set CCONDUCTOR_WEB_FETCH_STRICT_MODE=0 or add it to config/web-fetch-limits.json" >&2
+                # Log to system-errors.log and track first occurrence per domain
+                if [[ -n "${session_dir:-}" ]]; then
+                    usage_file="${CCONDUCTOR_TOOL_USAGE_FILE:-}"
+                    if [[ -z "$usage_file" ]]; then
+                        usage_file="$session_dir/meta/tool-usage.json"
+                    fi
+                    mkdir -p "$(dirname "$usage_file")"
+                    if [[ ! -f "$usage_file" ]]; then
+                        echo '{}' > "$usage_file"
+                    fi
+                    # Check if this domain was already logged
+                    already_logged=$(jq -r --arg agent "$agent_name" --arg domain "$domain" '.agents[$agent].web_fetch.blocked_domains // [] | map(select(. == $domain)) | length' "$usage_file" 2>/dev/null || echo "0")
+                    if [[ "$already_logged" == "0" ]]; then
+                        # Log first occurrence
+                        if command -v log_system_warning >/dev/null 2>&1; then
+                            log_system_warning "$session_dir" "web_fetch_blocked" "Domain '$domain' not in allowed list" "strict_mode=1, policy_file=${CCONDUCTOR_WEB_FETCH_POLICY_FILE:-default}"
+                        fi
+                        # Track this domain to avoid duplicate logs
+                        if command -v atomic_json_update >/dev/null 2>&1; then
+                            # shellcheck disable=SC2016
+                            atomic_json_update "$usage_file" \
+                                --arg agent "$agent_name" \
+                                --arg domain "$domain" \
+                                '(.agents //= {}) |
+                                 (.agents[$agent] //= {}) |
+                                 (.agents[$agent].web_fetch //= {}) |
+                                 (.agents[$agent].web_fetch.blocked_domains //= []) |
+                                 (.agents[$agent].web_fetch.blocked_domains += [$domain])'
+                        fi
+                    fi
+                fi
                 exit 1
             fi
         fi
@@ -369,25 +414,22 @@ case "$tool_name" in
         ;;
 esac
 
-if [[ -z "${session_dir:-}" ]]; then
-    session_dir="${SESSION_DIR:-${CCONDUCTOR_SESSION_DIR:-}}"
-fi
-if [[ -z "$session_dir" ]]; then
-    transcript_path=$(hook_field '.transcript_path // ""' '' 'transcript_path')
-    if [[ -n "$transcript_path" && "$transcript_path" != "null" ]]; then
-        session_dir="$(dirname "$transcript_path")"
-    elif [[ -f "logs/events.jsonl" ]]; then
-        session_dir=$(pwd)
+if [[ -z "$session_dir" ]] || ! hook_is_session_dir "$session_dir"; then
+    resolved_session_dir=""
+    if resolved_session_dir="$(hook_resolve_session_dir "${BASH_SOURCE[0]}")"; then
+        session_dir="$resolved_session_dir"
     else
         session_dir=""
     fi
 fi
+unset resolved_session_dir
 if [[ -n "$session_dir" ]]; then
     HOOK_DEBUG_LOG="$session_dir/logs/hook-debug.log"
     debug_log "hook_session_dir $session_dir"
 else
     debug_log "hook_session_dir_unset"
 fi
+SESSION_DIR="$session_dir"
 
 if [[ -n "$session_dir" && -d "$session_dir/library" ]]; then
     real_library_dir=$(cd "$session_dir/library" && pwd -P)
@@ -405,6 +447,7 @@ emit_event() {
     local event_data_json="$2"
 
     if [[ -z "${session_dir:-}" ]]; then
+        log_warn "pre-tool-use: unable to emit $event_type (session_dir unresolved)"
         return 0
     fi
     if [[ -z "$event_type" || -z "$event_data_json" ]]; then
@@ -436,6 +479,33 @@ emit_event() {
         fi
         sleep 0.05
     done
+}
+
+record_library_reuse_marker() {
+    local marker_session_dir="$1"
+    local marker_hash="$2"
+    local marker_url="$3"
+    local marker_digest="$4"
+
+    if [[ -z "$marker_session_dir" || -z "$marker_hash" ]]; then
+        return 0
+    fi
+
+    local marker_dir="$marker_session_dir/.claude/library-reuse"
+    mkdir -p "$marker_dir"
+    local marker_path="$marker_dir/${marker_hash}.json"
+
+    jq -n \
+        --arg url "$marker_url" \
+        --arg hash "$marker_hash" \
+        --arg digest "$marker_digest" \
+        --arg recorded "$(get_timestamp)" \
+        '{
+            url: $url,
+            url_hash: $hash,
+            digest_path: $digest,
+            recorded_at: $recorded
+        }' > "$marker_path"
 }
 
 # Source utilities after resolving project root
@@ -608,6 +678,12 @@ url=$(hook_field '.tool_input.url // empty' '' 'web_fetch.url')
     guard_detail="$url"
     guard_reason="allow:no_url"
     debug_log "guard_start tool=$tool_name url=$url session_dir=${session_dir:-}"
+    if [[ -z "$session_dir" ]]; then
+        session_dir="${SESSION_DIR:-${CCONDUCTOR_SESSION_DIR:-}}"
+        if [[ -z "$session_dir" ]]; then
+            debug_log "guard_session_dir_missing url=$url"
+        fi
+    fi
     if [[ -n "$url" ]]; then
         check_payload=$(jq -nc \
             --arg url "$url" \
@@ -681,31 +757,45 @@ url=$(hook_field '.tool_input.url // empty' '' 'web_fetch.url')
                             # Note: Hook stderr is captured by Claude CLI, so we emit events instead
                             # The event tailer reads events.jsonl and displays formatted output
 
+                            digest_snippet="[]"
+                            if [[ -f "$digest_path" ]]; then
+                                digest_snippet=$(jq -c '(.entries // []) | map({
+                                    session: (.session // null),
+                                    claim: (.claim // null),
+                                    quote: (.quote // null),
+                                    collected_at: (.collected_at // null)
+                                })[:3]' "$digest_path" 2>/dev/null || echo "[]")
+                            fi
+
+                            record_library_reuse_marker "$session_dir" "$url_hash" "$url" "$digest_path"
+
                             hit_event=$(jq -nc \
                                 --arg url "$url" \
                                 --arg hash "$url_hash" \
                                 --arg path "$digest_path" \
                                 --arg last "$stored_timestamp" \
                                 --arg agent "$agent_name" \
+                                --argjson snippet "$digest_snippet" \
                                 --argjson ttl "$ttl_days" \
                                 '{
                                     url: $url,
                                     agent: $agent,
                                     url_hash: $hash,
                                     digest_path: $path,
+                                    digest_snippet: $snippet,
                                     last_updated: (if $last == "" or $last == "unknown" then null else $last end),
                                     ttl_days: $ttl
                                 }')
                             emit_event "library_digest_hit" "$hit_event"
 
                             blocked_event=$(jq -nc \
-                                --arg tool "$tool_name" \
+                                --arg tool_name "$tool_name" \
                                 --arg agent "$agent_name" \
                                 --arg summary "$tool_input_summary" \
                                 --arg reason "library_digest_fresh" \
                                 --arg details "$tool_input_details" \
                                 '{
-                                    tool: $tool,
+                                    tool: $tool_name,
                                     agent: $agent,
                                     input_summary: $summary,
                                     reason: $reason,

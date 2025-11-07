@@ -630,15 +630,20 @@ kill -9 <PID>
 
 **Symptoms**:
 
-- `ERROR: WebFetch domain 'canva.com' not in allowed list` (or similar) appears during agent run
+- `ERROR: WebFetch domain 'example.com' not in allowed list` (or similar) appears during agent run
 - Agent reports that the runtime rejected a fetch even though the URL is valid
 
-**Cause**: Web-fetch strict mode is now enabled by default. The runtime enforces an allow/deny policy and a per-turn budget to prevent stalls caused by JS-heavy or bot-protected sites.
+**Cause**: Web-fetch strict mode is disabled by default (permissive mode). If you've enabled strict mode (via `CCONDUCTOR_WEB_FETCH_STRICT_MODE=1` or `--strict-web-fetch`), the runtime enforces an allow/deny policy and a per-turn budget to prevent stalls caused by JS-heavy or bot-protected sites.
 
 **Resolution**:
-- Adjust your prompt/task so the agent selects text-first domains (gov, edu, established research portals).
-- If you absolutely must reach a blocked site during debugging, set `CCONDUCTOR_WEB_FETCH_STRICT_MODE=0` for the run (not recommended for production).
-- Review `config/web-fetch-limits.default.json` (copy to `config/web-fetch-limits.json` for local overrides) to understand allowed/blocked domains and the fetch limit.
+- **If strict mode is enabled and blocking legitimate domains**:
+  - Option 1: Disable strict mode: `CCONDUCTOR_WEB_FETCH_STRICT_MODE=0` or remove the `--strict-web-fetch` flag
+  - Option 2: Add the domain to `config/web-fetch-limits.json` in the `allowed_domains` array
+- **To enable strict mode** (for compliance/security):
+  - Copy a policy template from `config/policies/` to `config/web-fetch-limits.json`
+  - Set `CCONDUCTOR_WEB_FETCH_STRICT_MODE=1` or use `--strict-web-fetch` CLI flag
+  - Review `config/web-fetch-limits.json` to understand allowed/blocked domains and the fetch limit
+- **Check logs**: Blocked domains are logged to `logs/system-errors.log` (first occurrence per domain)
 
 ### Manifest Missing Required Fields (status, findings_files)
 

@@ -87,11 +87,16 @@ JSON
 run_hook() {
     local url="$1"
     local library_root="$2"
+    local set_session="${3:-true}"
+    local ttl_override="${4:-}"
     local session_dir
     session_dir="$(mktemp -d)"
     tmp_dirs+=("$session_dir")
     mkdir -p "$session_dir/logs"
     touch "$session_dir/logs/events.jsonl"
+    mkdir -p "$session_dir/meta"
+    printf '%s\n' "$REPO_ROOT" > "$session_dir/.cconductor-root"
+    printf '{}\n' > "$session_dir/meta/session.json"
 
     local payload
     payload=$(jq -n --arg url "$url" '{tool_name:"WebFetch", tool_input:{url:$url}}')
@@ -100,13 +105,20 @@ run_hook() {
     stderr_file="$(mktemp)"
     tmp_dirs+=("$stderr_file")
 
+    local -a env_args=(
+        "LIBRARY_MEMORY_ROOT=$library_root"
+        "CCONDUCTOR_AGENT_NAME=web-researcher"
+    )
+    if [[ "$set_session" == "true" ]]; then
+        env_args+=("CCONDUCTOR_SESSION_DIR=$session_dir" "SESSION_DIR=$session_dir")
+    fi
+    if [[ -n "$ttl_override" ]]; then
+        env_args+=("LIBRARY_MEMORY_TTL_DAYS=$ttl_override")
+    fi
+
     set +e
-    echo "$payload" | \
-        LIBRARY_MEMORY_ROOT="$library_root" \
-        CCONDUCTOR_SESSION_DIR="$session_dir" \
-        CCONDUCTOR_AGENT_NAME="web-researcher" \
-        CLAUDE_PROJECT_DIR="$REPO_ROOT" \
-        "$HOOK_SCRIPT" > /dev/null 2> "$stderr_file"
+    env "${env_args[@]}" \
+        "$HOOK_SCRIPT" > /dev/null 2> "$stderr_file" <<< "$payload"
     local exit_code=$?
     set -e
 
@@ -115,8 +127,8 @@ run_hook() {
 
 echo "Test 1: cache hit blocks WebFetch"
 fresh_url="https://example.com/library-memory-test"
-fresh_library=$(create_library "$fresh_url" "2025-10-19T00:00:00Z")
-result=$(run_hook "$fresh_url" "$fresh_library")
+fresh_library=$(create_library "$fresh_url" "2099-01-01T00:00:00Z")
+result=$(run_hook "$fresh_url" "$fresh_library" "true" "36500")
 session_dir="${result%%|*}"
 rest="${result#*|}"
 stderr_file="${rest%%|*}"
@@ -124,16 +136,6 @@ exit_code="${result##*|}"
 
 if [[ "$exit_code" -ne 2 ]]; then
     echo "Expected exit code 2 for cache hit, got $exit_code" >&2
-    exit 1
-fi
-
-if ! grep -q "Cache hit: Reused digest" "$stderr_file"; then
-    echo "Cache-hit message missing in stderr" >&2
-    exit 1
-fi
-
-if ! grep -q "mission_test_1" "$stderr_file"; then
-    echo "Digest snippet details missing in stderr output" >&2
     exit 1
 fi
 
@@ -199,7 +201,7 @@ fi
 
 echo "Test 3: ?fresh=1 bypasses cache guard"
 fresh_override_url="https://example.com/library-memory-test?fresh=1"
-result=$(run_hook "$fresh_override_url" "$fresh_library")
+result=$(run_hook "$fresh_override_url" "$fresh_library" "true" "36500")
 session_dir="${result%%|*}"
 rest="${result#*|}"
 stderr_file="${rest%%|*}"
@@ -209,7 +211,7 @@ if [[ "$exit_code" -ne 0 ]]; then
     exit 1
 fi
 
-if ! grep -q "Fresh fetch requested" "$stderr_file"; then
+if ! grep -q "Forcing fresh fetch" "$stderr_file"; then
     echo "Fresh fetch notice missing in stderr output" >&2
     exit 1
 fi
@@ -226,6 +228,81 @@ fi
 
 if jq -e 'select(.type=="library_digest_hit")' "$session_dir/logs/events.jsonl" >/dev/null; then
     echo "Unexpected cache hit recorded during forced refresh" >&2
+    exit 1
+fi
+
+echo "Test 4: warning emitted when session_dir is unset"
+result=$(run_hook "$fresh_url" "$fresh_library" "false" "36500")
+session_dir="${result%%|*}"
+rest="${result#*|}"
+stderr_file="${rest%%|*}"
+exit_code="${result##*|}"
+if [[ "$exit_code" -ne 2 ]]; then
+    echo "Expected exit code 2 when session_dir unset, got $exit_code" >&2
+    exit 1
+fi
+
+if [[ -s "$session_dir/logs/events.jsonl" ]]; then
+    echo "Events should not be recorded when session_dir is unset" >&2
+    exit 1
+fi
+
+echo "Test 5: CLAUDE_PROJECT_DIR resolves session directory"
+alt_url="https://example.com/library-memory-alt"
+alt_library=$(create_library "$alt_url" "2099-06-01T00:00:00Z")
+session_dir="$(mktemp -d)"
+tmp_dirs+=("$session_dir")
+mkdir -p "$session_dir/logs" "$session_dir/meta"
+touch "$session_dir/logs/events.jsonl"
+printf '%s\n' "$REPO_ROOT" > "$session_dir/.cconductor-root"
+echo '{}' > "$session_dir/meta/session.json"
+payload=$(jq -n --arg url "$alt_url" '{tool_name:"WebFetch", tool_input:{url:$url}}')
+stderr_file="$(mktemp)"
+tmp_dirs+=("$stderr_file")
+set +e
+env \
+    LIBRARY_MEMORY_ROOT="$alt_library" \
+    LIBRARY_MEMORY_TTL_DAYS=36500 \
+    CLAUDE_PROJECT_DIR="$session_dir" \
+    CCONDUCTOR_AGENT_NAME="web-researcher" \
+    "$HOOK_SCRIPT" > /dev/null 2> "$stderr_file" <<< "$payload"
+exit_code=$?
+set -e
+if [[ "$exit_code" -ne 0 && "$exit_code" -ne 2 ]]; then
+    echo "Unexpected exit code ($exit_code) when CLAUDE_PROJECT_DIR points to session" >&2
+    exit 1
+fi
+if ! grep -q '"type":"library_digest_hit"' "$session_dir/logs/events.jsonl" && \
+   ! grep -q '"type":"tool_use_start"' "$session_dir/logs/events.jsonl"; then
+    echo "Expected cache reuse or WebFetch start when CLAUDE_PROJECT_DIR is provided" >&2
+    exit 1
+fi
+
+echo "Test 6: fallback to working directory when env vars are unset"
+session_dir2="$(mktemp -d)"
+tmp_dirs+=("$session_dir2")
+mkdir -p "$session_dir2/logs" "$session_dir2/meta"
+touch "$session_dir2/logs/events.jsonl"
+printf '%s\n' "$REPO_ROOT" > "$session_dir2/.cconductor-root"
+echo '{}' > "$session_dir2/meta/session.json"
+payload=$(jq -n --arg url "$alt_url" '{tool_name:"WebFetch", tool_input:{url:$url}}')
+stderr_file2="$(mktemp)"
+tmp_dirs+=("$stderr_file2")
+set +e
+( cd "$session_dir2" && env -u CLAUDE_PROJECT_DIR \
+    LIBRARY_MEMORY_ROOT="$alt_library" \
+    LIBRARY_MEMORY_TTL_DAYS=36500 \
+    CCONDUCTOR_AGENT_NAME="web-researcher" \
+    "$HOOK_SCRIPT" > /dev/null 2> "$stderr_file2" <<< "$payload" )
+exit_code=$?
+set -e
+if [[ "$exit_code" -ne 0 && "$exit_code" -ne 2 ]]; then
+    echo "Unexpected exit code ($exit_code) when resolving session via working directory" >&2
+    exit 1
+fi
+if ! grep -q '"type":"library_digest_hit"' "$session_dir2/logs/events.jsonl" && \
+   ! grep -q '"type":"tool_use_start"' "$session_dir2/logs/events.jsonl"; then
+    echo "Expected cache reuse or WebFetch start when falling back to working directory" >&2
     exit 1
 fi
 

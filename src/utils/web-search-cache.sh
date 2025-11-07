@@ -20,6 +20,11 @@ source "$PROJECT_ROOT/src/utils/platform-paths.sh"
 # shellcheck disable=SC1091
 source "$PROJECT_ROOT/src/utils/path-resolver.sh"
 
+escape_sed_regex() {
+    local input="${1-}"
+    printf '%s' "$input" | sed -E 's/[][\\/.*^$+?|(){}-]/\\&/g'
+}
+
 WEB_SEARCH_CACHE_SUBDIR="web-search"
 WEB_SEARCH_CACHE_INDEX="index.json"
 
@@ -130,8 +135,11 @@ web_search_cache_prepare_query() {
             if [[ "$normalized_lower" =~ [[:space:]]*"$marker_lower"[[:space:]]*$ ]]; then
                 force="true"
                 # Remove marker from end of both versions
-                normalized_lower=$(echo "$normalized_lower" | sed -E "s/[[:space:]]*$(echo "$marker_lower" | sed 's/[]\/$*.^[]/\\&/g')[[:space:]]*$//")
-                normalized_display=$(echo "$normalized_display" | sed -E "s/[[:space:]]*$(echo "$marker" | sed 's/[]\/$*.^[]/\\&/g')[[:space:]]*$//i")
+                local escaped_marker_lower escaped_marker_disp
+                escaped_marker_lower=$(escape_sed_regex "$marker_lower")
+                escaped_marker_disp=$(escape_sed_regex "$marker")
+                normalized_lower=$(echo "$normalized_lower" | sed -E "s/[[:space:]]*${escaped_marker_lower}[[:space:]]*$//")
+                normalized_display=$(echo "$normalized_display" | sed -E "s/[[:space:]]*${escaped_marker_disp}[[:space:]]*$//I")
             fi
         done <<< "$markers"
     fi

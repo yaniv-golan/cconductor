@@ -1,13 +1,8 @@
 {
+  "_comment": "WebFetch policy configuration - disabled by default (strict mode off). To enable restrictions, set CCONDUCTOR_WEB_FETCH_STRICT_MODE=1 and copy a policy template from config/policies/ to config/web-fetch-limits.json",
   "max_uses_per_turn": 2,
   "max_content_tokens": 60000,
-  "allowed_domains": [
-    "*.gov",
-    "*.edu",
-    "wikipedia.org",
-    "github.com",
-    "stackoverflow.com"
-  ],
+  "allowed_domains": [],
   "blocked_domains": [
     "canva.com",
     "figma.com",

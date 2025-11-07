@@ -79,6 +79,7 @@ validate_known_flags() {
         "enable-agent-timeouts" "disable-agent-timeouts"
         "evidence-mode" "evidence-render"
         "mission" "input-dir" "question-file"
+        "strict-web-fetch"
     )
 
     local flag known allowed
@@ -131,6 +132,11 @@ else
     if has_flag "no-web-search-cache"; then
         export CCONDUCTOR_DISABLE_WEB_SEARCH_CACHE=1
     fi
+fi
+
+# WebFetch strict mode flag
+if has_flag "strict-web-fetch"; then
+    export CCONDUCTOR_WEB_FETCH_STRICT_MODE=1
 fi
 
 # Evidence mode flag (controls Stop hook behaviour)

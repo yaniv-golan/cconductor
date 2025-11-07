@@ -1,0 +1,21 @@
+{
+  "_comment": "Restrictive WebFetch policy template - for compliance and security-sensitive environments. Copy this to config/web-fetch-limits.json and set CCONDUCTOR_WEB_FETCH_STRICT_MODE=1 to activate.",
+  "_description": "Limits WebFetch to academic and developer-focused domains only. Suitable for environments requiring strict domain controls.",
+  "max_uses_per_turn": 2,
+  "max_content_tokens": 60000,
+  "allowed_domains": [
+    "*.gov",
+    "*.edu",
+    "wikipedia.org",
+    "github.com",
+    "stackoverflow.com"
+  ],
+  "blocked_domains": [
+    "canva.com",
+    "figma.com",
+    "medium.com",
+    "pinterest.com"
+  ]
+}
+
+

@@ -799,6 +799,81 @@ Three built-in profiles:
 
 ---
 
+## WebFetch Policy (web-fetch-limits.json)
+
+### Overview
+
+**File**: `config/web-fetch-limits.json`  
+**Purpose**: Control which domains WebFetch can access (domain allowlist/denylist)  
+**Default**: Permissive mode (strict mode off) - all domains allowed
+
+### Default Behavior
+
+By default, WebFetch operates in **permissive mode** (`CCONDUCTOR_WEB_FETCH_STRICT_MODE=0`):
+- All domains are allowed (except those in `blocked_domains`)
+- No domain restrictions
+- Optimized for "useful out of the box" experience
+
+### Enabling Strict Mode
+
+To enable domain restrictions:
+
+1. **Copy a policy template**:
+   ```bash
+   cp config/policies/web-fetch-restricted.json config/web-fetch-limits.json
+   ```
+
+2. **Enable strict mode**:
+   - Environment variable: `export CCONDUCTOR_WEB_FETCH_STRICT_MODE=1`
+   - CLI flag: `./cconductor --strict-web-fetch "your question"`
+
+### Policy File Structure
+
+```json
+{
+  "_comment": "WebFetch policy - only active when CCONDUCTOR_WEB_FETCH_STRICT_MODE=1",
+  "max_uses_per_turn": 2,
+  "max_content_tokens": 60000,
+  "allowed_domains": ["*.gov", "*.edu", "wikipedia.org"],
+  "blocked_domains": ["canva.com", "figma.com"]
+}
+```
+
+**Fields**:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `allowed_domains` | array | Domain patterns allowed when strict mode is enabled. Empty array = allow all (when strict mode is off) |
+| `blocked_domains` | array | Domains always blocked (applies regardless of strict mode) |
+| `max_uses_per_turn` | integer | Maximum WebFetch calls per agent turn (0 = unlimited) |
+| `max_content_tokens` | integer | Maximum content size limit in tokens |
+
+**Domain Patterns**:
+- `*.gov` - Matches all .gov domains (e.g., `nasa.gov`, `nih.gov`)
+- `*.edu` - Matches all .edu domains
+- `wikipedia.org` - Exact domain match
+- Patterns support wildcards at the start only
+
+### Policy Templates
+
+See `config/policies/README.md` for available templates:
+- `web-fetch-restricted.json` - Academic/developer domains only
+
+### CLI Flag
+
+**`--strict-web-fetch`**: Enable WebFetch strict mode for a single session
+```bash
+./cconductor --strict-web-fetch "research question"
+```
+
+### Troubleshooting
+
+- Blocked domains are logged to `logs/system-errors.log` (first occurrence per domain)
+- Error messages include suggestions for how to allow blocked domains
+- See [Troubleshooting Guide](TROUBLESHOOTING.md) for more help
+
+---
+
 ## Web Fetch Cache (web-fetch-cache.json)
 
 ### Overview
@@ -1476,6 +1551,7 @@ export LOG_LEVEL=debug
 - `LOG_LEVEL` - Logging level
 - `MAX_PARALLEL_AGENTS` - Agent parallelism
 - `CCONDUCTOR_REQUIRE_INDEPENDENT_SOURCES` - Default `0`. When set to `1`/`true`, dedupes sources by eTLD+1 during knowledge-graph ingestion and blocks synthesis until each claim has the required number of independent domains.
+- `CCONDUCTOR_WEB_FETCH_STRICT_MODE` - WebFetch domain restrictions. Default `0` (permissive). Set to `1` to enable strict mode with domain allowlist/denylist from `config/web-fetch-limits.json`. See [WebFetch Policy](#webfetch-policy-web-fetch-limitsjson) below.
 
 ---
 
