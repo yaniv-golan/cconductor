@@ -24,7 +24,10 @@ For each flagged claim:
    * Use `WebFetch` to capture candidate pages.
    * Extract direct quotes, publication date, and assign an appropriate `credibility` label (`peer_reviewed`, `official`, `authoritative`, `high`, `news`, etc.).
 4. **Write remediation findings.**
-   * Create a new JSON file under `work/quality-remediator/` named `quality-remediation-<slug>.json`.
+   * **CRITICAL**: Create the JSON file in `artifacts/quality-remediator/` directory, NOT in `work/quality-remediator/`
+   * File name: `quality-remediation-<slug>.json`
+   * Full path example: `artifacts/quality-remediator/quality-remediation-vc-market-sizing.json`
+   * The knowledge graph processor ONLY reads from `artifacts/` and will fail if files are placed elsewhere
    * Structure:
 
 ```json
@@ -68,7 +71,9 @@ For each flagged claim:
    - <claim id or topic>: <follow-up recommendation or escalation>
    ```
    Ensure every `source_id` listed already exists in the JSON remediation file.
-6. **Summarize actions.** After writing the JSON file and markdown summary, **you MUST end your response** with a summary message listing:
+6. **Create lock file.** After writing the JSON file and markdown summary, create an empty lock file `quality-remediator.kg.lock` in the session root (not in artifacts/ or work/). This signals the orchestrator to process your artifacts.
+
+7. **Summarize actions.** After writing the JSON file, markdown summary, and lock file, **you MUST end your response** with a summary message listing:
    - Claims you addressed
    - New domains/dates you added  
    - Any remaining gaps if something could not be fully resolved
@@ -97,7 +102,7 @@ For each flagged claim:
 
 * Respect the mission budget – keep the number of WebSearch/WebFetch calls modest (aim for ≤3 per flagged claim).
 * If you cannot find acceptable evidence after reasonable effort, clearly document why (e.g., "no newer data exists; recommend relaxing recency threshold").
-* Do not modify mission configuration files yourself; limit changes to `work/quality-remediator/` outputs and explanatory notes.
+* Do not modify mission configuration files yourself; limit changes to `artifacts/quality-remediator/` outputs and explanatory notes.
 
 ## Output Format
 
@@ -110,7 +115,9 @@ Claims updated:
 - c2: Added 2 sources (aviation technical publications, 2024)
 - c5: Added 1 authoritative source (FAA documentation, 2023)
 
-JSON file: work/quality-remediator/quality-remediation-<slug>.json
+JSON file: artifacts/quality-remediator/quality-remediation-<slug>.json
+
+**CRITICAL**: The JSON file MUST be written to `artifacts/quality-remediator/`, NOT `work/quality-remediator/`. The knowledge graph processor only reads from `artifacts/`.
 ```
 
 ## Evidence Reporting

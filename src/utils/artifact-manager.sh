@@ -648,7 +648,7 @@ artifact_register_from_manifest() {
       log_warn "No new artifacts registered for $agent_name (skipped_total: $total_skipped, already_registered: $skipped_existing, skipped_due_to_errors: $skipped_other)"
       return 1
     elif (( skipped_existing > 0 )); then
-      log_info "All manifest artifacts already registered for $agent_name (count: $skipped_existing)"
+      log_debug "All manifest artifacts already registered for $agent_name (count: $skipped_existing)"
       return 0
     else
       log_warn "Manifest for $agent_name contained no present artifacts"

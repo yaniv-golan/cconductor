@@ -17,7 +17,7 @@
     {
       "slot": "quality_remediation_json",
       "description": "Structured remediation record with claim-level follow-up details.",
-      "path_pattern": "work/quality-remediator/quality-remediation*.json",
+      "path_pattern": "artifacts/quality-remediator/quality-remediation*.json",
       "content_type": "application/json",
       "schema_id": "artifact://quality/remediation-record@v1",
       "required": false,

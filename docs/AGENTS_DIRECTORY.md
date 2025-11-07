@@ -102,7 +102,7 @@ CConductor missions rely on a cooperative set of specialized agents. This guide 
 ### Quality Remediator
 - **Role**: Responds to quality gate diagnostics by sourcing fresher or more independent evidence for specific claims, then staging remediation bundles for merge.
 - **Inputs**: `artifacts/quality-gate.json`, `knowledge/knowledge-graph.json`, and cache-aware web research tools.
-- **Outputs**: JSON remediation files under `work/quality-remediator/` plus a final summary that the orchestrator processes.
+- **Outputs**: JSON remediation files under `artifacts/quality-remediator/` plus a final summary that the orchestrator processes.
 - **Why it matters**: Keeps missions from shipping reports that fail quality thresholds, especially around recency, independence, and trust score requirements.
 - **Deeper docs**: [System prompt](../src/claude-runtime/agents/quality-remediator/system-prompt.md), [Quality program overview](QUALITY_GUIDE.md#domain-aware-quality--stakeholder-coverage)
 

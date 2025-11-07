@@ -244,7 +244,7 @@ build_session_manifest() {
             )' "$classifier_file" 2>/dev/null || echo '{}')
         classifier_needs_review_json=$(jq -s '
             [ .[]?
-              | select((.needs_review // false) == true or (.llm_attempted // false) == true)
+              | select((.resolved_category // "") == "needs_review")
               | {
                     source_id: (.source_id // null),
                     url: (.url // null),
@@ -299,7 +299,15 @@ build_session_manifest() {
         log_warn "session-manifest: failed to compute normalized source digest; falling back to stale status"
     fi
 
-    if (( classifier_needs_review_count > 0 )); then
+    local mission_state_file="$meta_dir/mission_state.json"
+    local recent_decisions="[]"
+    local classifier_needs_review_pending_count="0"
+    if [[ -f "$mission_state_file" ]]; then
+        recent_decisions=$(safe_jq_from_file "$mission_state_file" '.last_5_decisions // []' '[]' "$session_dir" "session_manifest.recent_decisions" "false")
+        classifier_needs_review_pending_count=$(safe_jq_from_file "$mission_state_file" '.stakeholder_classifier.needs_review.pending.count // 0' "0" "$session_dir" "session_manifest.classifier_pending")
+    fi
+
+    if (( classifier_needs_review_pending_count > 0 )); then
         classifier_status="stale_pending"
     elif (( classifier_pending > 0 )); then
         classifier_status="stale_pending"
@@ -326,12 +334,6 @@ build_session_manifest() {
     if [[ -f "$quality_gate_summary_path" ]]; then
         quality_gate_status=$(safe_jq_from_file "$quality_gate_summary_path" '.status // "unknown"' "unknown" "$session_dir" "session_manifest.quality_gate_status")
         quality_gate_summary=$(safe_jq_from_file "$quality_gate_summary_path" '.' '{}' "$session_dir" "session_manifest.quality_gate_summary" "false")
-    fi
-
-    local mission_state_file="$meta_dir/mission_state.json"
-    local recent_decisions="[]"
-    if [[ -f "$mission_state_file" ]]; then
-        recent_decisions=$(safe_jq_from_file "$mission_state_file" '.last_5_decisions // []' '[]' "$session_dir" "session_manifest.recent_decisions" "false")
     fi
 
     local pending_tasks="$kg_high_priority_gaps"

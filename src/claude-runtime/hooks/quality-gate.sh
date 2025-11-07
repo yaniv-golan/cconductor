@@ -31,6 +31,8 @@ source "$PROJECT_ROOT/src/utils/error-messages.sh" 2>/dev/null || true
 # shellcheck disable=SC1091
 source "$PROJECT_ROOT/src/utils/json-helpers.sh"
 # shellcheck disable=SC1091
+source "$PROJECT_ROOT/src/shared-state.sh" 2>/dev/null || true
+# shellcheck disable=SC1091
 source "$PROJECT_ROOT/src/utils/domain-helpers.sh" 2>/dev/null || true
 
 # Check required dependencies
@@ -772,6 +774,71 @@ mv "${OUTPUT_PATH}.tmp.$$" "$OUTPUT_PATH"
 
 echo "$summary_compact" >"${SUMMARY_PATH}.tmp.$$"
 mv "${SUMMARY_PATH}.tmp.$$" "$SUMMARY_PATH"
+
+# Persist trust scores back to knowledge graph
+# This ensures mission-orchestration.sh can read quality_gate_assessment.trust_score
+if [[ -n "$claim_results" && "$claim_results" != "null" && "$claim_results" != "[]" ]]; then
+    # Build a lookup map of claim_id -> quality_gate_assessment
+    # Handle both 'id' and 'claim_id' fields for compatibility
+    trust_scores_json=$(echo "$claim_results" | jq '[.[] | {key: .id, value: .confidence_surface}] | from_entries')
+    
+    # Update knowledge graph with quality_gate_assessment for each claim
+    if type atomic_json_update &>/dev/null; then
+        # Use atomic update to safely modify knowledge graph
+        # shellcheck disable=SC2016
+        if atomic_json_update "$KG_FILE" \
+            --argjson trust_scores "$trust_scores_json" \
+            '.claims = (.claims | map(
+                . as $claim |
+                (($claim.id // $claim.claim_id // "") as $claim_id | $trust_scores[$claim_id] // {}) as $assessment |
+                if $assessment.trust_score != null then
+                    . + {
+                        quality_gate_assessment: {
+                            trust_score: $assessment.trust_score,
+                            independent_source_count: ($assessment.independent_source_count // 0),
+                            source_count: ($assessment.source_count // 0),
+                            last_reviewed_at: ($assessment.last_reviewed_at // null),
+                            status: ($assessment.status // "unknown")
+                        }
+                    }
+                else
+                    .
+                end
+            ))' 2>/dev/null; then
+            log_info "Updated knowledge graph with trust scores for ${total_claims} claims"
+        else
+            log_warn "Failed to persist trust scores to knowledge graph (non-fatal)"
+        fi
+    else
+        # Fallback: direct jq update if atomic_json_update unavailable
+        # shellcheck disable=SC2016
+        if jq \
+            --argjson trust_scores "$trust_scores_json" \
+            '.claims = (.claims | map(
+                . as $claim |
+                (($claim.id // $claim.claim_id // "") as $claim_id | $trust_scores[$claim_id] // {}) as $assessment |
+                if $assessment.trust_score != null then
+                    . + {
+                        quality_gate_assessment: {
+                            trust_score: $assessment.trust_score,
+                            independent_source_count: ($assessment.independent_source_count // 0),
+                            source_count: ($assessment.source_count // 0),
+                            last_reviewed_at: ($assessment.last_reviewed_at // null),
+                            status: ($assessment.status // "unknown")
+                        }
+                    }
+                else
+                    .
+                end
+            ))' "$KG_FILE" > "${KG_FILE}.tmp.$$" 2>/dev/null && \
+            mv "${KG_FILE}.tmp.$$" "$KG_FILE" 2>/dev/null; then
+            log_info "Updated knowledge graph with trust scores for ${total_claims} claims"
+        else
+            log_warn "Failed to persist trust scores to knowledge graph (non-fatal)"
+            rm -f "${KG_FILE}.tmp.$$"
+        fi
+    fi
+fi
 
 if [[ "$status" == "passed" ]]; then
     echo "✓ Quality gate passed (${total_claims} claims evaluated)" >&2

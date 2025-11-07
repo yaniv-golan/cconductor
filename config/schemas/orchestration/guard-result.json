@@ -6,7 +6,7 @@
   "properties": {
     "status": {
       "type": "string",
-      "enum": ["ok", "block", "error"]
+      "enum": ["ok", "block", "error", "warn"]
     },
     "blocker": {
       "type": "string",

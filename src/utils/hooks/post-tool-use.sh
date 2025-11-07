@@ -372,6 +372,52 @@ if [ "$tool_name" = "Write" ] && [ "$exit_code" = "0" ]; then
     fi
 fi
 
+# Auto-correct quality-remediation JSON files written to wrong location
+if [ "$tool_name" = "Write" ] && [ "$exit_code" = "0" ]; then
+    file_path=$(echo "$hook_data" | jq -r '.tool_input.file_path // empty')
+
+    # Check if file matches work/quality-remediator/quality-remediation*.json
+    if [[ "$file_path" == *"work/quality-remediator/quality-remediation"*".json" ]]; then
+        # Resolve file path (handle both absolute and relative paths)
+        actual_file=""
+        if [[ -f "$file_path" ]]; then
+            actual_file="$file_path"
+        elif [[ -n "$session_dir" && -f "$session_dir/$file_path" ]]; then
+            actual_file="$session_dir/$file_path"
+        fi
+
+        if [[ -n "$actual_file" && -f "$actual_file" ]]; then
+            filename=$(basename "$actual_file")
+            correct_dir="$session_dir/artifacts/quality-remediator"
+            correct_path="$correct_dir/$filename"
+
+            mkdir -p "$correct_dir"
+            mv "$actual_file" "$correct_path" 2>/dev/null || true
+
+            if [[ -f "$correct_path" ]]; then
+                # Log the auto-correction event
+                if [[ -n "$session_dir" ]]; then
+                    jq -nc \
+                        --arg ts "$(get_timestamp)" \
+                        --arg from "$file_path" \
+                        --arg to "$correct_path" \
+                        '{
+                            timestamp: $ts,
+                            type: "artifact_autocorrect",
+                            data: {
+                                tool: "Write",
+                                from: $from,
+                                to: $to,
+                                reason: "quality-remediation JSON must be in artifacts/ not work/"
+                            }
+                        }' >> "$session_dir/logs/events.jsonl" 2>/dev/null || true
+                fi
+                echo "⚠️  Auto-corrected: Moved $filename from work/ to artifacts/" >&2
+            fi
+        fi
+    fi
+fi
+
 # Cache successful WebSearch results
 if [ "$tool_name" = "WebSearch" ] && [ "$exit_code" = "0" ]; then
     if command -v web_search_cache_store >/dev/null 2>&1 && web_search_cache_enabled; then

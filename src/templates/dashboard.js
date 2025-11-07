@@ -1504,7 +1504,7 @@ class Dashboard {
                 return `I synthesized ${claims} claim${claims !== 1 ? 's' : ''} from all gathered sources and identified ${gaps} knowledge gap${gaps !== 1 ? 's' : ''} requiring further investigation.`;
             },
             'quality-remediator': () => {
-                return 'I reviewed the quality gate diagnostics and gathered additional evidence for the flagged claims. See work/quality-remediator/ for remediation notes.';
+                return 'I reviewed the quality gate diagnostics and gathered additional evidence for the flagged claims. See artifacts/quality-remediator/ for remediation notes.';
             },
             'research-coordinator': () => {
                 const entities = data.entities_discovered || 0;

@@ -237,6 +237,90 @@ fi
 
 echo ""
 
+# Test 7: Quality Remediator Agent
+echo "Test 7: Quality Remediator Agent"
+echo "────────────────────────────────────────────────────────"
+
+# Create test KG
+mkdir -p "$TEST_SESSION/knowledge"
+cat > "$TEST_SESSION/knowledge/knowledge-graph.json" <<'EOF'
+{
+  "research_question": "Test Quality Remediation",
+  "entities": [],
+  "claims": []
+}
+EOF
+
+# Create quality-remediator artifacts
+mkdir -p "$TEST_SESSION/artifacts/quality-remediator"
+cat > "$TEST_SESSION/artifacts/quality-remediator/quality-remediation-test.json" <<'EOF'
+{
+  "metadata": {
+    "source": "quality-remediator",
+    "quality_gate_run": "2025-01-15T10:00:00Z",
+    "notes": "Test remediation for quality gate issues"
+  },
+  "claims": [
+    {
+      "id": "c1",
+      "statement": "Test claim requiring remediation",
+      "confidence": 0.85,
+      "evidence_quality": "high",
+      "sources": [
+        {
+          "url": "https://example.com/remediation-source",
+          "title": "Example Remediation Source",
+          "credibility": "authoritative",
+          "date": "2024-12-01",
+          "relevant_quote": "This source provides evidence for the test claim.",
+          "notes": "Addresses quality gate issue: missing authoritative source"
+        }
+      ]
+    }
+  ]
+}
+EOF
+
+cat > "$TEST_SESSION/artifacts/quality-remediator/output.md" <<'EOF'
+## Remediation Summary
+Test remediation addressing quality gate issues.
+
+## Claims Updated
+- c1: Added 1 authoritative source (example.com, 2024)
+
+## Remaining Gaps
+- None
+EOF
+
+# Create lockfile
+touch "$TEST_SESSION/quality-remediator.kg.lock"
+
+echo "Processing quality-remediator artifacts..."
+if process_kg_artifacts "$TEST_SESSION" "quality-remediator"; then
+    echo "✓ Quality-remediator processing succeeded"
+else
+    echo "✗ Quality-remediator processing failed"
+    exit 1
+fi
+
+# Verify lockfile removed
+if [ ! -f "$TEST_SESSION/quality-remediator.kg.lock" ]; then
+    echo "✓ Lockfile removed"
+else
+    echo "✗ Lockfile still exists"
+    exit 1
+fi
+
+# Verify merge
+if jq -e '.claims | length == 1' "$TEST_SESSION/knowledge/knowledge-graph.json" >/dev/null; then
+    echo "✓ Quality-remediator artifacts merged into KG"
+else
+    echo "✗ Artifacts not found in KG"
+    exit 1
+fi
+
+echo ""
+
 # Summary
 echo "═══════════════════════════════════════════════════════"
 echo "  ✅ All Tests Passed!"
@@ -249,4 +333,5 @@ echo "  ✓ Oversized files rejected"
 echo "  ✓ No lockfile case handled gracefully"
 echo "  ✓ Direct validation function works correctly"
 echo "  ✓ Fixture session artifacts integrate into KG"
+echo "  ✓ Quality-remediator artifacts processed correctly"
 echo ""
